@@ -193,7 +193,7 @@
                             <h4 class="att-title-header"> {{ ucfirst('Student') }} / {{ get_phrase('Date') }}</h4>
                             <ul class="att-stuName-items">
                                 <?php foreach(array_slice($attendance_of_students, 0, $no_of_users) as $attendance_of_student ):  ?>
-                                <?php $user_details = new CommonController()->get_user_by_id_from_user_table($attendance_of_student['student_id'])->toArray(); ?>
+                                <?php $user_details = (new CommonController)->get_user_by_id_from_user_table($attendance_of_student['student_id'])->toArray(); ?>
                                 <?php if(date('m', (int)$page_data['attendance_date']) == date('m', $attendance_of_student['timestamp'])): ?>
                                 <?php if($student_id_count != $attendance_of_student['student_id']): ?>
                                 <li class="att-stuName-item">

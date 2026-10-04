@@ -230,8 +230,13 @@
                     xmlRows.push('<Row>' + xmlCells.join('') + '</Row>');
                 });
 
-                return '<?xml version="1.0"?>' +
-                    '<?mso-application progid="Excel.Sheet"?>' +
+                // Each Excel XML processing instruction below is emitted as two adjacent
+                // string literals, the first holding only the opening angle
+                // bracket. A short open tag immediately followed by "xml" or
+                // "mso-application" is a ParseError when short_open_tag=On,
+                // which would 500 this page. The emitted XML is byte-identical.
+                return '<' + '?xml version="1.0"?>' +
+                    '<' + '?mso-application progid="Excel.Sheet"?>' +
                     '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ' +
                     'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
                     'xmlns:x="urn:schemas-microsoft-com:office:excel" ' +

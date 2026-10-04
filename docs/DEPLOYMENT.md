@@ -1,8 +1,10 @@
 # PIIE deployment pipeline
 
 Local → GitHub push → CI → (manual, approved) deploy → live verification.
-**Status: prepared, NOT enabled.** `.github/workflows/piie-deploy.yml` has no trigger and every
-job also requires the repo variable `PIIE_DEPLOY_ENABLED=true`.
+**Status: prepared, NOT enabled.** `piie-deploy.yml` has only a `workflow_dispatch`
+trigger (no `push`/`pull_request`), every job requires the repo variable
+`PIIE_DEPLOY_ENABLED=true`, and the `deploy` job runs in the `production` environment,
+whose branch policy admits `main` only and which requires a reviewer.
 
 ## Architecture
 
@@ -68,7 +70,7 @@ Storage: `tar -xzf backups/storage-<id>.tar.gz -C shared/storage`.
 
 ## Activation (in order)
 1. Complete prerequisites 1–5. 2. Run `preflight.sh` over SSH; all `FAIL` lines must be clear.
-3. Merge the workflow to `main`; uncomment `on:`. 4. Set variable `PIIE_DEPLOY_ENABLED=true`.
+3. Merge the workflow to `main`. 4. Set variable `PIIE_DEPLOY_ENABLED=true`.
 5. Dispatch with `mode: stage`; inspect the pretend-migration output on the server.
 6. Dispatch with `mode: activate`; approve in the `production` environment; watch health check.
 7. Rehearse `rollback.sh`. Afterwards set `PIIE_DEPLOY_ENABLED` back to unset if you want the gate closed.

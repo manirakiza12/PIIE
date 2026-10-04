@@ -27,13 +27,27 @@
 #   credentials that exist only inside the job, and never reads a committed
 #   `.env` (none is tracked; only `.env.example` is).
 #
-# THE 14 KNOWN FAILURES
-#   `CourseOfferingAdministrationTest` (10), `MultinationalTimezoneTest` (2),
-#   `LiveClassCertificationTest` (1), `TenantTimezoneTest` (1) fail on the current
-#   branch. They are pre-existing and unrelated to CI. The job reports the
-#   failure list as an artefact and compares the FAILURE COUNT to this documented
-#   baseline rather than pretending the suite is green — so a NEW failure is
-#   visible as a change in count, and a FIXED failure is visible too.
+# THE FAILURE BASELINE IS ZERO
+#   The whole committed Feature suite passes: 3,237 tests, 30,347 assertions,
+#   0 failures, 0 errors, 26 skipped (verified 2026-10-04 in a php:8.3 container
+#   with the same extension set as this job).
+#
+#   History, because a non-zero baseline here is how a red suite hides:
+#     - an earlier header documented 14 known failures, all time-dependent tests
+#       whose fixtures pinned literal Sep/Oct 2026 dates against the real clock.
+#       They were repaired by freezing the clock (tests/Feature/Support/
+#       FrozenClock.php) instead of loosening assertions, and the count fell.
+#     - commit 8739635 then lowered the baseline from 14 to 5, because CI was
+#       only ever testing the COMMITTED subset; the 5 that remained were fixed
+#       in c54c4e3 along with the rest of the feature set.
+#   The baseline is now 0 and this job FAILS on any failure. A count comparison
+#   is a weak gate: it cannot tell a fixed test from a new one that happens to
+#   offset it. The failure list is still published as an artefact.
+#
+#   Note the container needs `session` and `iconv` alongside the extensions
+#   listed below. Without them the suite does not merely fail, it ERRORS
+#   wholesale: ArraySessionHandler needs SessionHandlerInterface, and the ID
+#   card QR code calls iconv(). Both were found by running this suite locally.
 # =============================================================================
 
 name: PIIE CI
@@ -100,7 +114,7 @@ jobs:
           # `pdo_sqlite` is required by the migration-compatibility probe.
           extensions: >-
             mbstring, openssl, tokenizer, xml, ctype, json, bcmath, fileinfo,
-            curl, gd, zip, intl, pdo_mysql, pdo_sqlite
+            curl, gd, zip, intl, pdo_mysql, pdo_sqlite, session, iconv
           coverage: none
           tools: composer:v2
 
@@ -213,8 +227,8 @@ jobs:
           tail -n 8 phpunit-ci.log
           echo "---------------------------"
 
-          # The documented pre-existing baseline on this branch.
-          EXPECTED_FAILURES=5
+          # The suite passes in full on this branch; any failure is a regression.
+          EXPECTED_FAILURES=0
 
           ACTUAL=$(grep -oE 'Failures:[[:space:]]*[0-9]+' phpunit-ci.log | tail -1 | grep -oE '[0-9]+' || echo 0)
           ERRORS=$(grep -oE 'Errors:[[:space:]]*[0-9]+' phpunit-ci.log | tail -1 | grep -oE '[0-9]+' || echo 0)
@@ -365,8 +379,15 @@ jobs:
       - name: Scan migrations added since main for destructive operations (report)
         continue-on-error: true
         run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main || true
-          bash deploy/check-migrations.sh origin/main
+          # exit 2 = the base ref is missing (no main branch yet), which is not a
+          # destructive migration. Report it distinctly instead of pretending the
+          # scan passed.
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main" || true
+          if git rev-parse --verify -q origin/main >/dev/null; then
+            bash deploy/check-migrations.sh origin/main
+          else
+            echo "::warning::origin/main does not exist; the migration scan was skipped, not passed."
+          fi
 
       - name: Publish the artefact
         uses: actions/upload-artifact@v4

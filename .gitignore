@@ -86,6 +86,10 @@ coverage
 /public/assets/uploads/admissions
 /public/assets/uploads/application_payments
 
+# Website-section images uploaded through the CMS at run time. These are
+# content the site creates for itself; on the server they live in the shared
+# uploads directory, so committing them would fork the live copy into git.
+/public/assets/uploads/website
 
 
 #More

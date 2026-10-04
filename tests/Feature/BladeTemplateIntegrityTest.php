@@ -35,13 +35,13 @@ class BladeTemplateIntegrityTest extends TestCase
      * exists to stop NEW breakage, so the debt is pinned explicitly. Remove an
      * entry only when the template is actually repaired.
      *
-     * teacher/attendance/attendance_list.blade.php writes `new CommonController()->...`
-     * directly in a Blade file, which is invalid PHP — an instantiating
-     * expression needs parentheses: `(new CommonController)->...`. Unrelated to
-     * the Programme Cohort work and out of its scope.
+     * EMPTY: the last entry, teacher/attendance/attendance_list.blade.php, wrote
+     * `new CommonController()->...` directly in a Blade file — invalid PHP, since
+     * an instantiating expression needs parentheses: `(new CommonController)->...`.
+     * That 500'd the teacher attendance list and is now repaired, so every
+     * template in resources/views must compile.
      */
     private const KNOWN_UNCOMPILABLE = [
-        'teacher/attendance/attendance_list.blade.php',
     ];
 
     /** Always forward-slashed, so the KNOWN_UNCOMPILABLE list is platform-independent. */

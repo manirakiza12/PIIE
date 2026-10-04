@@ -2,11 +2,23 @@
 # PIIE — Production Deployment  (PREPARED — NOT ENABLED)
 # =============================================================================
 #
-#   THIS WORKFLOW IS DELIBERATELY DISABLED, BY TWO INDEPENDENT LOCKS:
-#     1. the `on:` block below is commented out, so nothing can start it;
+#   THIS WORKFLOW IS DELIBERATELY DISABLED BY THREE INDEPENDENT LOCKS:
+#     1. it can ONLY be started by hand (`workflow_dispatch`); it has no
+#        push or pull_request trigger, so no commit can ever deploy itself;
 #     2. every job additionally requires the repository VARIABLE
-#        PIIE_DEPLOY_ENABLED == 'true'.
+#        PIIE_DEPLOY_ENABLED == 'true';
+#     3. the `deploy` job runs in the `production` environment, whose
+#        deployment branch policy admits the `main` branch ONLY, and which
+#        requires a human reviewer.
 #   Full design, rollback and activation steps: docs/DEPLOYMENT.md
+#
+#   WHY `on:` IS NOT COMMENTED OUT
+#     A workflow file with no `on:` key at all is not a valid workflow.
+#     GitHub then fails it as a zero-job run on EVERY push while still
+#     showing the file as "active", which buries real CI signal in a red
+#     mark that means nothing. `workflow_dispatch` is the correct way to
+#     keep a workflow unreachable by automation: it is inert until a person
+#     presses Run, and locks 2 and 3 still apply even then.
 #
 # WHAT IT DOES WHEN ENABLED
 #   gate    (no secrets)  CI for the exact SHA must have succeeded; new migrations
@@ -27,6 +39,9 @@
 # NEVER: migrate:fresh, db:wipe, seeders, rsync --delete, writing .env, building
 # on the server, or restoring the database automatically.
 #
+# DO NOT DISPATCH until every prerequisite in docs/DEPLOYMENT.md is met. With
+# PIIE_DEPLOY_ENABLED unset both jobs skip, so a dispatch today is a no-op.
+#
 # SECRETS (names only; values live in GitHub, scoped to the `production`
 # environment, and are never echoed):
 #   PIIE_SSH_HOST  PIIE_SSH_PORT  PIIE_SSH_USER  PIIE_SSH_KEY  PIIE_SSH_KNOWN_HOSTS
@@ -41,27 +56,28 @@
 name: PIIE Deploy (disabled)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DISABLED (lock 1). Uncomment ONLY after the approval steps in docs/DEPLOYMENT.md.
-#
-# on:
-#   workflow_dispatch:
-#     inputs:
-#       confirm:
-#         description: 'Type "DEPLOY TO PRODUCTION" to proceed'
-#         required: true
-#         type: string
-#       mode:
-#         description: 'stage (prepare only) or activate (backup, migrate, go live)'
-#         required: true
-#         default: stage
-#         type: choice
-#         options: [stage, activate]
-#       ref:
-#         description: 'Commit SHA to deploy (defaults to the workflow commit)'
-#         required: false
-#         default: ''
-#         type: string
+# LOCK 1: manual trigger only. There is intentionally no `push` and no
+# `pull_request` trigger, so no commit — including one merged to main — can
+# deploy itself. Dispatching by hand still hits locks 2 and 3.
 # ─────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "DEPLOY TO PRODUCTION" to proceed'
+        required: true
+        type: string
+      mode:
+        description: 'stage (prepare only) or activate (backup, migrate, go live)'
+        required: true
+        default: stage
+        type: choice
+        options: [stage, activate]
+      ref:
+        description: 'Commit SHA to deploy (defaults to the workflow commit)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -105,11 +121,26 @@ jobs:
           echo "CI run $RUN succeeded for $SHA"
           echo "CI_RUN_ID=$RUN" >> "$GITHUB_ENV"
 
+      - name: Resolve the base ref for the migration scan
+        id: baseref
+        run: |
+          # check-migrations.sh exits 2 when the base ref is missing, and 1 when
+          # it finds something destructive. Those mean different things, so they
+          # must not be collapsed into one error message.
+          BASE=origin/main
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main" || true
+          if git rev-parse --verify -q "$BASE" >/dev/null; then
+            echo "ref=$BASE" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Base ref $BASE does not exist. Production is restricted to the main branch, so main must exist before a deployment can be gated. (check-migrations.sh exit 2 = missing ref, not a destructive migration.)"
+            exit 1
+          fi
+
       - name: Scan new migrations for destructive operations
         env:
           ALLOW: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS }}
         run: |
-          bash deploy/check-migrations.sh origin/main || {
+          bash deploy/check-migrations.sh "${{ steps.baseref.outputs.ref }}" || {
             [ "$ALLOW" = "1" ] || { echo "::error::Destructive migration(s) need human review (set repo variable ALLOW_DESTRUCTIVE_MIGRATIONS=1 after review)."; exit 1; }
           }
 
