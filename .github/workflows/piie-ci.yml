@@ -207,7 +207,13 @@ jobs:
       # application's tables already exist. Migrations are run so the baseline is
       # realistic. This touches ONLY the throwaway `ci_test` container.
       - name: Apply migrations to the disposable database
-        run: php artisan migrate --force --no-interaction
+        run: |
+          # PackageManifest writes a compiled package manifest here and refuses to
+          # run if the directory is absent. A fresh clone has no bootstrap/cache
+          # unless something is tracked inside it, so create it explicitly rather
+          # than relying on a developer's working copy.
+          mkdir -p bootstrap/cache
+          php artisan migrate --force --no-interaction
 
       # ---- PHPUnit -----------------------------------------------------------
       # `--testdox` is not used: the output is unreadable at this size. Failures
