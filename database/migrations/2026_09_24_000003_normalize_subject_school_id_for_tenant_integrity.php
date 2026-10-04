@@ -95,7 +95,7 @@ return new class extends Migration
         return array_map(
             fn ($row) => $row->column_name,
             DB::select(
-                'SELECT column_name FROM information_schema.statistics
+                'SELECT COLUMN_NAME AS column_name FROM information_schema.statistics
                  WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
                  ORDER BY seq_in_index',
                 ['subjects', $indexName]
