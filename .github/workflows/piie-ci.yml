@@ -374,3 +374,17 @@ jobs:
           name: piie-release-${{ github.sha }}
           path: dist/
           retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # Deployment scripts: behavioural tests in a sandbox (stubbed php/curl/flock)
+  # ---------------------------------------------------------------------------
+  deploy-scripts:
+    name: Deployment script sandbox tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check every deployment script
+        run: for f in deploy/*.sh deploy/remote/*.sh deploy/tests/*.sh; do bash -n "$f"; done
+      - name: Run the sandbox tests (no host, database or network is touched)
+        run: bash deploy/tests/sandbox.sh

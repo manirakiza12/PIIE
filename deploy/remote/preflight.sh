@@ -33,10 +33,12 @@ LAST=$(ls -t "$BASE"/backups/db-*.sql.gz 2>/dev/null | head -1 || true)
 if [ -n "$LAST" ] && gzip -t "$LAST"; then ok "latest DB backup readable: $(basename "$LAST")"; else warn "no verified DB backup yet (a deploy takes one)"; fi
 
 echo "Document root"
-if [ -L "$DOCROOT_LINK" ]; then
-  ok "public_html is a symlink -> $(readlink -f "$DOCROOT_LINK")"
+if grep -q PIIE-RELEASE-SHELL "$DOCROOT_LINK/index.php" 2>/dev/null; then
+  ok "public_html serves the release shell"
+elif [ -d "$DOCROOT_LINK" ] && [ ! -L "$DOCROOT_LINK" ]; then
+  warn "public_html is the legacy flat app root (expected before cutover): deploys can be STAGED only; run docroot.sh plan/apply (docs/DEPLOYMENT.md)"
 else
-  warn "public_html is a REAL directory: deploys can be STAGED but not ACTIVATED until it is wired to current/public (docs/DEPLOYMENT.md)."
+  no "public_html must be a real directory"
 fi
 if [ -L "$BASE/current" ]; then ok "current -> $(readlink "$BASE/current")"; else warn "no current release yet"; fi
 exit $bad

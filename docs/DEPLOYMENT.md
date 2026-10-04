@@ -35,7 +35,7 @@ The deploy workflow downloads the artefact CI built for that exact SHA; it never
 - Pinned host key (no ssh-keyscan); key fingerprint must equal v3; key files deleted at the end.
 - Server uses `/usr/local/php83/bin/php` explicitly (bare `php` is 8.2.27).
 - `mode: stage` (default): unpack + link + `migrate --pretend` only. Nothing live changes.
-- `mode: activate`: refused unless `public_html` is a symlink resolving to `current/public`.
+- `mode: activate`: refused unless `public_html/index.php` is the release shell (`PIIE-RELEASE-SHELL`, installed by `deploy/remote/docroot.sh`).
   Then: verified DB dump (gzip test, size, "Dump completed", sha256) and storage archive →
   `migrate --pretend` scan (DROP/TRUNCATE/DELETE aborts unless `ALLOW_DESTRUCTIVE_MIGRATIONS=1`) →
   `migrate --force` (forward-only) → atomic swap → health check (6×) → auto code rollback.
@@ -53,9 +53,7 @@ a restore discards student records written since the backup. If a migration must
 Storage: `tar -xzf backups/storage-<id>.tar.gz -C shared/storage`.
 
 ## Prerequisites still needed from you
-1. **Document root**: `public_html` is a real directory containing the app root. Decide the cutover
-   (DirectAdmin: point the domain's document root, or replace `public_html` with a symlink to
-   `.../current/public`, keeping a renamed copy of the old directory). Until then, only `stage` works.
+1. **Document root** (verified read-only 2026-10-04): the vhost serves `public_html` itself, a flat app root; it cannot be a symlink to a release. Convert it ONCE to a thin shell with `docroot.sh plan` then `apply`. Until then only `stage` works.
 2. **Seed `shared/`** once by hand: copy the live `.env` to `shared/.env` (chmod 600), copy live
    `storage/` (uploads) into `shared/storage/`. Confirm the `.env` has `APP_DEBUG=false`.
 3. **Host**: confirm `mysqldump`, PHP 8.3 extensions (`deploy/remote/preflight.sh` reports them),

@@ -20,10 +20,8 @@ REL="$BASE/releases/$RID"
 [ ! -e "$REL" ] || die "release $RID already exists (releases are append-only)"
 
 if [ "$MODE" = activate ]; then
-  WIRED=none
-  [ -L "$DOCROOT_LINK" ] && WIRED="$(readlink -f "$DOCROOT_LINK")"
-  [ "$WIRED" = "$(readlink -f "$BASE/current/public" 2>/dev/null || echo x)" ] \
-    || die "public_html is not wired to current/public; run in stage mode (docs/DEPLOYMENT.md)"
+  grep -q "PIIE-RELEASE-SHELL" "$DOCROOT_LINK/index.php" 2>/dev/null \
+    || die "public_html is not converted to the release shell yet (deploy/remote/docroot.sh); run in stage mode"
   bash "$(dirname "$0")/backup.sh" "$RID"
 fi
 

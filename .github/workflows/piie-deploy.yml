@@ -166,6 +166,7 @@ jobs:
         run: |
           ssh piie-prod "mkdir -p $REMOTE_BASE/incoming $REMOTE_BASE/bin"
           scp -q deploy/remote/*.sh piie-prod:$REMOTE_BASE/bin/
+          scp -q deploy/docroot/index.php piie-prod:$REMOTE_BASE/bin/docroot-index.php
           scp -q dist/piie-release-${SHA:0:12}.tar.gz piie-prod:$REMOTE_BASE/incoming/
           ssh piie-prod "chmod +x $REMOTE_BASE/bin/*.sh"
 
