@@ -128,7 +128,7 @@ return new class extends Migration
         $actual = array_map(
             fn ($row) => $row->column_name,
             DB::select(
-                'SELECT column_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? ORDER BY seq_in_index',
+                'SELECT COLUMN_NAME AS column_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? ORDER BY seq_in_index',
                 [$table, $index]
             )
         );
