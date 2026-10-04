@@ -400,6 +400,11 @@
                     <li><a class="{{ request()->is('superadmin/settings/system*') ? 'active' : '' }}" href="{{ route('superadmin.system_settings') }}"><span>{{ get_phrase('System Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/website*') ? 'active' : '' }}" href="{{ route('superadmin.website_settings') }}"><span>{{ get_phrase('Website Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/website-management*') ? 'active' : '' }}" href="{{ route('superadmin.website.index') }}"><span>{{ get_phrase('Website Management') }}</span></a></li>
+                    {{-- Public website enquiries. Placed beside Website Management because
+                         they arrive from the public site those pages configure, and both
+                         are institution-level rather than per-school concerns — which is
+                         why these routes sit behind `superAdmin` and not `admin`. --}}
+                    <li><a class="{{ request()->is('superadmin/enquiries*') ? 'active' : '' }}" href="{{ route('superadmin.enquiries.index') }}"><span>{{ get_phrase('Website Enquiries') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/faq*') ? 'active' : '' }}" href="{{ route('superadmin.faq_views') }}"><span>{{ get_phrase('Manage FAQ') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/payment/settings*') ? 'active' : '' }}" href="{{ route('superadmin.payment_settings') }}"><span>{{ get_phrase('Payment Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/language*') ? 'active' : '' }}" href="{{ route('superadmin.language.manage') }}"><span>{{ get_phrase('Language Settings') }}</span></a></li>

@@ -54,7 +54,9 @@ class ProgrammeManagementTest extends TestCase
         $response->assertStatus(200);
         $response->assertSeeInOrder(['Faculty of Business', 'BSc Accounting']);
         $response->assertSeeInOrder(['Faculty of Engineering', 'BSc Civil Engineering']);
-        $response->assertSee('Unassigned (no faculty)');
+        // The catch-all group is labelled for what it really holds: no faculty
+        // set, AND a faculty that no longer exists.
+        $response->assertSee('Unassigned / Unknown Department');
         $response->assertSee('Unassigned Programme');
     }
 
@@ -260,5 +262,135 @@ class ProgrammeManagementTest extends TestCase
 
         $response->assertSessionHas('success');
         $this->assertDatabaseMissing('programmes', ['id' => $programmeId]);
+    }
+
+    // ── Orphaned programmes must never silently disappear ───────────────────
+    //
+    // Regression: a programme whose department_id points at a department that
+    // has since been DELETED matched neither a faculty group nor the old
+    // `department_id IS NULL` bucket, so it was fetched, counted in totalCount,
+    // and then dropped from the rendered screen. This is the BBIT case.
+
+    public function test_a_programme_whose_department_no_longer_exists_is_still_displayed(): void
+    {
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $it = $this->makeDepartment($schoolId, 'Department of Computer Science & IT');
+
+        // department_id 9 does not exist in this school (or any).
+        $bbit = $this->makeProgramme($schoolId, [
+            'name' => 'Bachelor of Business Information Technology', 'code' => 'BBIT', 'department_id' => 9,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.programmes.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Unassigned / Unknown Department');
+        $response->assertSee('BBIT');
+
+        // Asserted on the group structure, not the HTML: the faculty filter
+        // dropdown legitimately lists every department name, so a plain
+        // assertDontSee would be meaningless. BBIT must be in the fallback
+        // group and NOT in the Computer Science group.
+        $groups = $response->viewData('groups');
+        $inIt = $groups->first(function ($group) use ($it) {
+            return $group['department'] && (int) $group['department']->id === $it;
+        });
+        $this->assertNotNull($inIt);
+        $this->assertCount(0, $inIt['programmes'], 'BBIT is not filed under a faculty it does not belong to');
+
+        $fallback = $groups->first(fn ($group) => ($group['isUnresolvedGroup'] ?? false) === true);
+        $this->assertNotNull($fallback, 'the fallback group is present');
+        $this->assertSame([(int) $bbit], $fallback['programmes']->map(fn ($p) => (int) $p->id)->values()->all());
+    }
+
+    public function test_the_fallback_group_holds_both_null_and_dangling_departments_and_counts_once(): void
+    {
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $law = $this->makeDepartment($schoolId, 'Faculty of Law');
+
+        $nullDept = $this->makeProgramme($schoolId, ['name' => 'No Faculty Set', 'code' => 'NUL1', 'department_id' => null]);
+        $dangling = $this->makeProgramme($schoolId, ['name' => 'Dangling Department', 'code' => 'DAN1', 'department_id' => 9]);
+        $owned = $this->makeProgramme($schoolId, ['name' => 'Properly Filed', 'code' => 'OWN1', 'department_id' => $law]);
+
+        $html = $this->actingAs($admin)->get(route('admin.programmes.index'))->assertOk()->getContent();
+
+        // All three are visible, and the two unresolved ones share one group.
+        foreach (['NUL1', 'DAN1', 'OWN1'] as $code) {
+            $this->assertStringContainsString($code, $html, "{$code} must be displayed");
+        }
+        $this->assertStringContainsString('Unassigned / Unknown Department', $html);
+
+        // Each programme appears exactly once: no duplicates across groups.
+        foreach (['NUL1', 'DAN1', 'OWN1'] as $code) {
+            $this->assertSame(1, substr_count($html, '>' . $code . '<'), "{$code} is rendered exactly once");
+        }
+
+        // The reported total equals the number of programmes actually fetched.
+        $this->assertSame(3, \Illuminate\Support\Facades\DB::table('programmes')->where('school_id', $schoolId)->count());
+    }
+
+    public function test_the_displayed_count_equals_the_rendered_programme_rows_for_every_case(): void
+    {
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $a = $this->makeDepartment($schoolId, 'Faculty A');
+        $b = $this->makeDepartment($schoolId, 'Faculty B');
+
+        $this->makeProgramme($schoolId, ['code' => 'AAA', 'department_id' => $a]);
+        $this->makeProgramme($schoolId, ['code' => 'BBB', 'department_id' => $b]);
+        $this->makeProgramme($schoolId, ['code' => 'NUL', 'department_id' => null]);
+        $this->makeProgramme($schoolId, ['code' => 'DAN', 'department_id' => 4242]);
+        $this->makeProgramme($schoolId, ['code' => 'DAN', 'department_id' => null]);
+
+        $html = $this->actingAs($admin)->get(route('admin.programmes.index'))->assertOk()->getContent();
+
+        // "5 programme(s)" — totalCount is derived from the query, and the
+        // rendered rows must account for every one of them.
+        $this->assertStringContainsString('5', $html);
+        foreach (['AAA', 'BBB', 'NUL', 'DAN'] as $code) {
+            $this->assertGreaterThanOrEqual(1, substr_count($html, '>' . $code . '<'), "{$code} rendered");
+        }
+    }
+
+    public function test_a_programme_pointing_at_another_tenants_department_is_never_shown_under_it(): void
+    {
+        $schoolId = $this->makeSchool();
+        $otherSchool = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+
+        $this->makeDepartment($schoolId, 'Own Faculty');
+        $foreignDepartmentId = $this->makeDepartment($otherSchool, 'Foreign Confidential Faculty');
+
+        $this->makeProgramme($schoolId, ['code' => 'XNT', 'department_id' => $foreignDepartmentId]);
+
+        $html = $this->actingAs($admin)->get(route('admin.programmes.index'))->assertOk()->getContent();
+
+        // The programme is surfaced, but the other tenant's faculty name is not.
+        $this->assertStringContainsString('XNT', $html);
+        $this->assertStringNotContainsString('Foreign Confidential Faculty', $html,
+            'another tenant\'s faculty must never leak into this screen');
+        $this->assertStringContainsString('Unassigned / Unknown Department', $html);
+    }
+
+    public function test_another_tenants_programmes_never_appear_at_all(): void
+    {
+        $schoolId = $this->makeSchool();
+        $otherSchool = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $mine = $this->makeDepartment($schoolId, 'Own Faculty');
+
+        $this->makeProgramme($schoolId, ['code' => 'MINE', 'name' => 'My Programme', 'department_id' => $mine]);
+        $this->makeProgramme($otherSchool, ['code' => 'THEIRS', 'name' => 'Their Programme', 'department_id' => null]);
+        $this->makeProgramme($otherSchool, ['code' => 'ORPHAN', 'name' => 'Their Orphan', 'department_id' => 9]);
+
+        $html = $this->actingAs($admin)->get(route('admin.programmes.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('MINE', $html);
+        $this->assertStringNotContainsString('THEIRS', $html);
+        $this->assertStringNotContainsString('ORPHAN', $html);
+        $this->assertStringNotContainsString('Their Programme', $html);
+        $this->assertStringNotContainsString('Their Orphan', $html);
     }
 }

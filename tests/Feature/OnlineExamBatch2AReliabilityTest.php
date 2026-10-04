@@ -30,7 +30,30 @@ class OnlineExamBatch2AReliabilityTest extends TestCase
         ]);
 
         $this->actingAs($student)->get(route('student.online_exam.resume', $submission))->assertStatus(422);
-        $this->assertDatabaseHas('online_exam_submissions', ['id' => $submission, 'status' => 'finalized']);
+
+        /**
+         * THE GUARANTEE IS "CLOSED", NOT "finalized".
+         *
+         * This used to assert the literal word `finalized`. A student's own expiry
+         * or submit must never produce `finalized`: that state is now written ONLY by
+         * `finalizeSubmission()`, which is a deliberate act by staff handing marking
+         * over. Letting a student's submit reach it is what produced submission 12 -
+         * a 10-mark written question with no human involvement, a result reading
+         * "Marking Complete / Finalized / Not Released", and an Actions column with
+         * nothing in it, because `finalized` + `not_ready` is in no queue and admits
+         * no action.
+         *
+         * This paper is one auto-marked MCQ, so there is nothing for a marker to
+         * decide and the correct state is `submitted`: closed, with the lecturer, and
+         * still requiring the handover gate before any administrator sees it. What the
+         * student must never be able to do is reopen the attempt - which is what
+         * "not in_progress" guarantees.
+         */
+        $this->assertDatabaseMissing('online_exam_submissions', [
+            'id' => $submission,
+            'status' => 'in_progress',
+        ]);
+        $this->assertDatabaseHas('online_exam_submissions', ['id' => $submission, 'status' => 'submitted']);
     }
 
     public function test_expired_heartbeat_finalizes_without_granting_more_time(): void
@@ -117,8 +140,22 @@ class OnlineExamBatch2AReliabilityTest extends TestCase
         DB::table('online_exam_answers')->insert(['submission_id' => $submission, 'question_id' => $question, 'selected_option' => 'a', 'created_at' => now(), 'updated_at' => now()]);
 
         $this->actingAs($student)->post(route('student.online_exam.submit', $exam), ['submission_id' => $submission])->assertRedirect();
+        $afterFirstSubmit = DB::table('online_exam_submissions')->where('id', $submission)->first();
+
+        // A RETRIED submit, or the timeout path firing afterwards, must change
+        // NOTHING. Asserted as a snapshot comparison rather than a fixed status,
+        // because the status itself is now derived from the paper rather than
+        // assumed: this is one auto-marked MCQ, so `submitted` is correct, and the
+        // property that matters is idempotence.
         $this->actingAs($student)->post(route('student.online_exam.timeout_submit', $submission))->assertRedirect();
-        $this->assertDatabaseHas('online_exam_submissions', ['id' => $submission, 'status' => 'finalized', 'score' => 5]);
+
+        $this->assertEquals(
+            $afterFirstSubmit,
+            DB::table('online_exam_submissions')->where('id', $submission)->first(),
+            'a retried submit or a late timeout must not alter a closed attempt'
+        );
+
+        $this->assertDatabaseHas('online_exam_submissions', ['id' => $submission, 'score' => 5]);
     }
 
     public function test_recovery_contract_is_scoped_and_reconciles_against_server_revision(): void

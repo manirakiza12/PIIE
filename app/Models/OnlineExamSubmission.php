@@ -26,6 +26,16 @@ class OnlineExamSubmission extends Model
         'camera_permission_granted', 'camera_ready_at',
         'fullscreen_started_at', 'browser_session_token',
         'ip_address', 'user_agent', 'result_review_state',
+
+        /**
+         * PUBLICATION AUDIT.
+         *
+         * These must be fillable, or update() discards them SILENTLY - no exception
+         * and no partial write. The release then proceeds looking successful while the
+         * record of WHO released it is simply absent, which is exactly the gap these
+         * columns exist to close. Caught by the test asserting the releaser.
+         */
+        'published_at', 'published_by',
     ];
 
     protected $casts = [
@@ -42,6 +52,9 @@ class OnlineExamSubmission extends Model
         'expires_at' => 'datetime',
         'last_activity_at' => 'datetime',
         'submitted_at' => 'datetime',
+        // Without this cast the audit timestamp arrives as a raw string, and the
+        // results screen's ->format() on it fails at render time.
+        'published_at' => 'datetime',
         'timeout_at' => 'datetime',
         'camera_consent_at' => 'datetime',
         'camera_ready_at' => 'datetime',
@@ -120,6 +133,40 @@ class OnlineExamSubmission extends Model
             ? 'Pending marking' : 'Ready to finalize';
     }
 
+    /**
+     * The review state in words a person can act on.
+     *
+     * ── WHY THIS EXISTS ────────────────────────────────────────────────────
+     *
+     * `result_review_state` is an internal workflow token, and the administrator's
+     * results table printed it raw: a row read `not_ready`, which tells an
+     * administrator nothing about whether marking is in progress, who owes the next
+     * step, or whether anything is wrong.
+     *
+     * The tokens are stable and the wording is not, so the mapping lives HERE rather
+     * than in a view: three screens report this state and they must not drift into
+     * three different vocabularies. An unrecognised token is shown rather than
+     * hidden — an unknown state is a fact an administrator needs to see, and
+     * swallowing it would make a genuine inconsistency invisible.
+     */
+    public function getResultReviewStateLabelAttribute(): string
+    {
+        $state = $this->result_review_state;
+
+        if ($state === null || $state === '') {
+            return $this->isFinalized()
+                ? 'With lecturer — handover not recorded'
+                : 'Marking in progress';
+        }
+
+        return [
+            'not_ready' => 'Marking in progress',
+            'pending_review' => 'Awaiting admin review',
+            'returned_for_correction' => 'Returned to lecturer for correction',
+            'published' => 'Result published',
+        ][$state] ?? ('Review state: '.$state);
+    }
+
     public function computeExpiryAt(): ?Carbon
     {
         if (empty($this->started_at) || empty($this->exam)) {
@@ -140,11 +187,19 @@ class OnlineExamSubmission extends Model
     public function isExpired(?Carbon $at = null): bool
     {
         $at = $at ?: now();
-        if (empty($this->expires_at)) {
+
+        // Uses the SAME effective deadline as `remainingSeconds()`, so the countdown a
+        // student watches and the moment the attempt is actually closed can never
+        // disagree. They previously read different columns: the timer honoured the
+        // recomputed deadline while the timeout only looked at the frozen one, so an
+        // attempt could be shut while the page still showed time remaining.
+        $deadline = $this->effectiveExpiresAt();
+
+        if (! $deadline) {
             return false;
         }
 
-        return $at->gte($this->expires_at);
+        return $at->gte($deadline);
     }
 
     public function getEffectiveScoreAttribute(): float
@@ -159,16 +214,125 @@ class OnlineExamSubmission extends Model
         return (float) ($this->score ?? 0);
     }
 
-    public function remainingSeconds(?Carbon $at = null): int
-    {
-        $at = $at ?: now();
-        if (empty($this->expires_at)) {
-            return 0;
+    /**
+ * THE EFFECTIVE DEADLINE FOR THIS ATTEMPT.
+ *
+ * ── WHY THIS EXISTS: EXAM 19 SHOWED 223 MINUTES FOR A 45-MINUTE EXAM ───────
+ *
+ * Submission 13 was created with `expires_at = 04:58`, which is the examination's
+ * `end_datetime` to the minute. The paper was configured for 45 minutes.
+ *
+ * `startExam()` already computes the deadline as the EARLIER of "started plus the
+ * configured duration" and "the exam's closing time", so this was not that code being
+ * wrong — it was `expires_at` being FROZEN AT CREATION and never reconsidered. The
+ * attempt had been opened while the exam still carried a duration of roughly 225
+ * minutes; the lecturer then corrected it to 45, and the running attempt kept the
+ * deadline it was born with.
+ *
+ * The consequence was a student given more than five times the time the institution
+ * set, decided by a value nobody could see or correct.
+ *
+ * ── THE RULE ──────────────────────────────────────────────────────────────
+ *
+ * The deadline is the EARLIEST of three things, recomputed on every read:
+ *
+ *   1. `expires_at` — frozen at attempt start, so a refresh, a reconnect or a second
+ *      tab cannot extend anything;
+ *   2. `started_at` plus the exam's CURRENT `duration_mins` — so shortening the paper
+ *      takes effect immediately;
+ *   3. the exam's CURRENT closing time — so moving the window forward cannot extend
+ *      an attempt that has already begun.
+ *
+ * Only ever SHORTENS. An attempt is never lengthened by any of this, because the only
+ * way to give a student more time is an explicit administrative act, not a recompute.
+ */
+public function effectiveExpiresAt(): ?Carbon
+{
+    if (empty($this->expires_at)) {
+        return null;
+    }
+
+    // ── COMPUTED IN UNIX SECONDS, DELIBERATELY ──────────────────────────────
+    //
+    // These three instants can each arrive in a different timezone: `expires_at` and
+    // `started_at` are read in the application's zone, while `scheduledEndAt()`
+    // converts the exam's window from its own `schedule_timezone`. Comparing those
+    // values as Carbon objects proved unreliable here — an identity comparison on two
+    // Carbons that plainly differ in wall-clock time returned "not earlier", so the
+    // 45-minute deadline was discarded in favour of the exam's closing time and the
+    // 223-minute bug survived the first attempt at this fix.
+    //
+    // Timestamps have no timezone ambiguity: each value is converted to a single
+    // absolute instant, compared as an integer, and only the winner is turned back
+    // into a Carbon at the end.
+    $deadlineTs = $this->expires_at->getTimestamp();
+
+    $exam = $this->exam;
+
+    if ($exam) {
+        $durationMins = (int) $exam->duration_mins;
+
+        if ($durationMins > 0 && ! empty($this->started_at)) {
+            $durationTs = $this->started_at->getTimestamp() + ($durationMins * 60);
+
+            if ($durationTs < $deadlineTs) {
+                $deadlineTs = $durationTs;
+            }
         }
 
-        $seconds = $this->expires_at->diffInSeconds($at, false);
-        return max(0, -$seconds);
+        $scheduledEnd = $exam->scheduledEndAt();
+
+        if ($scheduledEnd) {
+            $scheduledTs = $scheduledEnd->getTimestamp();
+
+            if ($scheduledTs < $deadlineTs) {
+                $deadlineTs = $scheduledTs;
+            }
+        }
     }
+
+    return Carbon::createFromTimestamp($deadlineTs, $this->expires_at->getTimezone());
+}
+
+public function remainingSeconds(?Carbon $at = null): int
+{
+    $at = $at ?: now();
+
+    $deadline = $this->effectiveExpiresAt();
+
+    if (! $deadline) {
+        return 0;
+    }
+
+    $seconds = $deadline->diffInSeconds($at, false);
+
+    return max(0, -$seconds);
+}
+
+/**
+ * PERSIST A SHORTENED DEADLINE, so the browser and the server cannot disagree.
+ *
+ * Writes only when the recomputed deadline is EARLIER than the stored one. This is
+ * what makes the correction durable rather than merely computed: after a refresh the
+ * student sees the same number the server will enforce.
+ */
+public function clampExpiresAtToEffectiveDeadline(): bool
+{
+    $deadline = $this->effectiveExpiresAt();
+
+    if (! $deadline || ! $this->expires_at) {
+        return false;
+    }
+
+    // Same integer comparison as above, for the same reason.
+    if ($deadline->getTimestamp() >= $this->expires_at->getTimestamp()) {
+        return false;
+    }
+
+    $this->forceFill(['expires_at' => $deadline])->save();
+
+    return true;
+}
 
     public function isResultVisible(): bool
     {

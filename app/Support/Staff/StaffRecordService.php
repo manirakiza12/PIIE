@@ -35,6 +35,43 @@ class StaffRecordService
     /** Not staff: Super Admin (platform), Parent, Student, reserved legacy role 8. */
     private const NOT_STAFF = [1, 6, 7, 8];
 
+    /**
+     * One contact-number pattern for the whole staff module, so a number the
+     * profile screen accepts is never rejected by staff creation (or the other
+     * way round). It accepts an international prefix and the spacing, dashes and
+     * brackets used in practice, and requires digits at both ends so free text
+     * such as "call me at the office" is refused.
+     */
+    public const PHONE_RULE = 'regex:/^[+()0-9][0-9 ()\\-]{4,24}[0-9]$/';
+
+    /**
+     * The Next of Kin block as a NEW staff record must supply it: all four
+     * identity fields present, and contact numbers in a usable format.
+     *
+     * Kept separate from profileRules() because that is also the rule set for
+     * editing an existing profile, where a staff member may legitimately have
+     * no Next of Kin recorded yet, or a number stored before this rule existed.
+     */
+    public static function nextOfKinRules(bool $strict = true): array
+    {
+        $rules = array_intersect_key(self::profileRules(), array_flip([
+            'emergency_contact_name', 'emergency_contact_relationship', 'emergency_contact_email',
+            'emergency_contact_phone', 'emergency_contact_alternative_phone', 'emergency_contact_address',
+        ]));
+
+        $rules['emergency_contact_phone'] = ['nullable', 'string', 'max:50', self::PHONE_RULE];
+        $rules['emergency_contact_alternative_phone'] = ['nullable', 'string', 'max:50', self::PHONE_RULE];
+
+        if ($strict) {
+            foreach (['emergency_contact_name', 'emergency_contact_relationship', 'emergency_contact_email', 'emergency_contact_phone'] as $field) {
+                $rules[$field] = array_values(array_diff($rules[$field], ['nullable']));
+                array_unshift($rules[$field], 'required');
+            }
+        }
+
+        return $rules;
+    }
+
     public function __construct(private PermissionService $permissions)
     {
     }
@@ -152,6 +189,54 @@ class StaffRecordService
         return $registration;
     }
 
+    /**
+     * Corrects an EXISTING qualification in place, so editing a staff record
+     * never appends a second row for the same award.
+     *
+     * The row must already belong to $target and to $actor's school; anything
+     * else is a 404, exactly as for a missing record. A field the submitted form
+     * did not send (evidence_document_id, which the staff edit form does not
+     * manage) is left as it is rather than blanked.
+     */
+    public function updateQualification(User $actor, User $target, int $qualificationId, array $data): StaffQualification
+    {
+        $this->assertSameSchool($actor, $target);
+        $this->authorize($actor, 'staff.edit');
+        $qualification = $this->professionalRow(StaffQualification::class, $actor, $target, $qualificationId);
+        $clean = $this->validated($data, self::qualificationRules(), 'qualification');
+        $this->assertOrdered($clean, 'start_year', 'completion_year', 'The completion year cannot be before the start year.');
+        if (array_key_exists('evidence_document_id', $clean)) {
+            $clean['evidence_document_id'] = $this->evidenceFor($target, $clean['evidence_document_id']);
+        }
+
+        $old = $qualification->only(array_keys($clean));
+        $qualification->fill($clean)->save();
+        $this->audit('STAFF_QUALIFICATION_UPDATED', $target, 'Updated qualification',
+            ['qualification_id' => $qualification->id] + $clean, $old);
+
+        return $qualification;
+    }
+
+    /** Corrects an EXISTING professional registration in place; see updateQualification(). */
+    public function updateRegistration(User $actor, User $target, int $registrationId, array $data): StaffProfessionalRegistration
+    {
+        $this->assertSameSchool($actor, $target);
+        $this->authorize($actor, 'staff.edit');
+        $registration = $this->professionalRow(StaffProfessionalRegistration::class, $actor, $target, $registrationId);
+        $clean = $this->validated($data, self::registrationRules(), 'registration');
+        $this->assertOrdered($clean, 'issue_date', 'expiry_date', 'The expiry date cannot be before the issue date.');
+        if (array_key_exists('evidence_document_id', $clean)) {
+            $clean['evidence_document_id'] = $this->evidenceFor($target, $clean['evidence_document_id']);
+        }
+
+        $old = $registration->only(array_keys($clean));
+        $registration->fill($clean)->save();
+        $this->audit('STAFF_REGISTRATION_UPDATED', $target, 'Updated professional registration',
+            ['registration_id' => $registration->id] + $clean, $old);
+
+        return $registration;
+    }
+
     public function addExperience(User $actor, User $target, array $data, bool $creating = false): StaffExperience
     {
         $this->assertSameSchool($actor, $target);
@@ -252,6 +337,10 @@ class StaffRecordService
             'date_joined' => ['nullable', 'date'],
             'emergency_contact_name' => ['nullable', 'string', 'max:150'],
             'emergency_contact_relationship' => ['nullable', 'string', 'max:60'],
+            'emergency_contact_email' => ['nullable', 'email:filter', 'max:191'],
+            // Format only. A staff member who was recorded before contact numbers
+            // were validated keeps the number already on file, so the strict
+            // requirement below applies to creation, not to these profile rules.
             'emergency_contact_phone' => ['nullable', 'string', 'max:50'],
             'emergency_contact_alternative_phone' => ['nullable', 'string', 'max:50'],
             'emergency_contact_address' => ['nullable', 'string', 'max:255'],
@@ -364,6 +453,22 @@ class StaffRecordService
         return (int) $documentId;
     }
 
+    /**
+     * A professional record that already belongs to $target inside $actor's
+     * school. A row of another staff member, or of another school, is
+     * indistinguishable from a missing one (404) so an id cannot be probed.
+     *
+     * @template T of \Illuminate\Database\Eloquent\Model
+     * @param  class-string<T>  $model
+     * @return T
+     */
+    private function professionalRow(string $model, User $actor, User $target, int $id)
+    {
+        return $model::where('school_id', (int) $actor->school_id)
+            ->where('user_id', $target->id)
+            ->findOrFail($id);
+    }
+
     private function assertStatus(string $status, array $allowed): void
     {
         if (!in_array($status, $allowed, true)) {
@@ -373,13 +478,41 @@ class StaffRecordService
 
     private function validated(array $data, array $rules, string $what): array
     {
-        $validator = Validator::make(array_intersect_key($data, $rules), $rules);
+        $validator = Validator::make(array_intersect_key($data, $rules), $rules, self::messagesFor($rules));
         if ($validator->fails()) {
             $errors = array_map(fn ($messages) => $messages[0], $validator->errors()->toArray());
             throw new StaffRecordException("The {$what} details are not valid.", $errors);
         }
 
         return $validator->validated();
+    }
+
+    /**
+     * Staff-facing wording. Laravel's defaults leak input keys and rule names
+     * ("The emergency contact email must be a valid email address"), which is
+     * not language an administrator should have to read.
+     */
+    public static function messagesFor(array $rules): array
+    {
+        $messages = [
+            'email' => 'Enter a valid email address.',
+            'max' => 'This value is longer than allowed.',
+            'required_with' => 'Complete the Next of Kin details: name, relationship, email and contact number.',
+        ];
+
+        return [
+            'emergency_contact_name.required_with' => 'Enter the Next of Kin full name.',
+            'emergency_contact_name.max' => 'The Next of Kin name may not be longer than 150 characters.',
+            'emergency_contact_relationship.required_with' => 'Choose how the Next of Kin is related to this staff member.',
+            'emergency_contact_relationship.max' => 'The Next of Kin relationship may not be longer than 60 characters.',
+            'emergency_contact_email.email' => 'Enter a valid Next of Kin email address.',
+            'emergency_contact_email.max' => 'The Next of Kin email address may not be longer than 191 characters.',
+            'emergency_contact_phone.required_with' => 'Enter the Next of Kin contact number.',
+            'emergency_contact_phone.regex' => 'Enter a valid contact number, for example +256 712 345 678.',
+            'emergency_contact_phone.max' => 'The Next of Kin contact number may not be longer than 50 characters.',
+            'emergency_contact_alternative_phone.regex' => 'Enter a valid alternative contact number, for example +256 712 345 678.',
+            'emergency_contact_address.max' => 'The Next of Kin address may not be longer than 255 characters.',
+        ];
     }
 
     private function audit(string $action, ?User $target, string $what, array $new = [], array $old = []): void

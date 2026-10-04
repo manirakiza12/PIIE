@@ -33,11 +33,18 @@ return [
     'modules' => [
         'students' => 'Students', 'parents' => 'Parents', 'admissions' => 'Admissions', 'staff' => 'Staff',
         'admins' => 'School Administrators', 'academic' => 'Academic', 'online_exams' => 'Online Exams',
-        'live_classes' => 'Live Classes', 'finance' => 'Finance', 'hostel' => 'Hostel', 'library' => 'Library',
+        'live_classes' => 'Live Classes',
+    // Course Content, so the capability keys declared below belong to a module
+    // the RBAC screens already know how to display and group. Without a
+    // declaration here the permission would be unassignable through the UI.
+    'course_content' => 'Course Content',
+    'course_assignments' => 'Course Assignments',
+    'finance' => 'Finance', 'hostel' => 'Hostel', 'library' => 'Library',
         'hr' => 'HR', 'clubs' => 'Clubs', 'communications' => 'Noticeboard & Events', 'elections' => 'Elections',
         'cms' => 'Website CMS', 'reports' => 'Reports', 'audit' => 'Audit Log', 'assets' => 'Assets',
         'procurement' => 'Procurement', 'settings' => 'Settings', 'subscription' => 'Subscription',
         'rbac' => 'Roles & Permissions',
+        'system_testing' => 'System Testing',
     ],
 
     'permissions' => [
@@ -127,7 +134,20 @@ return [
         'online_exams.proctoring' => $p('online_exams', 'Proctoring review', 'Review proctoring events.'),
 
         // Live Classes — bridged to App\Policies\LiveClassPolicy (authoritative)
-        'live_classes.view' => $p('live_classes', 'View live classes', 'See live classes and their materials.'),
+        // Course Content. Authoring is a Course Offering concern, so these are
+    // capabilities rather than roles: a lecturer additionally needs an
+    // allocation on the exact Offering (CourseContentAccess), and a student
+    // additionally needs a confirmed registration - neither is satisfied by
+    // holding a permission.
+    'course_content.view' => $p('course_content', 'View Course Content', 'See the modules and lessons of a Course Offering.'),
+    'course_content.manage' => $p('course_content', 'Manage Course Content', 'Create, edit, order and publish the modules and lessons of a Course Offering.'),
+    // Course Offering Assignments. Authoring, publishing, grading and returning
+    // are all gated on a current lecturer allocation in addition to these, so a
+    // grant here is a CAPABILITY and never by itself an authorisation.
+    'course_assignments.view' => $p('course_assignments', 'View Course Assignments', 'See the assignments of a Course Offering and the submissions against them.'),
+    'course_assignments.manage' => $p('course_assignments', 'Manage Course Assignments', 'Create, edit, publish, close and grade the assignments of a Course Offering.'),
+
+    'live_classes.view' => $p('live_classes', 'View live classes', 'See live classes and their materials.'),
         'live_classes.create' => $p('live_classes', 'Schedule live classes', 'Create live classes.'),
         'live_classes.manage_all' => $p('live_classes', 'Manage all live classes', 'Edit, cancel, publish and manage materials of any live class in the school.'),
         'live_classes.platforms' => $p('live_classes', 'Live class platforms', 'Configure Zoom / Google Meet / Jitsi integration.', true),
@@ -193,6 +213,20 @@ return [
         'roles.manage' => $p('rbac', 'Manage roles', 'Create, edit and delete staff roles.', true, false),
         'permissions.assign' => $p('rbac', 'Assign permissions', 'Grant and revoke staff permissions.', true, false),
         'users.assign_roles' => $p('rbac', 'Assign staff roles', 'Assign staff roles to users.', true, false),
+
+        // System Testing: an ADDITIONAL capability, never a role of its own. A tester
+        // keeps their real identity and authority (a Lecturer stays a Lecturer) and
+        // users.role_id is never touched. It relaxes exactly ONE condition, the
+        // pre-start DATE gate on an allocation, and only for a Course Offering that
+        // was deliberately early-started through the governed workflow. It is NOT a
+        // bypass of authentication, tenant isolation, Lecturer identity, allocation
+        // existence or status, Offering lifecycle, or IDOR protection. See
+        // App\Support\CourseOffering\SystemTesterAccess.
+        //
+        // Student testing is deliberately absent: there is currently no student-side
+        // pre-start date gate requiring an exception, and a Student must never be
+        // given a staff permission merely to label the account.
+        'system.testing.prestart_lecturer' => $p('system_testing', 'Pre-start Lecturer testing', 'Allows a Lecturer who already holds a valid allocation to exercise approved teaching and testing functionality before the Academic Period start date, on a Course Offering that was deliberately started early for testing. The Lecturer keeps their Lecturer role; this does not bypass any other authorization.', true),
     ],
 
     /*
@@ -259,19 +293,23 @@ return [
     */
     'routes' => [
         'admin.course_offerings.index' => 'academic.course_offering.view',
-        'admin.course_offerings.create' => 'academic.course_offering.view',
+        'admin.course_offerings.create' => 'academic.course_offering.manage',
         'admin.course_offerings.show' => 'academic.course_offering.view',
         'admin.course_offerings.store' => 'academic.course_offering.manage',
         'admin.course_offerings.update' => 'academic.course_offering.manage',
         'admin.course_offerings.applicability.*' => 'academic.course_offering.manage',
         'admin.course_offerings.open' => 'academic.course_offering.lifecycle',
         'admin.course_offerings.start' => 'academic.course_offering.lifecycle',
+    'admin.course_offerings.start_early' => 'academic.course_offering.lifecycle',
         'admin.course_offerings.complete' => 'academic.course_offering.lifecycle',
         'admin.course_offerings.cancel' => 'academic.course_offering.lifecycle',
         'admin.course_offerings.eligible_students' => 'academic.course_registration.view',
         'admin.course_offerings.registrations' => 'academic.course_registration.view',
         'admin.course_offerings.registrations.store' => 'academic.course_registration.manage',
         'admin.course_offerings.registrations.drop' => 'academic.course_registration.manage',
+        'admin.course_offerings.registrations.bulk' => 'academic.course_registration.manage',
+        'admin.course_offerings.registrations.confirm' => 'academic.course_registration.confirm',
+        'admin.course_offerings.registrations.confirm_bulk' => 'academic.course_registration.confirm',
         'admin.course_offerings.lecturers.index' => 'academic.course_offering.lecturer.view',
         'admin.course_offerings.lecturers.history' => 'academic.course_offering.lecturer.view',
         'admin.course_offerings.lecturers.create' => 'academic.course_offering.lecturer.manage',
@@ -529,6 +567,17 @@ return [
         'admin.rbac.roles.*' => 'roles.manage',
         'admin.rbac.staff.permissions.*' => 'permissions.assign',
         'admin.rbac.staff.*' => 'users.assign_roles',
+        // Staff record management (HR profile), NOT access governance. Editing a
+        // designation is therefore gated by staff.edit and never by
+        // users.assign_roles, and holding it grants no permission whatsoever.
+        'admin.staff.profile.show' => 'staff.view',
+        'admin.staff.profile.edit' => 'staff.edit',
+        'admin.staff.profile.update' => 'staff.edit',
+        'admin.staff.profile.status' => 'staff.edit',
+        // The governed account setup workflow, for any staff base role. Uses the
+        // platform's own staff.accounts permission, so a password setup link is
+        // an account concern and is not tied to access governance.
+        'admin.staff.account-access.*' => 'staff.accounts',
         'admin.settings.permissions.save' => 'roles.manage',
         'admin.subscription*' => 'subscription.manage',
         'admin_free_subcription' => 'subscription.manage',
@@ -584,6 +633,8 @@ return [
         'online_exams.delete' => ['online_exams.view'], 'online_exams.publish' => ['online_exams.view'], 'online_exams.cancel' => ['online_exams.view'],
         'online_exams.questions' => ['online_exams.view'], 'online_exams.attempts' => ['online_exams.view'], 'online_exams.mark' => ['online_exams.view'],
         'online_exams.results' => ['online_exams.view'], 'online_exams.settings' => ['online_exams.view'], 'online_exams.proctoring' => ['online_exams.view'],
+        'course_content.manage' => ['course_content.view'],
+    'course_assignments.manage' => ['course_assignments.view'],
         'live_classes.create' => ['live_classes.view'], 'live_classes.manage_all' => ['live_classes.view'], 'live_classes.platforms' => ['live_classes.view'],
         'finance.invoices' => ['finance.view'], 'finance.payments' => ['finance.view'],
         'hostel.manage' => ['hostel.view'], 'hostel.allocate' => ['hostel.view'], 'hostel.applications' => ['hostel.view'], 'hostel.payments' => ['hostel.view'],

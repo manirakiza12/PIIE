@@ -43,6 +43,8 @@ use App\Models\User;
 use App\Support\CourseRegistration\CourseRegistrationService;
 use App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility;
 use App\Support\CourseRegistration\StudentCourseOfferingDiscovery;
+use App\Support\CourseRegistration\StudentCourseCatalogue;
+use App\Support\Passwords\PortalPasswordChange;
 use App\Support\TenantConfiguration;
 use Carbon\Carbon;
 use Illuminate\Validation\Rule;
@@ -245,7 +247,7 @@ class StudentController extends Controller
      * else, and Subject's credits/code/course_type columns (added earlier
      * this session) had no student-facing consumer yet.
      */
-    public function myCourses()
+    public function myCourses(Request $request)
     {
         $student = auth()->user();
         $schoolId = $student->school_id;
@@ -273,7 +275,22 @@ class StudentController extends Controller
             }
             $school = School::query()->whereKey($schoolId)->first();
             $terminology = app(TenantConfiguration::class)->terminology($school);
+
+            // Search and filters arrive as query string on a GET, and are applied by
+            // the catalogue to the rows `discover()` already authorised — there is no
+            // new query for a student to widen, so a crafted ?year= or ?q= cannot
+            // surface a course that was not already theirs.
+            $catalogue = app(StudentCourseCatalogue::class, ['schoolId' => $schoolId])->build(
+                $courseData,
+                $request->only(['q', 'year', 'period'])
+            );
+
+            // Namespaced under `catalogue` rather than merged flat. Flat, its `sections` and
+            // `finance_eligible` keys would sit loose in the view namespace next to
+            // discovery's identically-named keys — two meanings for one name in the
+            // same template, resolved only by the `+` operator's left-wins rule.
             return view('student.my_courses', $courseData + [
+                'catalogue' => $catalogue,
                 'workflow' => 'hei',
                 'courseUnitLabel' => $terminology['course_unit'] ?? 'Course Unit',
             ]);
@@ -1186,19 +1203,34 @@ class StudentController extends Controller
 
         if ($action_type == 'update') {
 
-            if ($request->new_password != $request->confirm_password) {
-                return back()->with("error", "Confirm Password Doesn't match!");
+            $user = auth()->user();
+
+            // When this page is reached because of portal activation, the
+            // "current" password is the temporary password from the activation
+            // email. Say so, instead of reporting a bare mismatch.
+            $hint = $user->force_password_change
+                ? 'It is the temporary password in your activation email, not your new password.'
+                : '';
+
+            // One shared authority for the rules and the wording. On failure this
+            // throws ValidationException, which renders a per-field message
+            // beside the input and never shows Laravel's internal terminology.
+            PortalPasswordChange::validate($request, $hint);
+
+            if (! PortalPasswordChange::currentPasswordMatches($request->input('old_password'), $user->password)) {
+                return back()
+                    ->withInput($request->except('old_password', 'new_password', 'confirm_password'))
+                    ->withErrors(['old_password' => $user->force_password_change
+                        ? 'That is not the temporary password from your activation email. Please check the email and try again.'
+                        : 'The current password you entered is not correct. Please try again.']);
             }
 
-            if (! Hash::check($request->old_password, auth()->user()->password)) {
-                return back()->with("error", "Current Password Doesn't match!");
-            }
+            $wasForced = (bool) $user->force_password_change;
 
-            $wasForced = (bool) auth()->user()->force_password_change;
-
-            $data['password'] = Hash::make($request->new_password);
-            $data['force_password_change'] = false;
-            auth()->user()->update($data);
+            $user->update([
+                'password' => Hash::make($request->input('new_password')),
+                'force_password_change' => false,
+            ]);
 
             if ($wasForced) {
                 AuditLog::record('update', 'Staff & Students', "Student completed the forced password change after portal activation (#" . auth()->id() . ").");

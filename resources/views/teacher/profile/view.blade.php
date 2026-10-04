@@ -55,6 +55,22 @@
             
             <!-- Tab content -->
             <div class="tab-content eNav-Tabs-content" id="myTabContent">
+            {{-- Regional Settings (personal timezone) lives on its own screen
+                 rather than inside this form, because it is a presentation
+                 preference and not part of a person's identity or contact
+                 record - and because a student and a member of staff must reach
+                 the identical screen under identical rules. --}}
+            <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <strong>{{ get_phrase('Regional Settings') }}</strong>
+                    <div class="small">
+                        {{ get_phrase('Choose the timezone used to display your classes, deadlines and schedules.') }}
+                    </div>
+                </div>
+                <a href="{{ route('profile.regional.edit') }}" class="eBtn eBtn-primary">
+                    {{ get_phrase('Regional Settings') }}
+                </a>
+            </div>
             <div
                 class="tab-pane fade show active"
                 id="basicInfo"

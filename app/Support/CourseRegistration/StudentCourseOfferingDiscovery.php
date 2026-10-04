@@ -4,6 +4,7 @@ namespace App\Support\CourseRegistration;
 
 use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
+use App\Models\CourseOffering;
 use App\Models\Curriculum;
 use App\Models\School;
 use App\Models\StudentCurriculumAssignment;
@@ -21,6 +22,7 @@ class StudentCourseOfferingDiscovery
         private AcademicContext $academicContext,
         private StudentCurriculumAssignmentService $assignments,
         private StudentRegistrationConfirmationEligibility $confirmationEligibility,
+        private CourseOfferingEligibility $eligibility,
     ) {
     }
 
@@ -33,6 +35,24 @@ class StudentCourseOfferingDiscovery
         }
         $registrations = $this->registrations($schoolId, (int) $student->id);
         $financeEligible = $this->confirmationEligibility->allows($student);
+
+        // Attached HERE, on the one exit path every early return shares, so a card
+        // can name its lecturer even when the academic record needs review. Doing it
+        // in the main path only would leave the lecturer blank on exactly the cards
+        // a student most needs a name on.
+        //
+        // The SAME `activeLecturers()` definition the available Offerings already use
+        // — active allocation, started, not ended — so a card never names a lecturer
+        // who has already left the Offering.
+        $registrationLecturers = $this->activeLecturers(
+            $schoolId,
+            $registrations->pluck('offering_id')->map(fn ($id) => (int) $id)->unique()->values()->all()
+        );
+        $registrations->each(function ($registration) use ($registrationLecturers): void {
+            $team = $registrationLecturers->get((int) $registration->offering_id, collect());
+            $registration->teaching_team = $team;
+            $registration->primary_lecturer = $team->firstWhere('role', 'primary_lecturer')?->name;
+        });
 
         $year = $this->academicContext->currentYear($school);
         if (! $year || (int) $year->school_id !== $schoolId) {
@@ -61,6 +81,11 @@ class StudentCourseOfferingDiscovery
             ->where('programme_id', $assignment->programme_id)->whereKey($assignment->curriculum_id)->first();
         if (! $curriculum || $curriculum->status !== 'approved') {
             return $this->empty('curriculum_unavailable', 'Your academic programme assignment needs review. Contact the academic office.', $year, $period, $registrations, $financeEligible);
+        }
+
+        $placement = $this->eligibility->placement($schoolId, (int) $student->id, (int) $year->id);
+        if (! $placement->eligible) {
+            return $this->empty('placement_incomplete', $this->studentPlacementMessage($placement->code, $year->label), $year, $period, $registrations, $financeEligible);
         }
 
         $candidateRows = DB::table('course_offering_curriculum_memberships as x')
@@ -98,11 +123,20 @@ class StudentCourseOfferingDiscovery
                 'ay.label as academic_year_label', 'ap.label as academic_period_label', 'ap.type as academic_period_type',
             ])->orderBy('s.name')->orderBy('o.reference');
 
+        // Candidate rows are narrowed by the shared eligibility rule (Study Plan
+        // stage, period and cohort), which also resolves the single membership.
         $rows = $candidateRows->get();
-        $grouped = $rows->groupBy('offering_id');
-        $ambiguousOfferingIds = $grouped->filter(fn ($items) => $items->count() !== 1)->keys();
-        $offerings = $grouped->filter(fn ($items, $offeringId) => ! $ambiguousOfferingIds->contains($offeringId))
-            ->map(fn ($items) => $items->first())->values();
+        $candidateOfferings = CourseOffering::query()->where('school_id', $schoolId)
+            ->whereIn('id', $rows->pluck('offering_id')->unique()->all())->get()->keyBy('id');
+        $ambiguousOfferingIds = collect();
+        $offerings = $rows->groupBy('offering_id')->map(function ($items, $offeringId) use ($candidateOfferings, $student, $ambiguousOfferingIds) {
+            $offering = $candidateOfferings->get((int) $offeringId);
+            $result = $offering ? $this->eligibility->evaluate($offering, (int) $student->id) : null;
+            if ($result?->code === 'ambiguous_study_plan') {
+                $ambiguousOfferingIds->push((int) $offeringId);
+            }
+            return $result?->eligible ? $items->firstWhere('curriculum_membership_id', $result->membership->id) : null;
+        })->filter()->values();
 
         $lecturerNames = $this->activeLecturers($schoolId, $offerings->pluck('offering_id')->all());
         $offerings->each(function ($offering) use ($lecturerNames): void {
@@ -135,6 +169,16 @@ class StudentCourseOfferingDiscovery
         }
         $offering = $view['offerings']->firstWhere('offering_id', $offeringId);
         return $offering ? (int) $offering->curriculum_membership_id : null;
+    }
+
+    private function studentPlacementMessage(string $code, string $yearLabel): string
+    {
+        return match ($code) {
+            'progression_not_recorded' => "Your Year of Study for {$yearLabel} has not been recorded yet. Contact the academic office.",
+            'cohort_not_current', 'cohort_mismatch' => 'Your Programme Cohort record needs review before you can register. Contact the academic office.',
+            'placement_ended' => 'Your academic placement is no longer current. Contact the academic office.',
+            default => 'Your academic placement is not complete yet. Contact the academic office.',
+        };
     }
 
     private function activeLecturers(int $schoolId, array $offeringIds)

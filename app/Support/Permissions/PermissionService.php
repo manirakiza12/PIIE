@@ -40,6 +40,16 @@ class PermissionService
     public const SUPER_ADMIN = 1;
     public const SCHOOL_ADMIN = 2;
 
+    /**
+     * The lecturer role. This is the same value TeacherMiddleware admits, so the
+     * two can never drift apart.
+     *
+     * Named here because a bare 3 was already mis-guessed as 6 (= Parent) in the
+     * Google Meet path, which both locked every real lecturer out and would have
+     * let a parent write to a lecturer's own Google calendar.
+     */
+    public const TEACHER = 3;
+
     /** Roles that are never staff: Parent, Student, and the reserved legacy "user" role. */
     public const NON_STAFF_ROLES = [6, 7, 8];
 
@@ -90,6 +100,14 @@ class PermissionService
         }
 
         if (str_starts_with($key, 'live_classes.') && $this->liveClassBaseAllows($role, $key)) {
+            return true;
+        }
+
+        if (str_starts_with($key, 'course_content.') && $this->courseContentBaseAllows($role, $key)) {
+            return true;
+        }
+
+        if (str_starts_with($key, 'course_assignments.') && $this->courseAssignmentBaseAllows($role, $key)) {
             return true;
         }
 
@@ -314,6 +332,43 @@ class PermissionService
     {
         return $user->account_status !== 'disable'
             && !(method_exists($user, 'isStaffPortalBlocked') && $user->isStaffPortalBlocked());
+    }
+
+    /**
+     * Capability only, for the same reason liveClassBaseAllows() exists: a
+     * lecturer who could already schedule Live Classes must not be stranded
+     * behind a permission grant nobody has been asked to make. The ALLOCATION
+     * check lives in CourseContentAccess and is not bypassed by this.
+     *
+     * The role lists are reused from LiveClassPolicy rather than restated, so
+     * "who is a teaching role" is answered in exactly one place.
+     */
+    /**
+     * Capability only, for the same reason courseContentBaseAllows() exists: a
+     * lecturer who could already teach a Course Offering must not be stranded
+     * behind a permission grant nobody has been asked to make. The ALLOCATION
+     * check lives in AssignmentAccess and is not bypassed by this.
+     *
+     * The role lists are reused from LiveClassPolicy so that "who is a teaching
+     * role" has exactly one definition across Live Classes, Course Content and
+     * Course Assignments.
+     */
+    private function courseAssignmentBaseAllows(int $role, string $key): bool
+    {
+        return match ($key) {
+            'course_assignments.view' => in_array($role, LiveClassPolicy::STAFF_ROLES, true),
+            'course_assignments.manage' => in_array($role, LiveClassPolicy::CREATE_ROLES, true),
+            default => false,
+        };
+    }
+
+    private function courseContentBaseAllows(int $role, string $key): bool
+    {
+        return match ($key) {
+            'course_content.view' => in_array($role, LiveClassPolicy::STAFF_ROLES, true),
+            'course_content.manage' => in_array($role, LiveClassPolicy::CREATE_ROLES, true),
+            default => false,
+        };
     }
 
     private function liveClassBaseAllows(int $role, string $key): bool

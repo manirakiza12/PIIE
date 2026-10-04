@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Providers\AppServiceProvider;
+use App\Support\Mail\SmtpPasswordSecret;
 use Illuminate\Support\Facades\DB;
 use Tests\Feature\Support\AdmissionsTestHelper;
 use Tests\TestCase;
@@ -49,5 +50,24 @@ class SystemSmtpSettingsTest extends TestCase
         (new AppServiceProvider($this->app))->boot();
 
         $this->assertSame($originalHost, config('mail.mailers.smtp.host'));
+    }
+
+    public function test_encrypted_global_smtp_password_is_applied_to_runtime_without_changing_storage(): void
+    {
+        $storedPassword = SmtpPasswordSecret::protect('Encrypted-Test-Password-987!');
+        DB::table('global_settings')->insert([
+            ['key' => 'smtp_protocol', 'value' => 'smtp', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'smtp_host', 'value' => 'mail.test', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'smtp_port', 'value' => '587', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'smtp_user', 'value' => 'mailer@example.test', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'smtp_pass', 'value' => $storedPassword, 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'smtp_crypto', 'value' => 'tls', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        (new AppServiceProvider($this->app))->boot();
+
+        $this->assertSame('smtp', config('mail.default'));
+        $this->assertSame('Encrypted-Test-Password-987!', config('mail.mailers.smtp.password'));
+        $this->assertSame($storedPassword, DB::table('global_settings')->where('key', 'smtp_pass')->value('value'));
     }
 }

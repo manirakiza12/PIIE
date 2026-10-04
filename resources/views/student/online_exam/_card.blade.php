@@ -13,7 +13,7 @@
             <div class="d-flex gap-2 flex-wrap mb-2"><span class="badge bg-info">{{ $exam->duration_minutes }} min</span><span class="badge bg-secondary">Pass: {{ $exam->pass_mark }} marks</span></div>
             @if($examStart)<div class="small text-muted">{{ get_phrase('Starts') }}: {{ $examStart->format('d M Y H:i') }}</div>@endif
             @if($examEnd)<div class="small text-muted">{{ get_phrase('Closes') }}: {{ $examEnd->format('d M Y H:i') }}</div>@endif
-            @if($exam->instructions)<p class="small mt-2">{{ Str::limit($exam->instructions, 100) }}</p>@endif
+            @if($exam->instructions)<p class="small mt-2">{{ $exam->plainInstructions(100) }}</p>@endif
             <div class="mt-auto">
             @if($latestSubmission && $latestSubmission->status === 'in_progress')
                 <div class="alert alert-warning py-2 small mb-2">In Progress</div><a href="{{ route('student.online_exam.take',$exam->id) }}" class="eBtn eBtn-sm eBtn-warning w-100">Resume Exam</a>

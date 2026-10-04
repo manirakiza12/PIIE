@@ -72,11 +72,12 @@ class SystemRoleRegistryTest extends TestCase
         }
     }
 
-    public function test_registry_covers_exactly_1_to_19_and_allocates_nothing_new(): void
+    public function test_registry_covers_exactly_1_to_20_and_allocates_nothing_new(): void
     {
-        $this->assertSame(range(1, 19), array_keys(SystemRole::all()));
+        // 20 = Generic Staff (migration 2026_09_27_000001_add_generic_staff_system_role).
+        $this->assertSame(range(1, 20), array_keys(SystemRole::all()));
         $this->assertNull(SystemRole::find(0));
-        $this->assertNull(SystemRole::find(20));
+        $this->assertNull(SystemRole::find(21));
     }
 
     public function test_bursar_is_the_accountant_not_a_separate_role(): void
@@ -121,6 +122,13 @@ class SystemRoleRegistryTest extends TestCase
      * and refusing custom role names that impersonate a protected base role.
      * It still decides no access, redirect or middleware; any other file that
      * starts referencing it must be added here on purpose.
+     *
+     * Generic Staff (deliberate update): role_id 20 is installed by migration
+     * and routed via SystemRole::GENERIC_STAFF in login/reset redirects, the
+     * staff/admin middleware, staff provisioning and account access. The
+     * lecturer allocation service reads SystemRole::TEACHER for eligibility,
+     * and the lecturer workspace reads SystemRole::TEACHER to confirm the
+     * signed-in user really is a lecturer before any Offering is resolved.
      */
     public function test_registry_is_not_referenced_by_runtime_code_yet(): void
     {
@@ -136,6 +144,28 @@ class SystemRoleRegistryTest extends TestCase
             'admin/rbac/roles/show.blade.php',                        // base-role name column
             'admin/rbac/staff/index.blade.php',                       // base-role name column
         ];
+
+        $genericStaffWiring = [
+            'Http/Controllers/Admin/GenericStaffAccountAccessController.php',
+            'Http/Controllers/Admin/OtherStaffController.php',
+            // Staff Directory record management: identity/display only — which
+            // base role a person is, the Lecturer academic block, and refusing
+            // to act as a platform Super Admin. Every authorization decision
+            // there comes from PermissionService and StaffRecordService.
+            'Http/Controllers/Admin/StaffProfileController.php',
+            'Http/Controllers/Auth/LoginController.php',
+            'Http/Controllers/Auth/ResetPasswordController.php',
+            'Http/Middleware/AdminMiddleware.php',
+            'Http/Middleware/GenericStaffMiddleware.php',
+            'Http/Middleware/RedirectIfAuthenticated.php',
+            'Support/CourseOffering/CourseOfferingLecturerAllocationService.php',
+            'Support/CourseOffering/LecturerCourseOfferingAccess.php',   // SystemRole::TEACHER: lecturer identity
+            'Support/CourseOffering/SystemTesterAccess.php',   // SystemRole::TEACHER: testing access requires Lecturer identity
+            'Support/Staff/StaffProvisioningService.php',
+            'admin/navigation.blade.php',
+            'migrations/2026_09_27_000001_add_generic_staff_system_role.php',
+        ];
+        $phase3bDisplayOnly = array_merge($phase3bDisplayOnly, $genericStaffWiring);
 
         $found = array_map(fn ($file) => str_replace('\\', '/', $file->getRelativePathname()), iterator_to_array($finder, false));
         sort($found);

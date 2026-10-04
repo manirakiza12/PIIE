@@ -1,0 +1,270 @@
+/*
+ * THE ACADEMIC EDITOR - one stylesheet for every rich-text surface in PIIE.
+ *
+ * ── WHY THE SOURCE TEXTAREA IS HIDDEN BY A CLASS ON <html>, NOT IN A MEDIA QUERY
+ * or an inline style
+ *
+ * A file input cannot repopulate, and neither can a textarea - but the whole
+ * reason the textarea stays in the DOM is that it is the SUBMITTED field. If the
+ * rule that hides it were unconditional, a browser with JavaScript disabled would
+ * show a student an empty box with a toolbar that does nothing, and their work
+ * would be unrecoverable.
+ *
+ * So the stylesheet hides it only under `html.piie-js`, and the editor script adds
+ * that class to the document when it has actually succeeded. Without the script,
+ * the class is never added, the textarea stays visible, and the page is a plain
+ * multi-line text field that posts exactly the same value. The editor is an
+ * enhancement; it is never the only way to answer.
+ *
+ * ── WHY THE EDITOR FRAME KEEPS THE EXISTING `as-editor-shell` GEOMETRY ─────
+ * The authoring surfaces already ship a frame sized for substantial writing on a
+ * phone as well as a desktop. These rules adopt that geometry rather than
+ * replacing it, so nothing that was readable before becomes less readable, and a
+ * lecturer who has learned one editor's shape finds the same shape everywhere.
+ *
+ * ── LOW DATA ──────────────────────────────────────────────────────────────
+ * No web fonts, no background images, nothing that must download before text
+ * appears. The reader is built for metered connections and that applies to the
+ * editing surface too.
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1. THE EDITOR FRAME
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.piie-editor-shell {
+    border: 1px solid #d7dee5;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+}
+
+/* ONLY under `html.piie-js`. See the file header. */
+html.piie-js .piie-editor-shell > textarea.piie-editor-source {
+    display: none;
+}
+
+.piie-editor-shell .note-editor {
+    min-height: 320px;
+    max-height: 68vh;
+    overflow-y: auto;
+}
+
+.piie-editor-shell .note-editable {
+    min-height: 320px;
+    padding: 1rem 1.15rem;
+    line-height: 1.65;
+    color: #1f2933;
+}
+
+.piie-editor-shell .note-resizebar { display: none; }
+.piie-editor-shell .note-container { margin: 0; }
+.piie-editor-shell .note-dropdown { z-index: 1080; }
+.piie-editor-shell .note-btn { font-size: .82rem; }
+
+@media (max-width: 767.98px) {
+    .piie-editor-shell .note-editable,
+    .piie-editor-shell .note-editor {
+        min-height: 220px;
+        max-height: 50vh;
+    }
+
+    /* A toolbar that wraps rather than overflows horizontally: a phone user
+       cannot reach a control that runs off the edge. */
+    .piie-editor-shell .note-toolbar { padding: 4px; }
+    .piie-editor-shell .note-toolbar .note-btn { padding: 5px 7px; margin: 1px; }
+}
+
+/* The state the script leaves behind when the editor could not load. The
+   textarea is visible and usable; this only makes the situation legible. */
+.piie-editor-shell.piie-editor-fallback { border-color: #f0b429; }
+
+@media print {
+    .piie-editor-shell .note-toolbar { display: none !important; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2. THE MATHEMATICAL SYMBOL PICKER
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.piie-symbol-overlay {
+    position: fixed;
+    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: rgba(15, 23, 32, .55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 2000;
+}
+
+.piie-symbol-panel {
+    background: #fff;
+    border-radius: 10px;
+    max-width: 640px;
+    width: 100%;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 18px 48px rgba(15, 23, 32, .3);
+}
+
+.piie-symbol-panel > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .8rem 1.1rem;
+    border-bottom: 1px solid #d7dee5;
+}
+
+.piie-symbol-panel > header h2 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+
+.piie-symbol-close {
+    border: 0;
+    background: transparent;
+    font-size: 1.6rem;
+    line-height: 1;
+    padding: 0 .35rem;
+    cursor: pointer;
+    color: #52606d;
+}
+
+.piie-symbol-body { overflow-y: auto; padding: .9rem 1.1rem 1.2rem; }
+.piie-symbol-group h3 {
+    font-size: .74rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #52606d;
+    margin: 1rem 0 .45rem;
+    font-weight: 700;
+}
+
+.piie-symbol-group:first-child h3 { margin-top: 0; }
+
+.piie-symbol-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(2.7rem, 1fr));
+    gap: .3rem;
+}
+
+.piie-symbol {
+    border: 1px solid #d7dee5;
+    background: #fff;
+    border-radius: 6px;
+    /* A fixed square so the grid stays even regardless of the glyph's own
+       metrics, and large enough to be a tap target on a phone. */
+    min-width: 2.7rem;
+    height: 2.7rem;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #1f2933;
+}
+
+.piie-symbol:hover, .piie-symbol:focus {
+    background: #eef4fa;
+    border-color: #1a5490;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3. RENDERED ACADEMIC PROSE
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * The READING side of the same vocabulary the editor produces. Kept here beside
+ * the editor rules on purpose: what a lecturer can do in the toolbar and what a
+ * reader then sees are one design decision, and splitting them across two
+ * stylesheets is how the two drift apart.
+ *
+ * Every size is relative, so the prose scales with the reader's own text-size
+ * setting, and there is no fixed pixel width.
+ */
+.piie-prose {
+    --piie-ink: #1f2933;
+    --piie-muted: #52606d;
+    --piie-line: #d7dee5;
+    --piie-accent: #1a5490;
+    color: var(--piie-ink);
+    line-height: 1.7;
+    overflow-wrap: break-word;
+}
+
+.piie-prose h1, .piie-prose h2, .piie-prose h3,
+.piie-prose h4, .piie-prose h5, .piie-prose h6 {
+    color: var(--piie-ink);
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 1.4em 0 .5em;
+}
+
+.piie-prose h1 { font-size: 1.45rem; }
+.piie-prose h2 { font-size: 1.3rem; }
+.piie-prose h3 { font-size: 1.14rem; }
+.piie-prose h4, .piie-prose h5, .piie-prose h6 { font-size: 1rem; }
+
+.piie-prose p { margin: 0 0 1em; }
+.piie-prose ul, .piie-prose ol { margin: 0 0 1em; padding-left: 1.5em; }
+.piie-prose li { margin-bottom: .35em; }
+.piie-prose a { color: var(--piie-accent); }
+
+.piie-prose blockquote {
+    margin: 0 0 1em;
+    padding: .6em 1em;
+    border-left: 4px solid var(--piie-line);
+    color: var(--piie-muted);
+    background: #f7f9fb;
+}
+
+.piie-prose blockquote p:last-child { margin-bottom: 0; }
+
+.piie-prose code, .piie-prose pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .95em;
+}
+
+.piie-prose pre {
+    background: #f4f6f8;
+    padding: .8em 1em;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.piie-prose sup, .piie-prose sub { font-size: .75em; line-height: 0; }
+
+.piie-prose hr { border: 0; border-top: 1px solid var(--piie-line); margin: 1.5em 0; }
+
+/* An equation is stored as notation plus a plain-text fallback. Until (and
+   unless) a maths renderer is fitted, the fallback is what the reader sees -
+   which is precisely why the editor requires one. A visible, quiet left rule
+   marks it as notation rather than as prose the author wrote in words. */
+.piie-prose [data-latex],
+.piie-prose [data-equation] {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #f4f6f8;
+    border-left: 3px solid var(--piie-line);
+    padding: .1em .5em;
+    border-radius: 0 4px 4px 0;
+}
+
+/* Images are max-width constrained and lazy by the sanitizer, so a pasted
+   photograph cannot force the page wide on a phone. */
+.piie-prose img { max-width: 100%; height: auto; border-radius: 6px; }
+
+/* A table scrolls inside its own container rather than forcing the page wide.
+   A single wide table would otherwise make every paragraph on the page
+   unreachable on a phone. */
+.piie-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 0 1em;
+}
+
+.piie-prose table { width: 100%; border-collapse: collapse; margin: 0; font-size: .95rem; }
+.piie-prose th, .piie-prose td {
+    border: 1px solid var(--piie-line);
+    padding: .5em .7em;
+    text-align: left;
+    vertical-align: top;
+}
+.piie-prose th { background: #f4f6f8; font-weight: 600; }

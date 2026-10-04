@@ -95,10 +95,24 @@ class OnlineExamAdminVisibilityTest extends TestCase
             'submission_id' => $this->submission, 'question_id' => $question, 'answer_revision' => 1, 'selected_option' => 'a',
         ])->assertOk();
         $this->actingAs($this->student)->post(route('student.online_exam.submit', $this->exam), ['submission_id' => $this->submission])->assertRedirect();
+
+        // A student's submit no longer finalises. It lands on the handover gate,
+        // because `finalized` is now written only by a deliberate staff act - which
+        // is what closed the submission-12 dead end, where a result read "Finalized /
+        // Not Released" with nothing able to action it.
+        $this->assertSame('submitted', DB::table('online_exam_submissions')->where('id', $this->submission)->value('status'));
+
+        // The handover is now performed through the REAL route rather than by
+        // writing `result_review_state` straight into the table. The previous
+        // version had to fake it, because no handover existed for a paper needing no
+        // marking; now it does, and this exercises the same authorisation, audit and
+        // state transition an administrator would.
+        $this->actingAs($this->admin)
+            ->post(route('admin.online_exams.submissions.finalize', $this->submission))
+            ->assertRedirect();
+
         $this->assertSame('finalized', DB::table('online_exam_submissions')->where('id', $this->submission)->value('status'));
-        // Simulate the teacher's explicit Submit Marking for Review action;
-        // completion alone intentionally leaves this state as not_ready.
-        DB::table('online_exam_submissions')->where('id', $this->submission)->update(['result_review_state' => 'pending_review']);
+        $this->assertSame('pending_review', DB::table('online_exam_submissions')->where('id', $this->submission)->value('result_review_state'));
 
         $this->actingAs($this->admin)->post(route('admin.online_exams.submissions.publish_result', $this->submission))
             ->assertRedirect()->assertSessionHas('success');
@@ -114,13 +128,31 @@ class OnlineExamAdminVisibilityTest extends TestCase
         $this->assertSame('result_published', DB::table('online_exam_submissions')->where('id', $this->submission)->value('status'));
     }
 
-    public function test_after_exam_end_policy_cannot_be_published_manually(): void
-    {
-        $this->createPendingManualAttempt();
-        $response = $this->actingAs($this->admin)->post(route('admin.online_exams.submissions.publish_result', $this->submission));
-        $response->assertStatus(422);
-        $this->assertNotSame('result_published', DB::table('online_exam_submissions')->where('id', $this->submission)->value('status'));
-    }
+    /**
+     * THE `after_exam_end` WINDOW STILL REFUSES PUBLICATION — AND NOW SAYS WHY.
+     *
+     * The rule is unchanged and still holds: nothing is released early. What changed is
+     * the refusal itself. This used to assert a bare `422`, which is what an
+     * administrator actually saw for exam 17 submission 12 and could not interpret.
+     *
+     * The refusal is now a redirect carrying an explanation, asserted here so the
+     * rule and its presentation are both pinned.
+     */
+public function test_after_exam_end_policy_cannot_be_published_manually(): void
+{
+    $this->createPendingManualAttempt();
+
+    $response = $this->actingAs($this->admin)->post(route('admin.online_exams.submissions.publish_result', $this->submission));
+
+    // Refused, and refused with words rather than a status code.
+    $response->assertRedirect();
+    $this->assertNotSame(422, $response->status(), 'an ordinary workflow rejection is not an error document');
+    $response->assertSessionHasErrors('result');
+
+    // The rule itself is untouched: still not released.
+    $this->assertNotSame('result_published', DB::table('online_exam_submissions')->where('id', $this->submission)->value('status'));
+    $this->assertNull(DB::table('online_exam_submissions')->where('id', $this->submission)->value('published_at'));
+}
 
     public function test_marking_completion_stays_not_ready_until_explicit_review_submission(): void
     {
@@ -138,10 +170,40 @@ class OnlineExamAdminVisibilityTest extends TestCase
             'submission_id' => $this->submission,
             'type' => 'marking_submitted_for_review',
         ]);
+        // The row is `submitted` + `not_ready`: with the lecturer, not yet handed over.
+        // The student is told the result is being processed, which is the truthful
+        // description of that state. The old page branched on `status` and would have
+        // claimed the result was finalized and awaiting publication.
         $this->actingAs($this->student)->get(route('student.online_exam.result', $this->submission))
-            ->assertOk()->assertSee('awaiting publication');
+            ->assertOk()->assertSee('being processed');
     }
 
+    /**
+     * A marking-review notification must land on THAT submission's results row.
+     *
+     * ── WHAT CHANGED, AND WHY THIS ASSERTION CHANGED WITH IT ────────────────
+     *
+     * This used to assert byte equality against
+     *
+     *     route('admin.online_exams.results', $exam) . '?submission=' . $id . '#submission-' . $id
+     *
+     * which pinned the stored value to an ABSOLUTE url rooted at `config('app.url')`.
+     * That is precisely the defect: an administrator was handed
+     * `http://localhost/admin/online-exams/17` while the application was being served
+     * from another host and port, and clicking it left the application for a server
+     * that has no document root for that path.
+     *
+     * So the assertion is now split, and both halves matter more than the old one:
+     *
+     *  - the TARGET is unchanged and still pinned - same named route, same query,
+     *    same fragment. The notification still opens the exact submission's row;
+     *  - the STORED value is a location inside this application, with no origin, so
+     *    it cannot be resolved against the wrong host at click time.
+     *
+     * Dropping the origin is not a loosening of "which page": `route()` still
+     * decides that, so the path cannot drift from the routing table. See
+     * `OnlineExamNotificationLink`.
+     */
     public function test_marking_review_notification_targets_exact_submission_results_row(): void
     {
         OnlineExamPortalNotifier::admins(
@@ -160,9 +222,30 @@ class OnlineExamAdminVisibilityTest extends TestCase
             ->first();
 
         $this->assertNotNull($notification);
+
+        $expectedPath = '/'.ltrim(parse_url(route('admin.online_exams.results', $this->exam), PHP_URL_PATH), '/');
+        $expected = $expectedPath
+            .'?submission='.$this->submission
+            .'#submission-'.$this->submission;
+
         $this->assertSame(
-            route('admin.online_exams.results', $this->exam) . '?submission=' . $this->submission . '#submission-' . $this->submission,
-            $notification->action_url
+            $expected,
+            $notification->action_url,
+            'the stored target must be that exact route, query and fragment'
+        );
+
+        // And it must carry NO origin, which is the whole point.
+        $this->assertStringStartsNotWith(
+            'http',
+            $notification->action_url,
+            'a stored notification link must not be pinned to APP_URL, or it leaves the application when clicked'
+        );
+
+        // Resolved for a reader, it comes back onto whatever host they are on.
+        $this->assertStringStartsWith(
+            url()->to('/'),
+            \App\Support\OnlineExams\OnlineExamNotificationLink::toAbsolute($notification->action_url),
+            'the link must resolve against the current application, not a configured one'
         );
     }
 }

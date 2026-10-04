@@ -1023,7 +1023,11 @@
             <!-- MAIN CONTENT                               -->
             <!-- ============================================ -->
             <div class="main_content">
-                @include('shared.page_toolbar')
+                {{-- A page that declares @section('hide_page_toolbar') has no
+                     printable/exportable result, so the toolbar is skipped. --}}
+                @unless (View::hasSection('hide_page_toolbar'))
+                    @include('shared.page_toolbar')
+                @endunless
                 <div id="page-print-area">
                     @yield('content')
                 </div>
@@ -1053,7 +1057,26 @@
     <script src="{{ asset('assets/calender/locales-all.js') }}"></script>
     <script src="{{ asset('assets/js/Sortable.min.js') }}"></script>
     <script src="{{ asset('assets/js/jquery-sortable.js') }}"></script>
-    <script src="{{ asset('assets/js/summernote-lite.min.js') }}"></script>
+    {{-- Summernote is deliberately NOT loaded here.
+
+         It used to be, and that was the cause of the exam 21 question-creation
+         failure. `x-academic-editor` loads the bundle itself, inside `@once`, at
+         the point the editor is needed — so it is already executed and already
+         mounted the editable regions by the time this layout's script block runs.
+
+         Loading it a second time here re-registers `$.fn.summernote` with a FRESH
+         copy that has no knowledge of the editables the first copy mounted. Every
+         later `$(area).summernote('code')` then dispatches into that fresh copy,
+         which finds nothing and answers with an empty string — while the lecturer
+         is looking at their text in the editor the first copy built. That empty
+         read is what the browser serialised as the question, and the server was
+         right to refuse it.
+
+         The stylesheet above is still loaded here: a duplicate stylesheet is inert,
+         and keeping it means any view expecting the vendor styling still has it.
+
+         Every editor in the application is built by `x-academic-editor`, so nothing
+         calls the vendor directly any more. --}}
     <script src="{{ asset('assets/js/toastr.min.js') }}"></script>
     <script src="{{ asset('assets/js/pdfmake.min.js') }}"></script>
     <script src="{{ asset('assets/js/html2pdf.bundle.min.js') }}"></script>

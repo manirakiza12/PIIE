@@ -10,9 +10,9 @@
           <div class="d-flex flex-column">
             <h4>{{ get_phrase('Designations') }}</h4>
             <ul class="d-flex align-items-center eBreadcrumb-2">
-              <li><a href="#">{{ get_phrase('Home') }}</a></li>
-              <li><a href="#">{{ get_phrase('Staff') }}</a></li>
-              <li><a href="#">{{ get_phrase('Designations') }}</a></li>
+              <li><a href="{{ route('admin.dashboard') }}">{{ get_phrase('Home') }}</a></li>
+              <li><a href="{{ route('admin.rbac.staff.index') }}">{{ get_phrase('Staff') }}</a></li>
+              <li><span>{{ get_phrase('Designations') }}</span></li>
             </ul>
           </div>
           <div class="export-btn-area">
@@ -49,14 +49,27 @@
                         <tr>
                             <th>#</th>
                             <th>{{ get_phrase('Name') }}</th>
+                            <th>{{ get_phrase('Staff Using') }}</th>
                             <th class="text-end">{{ get_phrase('Action') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($designations as $key => $designation)
+                            @php
+                                $inUse = (int) ($usage[$designation->id] ?? 0);
+                                $inUseTitle = str_replace(':count', (string) $inUse,
+                                    get_phrase('Used by :count staff member(s). Reassign them to another designation before deleting this one.'));
+                            @endphp
                              <tr>
                                 <td>{{ $designations->firstItem() + $key }}</td>
                                 <td>{{ $designation->name }}</td>
+                                <td>
+                                    @if($inUse > 0)
+                                        <span class="badge bg-secondary-subtle text-secondary-emphasis">{{ $inUse }}</span>
+                                    @else
+                                        <span class="text-muted">0</span>
+                                    @endif
+                                </td>
                                 <td>
                                     <div class="adminTable-action">
                                         <button
@@ -74,7 +87,14 @@
                                             <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.edit.designation', ['id' => $designation->id]) }}', '{{ get_phrase('Edit Designation') }}')">Edit</a>
                                           </li>
                                           <li>
-                                            <a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.designation.delete', ['id' => $designation->id]) }}', 'undefined');">{{ get_phrase('Delete') }}</a>
+                                            @if($inUse > 0)
+                                                {{-- Referenced by staff: never a hard delete. --}}
+                                                <span class="dropdown-item disabled" aria-disabled="true" title="{{ $inUseTitle }}">
+                                                    {{ get_phrase('In use — cannot delete') }}
+                                                </span>
+                                            @else
+                                                <a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.designation.delete', ['id' => $designation->id]) }}', 'undefined');">{{ get_phrase('Delete') }}</a>
+                                            @endif
                                           </li>
                                         </ul>
                                     </div>

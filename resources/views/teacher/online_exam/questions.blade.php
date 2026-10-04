@@ -37,7 +37,7 @@
                 @forelse($bank as $b)
                     <tr>
                         <td><input type="checkbox" name="question_bank_ids[]" value="{{ $b->id }}"></td>
-                        <td>{{ $b->question }}</td>
+                        <td class="piie-prose">{!! $b->prosePrompt() !!}</td>
                         <td>{{ strtoupper(str_replace('_', ' ', $b->normalized_type)) }}</td>
                         <td>{{ $b->marks }}</td>
                     </tr>
@@ -66,7 +66,7 @@
                             <input form="reorderQuestionsForm" type="hidden" name="question_ids[]" value="{{ $question->id }}">
                             {{ $question->sort_order }}
                         </td>
-                        <td>{{ $question->question }}</td>
+                        <td class="piie-prose">{!! $question->prosePrompt() !!}</td>
                         <td>{{ strtoupper(str_replace('_', ' ', $question->normalized_type)) }}</td>
                         <td>{{ $question->marks }}</td>
                         <td>
@@ -86,7 +86,30 @@
                             <form method="POST" action="{{ route('teacher.online_exams.questions.update', $question->id) }}" class="row g-2">
                                 @csrf
                                 @method('PUT')
-                                <div class="col-md-4"><input class="form-control eForm-control" name="question" value="{{ $question->question }}" required></div>
+                                                                {{-- Full width, and on its own row.
+
+                                     This replaced a single-line `<input>`, which became
+                                     a data-loss path the moment prompts could contain
+                                     markup: opening a question with a table in it showed
+                                     the raw tags as text, and saving stored that text -
+                                     so the formatting was destroyed and every candidate
+                                     would read literal angle brackets.
+
+                                     The type, marks, answer key and option fields keep
+                                     their existing columns on the row below, and the
+                                     per-row script still finds this form through
+                                     `document.currentScript`, because the component
+                                     renders inside it. --}}
+                                <div class="col-12">
+                                    <x-academic-editor
+                                        name="question"
+                                        :id="'edit-question-'.$question->id"
+                                        :value="$question->getAttributes()['question'] ?? ''"
+                                        :required="true"
+                                        :height="220"
+                                        help="Formatting, lists, tables and mathematical notation are kept."
+                                        testid="exam-question-edit-editor" />
+                                </div>
                                 @php($structuredConfig = $question->question_schema_version ? json_decode($question->question_config, true) : [])
                                 @php($structuredMarking = $question->question_schema_version ? json_decode($question->marking_config, true) : [])
                                 <div class="col-md-2">

@@ -22,7 +22,7 @@
             <div class="row mt-2">
                 <div class="col-6 fpb-7"><label class="eForm-label">{{ get_phrase('Exam Type') }} *</label>
                     <select class="form-control eForm-control" name="exam_type" required {{ $structureLocked ? 'disabled' : '' }}>
-                        @foreach(['cat' => 'CAT', 'midterm' => 'Midterm', 'final' => 'Final', 'quiz' => 'Quiz', 'assignment' => 'Assignment'] as $k => $v)
+                        @foreach(\App\Models\OnlineExam::TYPES as $k => $v)
                             <option value="{{ $k }}" {{ ($exam->exam_type ?? 'quiz') === $k ? 'selected' : '' }}>{{ get_phrase($v) }}</option>
                         @endforeach
                     </select>
@@ -106,7 +106,18 @@
             </div>
 
             <div class="fpb-7 mt-2"><label class="eForm-label">{{ get_phrase('Instructions') }}</label>
-                <textarea class="form-control eForm-control" name="instructions" rows="3">{{ $exam->instructions ?? '' }}</textarea></div>
+                <label class="eForm-label">{{ get_phrase('Instructions') }}</label>
+                {{-- A candidate's instructions are a document: a list of rules, a table
+                     of permitted notation, a worked example. The same component and the
+                     same server-side filter as every other piece of course content;
+                     the model's mutator filters this on the way in whatever form posts it. --}}
+                <x-academic-editor
+                    name="instructions"
+                    :value="!empty($exam) ? ($exam->getAttributes()['instructions'] ?? '') : ''"
+                    :rows="4"
+                    :height="260"
+                    help="Formatting, lists, tables and mathematical notation are kept."
+                    testid="exam-instructions-editor" /></div>
 
             <div class="row mt-2">
                 <div class="col-6 fpb-7 form-check ms-3">

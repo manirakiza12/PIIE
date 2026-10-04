@@ -14,7 +14,8 @@
 
             <div class="fpb-7">
                 <label for="birthday" class="eForm-label">{{ get_phrase('Birthday') }}<span class="required"></span></label>
-                <input type="text" class="form-control eForm-control inputDate" id="birthday" name="birthday" value="{{ date('m/d/Y', $info->birthday) }}" />
+                {{-- A missing date of birth stays blank. Falling back to today would silently write today's date onto a staff record that never had one. --}}
+                <input type="text" class="form-control eForm-control inputDate" id="birthday" name="birthday" value="{{ !empty($info->birthday) ? date('m/d/Y', (int) $info->birthday) : '' }}" />
                 </div>
             </div>
 

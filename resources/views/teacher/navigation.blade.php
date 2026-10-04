@@ -116,6 +116,23 @@
 	        </li>
 			<!-- Sidebar menu -->
 
+			{{-- HEI academic delivery workspace. Hidden for K12 institutions, which
+			     keep their existing Teacher navigation untouched. --}}
+			@if((app(\App\Support\TenantConfiguration::class)->terminology(auth()->user()->school)['profile'] ?? 'k12') !== 'k12')
+			<li class="nav-links-li {{ request()->is('teacher/course-offerings*') ? 'showMenu':'' }}">
+	            <div class="iocn-link">
+	              <a href="{{ route('teacher.course_offerings.index') }}">
+	                <div class="sidebar_icon">
+	                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48">
+	                    <path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v3.64C5 18.64 8.13 20 12 20s7-1.36 7-3.18v-3.64L12 16l-7-2.82z"/>
+	                  </svg>
+	                </div>
+	                <span class="link_name">{{ get_phrase('My Course Offerings') }}</span>
+	              </a>
+	            </div>
+	        </li>
+			@endif
+
 			<li class="nav-links-li {{ request()->is('teacher/attendance*') || request()->is('teacher/routine') || request()->is('teacher/subject') || request()->is('teacher/gradebook') || request()->is('teacher/syllabus') ? 'showMenu':'' }}">
 				<div class="iocn-link">
 					<a href="#">
@@ -482,7 +499,6 @@
             
             <div class="col-auto d-flex ">
               @include('notifications._bell')
-              @include('online_exam.notifications')
               <div class="message">
                 @php
                 $last_message = DB::table('message_thrades')
@@ -731,9 +747,10 @@
     <script src="{{ asset('assets/js/onDomChange.js') }}"></script>
     <script src="{{ asset('assets/js/Sortable.min.js') }}"></script>
     <script src="{{ asset('assets/js/jquery-sortable.js') }}"></script>
-    <!-- SummerNote Js -->
-    <script src="{{ asset('assets/js/summernote-lite.min.js') }}"></script>
-
+    {{-- SummerNote is loaded by `x-academic-editor`, not here. A second execution
+         of the bundle re-registers `$.fn.summernote` with a fresh copy that knows
+         nothing about the editables already mounted, so later `summernote('code')`
+         reads answer empty. See the same note in layouts/app.blade.php. --}}
     <!--Toaster Script-->
     <script src="{{ asset('assets/js/toastr.min.js') }}"></script>
 

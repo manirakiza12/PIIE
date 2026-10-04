@@ -66,12 +66,66 @@
                         <h6>{{ $lc->title }}</h6>
                         <span class="badge bg-{{ $lc->computed_status=='live'?'danger':($lc->computed_status=='scheduled'?'warning':'secondary') }}">
                             @if($lc->computed_status === 'live')<span class="live-pulse-dot"></span>@endif
-                            {{ ucfirst($lc->computed_status) }}
+                            {{ $lc->displayStatusLabel() }}
                         </span>
                     </div>
                     <div class="text-muted small">{{ optional($lc->subject)->name }}</div>
+                    {{-- Who is teaching it. A student planning to attend a class has
+                         as much right to know the lecturer's name as to know the
+                         room. --}}
+                    @if(optional($lc->teacher)->name)
+                        <div class="text-muted small"><i class="bi bi-person"></i> {{ optional($lc->teacher)->name }}</div>
+                    @endif
                     @if($lc->start_date)
-                    <div class="mt-2"><i class="bi bi-calendar-event"></i> {{ $lc->start_date->format('d M Y') }} {{ $lc->start_time ? \Illuminate\Support\Carbon::parse($lc->start_time)->format('H:i') : '' }} - {{ $lc->end_time ? \Illuminate\Support\Carbon::parse($lc->end_time)->format('H:i') : '' }}</div>
+                    {{-- One stored instant, in this student's own clock. The raw start_time/end_time
+     columns were rendered here; they hold the wall clock as TYPED by whoever
+     scheduled it, in whatever zone that person was in, so a student in another
+     country read a time hours away from the real meeting. --}}
+@php
+    // One formatter, resolved once. It was previously built twice in the same
+    // markup, and nothing showed WHICH clock the times were in: a student read
+    // "04 Oct 2026 3:25 AM" with no zone, and when the institution timezone was
+    // unset that was UTC while the class was really 06:25 Kampala - three hours
+    // out, presented as if it were certain. The zone label is now shown.
+    //
+    // A plain PHP comment, not a Blade {{-- --}} one: Blade does not process
+    // comments inside an @php block, and {{-- here is a PHP parse error.
+    $piieDisplay = app(App\Support\LiveClasses\LiveClassDisplay::class)->for($lc, auth()->user());
+@endphp
+<div class="mt-2">
+                            <i class="bi bi-calendar-event"></i>
+                            {{ $piieDisplay->date() }}
+                            {{ $piieDisplay->timeRange() }}
+                        </div>
+                        <div class="text-muted small">
+                            <i class="bi bi-globe2"></i>
+                            {{ $piieDisplay->zoneNote() }}
+                        </div>
+                        {{-- Duration, derived from the two stored instants rather
+                             than shown as a stored column, so it can never disagree
+                             with the times above it. --}}
+                        @if($lc->duration_minutes !== null)
+                            <div class="text-muted small">
+                                <i class="bi bi-hourglass-split"></i>
+                                {{ $lc->duration_minutes >= 60
+                                    ? intdiv($lc->duration_minutes, 60).'h'.($lc->duration_minutes % 60 ? ' '.($lc->duration_minutes % 60).'m' : '')
+                                    : $lc->duration_minutes.'m' }}
+                            </div>
+                        @endif
+                    @endif
+                    {{-- Google conference status. A student shown "Link not ready
+                         yet" needs to be told this is normal, or they will assume
+                         the class is cancelled. --}}
+                    @php($piieConference = \App\Support\LiveClasses\GoogleConferenceStatus::describe($lc->google_conference_status))
+                    @if($piieConference && ! $piieConference['joinable'])
+                        <div class="small text-muted mt-1">
+                            <i class="bi bi-info-circle"></i>
+                            {{ $piieConference['label'] }} — {{ $piieConference['explanation'] }}
+                        </div>
+                    @elseif($piieConference)
+                        <div class="small text-success mt-1">
+                            <i class="bi bi-camera-video"></i> {{ $piieConference['label'] }}
+                        </div>
                     @endif
                     @if($lc->description)<p class="small mt-2">{{ Str::limit($lc->description,80) }}</p>@endif
                     @if($lc->exceedsGoogleMeetFreeTierLimit())

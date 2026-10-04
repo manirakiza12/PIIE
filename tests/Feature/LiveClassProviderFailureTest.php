@@ -102,6 +102,52 @@ class LiveClassProviderFailureTest extends TestCase
         $this->assertSame(0, DB::table('live_classes')->count());
     }
 
+    // A real cURL TLS failure, which is what the missing CA bundle produced.
+    //
+    // The existing test above throws a hand-built RequestException, which carries NO
+    // handler context - so it exercises the generic transport branch, not the TLS
+    // one. This test supplies the handler context that a genuine cURL error 60
+    // always carries, and pins the two behaviours that were missing: the failure is
+    // classified in the log, and the lecturer is told it is a configuration fault
+    // rather than being sent into a retry loop against a provider that was never
+    // contacted.
+    public function test_a_real_tls_trust_failure_is_classified_and_not_reported_as_a_provider_outage(): void
+    {
+        Http::fake(fn () => throw new \GuzzleHttp\Exception\RequestException(
+            'cURL error 60: SSL certificate problem: unable to get local issuer certificate',
+            new \GuzzleHttp\Psr7\Request('POST', 'https://oauth2.googleapis.com/token'),
+            null,
+            null,
+            // Guzzle 7 takes the handler context as the FIFTH argument; passing it
+            // fourth binds to ?Throwable $previous and raises a TypeError instead,
+            // which would fail the test for the wrong reason entirely.
+            ['errno' => 60, 'error' => 'SSL certificate problem: unable to get local issuer certificate']
+        ));
+        Log::spy();
+
+        $response = $this->schedule('google_meet');
+
+        $response->assertSessionHasErrors('meeting_url');
+        $message = session('errors')->first('meeting_url');
+
+        // Told it is a configuration fault: retrying cannot help.
+        $this->assertStringContainsString('configuration fault', $message);
+        // NOT the "provider is down, try again shortly" wording, which sent the
+        // investigation to Google instead of to this host's php.ini.
+        $this->assertStringNotContainsString('could not be reached', $message);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $line, array $context): bool {
+                return str_contains($line, 'tls_trust_failure')
+                    && ($context['failure_kind'] ?? null) === 'tls_trust_failure'
+                    && ($context['curl_errno'] ?? null) === 60
+                    && str_contains((string) ($context['hint'] ?? ''), 'curl.cainfo');
+            });
+
+        $this->assertSame(0, DB::table('live_classes')->count());
+    }
+
     public function test_a_successful_google_meet_call_still_creates_the_class(): void
     {
         Http::fake([

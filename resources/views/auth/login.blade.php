@@ -268,10 +268,28 @@
 <div class="login-wrapper">
   <div class="login-card">
 
-    {{-- Logo --}}
+    {{-- Logo.
+         `dark_logo` is UNSET on this installation, so the original expression
+         `asset('assets/uploads/logo/'.get_settings('dark_logo'))` concatenated an
+         empty string and produced `.../assets/uploads/logo` - the bare directory,
+         which 404s and renders a broken-image icon on the sign-in page.
+
+         Now: use the configured file only when it is set AND actually exists on
+         disk, otherwise fall back to `dark-logo.png`, which ships in the repository.
+         An empty or dangling setting can therefore never produce a broken logo
+         again, on this install or any other.
+
+         Presentation only. Nothing about authentication is touched. --}}
+    @php
+        $piieLoginLogoSetting = trim((string) get_settings('dark_logo'));
+        $piieLoginLogoFile = ($piieLoginLogoSetting !== '' && is_file(public_path('assets/uploads/logo/'.$piieLoginLogoSetting)))
+            ? $piieLoginLogoSetting
+            : 'dark-logo.png';
+    @endphp
     <div class="login-logo">
       <div class="logo-circle">
-        <img src="{{ asset('assets/uploads/logo/'.get_settings('dark_logo')) }}" alt="Logo">
+        <img src="{{ asset('assets/uploads/logo/'.$piieLoginLogoFile) }}" alt="PIIE logo"
+             onerror="this.src='{{ asset('assets/uploads/logo/dark-logo.png') }}';">
       </div>
       <h4>{{ get_settings('system_title') ?: 'PIIE' }}</h4>
       <p>{{ get_settings('school_name') ?: 'Management System' }}</p>
@@ -357,7 +375,27 @@
     </form>
 
     <div class="login-footer-links">
-      <a href="{{ get_settings('help_link') }}" target="_blank">Help</a>
+      {{-- Help link.
+         `help_link` is stored as `avanteontech.net` with NO SCHEME, so
+         `href="avanteontech.net"` is a RELATIVE URL. The browser resolves it
+         against the current origin and requests
+         `http://127.0.0.1:8000/avanteontech.net`, which 404s.
+
+         The value is left exactly as the institution configured it - silently
+         rewriting it to `https://avanteontech.net` would be inventing an
+         intention nobody stated. Instead the link is rendered only when the
+         configured value is an ABSOLUTE url. A dead "Help" link on a sign-in page
+         is worse than no Help link, and a schemeless value silently becoming a
+         same-origin path is a mis-click hazard.
+
+         Presentation only. Nothing about authentication is touched. --}}
+    @php
+        $piieHelpLink = trim((string) get_settings('help_link'));
+        $piieHelpIsAbsolute = (bool) preg_match('#^(https?://|mailto:)#i', $piieHelpLink);
+    @endphp
+    @if($piieHelpIsAbsolute)
+      <a href="{{ $piieHelpLink }}" target="_blank" rel="noopener noreferrer">Help</a>
+    @endif
     </div>
   </div>
 </div>

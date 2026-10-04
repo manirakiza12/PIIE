@@ -37,7 +37,34 @@
          </div>
        </div>
        </div>
-   
+
+        @if((app(\App\Support\TenantConfiguration::class)->terminology(auth()->user()->school)['profile'] ?? 'k12') !== 'k12')
+        @php $myOfferings = app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)->offerings(auth()->user()); $currentCount = $myOfferings->filter(fn ($offering) => $offering->my_allocation_is_current)->count(); @endphp
+        <section class="eSection-wrap mb-3" aria-label="My Course Offerings">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+              <h5 class="mb-1">My Course Offerings</h5>
+              <p class="text-muted mb-0">{{ $myOfferings->count() }} {{ \Illuminate\Support\Str::plural('Course Offering', $myOfferings->count()) }} allocated to you &middot; {{ $currentCount }} currently in force.</p>
+            </div>
+            <a class="btn btn-primary" href="{{ route('teacher.course_offerings.index') }}">View My Course Offerings</a>
+          </div>
+          @if($myOfferings->isEmpty())
+            <p class="text-muted mb-0 mt-3">You do not currently have any Course Offerings assigned.</p>
+          @else
+          <div class="row g-2 mt-1">
+            @foreach($myOfferings->take(6) as $myOffering)
+              <div class="col-12 col-md-6 col-xl-4">
+                <a class="d-block border rounded p-3 h-100 text-decoration-none text-reset" href="{{ route('teacher.course_offerings.show', $myOffering->id) }}">
+                  <div class="fw-semibold">{{ $myOffering->subject?->code }} &mdash; {{ $myOffering->subject?->name }}</div>
+                  <div class="small text-muted">{{ $myOffering->academicYear?->label }} &middot; {{ $myOffering->academicPeriod?->label }}</div>
+                  <div class="small">{{ $myOffering->my_role_label }} &middot; {{ $myOffering->my_confirmed_students }} confirmed {{ \Illuminate\Support\Str::plural('student', $myOffering->my_confirmed_students) }}</div>
+                </a>
+              </div>
+            @endforeach
+          </div>
+          @endif
+        </section>
+        @endif
        <!-- Start Alerts -->
        <div class="row">
        <div class="col-12">
@@ -81,29 +108,6 @@
                        <div
                          class="dsHeader d-flex justify-content-between align-items-center"
                        >
-                         <h5 class="title">{{ get_phrase('Teacher') }}</h5>
-                       </div>
-                       <div
-                         class="dsBody d-flex justify-content-between align-items-center"
-                       >
-                         <div class="ds_item_details">
-                           <h4 class="total_no">{{ DB::table('users')->where('role_id', 3)->where('school_id', auth()->user()->school_id)->get()->count() }}</h4>
-                           <p class="total_info">{{ get_phrase('Total Teacher') }}</p>
-                         </div>
-                         <div class="ds_item_icon">
-                           <img
-                             src="{{ asset('assets/images/Teacher_icon.png') }}"
-                             alt=""
-                           />
-                         </div>
-                       </div>
-                     </div>
-                   </div>
-                   <div class="col-md-6">
-                     <div class="dashboard_ShortListItem">
-                       <div
-                         class="dsHeader d-flex justify-content-between align-items-center"
-                       >
                          <h5 class="title">{{ get_phrase('Parents') }}</h5>
                        </div>
                        <div
@@ -122,40 +126,29 @@
                        </div>
                      </div>
                    </div>
-                   <div class="col-md-6">
-                     <div class="dashboard_ShortListItem">
-                       <div
-                         class="dsHeader d-flex justify-content-between align-items-center"
-                       >
-                         <h5 class="title">{{ get_phrase('Staff') }}</h5>
-                       </div>
-                       <div
-                         class="dsBody d-flex justify-content-between align-items-center"
-                       >
-                        <div class="ds_item_details">
-                          @php $admin = DB::table('users')->where('role_id', 2)->where('school_id', auth()->user()->school_id)->get()->count() @endphp
-                          @php $teacher = DB::table('users')->where('role_id', 3)->where('school_id', auth()->user()->school_id)->get()->count() @endphp
-                          @php $accountant = DB::table('users')->where('role_id', 4)->where('school_id', auth()->user()->school_id)->get()->count() @endphp
-                          @php $librarian = DB::table('users')->where('role_id', 5)->where('school_id', auth()->user()->school_id)->get()->count() @endphp
-                           <h4 class="total_no">{{ $admin + $teacher + $accountant + $librarian }}</h4>
-                           <p class="total_info">{{ get_phrase('Total Staff') }}</p>
-                        </div>
-                        <div class="ds_item_icon">
-                           <img
-                             src="{{ asset('assets/images/Staff_icon.png') }}"
-                             alt=""
-                           />
-                        </div>
-                       </div>
-                     </div>
-                   </div>
                  </div>
                </div>
              </div>
              <!-- Imcome Report -->
    
-             <!-- Upcoming Events -->
-             <div class="col-md-6 ms-auto">
+              {{--
+                 THE GRID AFTER THE STAFFING CARDS WERE REMOVED.
+
+                 `col-lg-6` on BOTH columns, matching the short-details block above.
+                 It was `col-md-6 ms-auto` before, which was invisible while four
+                 cards filled the left half but left an awkward half-empty gap the
+                 moment the widths no longer lined up: below `lg` the left block
+                 collapses to 100% while this one stayed at 50% and was pushed right,
+                 so a tablet and a phone showed a 50% void.
+
+                 Both at `lg` gives an even 50/50 on a desktop and two full-width
+                 stacked blocks on anything narrower. The two remaining cards stay
+                 `col-md-6` inside their own row, so they sit side by side on a
+                 tablet and stack on a phone. No fixed pixel widths are introduced,
+                 so nothing can overflow horizontally.
+             --}}
+              <!-- Upcoming Events -->
+             <div class="col-lg-6">
                <div class="dashboard_report dashboard_upcoming_events">
                  <div
                    class="ds_report_header d-flex justify-content-between align-items-start"

@@ -191,7 +191,25 @@
                     <div class="col-md-1 fpb-7"><label class="eForm-label">Status</label><select name="status" class="form-control eForm-control"><option value="1">Active</option><option value="0">Inactive</option></select></div>
                     <div class="col-md-4 fpb-7"><label class="eForm-label">Description</label><textarea name="description" class="form-control eForm-control" rows="2"></textarea></div>
                     <div class="col-md-4 fpb-7"><label class="eForm-label">Content</label><textarea name="content" class="form-control eForm-control" rows="2"></textarea></div>
-                    <div class="col-md-2 fpb-7"><label class="eForm-label">Image</label><input type="file" name="image" class="form-control eForm-control-file"></div>
+                    @include('website_management.partials.item_image_field', [
+                        'idSuffix'     => 'new',
+                        // The section is typed into the field beside this one, so the
+                        // hint follows that field via JS rather than being asserted here.
+                        'isProgramme'  => false,
+                        'currentImage' => null,
+                    ])
+                    <div class="col-md-2 fpb-7">
+                        {{-- Featured flag. Stored in the existing meta_json column as
+                             {"featured": true}, so no migration is involved. Programme
+                             items marked here become eligible for the homepage
+                             Featured Programmes block automatically, with no code change
+                             when a new one is published. --}}
+                        <label class="eForm-label" for="item-featured">Featured</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="1" id="item-featured" name="featured">
+                            <label class="form-check-label" for="item-featured">Show on homepage</label>
+                        </div>
+                    </div>
                     <div class="col-md-2 fpb-7"><button type="submit" class="btn-form">Create Item</button></div>
                 </div>
             </form>
@@ -242,7 +260,36 @@
                                             <div class="col-md-1 fpb-7"><select name="status" class="form-control eForm-control"><option value="1" {{ $item->status ? 'selected' : '' }}>Active</option><option value="0" {{ !$item->status ? 'selected' : '' }}>Inactive</option></select></div>
                                             <div class="col-md-4 fpb-7"><textarea class="form-control eForm-control" name="description" rows="2">{{ $item->description }}</textarea></div>
                                             <div class="col-md-4 fpb-7"><textarea class="form-control eForm-control" name="content" rows="2">{{ $item->content }}</textarea></div>
-                                            <div class="col-md-2 fpb-7"><input type="file" name="image" class="form-control eForm-control-file"></div>
+                                            @include('website_management.partials.item_image_field', [
+                                                'idSuffix'     => 'item-'.$item->id,
+                                                // The item's own section is known here, so
+                                                // the 16:9 guidance is correct immediately.
+                                                'isProgramme'  => $item->item_type === 'programme'
+                                                    || str_starts_with((string) $item->section_key, 'programme_catalog'),
+                                                'currentImage' => $item->image,
+                                            ])
+                                            {{-- Featured, read back out of meta_json so the
+                                                 checkbox reflects what is stored rather
+                                                 than a separate source of truth. --}}
+                                            @php
+                                                // Decoded rather than string-matched on
+                                                // '"featured":true', which would depend on
+                                                // json_encode's exact spacing and break
+                                                // the moment that changed.
+                                                $piieItemMeta = json_decode((string) $item->meta_json, true);
+                                                $piieItemFeatured = is_array($piieItemMeta)
+                                                    && ! empty($piieItemMeta['featured']);
+                                            @endphp
+                                            <div class="col-md-2 fpb-7">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" value="1"
+                                                           id="edit-item-featured-{{ $item->id }}" name="featured"
+                                                           @checked($piieItemFeatured)>
+                                                    <label class="form-check-label" for="edit-item-featured-{{ $item->id }}">
+                                                        Featured
+                                                    </label>
+                                                </div>
+                                            </div>
                                             <div class="col-md-2 fpb-7"><button type="submit" class="btn-form">Update</button></div>
                                         </div>
                                     </form>

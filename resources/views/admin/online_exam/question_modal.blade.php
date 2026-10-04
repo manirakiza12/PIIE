@@ -2,8 +2,17 @@
     <form method="POST" class="d-block ajaxForm" action="{{ route('admin.online_exams.questions.store', $exam_id) }}">
         @csrf
         <div class="form-row">
-            <div class="fpb-7"><label class="eForm-label">{{ get_phrase('Question') }} *</label>
-                <textarea class="form-control eForm-control" name="question" rows="3" required></textarea></div>
+            <div class="fpb-7">
+                {{-- Same component, same filter, same reasons as the lecturer's form: a prompt is a document, not a sentence, and a maths question typed into a plain box is a wall of `df/dx` and `<= 0`. --}}
+                <x-academic-editor
+                    name="question"
+                    :label="get_phrase('Question')"
+                    :required="true"
+                    :rows="4"
+                    :height="280"
+                    help="Formatting, lists, tables and mathematical notation are kept."
+                    testid="exam-question-editor" />
+            </div>
             <div class="row mt-2">
                 <div class="col-6 fpb-7"><label class="eForm-label">{{ get_phrase('Type') }}</label>
                     <select class="form-control eForm-control" name="type" id="q_type" onchange="toggleOptions(this.value)">

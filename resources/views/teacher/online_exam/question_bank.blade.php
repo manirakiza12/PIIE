@@ -44,7 +44,22 @@
     @else
     <form method="POST" action="{{ route('teacher.online_exams.question_bank.store') }}" class="row g-2">
         @csrf
-        <div class="col-md-8"><textarea class="form-control eForm-control" name="question" rows="2" placeholder="{{ get_phrase('Question') }}" required>{{ old('question') }}</textarea></div>
+        <div class="col-md-8">
+            {{-- A bank entry is authored ONCE and copied into many exams, so rich text here pays for itself at once: the same worked calculation is not retyped for every paper that uses it.
+
+                 The filter is on the QuestionBank model's mutator, which matters more here than anywhere else in this feature: this table is SHARED and long-lived, and it is also rendered by the admin bank screens. An editor on this form with no filter attached would have turned a shared table into an injection surface that outlives any single exam.
+
+                 `old('question')` is carried over from the form it replaces, so a failed save returns the lecturer their wording rather than an empty box. --}}
+            <x-academic-editor
+                name="question"
+                :value="old('question')"
+                :placeholder="get_phrase('Question')"
+                :required="true"
+                :rows="3"
+                :height="260"
+                help="Formatting, lists, tables and mathematical notation are kept. This question can be reused across assessments."
+                testid="bank-question-editor" />
+        </div>
         <div class="col-md-4"><select class="form-select eForm-select" name="subject_id" required><option value="">{{ get_phrase('Select assigned subject') }}</option>@foreach($subjects as $subject)<option value="{{ $subject->id }}" @selected((string)old('subject_id') === (string)$subject->id)>{{ $subject->name }}</option>@endforeach</select></div>
         <div class="col-md-4"><label class="form-label">{{ academic_term('programme', auth()->user()->school_id) }}</label><select class="form-select eForm-select" name="programme_id"><option value="">{{ get_phrase('Optional') }}</option>@foreach($programmes as $programme)<option value="{{ $programme->id }}">{{ $programme->name }}</option>@endforeach</select></div><div class="col-md-4"><label class="form-label">{{ academic_term('session', auth()->user()->school_id) }}</label><select class="form-select eForm-select" name="session_id"><option value="">{{ get_phrase('Optional') }}</option>@foreach($sessions as $session)<option value="{{ $session->id }}">{{ $session->session_title }}</option>@endforeach</select></div>
         <div class="col-md-4"><label class="form-label">{{ get_phrase('Topic') }}</label><select class="form-select eForm-select" name="topic_id"><option value="">{{ get_phrase('Optional') }}</option>@foreach($topics as $topic)<option value="{{ $topic->id }}" data-subject="{{ $topic->subject_id }}">{{ $topic->name }}</option>@endforeach</select></div><div class="col-md-4"><label class="form-label">{{ get_phrase('Subtopic') }}</label><select class="form-select eForm-select" name="subtopic_id"><option value="">{{ get_phrase('Optional') }}</option>@foreach($subtopics as $subtopic)<option value="{{ $subtopic->id }}" data-subject="{{ $subtopic->subject_id }}" data-parent="{{ $subtopic->parent_id }}">{{ $subtopic->name }}</option>@endforeach</select></div><div class="col-md-4"><label class="form-label">{{ get_phrase('Tags') }}</label><select class="form-select eForm-select" name="tag_ids[]" multiple>@foreach($tags as $tag)<option value="{{ $tag->id }}">{{ $tag->name }}</option>@endforeach</select></div>
@@ -89,7 +104,7 @@
         @forelse($questions as $i => $q)
             <tr>
                 <td>{{ $questions->firstItem() + $i }}</td>
-                <td>{{ $q->question }}</td>
+                <td class="piie-prose">{!! $q->prosePrompt() !!}</td>
                 <td>{{ optional($q->subject)->name ?? '—' }}</td>
                 <td>{{ strtoupper(str_replace('_', ' ', $q->normalized_type)) }}</td>
                 <td>{{ $q->marks }}</td>

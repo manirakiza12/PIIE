@@ -327,12 +327,20 @@ class FinalSecurityHardeningTest extends TestCase
             $t->id(); $t->string('title')->nullable(); $t->integer('class_id')->nullable(); $t->integer('section_id')->nullable();
             $t->integer('subject_id')->nullable(); $t->string('file')->nullable(); $t->integer('school_id')->nullable(); $t->integer('session_id')->nullable(); $t->timestamps();
         });
+        // `course_offering_id` is declared because the production table has it
+        // (added by the Course Offering Assignments migration) and the legacy
+        // controller now scopes its reads with `->k12()`. It is NULL for every row
+        // in this test on purpose: these ARE the legacy K12 assignments the test is
+        // about, and the domain partition must not exclude them. Every assertion
+        // in the test is unchanged.
         Schema::create('assignments', function (Blueprint $t) {
-            $t->id(); $t->integer('school_id'); $t->boolean('is_published')->default(1); $t->dateTime('due_date')->nullable(); $t->timestamps();
+            $t->id(); $t->integer('school_id'); $t->boolean('is_published')->default(1); $t->dateTime('due_date')->nullable();
+            $t->unsignedBigInteger('course_offering_id')->nullable(); $t->timestamps();
         });
         Schema::create('assignment_submissions', function (Blueprint $t) {
             $t->id(); $t->integer('assignment_id'); $t->integer('student_id'); $t->dateTime('submitted_at')->nullable(); $t->string('status')->nullable();
-            $t->string('file_path')->nullable(); $t->text('submission')->nullable(); $t->timestamps();
+            $t->string('file_path')->nullable(); $t->text('submission')->nullable();
+            $t->unsignedBigInteger('course_offering_id')->nullable(); $t->timestamps();
         });
         $teacher = $this->staff(3, $this->A);
         $syllabusDir = $this->publicDir . '/assets/uploads/syllabus';

@@ -2,8 +2,20 @@
     <form method="POST" class="d-block ajaxForm" action="{{ route('teacher.online_exams.question_bank.store') }}">
         @csrf
         <div class="form-row">
-            <div class="fpb-7"><label class="eForm-label">{{ get_phrase('Question') }} *</label>
-                <textarea class="form-control eForm-control" name="question" rows="3" required></textarea></div>
+            <div class="fpb-7">
+                {{-- The lecturer's Question Bank entry, in the same editor as the exam
+                     question form. Both write to the QuestionBank model's mutator, so
+                     the stored prompt is filtered whichever form posted it - and this
+                     table is shared across every assessment that reuses the entry. --}}
+                <x-academic-editor
+                    name="question"
+                    id="teacher-bank-question-new"
+                    :required="true"
+                    :rows="4"
+                    :height="260"
+                    help="Formatting, lists, tables and mathematical notation are kept."
+                    testid="bank-question-editor" />
+            </div>
             <div class="fpb-7 mt-2"><label class="eForm-label">{{ get_phrase('Subject') }}</label>
                 <select class="form-control eForm-control" name="subject_id">
                     <option value="">{{ get_phrase('General') }}</option>

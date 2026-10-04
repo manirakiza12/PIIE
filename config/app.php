@@ -56,6 +56,11 @@ return [
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
         App\Providers\AuditServiceProvider::class,
+        // Supplies the lecturer's Course Offering workspace navigation to every
+        // page in the teacher/course_offerings namespace, so that no page can
+        // reach production without it - the previous defect was a hand-written
+        // tab strip that existed on the Overview page and nowhere else.
+        App\Providers\CourseOfferingWorkspaceNavServiceProvider::class,
     ],
 
     'aliases' => Facade::defaultAliases()->merge([

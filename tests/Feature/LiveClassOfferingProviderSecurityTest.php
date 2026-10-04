@@ -7,6 +7,11 @@ use App\Models\CourseOfferingLecturerAllocation;
 use App\Models\CourseRegistration;
 use App\Models\LiveClass;
 use App\Models\User;
+use App\Models\GoogleAccountConnection;
+use App\Support\Google\GoogleOAuthClient;
+use App\Support\Google\GoogleOAuthCredentials;
+use App\Support\LiveClasses\GoogleConferenceStatus;
+use App\Support\Permissions\PermissionService;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Database\Schema\Blueprint;
@@ -29,6 +34,9 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
     private int $offeringA;
     private int $parallelOffering;
     private int $foreignOffering;
+
+    /** Temp OAuth credentials file; removed in tearDown so no fixture leaks. */
+    private ?string $credentialsPath = null;
 
     protected function setUp(): void
     {
@@ -82,6 +90,15 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
 
     protected function tearDown(): void
     {
+        // The static override is process-wide, so leaving it set would silently
+        // point every later test in this PHPUnit process at a deleted temp file.
+        GoogleOAuthCredentials::$pathOverride = null;
+
+        if ($this->credentialsPath !== null && is_file($this->credentialsPath)) {
+            @unlink($this->credentialsPath);
+        }
+        $this->credentialsPath = null;
+
         Carbon::setTestNow();
         Config::set('services.jitsi.algorithm', 'RS256');
         Config::set('services.jitsi.app_id', '');
@@ -381,6 +398,226 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
         }
     }
 
+    // ── Offering-backed Google persistence ────────────────────────────────────
+    //
+    // The Offering route (LiveClassController::storeForOffering) used to resolve
+    // the meeting through the string-only helper, so a Google class created there
+    // recorded NEITHER its Calendar event id NOR its conference state. The class
+    // was created and the join link worked, but PIIE kept no handle on the
+    // calendar entry behind it - so cancelling the class left an orphan Meet
+    // conference, and a live join link, on the lecturer's real calendar while
+    // PIIE reported the class cancelled. The link is all a student needs to join,
+    // so that is a security defect and not a housekeeping one.
+    //
+    // These pin the three things the route must now do: persist the event id,
+    // persist the conference status, and treat a pending conference as a real
+    // scheduled class rather than a failure.
+
+    public function test_offering_backed_google_meet_persists_the_calendar_event_id_and_conference_status(): void
+    {
+        $this->bootGoogleSchema();
+        $primary = $this->user('primary-google-offering@example.test', PermissionService::TEACHER, 1);
+        $this->allocation($primary, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
+        $this->connectGoogle($primary, 'primary-google-offering@example.test');
+        $this->fakeGoogleReady('offering-google-event-id');
+
+        $payload = $this->offeringPayload('google_meet');
+        $payload['teacher_id'] = $primary->id;
+        // No meeting_url: the whole point is that PIIE asks Google for one.
+        unset($payload['meeting_url']);
+
+        $this->actingAs($primary)->post(route('teacher.course_offerings.live_classes.store', $this->offeringA), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $row = DB::table('live_classes')->where('course_offering_id', $this->offeringA)->first();
+
+        $this->assertNotNull($row, 'The Offering-backed Google class was not saved.');
+        $this->assertSame('offering-google-event-id', $row->google_calendar_event_id);
+        $this->assertSame(GoogleConferenceStatus::READY, $row->google_conference_status);
+        $this->assertSame('https://meet.google.com/offering-google-event-id', $row->meeting_url);
+    }
+
+    public function test_offering_backed_pending_conference_is_saved_as_pending_not_rejected_as_a_failure(): void
+    {
+        $this->bootGoogleSchema();
+        $primary = $this->user('primary-google-pending@example.test', PermissionService::TEACHER, 1);
+        $this->allocation($primary, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
+        $this->connectGoogle($primary, 'primary-google-pending@example.test');
+        // Google accepted the event but has not issued the conference yet.
+        $this->fakeGooglePending('offering-google-pending-id');
+
+        $payload = $this->offeringPayload('google_meet');
+        $payload['teacher_id'] = $primary->id;
+        unset($payload['meeting_url']);
+
+        $this->actingAs($primary)->post(route('teacher.course_offerings.live_classes.store', $this->offeringA), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $row = DB::table('live_classes')->where('course_offering_id', $this->offeringA)->first();
+
+        $this->assertNotNull($row, 'A pending conference is a real scheduled class and must still be saved.');
+        $this->assertSame('offering-google-pending-id', $row->google_calendar_event_id);
+        $this->assertSame(GoogleConferenceStatus::PENDING, $row->google_conference_status);
+        // No invented URL: a student must never be handed a link that does not work.
+        $this->assertTrue($row->meeting_url === null || $row->meeting_url === '');
+        $this->assertFalse(GoogleConferenceStatus::describe($row->google_conference_status)['joinable']);
+    }
+
+    // ── No silent substitution of the institution-wide calendar ───────────────
+
+    /**
+     * The central rule: an unconnected lecturer must NOT get the institution's
+     * calendar by default.
+     *
+     * Before this, choosing Google Meet on an Offering fell straight through to the
+     * installation-wide .env refresh token, so the conference was created on the
+     * institution's calendar while the lecturer believed it was on their own. No
+     * message said otherwise. `Http::assertNothingSent()` is the load-bearing
+     * assertion: it proves the request was refused BEFORE any Google call, so
+     * nothing was written to any calendar as a side effect.
+     */
+    public function test_an_unconnected_lecturer_cannot_silently_use_the_institution_calendar(): void
+    {
+        $this->bootGoogleSchema();
+        $primary = $this->user('unconnected-lecturer@example.test', PermissionService::TEACHER, 1);
+        $this->allocation($primary, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
+
+        // The institution-wide credential IS configured for this test - which is
+        // exactly the condition under which the silent substitution used to happen.
+        $this->assertNotSame('', (string) config('services.google_meet.refresh_token'));
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response(['access_token' => 'institution-token'], 200),
+            'www.googleapis.com/calendar/*' => Http::response([
+                'id' => 'institution-owned-event',
+                'conferenceData' => ['entryPoints' => [['entryPointType' => 'video', 'uri' => 'https://meet.google.com/institution-room']]],
+            ], 200),
+        ]);
+
+        $payload = $this->offeringPayload('google_meet');
+        $payload['teacher_id'] = $primary->id;
+        unset($payload['meeting_url']);
+
+        $this->actingAs($primary)->post(route('teacher.course_offerings.live_classes.store', $this->offeringA), $payload)
+            ->assertRedirect()
+            ->assertSessionHasErrors('platform');
+
+        $message = session('errors')->first('platform');
+        $this->assertStringContainsString('Connect your Google Account before scheduling a Google Meet class.', $message);
+
+        // No Google request of any kind, and no class created.
+        Http::assertNothingSent();
+        $this->assertSame(0, DB::table('live_classes')->count());
+    }
+
+    /**
+     * A lecturer who HAS connected gets the event on their own calendar.
+     *
+     * Proves the positive half of the rule above, and specifically that the
+     * institution credential is not what answers: the only token faked is the one
+     * the refresh produced, and the institution-wide endpoint would have had to be
+     * reached for the class to land there instead.
+     */
+    public function test_a_connected_lecturer_uses_their_own_grant_and_not_the_institution_credential(): void
+    {
+        $this->bootGoogleSchema();
+        $primary = $this->user('connected-lecturer@example.test', PermissionService::TEACHER, 1);
+        $this->allocation($primary, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
+        $this->connectGoogle($primary, 'connected-lecturer@example.test');
+        $this->fakeGoogleReady('own-calendar-event-id');
+
+        $payload = $this->offeringPayload('google_meet');
+        $payload['teacher_id'] = $primary->id;
+        unset($payload['meeting_url']);
+
+        $this->actingAs($primary)->post(route('teacher.course_offerings.live_classes.store', $this->offeringA), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $row = DB::table('live_classes')->where('course_offering_id', $this->offeringA)->first();
+        $this->assertNotNull($row);
+        $this->assertSame('own-calendar-event-id', $row->google_calendar_event_id);
+        $this->assertSame(GoogleConferenceStatus::READY, $row->google_conference_status);
+
+        // The event was written to the calendar_id on the LECTURER'S OWN connection
+        // row, which is what distinguishes it from the institution fallback.
+        $connection = DB::table('google_account_connections')->where('user_id', $primary->id)->first();
+        $this->assertSame('primary', $connection->calendar_id);
+        $this->assertSame('connected-lecturer@example.test', $connection->google_email);
+    }
+
+    /** Manual entry must survive: a lecturer may still paste their own link. */
+    public function test_an_unconnected_lecturer_can_still_paste_a_meeting_link(): void
+    {
+        $this->bootGoogleSchema();
+        $primary = $this->user('paste-link-lecturer@example.test', PermissionService::TEACHER, 1);
+        $this->allocation($primary, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
+        Http::fake();
+
+        $payload = $this->offeringPayload('google_meet');
+        $payload['teacher_id'] = $primary->id;
+        $payload['meeting_url'] = 'https://meet.google.com/pasted-by-the-lecturer';
+
+        $this->actingAs($primary)->post(route('teacher.course_offerings.live_classes.store', $this->offeringA), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            'https://meet.google.com/pasted-by-the-lecturer',
+            DB::table('live_classes')->value('meeting_url')
+        );
+        // Pasted, so no provider call and no Google bookkeeping invented.
+        Http::assertNothingSent();
+        $this->assertNull(DB::table('live_classes')->value('google_calendar_event_id'));
+    }
+
+    /**
+     * The institution-wide credential must still work where it always did.
+     *
+     * This is the regression guard on requirement 7: refusing the substitution in
+     * the lecturer's Offering workflow must not have removed the shared credential
+     * from the non-Offering path, which is what an administrator uses.
+     */
+    public function test_the_institution_wide_credential_still_serves_the_non_offering_path(): void
+    {
+        $primary = $this->user('admin-non-offering@example.test', 2, 1);
+        $this->allocation($primary, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response(['access_token' => 'institution-token'], 200),
+            'www.googleapis.com/calendar/*' => Http::response([
+                'id' => 'institution-non-offering-event',
+                'conferenceData' => ['entryPoints' => [['entryPointType' => 'video', 'uri' => 'https://meet.google.com/institution-non-offering']]],
+            ], 200),
+        ]);
+
+        $this->actingAs($primary)->post(route('admin.live_classes.store'), [
+            'title' => 'Non-Offering institution credential class',
+            'class_id' => $this->makeClass(1, ['name' => 'Non-Offering credential class']),
+            'platform' => 'google_meet',
+            'start_date' => '2026-09-26', 'start_time' => '14:00', 'end_time' => '15:00',
+            'timezone' => 'UTC', 'status' => 'scheduled', 'is_published' => 0,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            'https://meet.google.com/institution-non-offering',
+            DB::table('live_classes')->value('meeting_url')
+        );
+    }
+
+    public function test_a_parent_cannot_complete_the_google_oauth_consent_for_this_installation(): void
+    {
+        $this->bootGoogleSchema();
+        $parent = $this->user('parent-google-oauth@example.test', 6, 1);
+
+        // The connect route is behind `auth` alone, so without a role gate any
+        // signed-in account could grant this installation calendar.events scope.
+        $this->actingAs($parent)->get(route('google.auth.connect'))->assertForbidden();
+
+        $this->actingAs($parent)->post(route('google.auth.disconnect'))->assertForbidden();
+
+        Http::fake();
+        Http::assertNothingSent();
+    }
+
     private function subject(int $schoolId, string $name): int
     {
         return (int) DB::table('subjects')->insertGetId([
@@ -449,5 +686,91 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
             'start_date' => '2026-09-26', 'start_time' => '11:00', 'end_time' => '12:00', 'timezone' => 'UTC',
             'status' => 'scheduled', 'is_published' => 0,
         ];
+    }
+
+    /**
+     * Apply the two real Google migrations on top of the shared Live Class schema.
+     *
+     * The helper's schema predates this feature and does not define these columns.
+     * The real migrations are used rather than hand-written equivalents so the
+     * columns and casts under test are the ones production actually has.
+     */
+    private function bootGoogleSchema(): void
+    {
+        if ($this->credentialsPath === null) {
+            $this->credentialsPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'piie-offering-google-'.uniqid().'.json';
+            file_put_contents($this->credentialsPath, json_encode([
+                'web' => [
+                    'client_id' => 'offering-test-client.apps.googleusercontent.com',
+                    'client_secret' => 'offering-test-secret',
+                    'redirect_uris' => ['http://localhost/auth/google/callback'],
+                ],
+            ]));
+            GoogleOAuthCredentials::$pathOverride = $this->credentialsPath;
+        }
+
+        (require base_path('database/migrations/2026_10_04_000001_create_google_account_connections_table.php'))->up();
+        (require base_path('database/migrations/2026_10_04_000002_add_google_calendar_fields_to_live_classes.php'))->up();
+    }
+
+    private function connectGoogle(User $user, string $email): void
+    {
+        $id = DB::table('google_account_connections')->insertGetId([
+            'school_id' => $user->school_id,
+            'user_id' => $user->id,
+            'calendar_id' => 'primary',
+            // STATUS_OK is 'ok'. Inventing a 'connected' value here produced a row
+            // that isUsable() rejects, so accessTokenFor() returned null and the
+            // test silently exercised the installation-wide fallback instead.
+            'status' => GoogleAccountConnection::STATUS_OK,
+            'google_email' => $email,
+            'scope' => GoogleOAuthClient::SCOPE_CALENDAR_EVENTS,
+            'access_token_expires_at' => time() + 3600,
+            'last_refreshed_at' => now(),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        // forceFill()+save(), not a raw UPDATE: both tokens carry the `encrypted`
+        // cast, so writing plaintext into the column would make the row unreadable
+        // and accessTokenFor() would mark it as needing re-authentication. Writing
+        // through the model is what actually encrypts them.
+        GoogleAccountConnection::findOrFail($id)->forceFill([
+            'access_token_ciphertext' => 'offering-test-access-token',
+            'refresh_token_ciphertext' => 'offering-test-refresh-token',
+        ])->save();
+    }
+
+    /** Google issues a token and a conference that is ready to join. */
+    private function fakeGoogleReady(string $eventId): void
+    {
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response(['access_token' => 'fresh-access-token', 'expires_in' => 3599], 200),
+            'www.googleapis.com/calendar/*' => Http::response([
+                'id' => $eventId,
+                'htmlLink' => 'https://calendar.google.com/event?eid='.$eventId,
+                'conferenceData' => [
+                    'entryPoints' => [['entryPointType' => 'video', 'uri' => 'https://meet.google.com/'.$eventId]],
+                ],
+            ], 200),
+        ]);
+    }
+
+    /**
+     * Google accepts the event but has not produced the conference yet.
+     *
+     * An empty `conferenceData` is exactly what the real API returns while the
+     * conference is still being created, and it is the case that must not be
+     * reported as a network failure.
+     */
+    private function fakeGooglePending(string $eventId): void
+    {
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response(['access_token' => 'fresh-access-token', 'expires_in' => 3599], 200),
+            'www.googleapis.com/calendar/*' => Http::response([
+                'id' => $eventId,
+                'htmlLink' => 'https://calendar.google.com/event?eid='.$eventId,
+                'conferenceData' => [],
+            ], 200),
+        ]);
     }
 }

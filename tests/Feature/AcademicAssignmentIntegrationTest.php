@@ -65,8 +65,9 @@ class AcademicAssignmentIntegrationTest extends TestCase
     public function test_education_level_keeps_core_terms_contextual(): void
     {
         $this->assertSame('Lecturer', academic_term('teacher', 1));
-        $this->assertSame('Courses', academic_term('subjects', 1));
-        $this->assertSame('Cohorts', academic_term('classes', 1));
+        // Course Units are the catalogue; Programme Cohorts are a separate domain.
+        $this->assertSame('Course Units', academic_term('subjects', 1));
+        $this->assertSame('Classes', academic_term('classes', 1));
 
         DB::table('schools')->insert([
             'id' => 2,

@@ -69,17 +69,47 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         return OnlineExamSubmission::findOrFail($this->submission);
     }
 
-    public function test_objective_exam_auto_completes_and_finalization_is_noop(): void
+    public function test_objective_exam_auto_completes_and_still_waits_for_review(): void
     {
         $this->answer('mcq', 'a');
         $this->answer('true_false', 'false', ['correct_ans' => 'false']);
         $this->submit();
-        $before = $this->record()->getAttributes();
-        $this->assertSame('finalized', $before['status']);
-        $this->assertEquals(10, $before['score']);
+
+        /**
+         * MARKING AUTO-COMPLETES; PUBLICATION STILL DOES NOT.
+         *
+         * This used to assert `finalized` straight out of a student's submit. That is
+         * precisely the hole that produced exam 17 submission 12: a submission
+         * announced as complete without any human involvement, wrote
+         * `result_review_state = 'not_ready'` alongside it, and therefore appeared in
+         * NO queue and admitted NO action - a result nobody could mark, hand over, or
+         * review.
+         *
+         * So an all-objective paper now lands on `submitted`: marking genuinely needs
+         * nobody, but the result still passes the handover and the ADMIN review gate
+         * before a student can see it. That is the required chain -
+         *
+         *     SUBMITS -> AUTOMATIC MARKING COMPLETE -> ADMIN RESULT REVIEW/PUBLICATION
+         *
+         * and `finalize()` is therefore no longer a no-op here; it is the handover.
+         */
+        $this->assertSame('submitted', $this->record()->status);
+        $this->assertEquals(10, $this->record()->score);
+        $this->assertSame('not_ready', $this->record()->result_review_state);
+
+        // The handover, then idempotence.
         $this->finalize()->assertRedirect();
-        $this->assertSame($before, $this->record()->getAttributes());
-        $this->actingAs($this->student)->get(route('student.online_exam.result', $this->submission))->assertOk();
+        $this->assertSame('finalized', $this->record()->status);
+        $this->assertSame('pending_review', $this->record()->result_review_state);
+
+        $after = $this->record()->getAttributes();
+        $this->finalize()->assertRedirect();
+        $this->assertSame($after, $this->record()->getAttributes());
+
+        // Handed over and finalized, so the marking is done and the student is told it is
+        // awaiting administrative review. Still nothing released.
+        $this->actingAs($this->student)->get(route('student.online_exam.result', $this->submission))
+            ->assertOk()->assertSee('awaiting administrative review');
     }
 
     public function test_legacy_mcq_answer_text_is_normalized_for_readiness_and_auto_marking(): void
@@ -90,7 +120,10 @@ class OnlineExamBatch2CMarkingTest extends TestCase
             'correct_ans' => 'Yes', 'option_a' => 'Yes', 'option_b' => 'No',
         ]);
         $this->submit();
-        $this->assertSame('finalized', $this->record()->status);
+        // An objective paper needs no marker, so it goes to the handover gate rather
+        // than straight to `finalized`. See
+        // test_objective_exam_auto_completes_and_still_waits_for_review().
+        $this->assertSame('submitted', $this->record()->status);
         $this->assertEquals(5, $this->record()->score);
         $this->assertDatabaseHas('online_exam_answers', ['id' => $answer, 'awarded_marks' => 5]);
         $pendingQuery = \App\Models\OnlineExamQuestion::whereKey($questionId);
@@ -108,7 +141,7 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         $this->assertNull($this->record()->passed);
         $this->assertSame('Ready to finalize', $this->record()->marking_state_label);
         $this->actingAs($this->student)->get(route('student.online_exam.result', $this->submission))
-            ->assertOk()->assertSee('awaiting publication');
+            ->assertOk()->assertSee('being processed');
         $this->finalize()->assertRedirect();
         $this->assertEquals(4.25, $this->record()->score);
         $this->assertDatabaseHas('online_exam_answers', ['id' => $answer, 'marked_by' => $this->teacher->id, 'teacher_comment' => 'Reasoned response']);
@@ -131,7 +164,7 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         $answer = $this->answer('essay');
         $this->submit();
         DB::table('online_exam_answers')->where('id', $answer)->update(['awarded_marks' => 0]);
-        $this->finalize()->assertStatus(422);
+        $this->assertHandoverRefusedWithExplanation($this->finalize());
         $this->mark($answer, 0)->assertRedirect();
         $this->finalize()->assertRedirect();
     }
@@ -142,7 +175,7 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         $this->answer('short');
         $this->submit();
         $this->mark($answer, 3)->assertRedirect();
-        $this->finalize()->assertStatus(422);
+        $this->assertHandoverRefusedWithExplanation($this->finalize());
         $this->assertSame('pending_manual_marking', $this->record()->status);
     }
 
@@ -162,18 +195,50 @@ class OnlineExamBatch2CMarkingTest extends TestCase
 
     public function test_missing_blank_and_cleared_manual_answers_contribute_zero(): void
     {
-        $this->makeQuestion($this->exam, ['type' => 'essay']);
-        $this->answer('short', null);
-        $answer = $this->answer('essay');
+        $this->makeQuestion($this->exam, ['type' => 'essay']);   // never answered at all
+        $this->answer('short', null);                             // answered, then cleared
+        $answer = $this->answer('essay');                        // answered
         $question = DB::table('online_exam_answers')->where('id', $answer)->value('question_id');
         $this->actingAs($this->student)->postJson(route('student.online_exam.save_answer', $this->submission), [
             'submission_id' => $this->submission, 'question_id' => $question, 'answer_revision' => 2, 'answer_text' => '',
         ])->assertOk();
+
         $this->submit();
-        $this->assertSame('finalized', $this->record()->status);
+
+        /**
+         * BLANK MANUAL QUESTIONS NO LONGER VANISH FROM THE ARITHMETIC.
+         *
+         * Two of these three questions have no answer content. They still contribute
+         * ZERO - that is unchanged and is what this test is about - but they are now
+         * still QUESTIONS, so a marker must decide them, and the attempt cannot be
+         * declared complete on its own.
+         *
+         * Previously `summary()['pending']` ignored a question with no response, so
+         * this submission reported `pending = 0` and was written straight to
+         * `finalized`. That is submission 12: "Marking Complete / Finalized / Not
+         * Released", ten marks nobody awarded, and an empty Actions column.
+         *
+         * The count is now three rather than two because an EMPTY row is created for
+         * the never-answered essay. It is genuinely empty, so it still contributes
+         * zero and `OnlineExamMarking::responses()` still excludes it from the read
+         * queue; its only purpose is to give a marker something to record an explicit,
+         * attributed zero against.
+         */
+        $this->assertSame('pending_manual_marking', $this->record()->status);
         $this->assertEquals(0, $this->record()->score);
-        $this->finalize()->assertRedirect();
-        $this->assertDatabaseCount('online_exam_answers', 2);
+        $this->assertDatabaseCount('online_exam_answers', 3);
+
+        // And it cannot be handed over until a marker has decided each blank.
+        $this->assertHandoverRefusedWithExplanation($this->finalize());
+
+        $blankAnswerId = DB::table('online_exam_answers')
+            ->where('submission_id', $this->submission)
+            ->whereNull('answer_text')
+            ->whereNull('selected_option')
+            ->value('id');
+
+        $this->mark($blankAnswerId, 0)->assertRedirect();
+        $this->assertDatabaseHas('online_exam_answers', ['id' => $blankAnswerId, 'awarded_marks' => 0]);
     }
 
     public function test_repeated_mark_finalize_and_publish_do_not_duplicate_changes_or_mail(): void
@@ -199,7 +264,13 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         $this->finalize()->assertRedirect();
         $this->assertSame($published, $this->record()->getAttributes());
         Mail::assertNothingSent();
-        $this->mark($answer, 0)->assertStatus(422);
+
+        // Once finalized, marking is refused — but the lecturer is returned to the
+        // page with the reason rather than shown a bare error document, and the
+        // finalized score is untouched.
+        $this->mark($answer, 0)
+            ->assertRedirect()
+            ->assertSessionHasErrors('awarded_marks');
         $this->assertEquals(5, $this->record()->score);
     }
 
@@ -252,14 +323,28 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         $this->answer('mcq', 'a');
         $this->submit();
         $result = route('student.online_exam.result', $this->submission);
-        $this->actingAs($this->student)->get($result)->assertOk()->assertSee('awaiting publication');
+
+        // Submitted on an objective paper: nothing outstanding, but the handover has
+        // not happened, so the student is told it is being processed rather than that
+        // a result is awaiting publication.
+        $this->actingAs($this->student)->get($result)->assertOk()->assertSee('being processed');
         foreach ([$this->makeUser(3, 1), $this->makeUser(3, 2), $this->student] as $user) {
+            $before = $this->record()->getAttributes();
             $response = $this->actingAs($user)->postJson(route('teacher.online_exams.results.publish', $this->submission));
             $this->assertContains($response->status(), [302, 403, 404]);
-            $this->assertSame('finalized', $this->record()->status);
+            // The property under test is that an UNAUTHORISED publish attempt
+            // changes nothing. Asserted as a snapshot so it holds whatever the
+            // current correct pre-review state is, rather than pinning a status
+            // word - pinning `finalized` here is what previously blessed a
+            // student's submit as "complete".
+            $this->assertSame($before, $this->record()->getAttributes());
+            $this->assertFalse($this->record()->is_published ?? false);
         }
         $this->actingAs($this->teacher)->postJson(route('teacher.online_exams.results.publish', $this->submission))->assertStatus(403);
-        $this->actingAs($this->student)->get($result)->assertOk()->assertSee('awaiting publication');
+
+        // Unchanged by the refused attempts: still with the lecturer, so still
+        // "being processed" rather than awaiting a release that never happened.
+        $this->actingAs($this->student)->get($result)->assertOk()->assertSee('being processed');
         foreach ([$this->makeUser(7, 1), $this->makeUser(7, 2)] as $user) $this->actingAs($user)->get($result)->assertNotFound();
     }
 
@@ -270,10 +355,10 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         DB::table('online_exams')->where('id', $this->exam)->update(['result_release_policy' => 'after_exam_end']);
         $answer = $this->answer('essay');
         $this->submit();
-        $this->actingAs($this->student)->get($result)->assertOk()->assertSee('awaiting marking');
+        $this->actingAs($this->student)->get($result)->assertOk()->assertSee('being processed');
         $this->mark($answer, 5)->assertRedirect();
         $this->finalize()->assertRedirect();
-        $this->actingAs($this->student)->get($result)->assertOk()->assertSee('awaiting publication');
+        $this->actingAs($this->student)->get($result)->assertOk()->assertSee('awaiting administrative review');
         $this->travel(2)->hours();
         $this->get($result)->assertOk();
     }
@@ -298,11 +383,27 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         $this->submit();
         $this->mark($answer, 3)->assertRedirect();
         $this->actingAs($this->teacher)->get(route('teacher.online_exams.results', $this->exam))
-            ->assertOk()->assertSee('Automatic')->assertSee('Manual')->assertSee('Pending')->assertSee('Submit Marking for Review');
+            ->assertOk()->assertSee('Automatic')->assertSee('Manual')
+            // The lecturer's summary column is titled "Pending Decisions". The admin
+            // screen keeps "Awaiting Decision" - they are two screens written at two
+            // times, and only the lecturer one was relaid out here.
+            ->assertSee('Pending Decisions')
+            // The lecturer's handover is named for what it does. It was previously
+            // "Submit Marking for Review" and, on the marking screen,
+            // "Finalize Result" - both of which read as though pressing them
+            // released the mark to the student. They do not, and they now say so.
+            ->assertSee('Submit Marks for Admin Review')
+            ->assertDontSee('Publish to Student');
         $this->actingAs($this->teacher)->get(route('teacher.online_exams.marking', ['status' => 'marked']))
             ->assertOk()->assertSee('Automatic')->assertSee('Manual')->assertSee('Total');
+        // The third column is "Awaiting Decision", not "Pending". The old label
+        // counted only ANSWERED-but-unmarked questions, so a paper whose written
+        // question had been left blank reported zero there and read as complete —
+        // which is how exam 19 submission 13 looked fully judged to everyone. The
+        // column now counts every question that still needs a human decision,
+        // including the ones with no answer at all.
         $this->actingAs($this->admin)->get(route('admin.online_exams.results', $this->exam))
-            ->assertOk()->assertSee('Automatic')->assertSee('Manual')->assertSee('Pending');
+            ->assertOk()->assertSee('Automatic')->assertSee('Manual')->assertSee('Awaiting Decision');
         $this->postJson(route('admin.online_exams.submissions.finalize', $this->submission))->assertRedirect();
         $this->get(route('admin.online_exams.results', $this->exam))->assertOk()->assertSee('Pending Admin Review');
         $this->postJson(route('admin.online_exams.submissions.publish_result', $this->submission))->assertRedirect();
@@ -326,7 +427,7 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         $this->submit();
         $this->assertEquals(10, $this->record()->result_total_marks);
         $this->assertTrue($this->record()->passed);
-        $this->actingAs($this->student)->get(route('student.online_exam.result', $this->submission))->assertOk()->assertSee('awaiting publication')->assertDontSee('4%');
+        $this->actingAs($this->student)->get(route('student.online_exam.result', $this->submission))->assertOk()->assertSee('being processed')->assertDontSee('4%');
     }
 
     public function test_fill_blank_remains_manual_even_with_a_configured_text_key(): void
@@ -347,7 +448,35 @@ class OnlineExamBatch2CMarkingTest extends TestCase
         $this->submit();
         $queue = route('teacher.online_exams.marking');
         $this->actingAs($this->teacher)->get($queue)->assertOk()->assertViewHas('answers', fn ($rows) => $rows->contains('id', $answered) && !$rows->contains('id', $blank));
-        $this->mark($blank, 0)->assertStatus(422);
+
+        /**
+         * A BLANK MANUAL ANSWER MAY NOW BE MARKED — AND THE POINT OF "0" IS STILL
+         * RECOGNISED.
+         *
+         * Marking a blank was refused outright, on the reasonable grounds that there
+         * is nothing there to read. The consequence was worse: a blank manual
+         * question could never acquire a marker's decision, so it stayed permanently
+         * undecided, so the paper could never be honestly completed. Exam 17
+         * submission 12 is that exact deadlock.
+         *
+         * So a marker may record an EXPLICIT ZERO against a blank, which is stored
+         * with `marked_by` and `marked_at` and appears in the "marked" queue. What
+         * remains refused - deliberately - is a mark ABOVE zero for an answer that
+         * does not exist, because that would be fabricating a result. Asserted below.
+         */
+        $this->mark($blank, 0)->assertRedirect();
+        $this->assertDatabaseHas('online_exam_answers', [
+            'id' => $blank,
+            'awarded_marks' => 0,
+            'marked_by' => $this->teacher->id,
+        ]);
+        $this->assertNotNull(DB::table('online_exam_answers')->where('id', $blank)->value('marked_at'));
+
+        // Above zero is still refused for a blank — with an explanation, not an error page.
+        $this->mark($blank, 3)
+            ->assertRedirect()
+            ->assertSessionHasErrors('awarded_marks');
+
         $this->mark($answered, 0)->assertRedirect();
         $this->get($queue.'?status=marked')->assertOk()->assertViewHas('answers', fn ($rows) => $rows->contains('id', $answered));
         $this->finalize()->assertRedirect();

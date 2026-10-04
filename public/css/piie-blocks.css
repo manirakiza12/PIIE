@@ -1,0 +1,528 @@
+/* ==========================================================================
+   PIIE PUBLIC SITE — INNER-PAGE BLOCKS
+   --------------------------------------------------------------------------
+   Companion to piie-site.css. Extends the SAME tokens, so a section on the
+   homepage and the same section on an inner page are pixel-identical.
+
+   Every value here is a token from piie-site.css. Nothing is a magic number
+   repeated from a screenshot.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   PAGE HERO
+   Two treatments: a flat brand band with no photograph, and a photographic one.
+   The photographic variant gets the same readability approach as the homepage
+   hero - a dark gradient - so a headline is never fighting a busy frame.
+   -------------------------------------------------------------------------- */
+
+.piie-pagehero {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(120deg, var(--piie-primary-dark) 0%, var(--piie-primary) 100%);
+    color: #fff;
+    padding-block: clamp(2.75rem, 6vw, 4.5rem);
+}
+
+.piie-pagehero--image { padding-block: clamp(3.5rem, 8vw, 6rem); }
+
+.piie-pagehero__media {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    margin: 0;
+}
+
+.piie-pagehero__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.piie-pagehero--image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+        linear-gradient(90deg, rgba(6, 17, 30, .86) 0%, rgba(6, 17, 30, .62) 55%, rgba(6, 17, 30, .42) 100%),
+        linear-gradient(180deg, rgba(6, 17, 30, .5) 0%, rgba(6, 17, 30, .3) 60%, rgba(6, 17, 30, .72) 100%);
+}
+
+.piie-pagehero__inner { position: relative; z-index: 1; }
+
+.piie-pagehero h1 {
+    color: #fff;
+    font-size: clamp(1.85rem, 1.2rem + 2.6vw, 3rem);
+    margin-bottom: var(--piie-space-3);
+    text-shadow: 0 2px 16px rgba(0, 0, 0, .4);
+}
+
+.piie-pagehero__lede {
+    color: rgba(255, 255, 255, .93);
+    font-size: clamp(1rem, .95rem + .35vw, 1.15rem);
+    max-width: 56ch;
+    margin: 0;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, .45);
+}
+
+.piie-pagehero__motto {
+    color: #fff;
+    margin: var(--piie-space-4) 0 0;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, .45);
+}
+
+.piie-eyebrow--light { color: rgba(255, 255, 255, .85); }
+
+/* --------------------------------------------------------------------------
+   BREADCRUMBS
+   -------------------------------------------------------------------------- */
+
+.piie-breadcrumbs { margin-top: var(--piie-space-4); }
+.piie-breadcrumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: .875rem;
+}
+.piie-breadcrumbs li { display: flex; align-items: center; gap: .5rem; color: rgba(255, 255, 255, .78); }
+.piie-breadcrumbs a { color: rgba(255, 255, 255, .92); text-decoration: underline; text-underline-offset: 3px; }
+.piie-breadcrumbs a:hover { color: #fff; }
+.piie-breadcrumbs__sep { opacity: .55; }
+
+/* On a flat (non-photographic) hero the crumbs sit on brand blue, so they need
+   the same light treatment. On an inner page placed below a light section the
+   `.piie-breadcrumbs--dark` variant is available. */
+.piie-breadcrumbs--dark li { color: var(--piie-muted); }
+.piie-breadcrumbs--dark a { color: var(--piie-primary); }
+
+/* --------------------------------------------------------------------------
+   CARDS
+   `min-height` on the body is what makes cards in a row equal height with the
+   CTA aligned at the bottom, instead of every card ending at a different line.
+   -------------------------------------------------------------------------- */
+
+.piie-card--programme .piie-card__body { min-height: 12rem; }
+.piie-card--programme .piie-card__title { font-size: 1.0625rem; line-height: 1.35; }
+.piie-card--faculty .piie-card__title { font-size: 1.125rem; }
+.piie-card--leadership .piie-card__title { font-size: 1rem; }
+
+/* The DESIGNED fallback for a record with no photograph.
+   A brand gradient with the qualification level in type. Deliberately not an
+   empty image rectangle and deliberately not an invented photograph. */
+.piie-card__media--fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    padding: 1rem;
+    text-align: center;
+    background: linear-gradient(135deg, var(--piie-primary-dark) 0%, var(--piie-primary) 62%, var(--piie-primary-light) 100%);
+    color: rgba(255, 255, 255, .95);
+}
+.piie-card__fallback-mark {
+    font-family: var(--piie-font-head);
+    font-size: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: .06em;
+    line-height: 1;
+    opacity: .95;
+}
+.piie-card__fallback-label {
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    opacity: .88;
+}
+
+/* Four tones, so the fallback is genuinely CATEGORY-based rather than one flat
+   panel repeated for every programme with no photograph. All four are built from
+   the same brand palette so a grid of them reads as one system; only the hue angle
+   and depth change. The tone is chosen from the faculty key in `card.blade.php`,
+   so it is stable for a given programme across page loads. */
+.piie-card__media--fb-a {
+    background: linear-gradient(135deg, #0B2E4F 0%, #14507F 60%, #1D6FA8 100%);
+}
+.piie-card__media--fb-b {
+    background: linear-gradient(135deg, #123A2E 0%, #1B5E4A 60%, #2A8168 100%);
+}
+.piie-card__media--fb-c {
+    background: linear-gradient(135deg, #3A2352 0%, #553380 60%, #6F45A8 100%);
+}
+.piie-card__media--fb-d {
+    background: linear-gradient(135deg, #4A2A12 0%, #7A4419 60%, #A05F22 100%);
+}
+
+/* A faculty card has no photograph of its own, so it does not reserve a frame
+   for one. Reserving an empty 4:3 box is what made the catalogue look ragged. */
+.piie-card--faculty .piie-card__body { padding-top: var(--piie-space-5); }
+
+/* --------------------------------------------------------------------------
+   CATALOGUE — search, filters, results
+   -------------------------------------------------------------------------- */
+
+.piie-catalogue { padding-block: clamp(2.5rem, 5vw, 4rem); }
+
+.piie-filters {
+    display: grid;
+    gap: var(--piie-space-3);
+    margin-bottom: var(--piie-space-5);
+    padding: var(--piie-space-4);
+    background: var(--piie-surface-alt);
+    border: 1px solid var(--piie-line);
+    border-radius: var(--piie-radius);
+}
+
+.piie-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.piie-field label { font-size: .8125rem; font-weight: 700; color: var(--piie-ink); }
+.piie-field .piie-form-control {
+    width: 100%;
+    min-height: 46px;
+    padding: .6rem .8rem;
+    font: inherit;
+    font-size: .9375rem;
+    color: var(--piie-body);
+    background: #fff;
+    border: 1px solid #CBD5E1;
+    border-radius: var(--piie-radius-sm);
+}
+.piie-field .piie-form-control:focus-visible { border-color: var(--piie-primary); }
+
+.piie-results-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--piie-space-3);
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: var(--piie-space-4);
+    font-size: .9375rem;
+    color: var(--piie-muted);
+}
+.piie-results-meta strong { color: var(--piie-ink); }
+
+/* The grid the catalogue renders into. Three across on a desktop, two on a
+   tablet, one on a phone - the layout the brief asks for, and the first thing
+   the old two-column catalogue got wrong on a wide screen. */
+.piie-catalogue__grid {
+    display: grid;
+    gap: var(--piie-space-4);
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.piie-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    justify-content: center;
+    margin-top: var(--piie-space-6);
+}
+.piie-pagination a,
+.piie-pagination span {
+    display: inline-grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 .6rem;
+    border: 1px solid var(--piie-line);
+    border-radius: var(--piie-radius-sm);
+    background: #fff;
+    color: var(--piie-ink);
+    font-size: .9375rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.piie-pagination a:hover { border-color: var(--piie-primary); color: var(--piie-primary); }
+.piie-pagination .is-current { background: var(--piie-primary); border-color: var(--piie-primary); color: #fff; }
+
+/* --------------------------------------------------------------------------
+   TIMELINE — admissions process
+   -------------------------------------------------------------------------- */
+
+.piie-timeline { display: grid; gap: var(--piie-space-4); list-style: none; margin: 0; padding: 0; counter-reset: piie-tl; }
+.piie-timeline > li {
+    counter-increment: piie-tl;
+    position: relative;
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    gap: var(--piie-space-3);
+    align-items: start;
+    padding-bottom: var(--piie-space-4);
+    border-bottom: 1px solid var(--piie-line);
+}
+.piie-timeline > li:last-child { border-bottom: 0; padding-bottom: 0; }
+.piie-timeline > li::before {
+    content: counter(piie-tl, decimal-leading-zero);
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background: var(--piie-primary);
+    color: #fff;
+    font-weight: 700;
+    font-size: .9375rem;
+}
+.piie-timeline h3 { font-size: 1.0625rem; margin-bottom: .25rem; }
+
+/* --------------------------------------------------------------------------
+   IDENTITY STATEMENTS — Vision, Mission, Motto, Core Values
+   --------------------------------------------------------------------------
+   These are promoted out of body copy because an institutional Vision is not a
+   paragraph. Each statement is a bordered panel with a small uppercase label and a
+   larger measure, which gives the text a shape distinct from the prose around it
+   without altering a word of it. */
+.piie-identity__grid { margin-top: 2.5rem; }
+
+/* The identity block sits on the page's alternate surface so it reads as a distinct
+   band of institutional statements rather than as the first of many equal sections.
+   Without this it is indistinguishable from the About prose that follows it, which is
+   the problem the promotion was meant to solve. */
+.piie-identity { background: var(--piie-surface-alt); }
+
+.piie-statement {
+    background: #fff;
+    border: 1px solid var(--piie-line);
+    border-left: 4px solid var(--piie-primary);
+    border-radius: var(--piie-radius);
+    padding: clamp(1.25rem, 2.5vw, 1.75rem);
+    box-shadow: var(--piie-shadow-sm);
+}
+
+.piie-statement__label {
+    font-family: var(--piie-font-head);
+    font-size: .8125rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--piie-primary);
+    margin: 0 0 .65rem;
+}
+
+.piie-statement__text {
+    margin: 0;
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    color: var(--piie-ink);
+}
+
+/* Core Values sits below the Vision/Mission pair and spans the full measure, because
+   its approved wording is a single sentence about how the institution behaves rather
+   than a directional statement. */
+.piie-statement--values {
+    margin-top: var(--piie-space-4);
+    border-left-color: var(--piie-secondary);
+}
+.piie-statement--values .piie-statement__label { color: var(--piie-secondary); }
+
+/* The motto gets its own full-width band. Three words, set large on the brand
+   colour, which is what makes it memorable rather than just another heading. */
+.piie-motto-band {
+    margin-top: 2.5rem;
+    padding: clamp(1.75rem, 4vw, 2.75rem) clamp(1.25rem, 3vw, 2rem);
+    background: linear-gradient(120deg, var(--piie-primary-dark) 0%, var(--piie-primary) 100%);
+    border-radius: var(--piie-radius);
+    text-align: center;
+    color: #fff;
+}
+.piie-motto-band__label {
+    display: block;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .78);
+}
+.piie-motto-band__text {
+    margin: .6rem 0 0;
+    font-family: var(--piie-font-head);
+    font-size: clamp(1.5rem, 1rem + 2.6vw, 2.75rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: .04em;
+    /* `text-wrap: balance` keeps an unusually long motto from leaving a single word
+       on the last line. Browsers that do not support it simply ignore it. */
+    text-wrap: balance;
+}
+
+/* --------------------------------------------------------------------------
+   CONTACT PAGE — channel cards, enquiry form, map
+   -------------------------------------------------------------------------- */
+
+/* A channel card is equal-height with its siblings so the four of them read as one
+   row. `min-height` on the body rather than a fixed card height, so a long address
+   grows the row instead of overflowing its card. */
+.piie-contact-card .piie-card__body,
+.piie-card--info.piie-contact-card {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    min-height: 11rem;
+}
+.piie-contact-card__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+}
+.piie-contact-card__list a { font-weight: 600; word-break: break-word; }
+.piie-contact-card__value { margin: 0; color: var(--piie-body); }
+
+/* The per-channel label inside a list item, e.g. "Official Line" above 0200920918.
+   Block-level so the number always starts on its own line directly beneath its
+   label, which is what makes a two-number card readable rather than a run-on list. */
+.piie-contact-card__label {
+    display: block;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--piie-muted);
+}
+
+/* The "not yet published" state. Deliberately quieter than a real value so a
+   visitor is not misled into thinking it is contactable, but not an error red. */
+.piie-contact-card__pending {
+    margin: 0;
+    font-size: .875rem;
+    color: var(--piie-muted);
+    font-style: italic;
+}
+
+/* ── Enquiry form ──────────────────────────────────────────────────────────
+   `.piie-field` and `.piie-form-control` are defined above; this adds the grid,
+   the required marker, per-field errors and the two alert styles. */
+.piie-form {
+    background: #fff;
+    border: 1px solid var(--piie-line);
+    border-radius: var(--piie-radius);
+    padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+/* The form sits in the right-hand column of a `.piie-split`, which is narrower than
+   a full measure. `align-self: start` stops it stretching to the height of the longer
+   prose column beside it, which otherwise leaves a large white void under the submit
+   button on a wide screen. */
+.piie-enquiry { align-self: start; }
+.piie-form__grid {
+    display: grid;
+    gap: var(--piie-space-4);
+    grid-template-columns: minmax(0, 1fr);
+}
+.piie-field--full { grid-column: 1 / -1; }
+
+.piie-form-control--area { min-height: 8rem; resize: vertical; }
+
+.piie-req { color: var(--piie-secondary); font-weight: 700; }
+.piie-hint { font-weight: 400; color: var(--piie-muted); font-size: .8125rem; }
+
+.piie-field__err {
+    margin: 0;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #B42318;
+}
+.piie-field__hint {
+    margin: 0;
+    font-size: .8125rem;
+    color: var(--piie-muted);
+}
+
+.piie-form-control[aria-invalid="true"] { border-color: #B42318; }
+
+/* The honeypot. Removed from the layout entirely rather than made invisible:
+   `position:absolute; left:-9999px` still leaves it focusable in some browsers,
+   and a focusable invisible input is an accessibility failure. `display:none`
+   removes it from both the visual and the accessibility tree, and the field is
+   additionally marked `tabindex="-1"` and `aria-hidden` in the markup. */
+.piie-hp { display: none !important; }
+
+.piie-alert {
+    padding: 1rem 1.15rem;
+    border-radius: var(--piie-radius-sm);
+    margin-bottom: 1.5rem;
+    border: 1px solid transparent;
+}
+.piie-alert__title { font-size: 1rem; margin: 0 0 .35rem; }
+.piie-alert p { margin: 0; font-size: .9375rem; }
+.piie-alert ul { margin: .5rem 0 0; padding-left: 1.15rem; font-size: .9375rem; }
+.piie-alert a { color: inherit; text-decoration: underline; }
+
+.piie-alert--ok {
+    background: #ECFDF3;
+    border-color: #A6F4C5;
+    color: #05603A;
+}
+.piie-alert--error {
+    background: #FEF3F2;
+    border-color: #FECDCA;
+    color: #B42318;
+}
+
+.piie-form__note {
+    margin: 1rem 0 0;
+    font-size: .8125rem;
+    color: var(--piie-muted);
+}
+
+/* ── Map ───────────────────────────────────────────────────────────────────
+   A 4:3 frame with `overflow:hidden` to clip the iframe's default inline
+   baseline gap. That is containment, one of the enumerated uses; it is not used
+   to hide a layout problem. */
+.piie-map {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--piie-radius);
+    border: 1px solid var(--piie-line);
+    margin-top: 2rem;
+}
+.piie-map iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+@media (min-width: 640px) {
+    .piie-form__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* --------------------------------------------------------------------------
+   RESPONSIVE
+   The catalogue columns and the timeline are the two places the old layout
+   collapsed, so they get explicit rules rather than relying on the shared grid.
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 576px) {
+    .piie-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .piie-catalogue__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 992px) {
+    .piie-filters { grid-template-columns: 2fr 1fr 1fr; }
+    /* Three across, as the brief requires. */
+    .piie-catalogue__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1366px) {
+    .piie-card--programme .piie-card__body { min-height: 13rem; }
+}
+
+@media (max-width: 575.98px) {
+    .piie-timeline > li { grid-template-columns: 2.5rem minmax(0, 1fr); gap: var(--piie-space-2); }
+    .piie-timeline > li::before { width: 2.5rem; height: 2.5rem; font-size: .8125rem; }
+    .piie-filters { padding: var(--piie-space-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .piie-pagehero--image::after { background: rgba(6, 17, 30, .78); }
+}

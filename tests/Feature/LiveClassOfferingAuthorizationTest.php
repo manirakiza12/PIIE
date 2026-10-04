@@ -386,7 +386,11 @@ class LiveClassOfferingAuthorizationTest extends TestCase
         $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_reminder')->count());
         $notification = DB::table('user_notifications')->where('type', 'live_class_reminder')->first();
         $this->assertSame($confirmed->id, (int) $notification->user_id);
-        $this->assertStringContainsString('/student/live-classes/'.$class->id.'/join', $notification->url);
+        // A reminder targets the student's DETAIL page, not the join endpoint: a
+        // 1-hour reminder lands well outside the 15-minute join window, so
+        // pointing it at /join would greet every recipient with a join refusal.
+        $this->assertSame(route('student.live_classes.show', $class->id), $notification->url);
+        $this->assertStringNotContainsString('/join', $notification->url);
         $this->assertStringNotContainsString('meet.example.test', $notification->body ?: '');
         $this->assertSame(0, DB::table('noticeboard')->count(), 'HEI reminders must not use a school-wide Noticeboard entry.');
     }

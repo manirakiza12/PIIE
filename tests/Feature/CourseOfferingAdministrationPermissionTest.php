@@ -29,7 +29,7 @@ class CourseOfferingAdministrationPermissionTest extends TestCase
         $this->assertEqualsCanonicalizing(['academic.course_offering.lifecycle', 'academic.course_offering.view'], $permissions->withDependencies(['academic.course_offering.lifecycle']));
         $expected = [
             'admin.course_offerings.index' => 'academic.course_offering.view',
-            'admin.course_offerings.create' => 'academic.course_offering.view',
+            'admin.course_offerings.create' => 'academic.course_offering.manage',
             'admin.course_offerings.show' => 'academic.course_offering.view',
             'admin.course_offerings.store' => 'academic.course_offering.manage',
             'admin.course_offerings.update' => 'academic.course_offering.manage',

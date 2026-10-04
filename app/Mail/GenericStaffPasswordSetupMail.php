@@ -5,6 +5,7 @@ namespace App\Mail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
+use App\Support\Mail\PlatformMailIdentity;
 
 class GenericStaffPasswordSetupMail extends Mailable
 {
@@ -16,14 +17,11 @@ class GenericStaffPasswordSetupMail extends Mailable
 
     public function build(): self
     {
-        $fromAddress = trim((string) (get_settings('smtp_user') ?: config('mail.from.address')));
-        $fromName = trim((string) (get_settings('system_title') ?: config('mail.from.name') ?: 'PIIE'));
-
         $mail = $this->subject('Set up your PIIE staff account')
             ->view('email.genericStaffPasswordSetup');
 
-        if ($fromAddress !== '') {
-            $mail->from($fromAddress, $fromName);
+        if ($fromAddress = PlatformMailIdentity::fromAddress()) {
+            $mail->from($fromAddress, PlatformMailIdentity::fromName());
         }
 
         return $mail;

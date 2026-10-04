@@ -164,6 +164,11 @@
     <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
 
     <link rel="stylesheet" href="{{ asset('assets/css/online-exams.css') }}?v=20260920-3">
+
+    {{-- Feature-scoped stylesheets: a page that owns its own presentation
+         (e.g. the Create Staff form) links them here instead of inlining a
+         <style> block in the markup. Rendered last so it wins on order. --}}
+    @yield('page_styles')
 </head>
 
 <body>
@@ -226,6 +231,9 @@
                 // The consolidated Staff menu contains only the directory,
                 // launcher and access management entry points. Legacy pages
                 // remain routable directly under their existing guards.
+                // Designation master data is reached contextually from the
+                // Staff Directory and the staff forms instead, so this menu
+                // stays exactly the three curated entries.
                 $staffNav = [
                     'directory'   => $navCan('admin.rbac.staff.index'),
                     'add'         => (bool) \App\Http\Controllers\Admin\StaffLauncherController::creatableTypes($user),
@@ -1032,7 +1040,6 @@
 
                     <div class="col-auto d-flex ">
                         @include('notifications._bell')
-                        @include('online_exam.notifications')
                         <div class="message">
                             @php
                                 $last_message = DB::table('message_thrades')
@@ -1233,7 +1240,12 @@
                 </div>
             </div>
             <div class="main_content">
-                @include('shared.page_toolbar')
+                {{-- Print / PDF / Excel belong on view, list and report pages.
+                     A creation form has nothing worth exporting, so a page that
+                     declares @section('hide_page_toolbar') renders without it. --}}
+                @unless (View::hasSection('hide_page_toolbar'))
+                    @include('shared.page_toolbar')
+                @endunless
                 <div id="page-print-area">
                     @yield('content')
                 </div>
@@ -1274,9 +1286,10 @@
     <!-- Sorting helpers -->
     <script src="{{ asset('assets/js/Sortable.min.js') }}"></script>
     <script src="{{ asset('assets/js/jquery-sortable.js') }}"></script>
-    <!-- SummerNote Js -->
-    <script src="{{ asset('assets/js/summernote-lite.min.js') }}"></script>
-
+    {{-- SummerNote is loaded by `x-academic-editor`, not here. A second execution
+         of the bundle re-registers `$.fn.summernote` with a fresh copy that knows
+         nothing about the editables already mounted, so later `summernote('code')`
+         reads answer empty. See the same note in layouts/app.blade.php. --}}
     <!--Toaster Script-->
     <script src="{{ asset('assets/js/toastr.min.js') }}"></script>
 

@@ -52,7 +52,7 @@
                 @if($exam->instructions)
                     <div class="alert alert-info">
                         <strong>{{ get_phrase('Instructions') }}:</strong>
-                        <div class="mt-1">{{ $exam->instructions }}</div>
+                        <div class="piie-prose mt-1">{!! $exam->proseInstructions() !!}</div>
                     </div>
                 @endif
 

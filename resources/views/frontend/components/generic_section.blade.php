@@ -1,16 +1,21 @@
-{{-- Generic Section Renderer - Professional Modern Design --}}
-<section class="generic-section section-padding" id="{{ $section->section_key }}">
-    <div class="container-xl">
+{{-- Generic Section Renderer.
+
+     THE ORANGE "Content Section" BADGE IS GONE.
+     It identified the CMS rather than the institution, appeared identically on every
+     section of every page, and told a visitor nothing. The section title below is
+     the heading, and that is all a heading needs.
+
+     NOTE: the public site no longer renders this component at all - `website_page`
+     lays sections out by their key using the shared blocks. It is retained because
+     `WebsiteRenderingHelper::renderSection()` still resolves section keys to it, so
+     removing the file would break that helper for any caller. --}}
+<section class="piie-section" id="{{ $section->section_key }}">
+    <div class="piie-wrap">
         <!-- Section Title -->
-        <div class="section-title">
-            <span class="section-badge">
-                <i class="fas fa-bookmark" style="margin-right: 6px;"></i>
-                Content Section
-            </span>
+        <div class="piie-head-center">
             <h2>{{ $section->title ?: ucwords(str_replace('_', ' ', $section->section_key)) }}</h2>
-            <div class="divider mx-auto"></div>
             @if(!empty($section->subtitle))
-                <p>{{ $section->subtitle }}</p>
+                <p class="piie-lede">{{ $section->subtitle }}</p>
             @endif
         </div>
 

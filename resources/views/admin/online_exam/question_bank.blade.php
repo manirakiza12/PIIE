@@ -41,7 +41,12 @@
             @forelse($questions as $i => $q)
             <tr>
                 <td>{{ $questions->firstItem() + $i }}</td>
-                <td>{{ Str::limit($q->question, 60) }}</td>
+                {{-- Plain text, not markup: this cell TRUNCATES to 60 characters, and
+         truncating HTML at an arbitrary offset yields a broken tag and a page
+         full of stray angle brackets. `plainPrompt()` is the accessor for a
+         truncated cell, and it preserves word boundaries so a cut does not join
+         two words together. --}}
+                    <td>{{ $q->plainPrompt(60) }}</td>
                 <td>{{ optional($q->subject)->name ?? '—' }}</td>
                 <td><span class="badge bg-primary">{{ strtoupper(str_replace('_', ' ', $q->normalized_type)) }}</span></td>
                 <td><span class="badge bg-{{ $q->difficulty=='hard'?'danger':($q->difficulty=='medium'?'warning':'success') }}">{{ ucfirst($q->difficulty) }}</span></td>

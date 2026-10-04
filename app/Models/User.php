@@ -39,6 +39,11 @@ class User extends Authenticatable
         'employment_type',
         'staff_status',
         'language',
+        // A person's own timezone: how THEIR screen reads a time. Deliberately
+        // separate from schools.timezone, which is the institution's official
+        // academic reference. See TenantTimezone::effective() for the
+        // user -> institution -> application resolution order.
+        'timezone',
         'school_role',
         'account_status',
         'force_password_change'

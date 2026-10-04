@@ -419,7 +419,12 @@ class RbacRoleManagementUiTest extends TestCase
         $page = $this->actingAs($this->adminA)->get(route('admin.rbac.staff.index'))->assertOk();
         $page->assertSee('John Teacher')->assertSee('STF-001')->assertSee('Teacher')->assertSee('Examinations Officer')
             ->assertSee('Lara Librarian')->assertSee('Sam Suspended')
-            ->assertDontSee('Stu Student')->assertDontSee('Pat Parent')->assertDontSee('Bea Teacher')->assertSee('Manage access');
+            ->assertDontSee('Stu Student')->assertDontSee('Pat Parent')->assertDontSee('Bea Teacher')
+            // The per-row Actions menu, which is how a staff record is now reached.
+            // Account Access (portal / password setup) and Roles & Permissions are
+            // deliberately separate entries with separate authority.
+            ->assertSee('Account Access')->assertSee('Roles &amp; Permissions', false)
+            ->assertSee('View Profile')->assertSee('Edit staff');
         foreach (['Name', 'Staff ID', 'Staff type', 'Access roles', 'Direct permissions', 'Status'] as $column) {
             $page->assertSee($column);
         }

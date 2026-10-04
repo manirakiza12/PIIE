@@ -6,11 +6,30 @@
 
 @section('content')
 
+{{--
+    PRESENTATION ONLY. The form, its fields, its validation, its submission route and
+    the applicant account workflow underneath are untouched - this block adds the
+    shared public chrome that every other page already had, so the page a visitor
+    reaches from "Apply Now" is recognisably the same website as the one they clicked
+    it from. Previously this view extended the shared layout but rendered no header,
+    no footer, no <main> and no <h1>, which made it read as a different site.
+--}}
+<div class="piie-site">
+    @include('frontend.partials.site_header')
+
+    <main id="piie-main">
+        @include('frontend.partials.blocks.page_hero', [
+            'title'   => get_phrase('Apply Now'),
+            'crumbs'  => [
+                ['label' => 'Home', 'url' => route('landingPage')],
+                ['label' => get_phrase('Apply Now'), 'url' => null],
+            ],
+        ])
+
 <div class="container" style="max-width:1080px; margin-top:60px; margin-bottom:80px;">
 
     <div class="text-center mb-5">
-        <h2 style="font-weight:700;">{{ get_phrase('Apply Now') }}</h2>
-        <p class="text-muted" style="max-width:640px; margin:12px auto 0;">
+        <p class="piie-lede" style="max-width:640px; margin:12px auto 0;">
             {{ get_phrase('Create an applicant account to start your application. Your progress is saved as you go, so you can complete it over several visits and track the outcome in one place.') }}
         </p>
     </div>
@@ -105,6 +124,10 @@
             </div>
         </div>
     @endif
+</div>
+    </main>
+
+    @include('frontend.partials.site_footer')
 </div>
 
 @endsection

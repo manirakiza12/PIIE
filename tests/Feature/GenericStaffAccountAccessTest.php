@@ -97,11 +97,11 @@ class GenericStaffAccountAccessTest extends TestCase
         return $token;
     }
 
-    public function test_school_admin_has_separate_account_access_ui_for_generic_staff_only(): void
+    public function test_school_admin_has_separate_account_access_ui(): void
     {
         $this->actingAs($this->admin)->get(route('admin.rbac.staff.index'))->assertOk()
             ->assertSee('Account Access')
-            ->assertSee(route('admin.rbac.staff.account-access', $this->staff->id), false);
+            ->assertSee(route('admin.staff.account-access.show', $this->staff->id), false);
 
         $page = $this->get(route('admin.rbac.staff.account-access', $this->staff->id))->assertOk()
             ->assertSee('Account Access')
@@ -114,7 +114,13 @@ class GenericStaffAccountAccessTest extends TestCase
         $page->assertDontSee('Manage access');
     }
 
-    public function test_only_same_school_school_administrator_can_issue_links_for_role_20(): void
+    /**
+     * The workflow was originally reachable for Other Staff (role 20) only, and
+     * the resolver refused every other base role with a 404. It now serves every
+     * staff member of the administrator's own school, so tenant isolation and
+     * authorization are asserted here instead of the old role restriction.
+     */
+    public function test_only_same_school_school_administrator_can_issue_links(): void
     {
         $tokenCount = DB::table('password_resets')->count();
 
@@ -128,8 +134,20 @@ class GenericStaffAccountAccessTest extends TestCase
         $foreignStaff = $this->makeGenericStaff($this->otherSchool, 'foreign.registrar@school.test');
         $this->actingAs($this->admin)->get(route('admin.rbac.staff.account-access', $foreignStaff->id))->assertNotFound();
         $this->post(route('admin.rbac.staff.account-access.send', $foreignStaff->id))->assertNotFound();
-        $this->get(route('admin.rbac.staff.account-access', $teacher->id))->assertNotFound();
+        // ... and the same for the HR-scoped entry point.
+        $this->get(route('admin.staff.account-access.show', $foreignStaff->id))->assertNotFound();
+        $this->post(route('admin.staff.account-access.send', $foreignStaff->id))->assertNotFound();
+        // A student is never a staff record.
+        $student = User::factory()->create([
+            'role_id' => 7, 'school_id' => $this->school, 'account_status' => 'active',
+        ]);
+        $this->get(route('admin.staff.account-access.show', $student->id))->assertNotFound();
         $this->assertSame($tokenCount, DB::table('password_resets')->count());
+
+        // A same-school Lecturer is now reachable, which is the point of the fix.
+        $this->get(route('admin.staff.account-access.show', $teacher->id))->assertOk()
+            ->assertSee('Account Access');
+        $this->assertSame($tokenCount, DB::table('password_resets')->count(), 'viewing issues nothing');
 
         Auth::logout();
         $this->actingAs($this->staff)->post(route('admin.rbac.staff.account-access.send', $this->staff->id))->assertRedirect();
@@ -222,6 +240,43 @@ class GenericStaffAccountAccessTest extends TestCase
             'password' => $newPassword,
             'password_confirmation' => $newPassword,
         ])->assertSessionHasErrors('email');
+
+        $this->post('/login', ['email' => $staff->email, 'password' => $newPassword])
+            ->assertRedirect(route('staff.dashboard'));
+        $this->assertAuthenticatedAs($staff);
+        Auth::logout();
+        $page = $this->actingAs($this->admin)->withSession(['setup_link_sent' => true])
+            ->get(route('admin.rbac.staff.account-access', $staff->id))->assertOk()
+            ->assertViewHas('setupState', 'completed')->assertSee('Completed')
+            ->assertDontSee('Setup required')->assertDontSee('Resend Password Setup Link')
+            ->assertDontSee('Send Password Setup Link')->assertDontSee($newPassword)
+            ->assertDontSee($token)->assertDontSee($staff->password);
+        $this->assertStringContainsString('no-store', $page->headers->get('Cache-Control'));
+        Mail::fake();
+        $this->post(route('admin.rbac.staff.account-access.send', $staff->id))->assertRedirect();
+        Mail::assertNothingOutgoing();
+        $this->assertSame(0, DB::table('password_resets')->where('email', $staff->email)->count());
+    }
+
+    public function test_initial_and_pending_states_follow_server_state_across_page_loads(): void
+    {
+        $url = route('admin.rbac.staff.account-access', $this->staff->id);
+        $this->actingAs($this->admin)->withSession(['setup_link_sent' => true])->get($url)
+            ->assertOk()->assertViewHas('setupState', 'required')->assertSee('Enabled')
+            ->assertSee('Setup required')->assertSee('Send Password Setup Link')
+            ->assertDontSee('Resend Password Setup Link');
+        $token = $this->issueSetupLink();
+        $this->flushSession();
+        $this->actingAs($this->admin)->get($url)->assertOk()
+            ->assertViewHas('setupState', 'pending')->assertSee('Pending setup')
+            ->assertSee('Resend Password Setup Link')->assertDontSee($token)
+            ->assertDontSee($this->temporaryPassword)->assertDontSee($this->staff->password);
+        $this->get($url)->assertViewHas('setupState', 'pending');
+        $this->assertSame(60, config('auth.passwords.users.expire'));
+        DB::table('password_resets')->where('email', $this->staff->email)
+            ->update(['created_at' => now()->subMinutes(61)]);
+        $this->get($url)->assertViewHas('setupState', 'required')->assertSee('Setup required');
+        $this->assertFalse(Password::broker('users')->tokenExists($this->staff, $token));
     }
 
     public function test_zero_permission_generic_staff_can_reach_workspace_but_not_privileged_routes(): void
@@ -274,7 +329,7 @@ class GenericStaffAccountAccessTest extends TestCase
     {
         Mail::shouldReceive('to')->once()->with($this->staff->email)
             ->andThrow(new MimeLogicException('An email must have a "From" or a "Sender" header.'));
-        Log::shouldReceive('warning')->once()->with('Mail delivery failed; the completed action was kept', Mockery::on(function (array $context): bool {
+        Log::shouldReceive('error')->once()->with('Mail delivery failed; the completed action was kept', Mockery::on(function (array $context): bool {
             $serialized = json_encode($context);
 
             return !str_contains($serialized, $this->temporaryPassword)

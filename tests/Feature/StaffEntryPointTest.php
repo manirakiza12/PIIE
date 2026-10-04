@@ -39,6 +39,19 @@ class StaffEntryPointTest extends TestCase
         'warden' => ['form' => 'admin.warden.create_form', 'post' => 'admin.warden.create', 'role' => 10],
     ];
 
+    /**
+     * The Create Staff form's own type key for each launcher key. The launcher
+     * calls the teaching role "lecturer" in every tenant; only the displayed
+     * label is tenant-specific.
+     */
+    private const CREATE_FORM_TYPE = [
+        'admin' => 'admin',
+        'teacher' => 'lecturer',
+        'accountant' => 'accountant',
+        'librarian' => 'librarian',
+        'warden' => 'warden',
+    ];
+
     private int $school;
     private int $otherSchool;
     private User $admin;
@@ -125,9 +138,11 @@ class StaffEntryPointTest extends TestCase
 
         preg_match_all('/data-staff-type="([a-z]+)"/', $html, $types);
         $this->assertSame(array_merge(array_keys(self::WORKFLOWS), ['other']), $types[1]);
-        foreach (self::WORKFLOWS as $workflow) {
-            // Opens the existing form in the same modal the list page uses.
-            $this->assertStringContainsString("rightModal('" . route($workflow['form']) . "'", $html);
+        foreach (array_keys(self::WORKFLOWS) as $key) {
+            // Opens the full-page Create Staff form for that type. The narrow
+            // drawer is no longer used for creation; the per-role create routes
+            // themselves are untouched (see the test below).
+            $this->assertStringContainsString(route('admin.staff.create', self::CREATE_FORM_TYPE[$key]), $html);
         }
         $this->assertStringContainsString('Add institutional staff whose main responsibility is not listed above.', $html);
         $this->assertStringContainsString('+ Add Other Staff', $html);
@@ -165,7 +180,7 @@ class StaffEntryPointTest extends TestCase
 
         $this->assertStringContainsString('data-staff-type="teacher"', $html);
         $this->assertStringContainsString('Lecturer', $html);
-        $this->assertStringContainsString("rightModal('" . route('admin.teacher.open_modal') . "'", $html);
+        $this->assertStringContainsString(route('admin.staff.create', 'lecturer'), $html);
         $this->assertStringNotContainsString('Create Teacher', $html);
     }
 

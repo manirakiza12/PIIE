@@ -4117,7 +4117,14 @@ class AdminController extends Controller
             $designations = Designation::where('school_id', auth()->user()->school_id)->paginate(10);
         }
 
-        return view('admin.designation.designation_list', compact('designations', 'search'));
+        // How many staff records hold each designation, so the list can explain
+        // why a referenced designation may not be deleted.
+        $school = (int) auth()->user()->school_id;
+        $usage = User::where('school_id', $school)->whereNotNull('designation_id')
+            ->select('designation_id')->selectRaw('COUNT(*) as staff_count')
+            ->groupBy('designation_id')->pluck('staff_count', 'designation_id');
+
+        return view('admin.designation.designation_list', compact('designations', 'search', 'usage'));
     }
 
     public function createDesignation()
@@ -4165,10 +4172,23 @@ class AdminController extends Controller
         return back()->with('error', 'Sorry this designation already exists');
     }
 
+    /**
+     * A designation is master data referenced by staff records, so it is never
+     * hard-deleted while it is in use. Deleting an unreferenced one stays
+     * available; a referenced one is refused with the reason and the count, so
+     * the administrator moves those staff members to another designation first.
+     */
     public function designationDelete($id)
     {
         $designation = Designation::where('school_id', auth()->user()->school_id)->findOrFail($id);
+        $inUse = (int) User::where('designation_id', $designation->id)->count();
+
+        if ($inUse > 0) {
+            return back()->with('error', "This designation is used by {$inUse} staff member(s) and cannot be deleted. Reassign them to another designation first, then delete it.");
+        }
+
         $designation->delete();
+
         return redirect()->back()->with('message', 'You have successfully deleted the designation.');
     }
 

@@ -4,73 +4,95 @@ namespace App\Support\CourseRegistration;
 
 use App\Models\CourseOffering;
 use App\Models\CourseRegistration;
-use App\Models\Curriculum;
 use App\Models\Programme;
 use App\Models\User;
-use App\Support\Curriculum\StudentCurriculumAssignmentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-/** Tenant-scoped administrator roster, derived from governed Study Plan assignments. */
+/** Tenant-scoped administrator roster, derived from the shared CourseOfferingEligibility rule. */
 class CourseOfferingRoster
 {
-    public function __construct(private StudentCurriculumAssignmentService $assignments) {}
+    public function __construct(private CourseOfferingEligibility $eligibility) {}
 
     public function eligible(CourseOffering $offering)
     {
+        return $this->review($offering)['eligible'];
+    }
+
+    /**
+     * Unregistered students with a current placement in, or current membership of a
+     * cohort following, a Study Plan linked to this Offering — split by the shared
+     * eligibility rule. Ineligible students carry an administrator-readable reason.
+     */
+    public function review(CourseOffering $offering, ?int $cohortId = null): array
+    {
+        $empty = ['eligible' => collect(), 'ineligible' => collect()];
         $schoolId = (int) $offering->school_id;
         if ($offering->status !== CourseOffering::STATUS_OPEN
             || ! Schema::hasTable('course_registrations')
             || ! Schema::hasColumn('course_registrations', 'course_offering_id')
-            || ! Schema::hasColumn('course_registrations', 'curriculum_membership_id')) return collect();
+            || ! Schema::hasColumn('course_registrations', 'curriculum_membership_id')) return $empty;
 
-        $memberships = DB::table('course_offering_curriculum_memberships as x')
-            ->join('curriculum_memberships as m', function ($join) use ($schoolId): void {
-                $join->on('m.id', '=', 'x.curriculum_membership_id')->on('m.school_id', '=', 'x.school_id');
-            })
-            ->join('academic_periods as ap', function ($join) use ($schoolId, $offering): void {
-                $join->where('ap.id', '=', (int) $offering->academic_period_id)->where('ap.school_id', '=', $schoolId)
-                    ->where('ap.academic_year_id', '=', (int) $offering->academic_year_id);
-            })
-            ->where('x.school_id', $schoolId)->where('x.course_offering_id', $offering->id)
-            ->where('x.subject_id', $offering->subject_id)->where('m.subject_id', $offering->subject_id)
-            ->whereColumn('x.curriculum_id', 'm.curriculum_id')->whereColumn('m.period_type', 'ap.type')->whereColumn('m.period_sequence', 'ap.sequence')
-            ->select('x.curriculum_id', 'm.id as membership_id', 'm.credits', 'm.classification')->get()
-            ->groupBy('curriculum_id');
+        $linkedStudyPlans = DB::table('course_offering_curriculum_memberships')
+            ->where('school_id', $schoolId)->where('course_offering_id', $offering->id)
+            ->distinct()->pluck('curriculum_id');
+        if ($linkedStudyPlans->isEmpty()) return $empty;
 
-        if ($memberships->isEmpty()) return collect();
         $alreadyRegistered = CourseRegistration::query()->where('school_id', $schoolId)
             ->where('course_offering_id', $offering->id)->pluck('student_id')->map(fn ($id) => (int) $id)->flip();
-        $students = User::query()->where('school_id', $schoolId)->where('role_id', 7)
+        $currentMemberships = ! Schema::hasTable('programme_cohort_memberships') ? collect() : DB::table('programme_cohort_memberships as pcm')
+            ->join('programme_cohorts as pc', function ($join) use ($schoolId): void {
+                $join->on('pc.id', '=', 'pcm.programme_cohort_id')->where('pc.school_id', '=', $schoolId);
+            })
+            ->where('pcm.school_id', $schoolId)->whereNull('pcm.ended_at')->whereIn('pcm.status', ['active', 'deferred'])
+            ->get(['pcm.student_id', 'pcm.programme_cohort_id', 'pc.name as cohort_name', 'pc.curriculum_id'])
+            ->keyBy(fn ($row) => (int) $row->student_id);
+        $candidateIds = DB::table('student_curriculum_assignments')->where('school_id', $schoolId)
+            ->whereNull('ended_at')->whereIn('curriculum_id', $linkedStudyPlans)->pluck('student_id')
+            ->merge($currentMemberships->filter(fn ($row) => $linkedStudyPlans->contains($row->curriculum_id))->keys())
+            ->map(fn ($id) => (int) $id)->unique();
+        if ($cohortId !== null) {
+            $candidateIds = $candidateIds->filter(fn ($id) => (int) ($currentMemberships->get($id)?->programme_cohort_id) === $cohortId);
+        }
+        $students = User::query()->where('school_id', $schoolId)->where('role_id', 7)->whereIn('id', $candidateIds->all())
             ->where(fn ($q) => $q->whereNull('account_status')->orWhere('account_status', '!=', 'disable'))
-            ->with(['studentProfile' => fn ($q) => $q->where('school_id', $schoolId)])->orderBy('name')->get();
+            ->with(['studentProfile' => fn ($q) => $q->where('school_id', $schoolId)])
+            ->orderBy('name')->get()
+            ->reject(fn (User $student) => $alreadyRegistered->has((int) $student->id));
+        $stageLabels = DB::table('curriculum_stages')->where('school_id', $schoolId)->pluck('label', 'id');
 
-        return $students->filter(function (User $student) use ($offering, $schoolId, $memberships, $alreadyRegistered): bool {
-            if ($alreadyRegistered->has((int) $student->id)) return false;
-            try {
-                $assignment = $this->assignments->assignmentForAcademicYear($schoolId, (int) $student->id, (int) $offering->academic_year_id);
-            } catch (\DomainException) {
-                return false;
-            }
-            if (! $assignment || ! $memberships->has((int) $assignment->curriculum_id)) return false;
-            $profile = $student->studentProfile;
-            if ($profile?->programme_id !== null && (int) $profile->programme_id !== (int) $assignment->programme_id) return false;
-            $curriculum = Curriculum::query()->where('school_id', $schoolId)->whereKey($assignment->curriculum_id)->first();
-            $matches = $memberships->get((int) $assignment->curriculum_id, collect());
-            if (! $curriculum || $curriculum->status !== 'approved' || (int) $curriculum->programme_id !== (int) $assignment->programme_id || $matches->count() !== 1) return false;
-            return DB::table('programmes')->where('school_id', $schoolId)->where('id', $assignment->programme_id)->exists();
-        })->map(function (User $student) use ($offering, $schoolId, $memberships): User {
-            $assignment = $this->assignments->assignmentForAcademicYear($schoolId, (int) $student->id, (int) $offering->academic_year_id);
-            $membership = $memberships->get((int) $assignment->curriculum_id)->first();
-            $student->setAttribute('roster_assignment', $assignment);
-            $student->setAttribute('roster_membership_id', (int) $membership->membership_id);
-            $curriculum = Curriculum::query()->where('school_id', $schoolId)->whereKey($assignment->curriculum_id)->first();
-            if ($curriculum) {
+        $reviewed = $students->map(function (User $student) use ($offering, $schoolId, $currentMemberships, $stageLabels): User {
+            $result = $this->eligibility->evaluate($offering, (int) $student->id);
+            $student->setAttribute('roster_cohort', $currentMemberships->get((int) $student->id)?->cohort_name);
+            $stageId = $result->assignment?->entry_curriculum_stage_id;
+            $student->setAttribute('roster_stage', $stageId ? $stageLabels->get($stageId) : null);
+            $student->setAttribute('roster_eligible', $result->eligible);
+            $student->setAttribute('roster_reason', $result->eligible ? null : $result->message);
+            if ($result->eligible) {
+                $curriculum = $result->curriculum;
                 $curriculum->setRelation('programme', Programme::query()->where('school_id', $schoolId)->whereKey($curriculum->programme_id)->first());
+                $student->setAttribute('roster_assignment', $result->assignment);
+                $student->setAttribute('roster_membership_id', (int) $result->membership->id);
+                $student->setAttribute('roster_curriculum', $curriculum);
             }
-            $student->setAttribute('roster_curriculum', $curriculum);
             return $student;
-        })->values();
+        });
+
+        return [
+            'eligible' => $reviewed->where('roster_eligible', true)->values(),
+            'ineligible' => $reviewed->where('roster_eligible', false)->values(),
+        ];
+    }
+
+    /** Administrator-facing reason why one student cannot be registered, or null when eligible. */
+    public function ineligibilityReason(CourseOffering $offering, int $studentId): ?string
+    {
+        if ($offering->status !== CourseOffering::STATUS_OPEN) {
+            return 'Students can be registered only while the Course Offering is open.';
+        }
+        $result = $this->eligibility->evaluate($offering, $studentId);
+
+        return $result->eligible ? null : $result->message;
     }
 
     public function registered(CourseOffering $offering)

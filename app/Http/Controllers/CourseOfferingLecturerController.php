@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use DomainException;
+use Throwable;
 
 class CourseOfferingLecturerController extends Controller
 {
@@ -107,8 +108,8 @@ class CourseOfferingLecturerController extends Controller
 
         try {
             $this->allocations->createPlanned($schoolId, $offering, (int) $data['user_id'], $data['role'], $data['starts_on'], $data['ends_on'] ?? null);
-        } catch (DomainException $exception) {
-            return back()->withInput()->withErrors(['allocation' => $this->domainMessage($exception, $schoolId)]);
+        } catch (Throwable $exception) {
+            return back()->withInput()->withErrors(['allocation' => $this->allocationMessage($exception, $schoolId)]);
         }
 
         return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', 'Lecturer assigned as a planned allocation.');
@@ -132,8 +133,8 @@ class CourseOfferingLecturerController extends Controller
                 'starts_on' => $data['starts_on'],
                 'ends_on' => $data['ends_on'] ?? null,
             ]);
-        } catch (DomainException $exception) {
-            return back()->withInput()->withErrors(['allocation' => $this->domainMessage($exception, $schoolId)]);
+        } catch (Throwable $exception) {
+            return back()->withInput()->withErrors(['allocation' => $this->allocationMessage($exception, $schoolId)]);
         }
 
         return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', 'Planned lecturer allocation updated.');
@@ -146,8 +147,8 @@ class CourseOfferingLecturerController extends Controller
 
         try {
             $this->allocations->activate($schoolId, $allocation);
-        } catch (DomainException $exception) {
-            return back()->withErrors(['allocation' => $this->domainMessage($exception, $schoolId)]);
+        } catch (Throwable $exception) {
+            return back()->withErrors(['allocation' => $this->allocationMessage($exception, $schoolId)]);
         }
 
         return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', 'Lecturer allocation activated.');
@@ -161,8 +162,8 @@ class CourseOfferingLecturerController extends Controller
 
         try {
             $this->allocations->end($schoolId, $allocation, $data['ends_on']);
-        } catch (DomainException $exception) {
-            return back()->withInput()->withErrors(['allocation' => $this->domainMessage($exception, $schoolId)]);
+        } catch (Throwable $exception) {
+            return back()->withInput()->withErrors(['allocation' => $this->allocationMessage($exception, $schoolId)]);
         }
 
         return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', 'Allocation ended and retained as teaching history.');
@@ -176,8 +177,8 @@ class CourseOfferingLecturerController extends Controller
 
         try {
             $this->allocations->cancel($schoolId, $allocation, trim($data['reason']));
-        } catch (DomainException $exception) {
-            return back()->withInput()->withErrors(['allocation' => $this->domainMessage($exception, $schoolId)]);
+        } catch (Throwable $exception) {
+            return back()->withInput()->withErrors(['allocation' => $this->allocationMessage($exception, $schoolId)]);
         }
 
         return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', 'Allocation cancelled. Its effective dates and history were preserved.');
@@ -205,8 +206,8 @@ class CourseOfferingLecturerController extends Controller
                 $data['starts_on'],
                 $data['ends_on'] ?? null
             );
-        } catch (DomainException $exception) {
-            return back()->withInput()->withErrors(['allocation' => $this->domainMessage($exception, $schoolId)]);
+        } catch (Throwable $exception) {
+            return back()->withInput()->withErrors(['allocation' => $this->allocationMessage($exception, $schoolId)]);
         }
 
         return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', 'Lecturer replaced. Both allocations remain in teaching history.');
@@ -340,6 +341,22 @@ class CourseOfferingLecturerController extends Controller
     private function offeringCanBeMutated(CourseOffering $offering): bool
     {
         return in_array($offering->status, [CourseOffering::STATUS_DRAFT, CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true);
+    }
+
+    /**
+     * Domain failures are already written for lecturers and administrators. Anything
+     * else (a database or configuration failure) is reported server-side and reduced
+     * to a safe message, so no SQL or exception detail ever reaches the UI.
+     */
+    private function allocationMessage(Throwable $exception, int $schoolId): string
+    {
+        if (! $exception instanceof DomainException) {
+            report($exception);
+
+            return 'Something went wrong while updating the teaching team. Please try again, or contact support if this continues.';
+        }
+
+        return $this->domainMessage($exception, $schoolId);
     }
 
     private function domainMessage(DomainException $exception, int $schoolId): string

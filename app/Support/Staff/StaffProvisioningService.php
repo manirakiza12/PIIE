@@ -135,6 +135,148 @@ class StaffProvisioningService
     }
 
     /**
+     * Common staff creation with the Next of Kin recorded, for ANY base role.
+     *
+     * The Next of Kin lives on the shared staff_profiles record, so it is
+     * captured once here rather than per role: Admin, Lecturer, Accountant,
+     * Librarian, Warden and Other Staff all get the same governed block, and a
+     * Next of Kin is never created as a system user.
+     *
+     * Delegates to provision() so the existing behaviour - photo, duplicate
+     * email check, staff number, password handling, credentials email after
+     * COMMIT - is unchanged, and the profile is written inside the same
+     * transaction through the same StaffRecordService the edit screens use.
+     *
+     * @param  array  $data  the account fields plus the emergency_contact_* block
+     * @param  array  $professional  optional existing professional records, written in the
+     *                                same transaction. Keys: 'qualifications' (staff_qualifications
+     *                                rows), 'registrations' (staff_professional_registrations rows),
+     *                                'documents' (['category' => …, 'file' => UploadedFile, 'ref' => …]).
+     *                                A qualification or registration may point at one of those
+     *                                documents with 'evidence_document_ref'. All of it reuses the
+     *                                existing StaffRecordService writers, so there is no second
+     *                                document store and no second qualification table.
+     */
+    public function provisionWithNextOfKin(int $roleId, array $data, User $actor, array $professional = []): User
+    {
+        if (! in_array($roleId, self::creatableRoleIds($actor), true)) {
+            throw new AuthorizationException('You may not create this type of staff member.');
+        }
+
+        $profile = $this->profileFor($data);
+        $qualifications = $professional['qualifications'] ?? [];
+        $registrations = $professional['registrations'] ?? [];
+        $documents = $professional['documents'] ?? [];
+
+        $storedKeys = [];
+        try {
+            return $this->provision($roleId, $data, (int) $actor->school_id,
+                function (User $user) use ($actor, $profile, $qualifications, $registrations, $documents, &$storedKeys): void {
+                    $records = app(StaffRecordService::class);
+
+                    // Documents first, so a qualification can cite one as its evidence
+                    // by the same in-request reference.
+                    $documentIds = [];
+                    foreach ($documents as $index => $document) {
+                        $stored = $records->uploadDocument($actor, $user, $document['file'], (string) $document['category'], true);
+                        $storedKeys[] = $stored->storage_key;
+                        $documentIds[(string) ($document['ref'] ?? $index)] = $stored->id;
+                    }
+                    $withEvidence = function (array $row) use ($documentIds): array {
+                        if (isset($row['evidence_document_ref'])) {
+                            $row['evidence_document_id'] = $documentIds[(string) $row['evidence_document_ref']]
+                                ?? throw new StaffRecordException('An evidence document reference does not match an uploaded document.');
+                        }
+                        unset($row['evidence_document_ref']);
+
+                        return $row;
+                    };
+
+                    $records->saveProfile($actor, $user, $profile, true);
+                    foreach ($qualifications as $row) {
+                        $records->addQualification($actor, $user, $withEvidence($row), true);
+                    }
+                    foreach ($registrations as $row) {
+                        $records->addRegistration($actor, $user, $withEvidence($row), true);
+                    }
+                });
+        } catch (\Throwable $e) {
+            // Anything already written to the private store is removed, so a failed
+            // creation leaves no orphaned file behind.
+            foreach ($storedKeys as $key) {
+                StaffDocumentStorage::delete($key);
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Everything this request wants on the shared staff_profiles record: the
+     * controlled title, the professional extras the profile owns, the Next of
+     * Kin block, and the NIN. Reduced to exactly the profile fields it owns and
+     * validated once, so the creation form and the profile screens cannot drift.
+     *
+     * An empty block simply means the staff member has nothing recorded yet on
+     * those optional fields; only the Next of Kin is mandatory on creation.
+     */
+    private function profileFor(array $data): array
+    {
+        $nokKeys = [
+            'emergency_contact_name', 'emergency_contact_relationship',
+            'emergency_contact_email', 'emergency_contact_phone',
+            'emergency_contact_alternative_phone', 'emergency_contact_address',
+        ];
+        $block = array_intersect_key($data, array_flip(array_merge(
+            $nokKeys,
+            ['title', 'title_other', 'city', 'country', 'years_teaching_experience', 'nin']
+        )));
+
+        $hasNextOfKin = array_filter(
+            array_intersect_key($block, array_flip($nokKeys)),
+            fn ($value) => trim((string) $value) !== ''
+        ) !== [];
+
+        // A controlled title, with the "Other" description folded into the existing
+        // column rather than adding one.
+        if (trim((string) ($block['title'] ?? '')) !== '') {
+            $block['title'] = StaffTitle::normalise($block['title'], $block['title_other'] ?? null);
+        }
+        unset($block['title_other']);
+
+        // A controlled relationship, likewise folded into the existing column.
+        if ($hasNextOfKin) {
+            $block['emergency_contact_relationship'] = StaffNextOfKin::normalise(
+                $block['emergency_contact_relationship'] ?? null,
+                $data['emergency_contact_relationship_other'] ?? null
+            );
+        }
+
+        // One source of truth for the block, so staff creation cannot drift from
+        // the profile screens; creation is the strict case because a new record
+        // must capture the Next of Kin in full.
+        $rules = array_merge(
+            array_intersect_key(StaffRecordService::nextOfKinRules(), array_flip($nokKeys)),
+            array_intersect_key(StaffRecordService::profileRules(), array_flip(['title', 'city', 'country', 'years_teaching_experience'])),
+            ['nin' => ['nullable', 'string', 'min:'.StaffNin::MIN_LENGTH, 'max:'.StaffNin::MAX_LENGTH]]
+        );
+
+        $validator = Validator::make($block, $rules, StaffRecordService::messagesFor($rules));
+        if ($validator->fails()) {
+            throw new StaffRecordException('The staff record details are not valid.', $validator->errors()->toArray());
+        }
+
+        $clean = $validator->validated();
+        // The NIN is only written when one was actually supplied, so an omitted
+        // field never blanks a value.
+        if (trim((string) ($clean['nin'] ?? '')) === '') {
+            unset($clean['nin']);
+        }
+
+        return $clean;
+    }
+
+    /**
      * Professional staff creation (the future full-page workflow): the user AND all
      * professional records commit together or not at all; credentials are emailed
      * only after COMMIT; any file already stored is deleted if anything fails.

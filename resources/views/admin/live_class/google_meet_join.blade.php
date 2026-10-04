@@ -3,6 +3,31 @@
 @php
     $routePrefix = request()->routeIs('teacher.*') ? 'teacher' : (request()->routeIs('student.*') ? 'student' : 'admin');
     $isStaff = (int) auth()->user()->role_id !== 7;
+
+    /**
+     * WHICH GOOGLE ACCOUNT ACTUALLY OWNS THIS CLASS.
+     *
+     * This page used to tell every staff member that the class "runs on this
+     * school's one shared Google Meet account", and to sign into that shared
+     * account before joining. Both halves were wrong once per-lecturer OAuth
+     * landed, and the second half was actively harmful: signing into a different
+     * Google account than the one that owns the event means Google does not
+     * recognise the lecturer as host, so the person about to teach the class
+     * would sit in the waiting room like a student.
+     *
+     * The account is not guessed. It is read from the class itself, and the
+     * discriminator is already persisted:
+     *
+     *   - a Calendar event id is recorded ONLY by the per-lecturer path
+     *     (createGoogleMeetEventForActor -> GoogleCalendarService), because the
+     *     installation-wide fallback in createGoogleMeetUrl() returns a bare
+     *     hangoutLink string and never records an id;
+     *   - no event id therefore means the institution-wide credential made it.
+     *
+     * Both branches are still real, so both are described honestly rather than
+     * pretending the shared-credential path no longer exists.
+     */
+    $onLecturerOwnAccount = filled($liveClass->google_calendar_event_id);
 @endphp
 
 <div class="mainSection-title">
@@ -39,10 +64,12 @@
                     this was actually caught). Long explanatory paragraphs
                     like this one have to stay as plain, untranslated text.
                 --}}
-                @if($isStaff)
-                    This class runs on this school's one shared Google Meet account, not your own personal Google sign-in. If you are running this session, make sure you are signed into that same shared Google account in this browser tab before continuing — otherwise Google Meet will not recognise you as host, and you will have to wait to be let in just like everyone else.
-                @else
+                @if(! $isStaff)
                     This class runs on Google Meet. You may briefly see a "waiting to be admitted" screen until the host lets you in — that is expected, just wait a moment.
+                @elseif($onLecturerOwnAccount)
+                    This class was created on the Google account of the lecturer who scheduled it. If you are running this session, continue in a browser tab already signed in to that same Google account — Google Meet identifies the host by that account, and signing in as anyone else means you will wait to be let in like everyone else. You can check which account owns it on the Live Classes page under Google Account.
+                @else
+                    This class was created on this school's shared Google Meet account rather than an individual lecturer's own account, so it is not tied to any one person's Google sign-in. If you are running this session, an administrator can confirm which account to use; otherwise continue and wait to be admitted.
                 @endif
             </div>
 

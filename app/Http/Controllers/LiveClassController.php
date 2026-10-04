@@ -12,14 +12,22 @@ use App\Models\LiveClass;
 use App\Models\LiveClassAttendance;
 use App\Models\LiveClassMaterial;
 use App\Models\LiveClassMeetGuest;
+use RuntimeException;
 use App\Models\Noticeboard;
 use App\Models\Programme;
 use App\Models\Session;
 use App\Models\Subject;
 use App\Models\TeacherPermission;
 use App\Models\TeacherProgrammeAssignment;
+use App\Support\Permissions\PermissionService;
 use App\Support\LiveClasses\JitsiTokenService;
+use App\Support\Google\GoogleAccountService;
+use App\Support\Google\GoogleCalendarService;
+use App\Support\Google\GoogleOAuthCredentials;
+use App\Support\LiveClasses\GoogleConferenceStatus;
+use App\Support\LiveClasses\MeetingResolution;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -55,6 +63,11 @@ class LiveClassController extends Controller
         // ended) is the default; staff explicitly asks for "completed",
         // "cancelled" or "all" to see the rest.
         $view = $request->input('view', $status ? 'all' : 'upcoming');
+        // HEI filters. A Course Offering and an academic period are the
+        // instruments an HEI lecturer actually filters by; Class/Section/Session
+        // mean nothing in an HEI timetable.
+        $courseOfferingId = $request->input('course_offering_id');
+        $academicPeriodId = $request->input('academic_period_id');
 
         $classes = LiveClass::query()
             ->where('school_id', $this->school_id)
@@ -76,11 +89,29 @@ class LiveClassController extends Controller
             ->when($platform, fn($q) => $q->where('platform', $platform))
             ->when($status, fn($q) => $q->where('status', $status))
             ->when($date, fn($q) => $q->whereDate('start_date', $date))
+            // Offering-aware filters for the higher-education view. An Offering
+            // and an academic period are what an HEI lecturer actually thinks
+            // in; Class/Section/Session are meaningless in an HEI timetable.
+            ->when($courseOfferingId, fn($q) => $q->where('course_offering_id', (int) $courseOfferingId))
+            ->when($academicPeriodId, fn($q) => $q->whereIn('course_offering_id',
+                \App\Models\CourseOffering::query()
+                    ->where('school_id', $this->school_id)
+                    ->where('academic_period_id', (int) $academicPeriodId)
+                    ->select('id')
+            ))
+
             // The explicit status dropdown is the more precise instrument;
             // the view tab's coarse date-window logic only applies when the
             // caller hasn't already pinned an exact status.
             ->when(!$status, fn($q) => $this->applyQuickView($q, $view))
-            ->with(['subject', 'teacher', 'programme', 'academicSession'])
+            ->with(array_merge(
+                ['subject', 'teacher', 'programme', 'academicSession'],
+                // Only eager-load the Offering when the table is actually
+                // present, so a K12 install (or a minimal fixture) that has
+                // never adopted Course Offerings is not broken by a listing
+                // feature it does not use.
+                \Illuminate\Support\Facades\Schema::hasTable('course_offerings') ? ['courseOffering'] : []
+            ))
             ->orderByDesc('start_date')
             ->orderByDesc('start_time')
             ->paginate(20);
@@ -89,56 +120,135 @@ class LiveClassController extends Controller
         $classList = Classes::where('school_id', $this->school_id)->orderBy('name')->get();
         $programmes = Programme::where('school_id', $this->school_id)->where('is_active', 1)->orderBy('name')->get();
         $sessions = Session::where('school_id', $this->school_id)->orderByDesc('id')->get();
+
+        // The lecturer's own manageable Offerings, so the Course Offering filter
+        // can never offer a class the lecturer may not see. Skipped entirely
+        // when the institution has not adopted Course Offerings.
+        $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
+        $offeringAware = \Illuminate\Support\Facades\Schema::hasTable('course_offerings')
+            && \Illuminate\Support\Facades\Schema::hasTable('academic_periods');
+        $isHei = $offeringAware && $scheduling->isHigherEducation(Auth::user());
+        $filterOfferings = $isHei
+            ? $scheduling->manageableOfferings(Auth::user())
+            : collect();
+        $filterPeriods = $isHei
+            ? \App\Models\AcademicPeriod::query()
+                ->where('school_id', $this->school_id)
+                ->whereIn('id', \App\Models\CourseOffering::query()
+                    ->where('school_id', $this->school_id)
+                    ->whereIn('id', $filterOfferings->pluck('id')->all())
+                    ->distinct()
+                    ->select('academic_period_id'))
+                ->orderByDesc('id')
+                ->get()
+            : collect();
         $platformStatus = $this->platformConfigurationStatus();
         $defaultPlatform = $this->defaultPlatform();
 
-        return view('admin.live_class.index', compact(
-            'classes',
-            'subjects',
-            'classList',
-            'programmes',
-            'sessions',
-            'search',
-            'subjectId',
-            'platform',
-            'status',
-            'date',
-            'platformStatus',
-            'defaultPlatform',
-            'view'
-        ));
+        return view('admin.live_class.index', [
+            'classes' => $classes,
+            'subjects' => $subjects,
+            'classList' => $classList,
+            'programmes' => $programmes,
+            'sessions' => $sessions,
+            'search' => $search,
+            'subjectId' => $subjectId,
+            'platform' => $platform,
+            'status' => $status,
+            'date' => $date,
+            'platformStatus' => $platformStatus,
+            'defaultPlatform' => $defaultPlatform,
+            // Google connection facts for the lecturer panel. `googleConnection` is
+            // the signed-in user's OWN row and is null for everyone else, so this
+            // cannot surface another lecturer's grant — and the partial that
+            // renders it only shows anything at all to a lecturer.
+            'googleConnection' => app(GoogleAccountService::class)->forUser(Auth::user()),
+            'googleConfigured' => GoogleOAuthCredentials::isConfigured(),
+            'view' => $view,
+            'emptyState' => $this->emptyStateForView($view),
+            // HEI Offering-aware filtering
+            'isHei' => $isHei,
+            'filterOfferings' => $filterOfferings,
+            'filterPeriods' => $filterPeriods,
+            'courseOfferingId' => $courseOfferingId,
+            'academicPeriodId' => $academicPeriodId,
+            'meetNowOfferings' => $filterOfferings,
+        ]);
     }
 
     /**
      * The four quick-filter tabs shown above the table/cards. Kept as one
      * method so the admin/teacher queue and the student listing can never
      * define "upcoming" or "completed" differently.
+     *
+     * Every branch is expressed against the STORED status or against the stored
+     * instants - never against a rendered time - so a filter can never disagree
+     * with the viewer's own timezone.
+     *
+     * "Completed" means ONE thing here: a person ended the class. It used to
+     * also match anything whose `ends_at` had passed, which let a class nobody
+     * ever taught be filed as completed purely because the clock moved on. That
+     * is the same false claim as the model's own derived status, and it is fixed
+     * in both places for the same reason.
      */
     private function applyQuickView($query, string $view)
     {
         return match ($view) {
             'live' => $query->active(),
-            'completed' => $query->where('status', '!=', LiveClass::STATUS_CANCELLED)
-                ->where(function ($q) {
-                    $q->where('status', LiveClass::STATUS_ENDED)
-                        ->orWhere(function ($sub) {
-                            $sub->whereNotNull('ends_at')->where('ends_at', '<', now());
-                        });
-                }),
+            'completed' => $query->where('status', LiveClass::STATUS_ENDED),
             'cancelled' => $query->where('status', LiveClass::STATUS_CANCELLED),
             'all' => $query,
-            // 'upcoming' and anything unrecognised: not yet finished and not
-            // cancelled — drafts, scheduled and currently-live classes.
+            // Upcoming: everything that has not been concluded and has not
+            // finished. A class whose scheduled end has passed but was never
+            // closed is NOT upcoming - it is neither running nor completed -
+            // so it is deliberately left out of this tab and still findable
+            // under All, where it shows its real state instead of a false one.
             default => $query->where('status', '!=', LiveClass::STATUS_CANCELLED)
+                ->where('status', '!=', LiveClass::STATUS_ENDED)
                 ->where(function ($q) {
                     $q->whereNull('ends_at')->orWhere('ends_at', '>=', now());
                 }),
         };
     }
 
-    public function create()
+    /**
+     * Wording for an empty tab, so a filtered list never claims something
+     * untrue. "No live classes scheduled." under a Cancelled filter used to
+     * tell a user they had no classes at all when in fact they had cancelled
+     * ones, which is the opposite of the reassurance the screen owes them.
+     */
+    private function emptyStateForView(string $view): array
+    {
+        return match ($view) {
+            'cancelled' => [get_phrase('No cancelled live classes'), get_phrase('You have not cancelled any live classes. Cancelled classes stay here as a record.')],
+            'live' => [get_phrase('No live classes are running now'), get_phrase('A class appears here while it is running. Joining opens 15 minutes before the start time.')],
+            'completed' => [get_phrase('No completed live classes'), get_phrase('A class appears here once your lecturer marks it completed.')],
+            default => [get_phrase('No upcoming live classes'), get_phrase('You have no live classes scheduled ahead.')],
+        };
+    }
+
+    public function create(Request $request)
     {
         $this->authorize('create', LiveClass::class);
+
+        $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
+
+        // A higher-education lecturer schedules through a Course Offering, not
+        // through Class/Section/Programme/Session. Rather than serve them the
+        // legacy form and let them pick a "Class" that has no meaning in an
+        // HEI timetable, this screen asks which Course Offering first and
+        // carries that choice into the real form as route context.
+        //
+        // The legacy K12 form below is untouched and still served to K12
+        // institutions and to tenant admins.
+        if (request()->routeIs('teacher.*') && $scheduling->isHigherEducation($request->user())) {
+            $offerings = $scheduling->manageableOfferings($request->user());
+
+            return view('admin.live_class.hei_offerings', [
+                'offerings' => $offerings,
+                'scheduling' => $scheduling,
+            ]);
+        }
 
         $liveClass = new LiveClass([
             'platform' => $this->defaultPlatform(),
@@ -213,7 +323,16 @@ class LiveClassController extends Controller
     public function meetNow(Request $request)
     {
         $this->authorize('create', LiveClass::class);
-        $this->rejectOfferingContextOnLegacyWorkflow($request);
+
+        $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
+        $requiresOffering = $scheduling->isHigherEducation(Auth::user());
+
+        // A K12 institution still may not smuggle Offering context onto this
+        // legacy endpoint. A higher-education one MUST supply it - that is what
+        // stops an instant meeting from existing outside every academic record.
+        if (! $requiresOffering) {
+            $this->rejectOfferingContextOnLegacyWorkflow($request);
+        }
 
         $validated = $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
@@ -222,6 +341,13 @@ class LiveClassController extends Controller
             'programme_id' => ['nullable', 'exists:programmes,id'],
             'academic_session_id' => ['nullable', 'exists:sessions,id'],
             'platform' => ['nullable', 'in:jitsi,google_meet,zoom'],
+            // Required for an instant meeting in a higher-education institution.
+            // A missing one is a field error the lecturer can act on, not a 404.
+            'course_offering_id' => $requiresOffering
+                ? ['required', 'integer', 'exists:course_offerings,id']
+                : ['nullable', 'integer', 'exists:course_offerings,id'],
+        ], [
+            'course_offering_id.required' => get_phrase('Choose the Course Offering this meeting belongs to.'),
         ]);
 
         $platform = $validated['platform'] ?? $this->defaultPlatform();
@@ -296,13 +422,14 @@ class LiveClassController extends Controller
         $now = now();
         $endsAt = $now->copy()->addHour();
         $title = trim((string) ($validated['title'] ?? 'Instant Live Class ' . $now->format('H:i')));
-        $meetingUrl = $this->resolveMeetingUrl(
+        $meetNowResolution = $this->resolveMeeting(
             $platform,
             $title,
             $now,
             $endsAt,
             config('app.timezone', 'UTC')
         );
+        $meetingUrl = $meetNowResolution->url;
 
         $payload = [
             'school_id' => $this->school_id,
@@ -327,9 +454,50 @@ class LiveClassController extends Controller
             'is_published' => 1,
             'attendance_enabled' => 1,
             'recording_url' => null,
+            // Same rule as buildPayload(): only name the Google columns when there
+            // is a Google event to record. `meetNow` never has one.
+            ...array_filter([
+                'google_calendar_event_id' => $meetNowResolution?->eventId,
+                'google_conference_status' => $meetNowResolution?->conferenceStatus,
+            ], fn ($value) => $value !== null),
             'created_by' => Auth::id(),
             'updated_by' => Auth::id(),
         ];
+
+        // An instant meeting in a higher-education institution must belong to a
+        // Course Offering. Creating one with only Class/Section/Programme/Session
+        // produced a class that belongs to no academic record at all: invisible
+        // to the Offering workspace, to the lecturer's own Course Offerings,
+        // and to every Attendance or notification rule that keys on the
+        // Offering. For a K12 institution the legacy behaviour is unchanged.
+        if ($requiresOffering) {
+            $offeringId = (int) $request->input('course_offering_id');
+            $offering = $this->tenantOfferingOrFail($offeringId);
+            $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+            abort_unless(
+                $access->canAdminCreateForOffering(Auth::user(), $offering)
+                    || $access->canLecturerCreateForOffering(Auth::user(), $offering, $now),
+                403
+            );
+
+            // Build it through the same governed service the scheduled path
+            // uses, so the Offering context, the subject match and the
+            // facilitator-allocation rules all apply identically.
+            $liveClass = app(\App\Support\LiveClasses\LiveClassService::class)->createForOffering(
+                Auth::user(),
+                (int) $offering->id,
+                array_merge($payload, [
+                    'status' => LiveClass::STATUS_LIVE,
+                    'is_published' => true,
+                    'attendance_enabled' => false,
+                ])
+            );
+            \App\Support\LiveClasses\LiveClassNotifier::announcePublished($liveClass);
+
+            $routePrefix = $this->getRoutePrefix($request);
+
+            return redirect()->route($routePrefix . '.live_classes.join', $liveClass->id);
+        }
 
         $liveClass = DB::transaction(function () use ($payload) {
             $record = LiveClass::create($payload);
@@ -347,8 +515,89 @@ class LiveClassController extends Controller
         abort_unless((int) $liveClass->school_id === (int) $this->school_id, 404);
         $this->authorizeClassView($liveClass);
 
-        $liveClass->load(['subject', 'teacher', 'programme', 'academicSession', 'creator']);
-        return view('admin.live_class.show', compact('liveClass'));
+        // courseOffering (and its year/period) is what supplies the academic
+        // context for an Offering-backed class. Without it the detail page could
+        // only ever show "Programme: —", because programme_id is deliberately
+        // null on such a class. Guarded on table existence so an installation
+        // (or fixture) without an academic calendar still renders the class.
+        $offeringRelations = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('course_offerings')) {
+            $offeringRelations = ['courseOffering'];
+            foreach (['academic_years', 'academic_periods'] as $calendarTable) {
+                if (\Illuminate\Support\Facades\Schema::hasTable($calendarTable)) {
+                    $offeringRelations[] = 'courseOffering.'.('academic_years' === $calendarTable ? 'academicYear' : 'academicPeriod');
+                }
+            }
+        }
+
+        $liveClass->load(array_merge(
+            ['subject', 'teacher', 'programme', 'academicSession', 'creator'],
+            $offeringRelations
+        ));
+
+        // One resolver feeds both this page and the student's, so "is this class
+        // ready to start" can never be answered differently on the two screens.
+        $lifecycle = app(\App\Support\LiveClasses\LiveClassLifecycle::class)->for($liveClass, Auth::user());
+
+        return view('admin.live_class.show', [
+            'liveClass' => $liveClass,
+            'lifecycle' => $lifecycle,
+            'primaryAction' => app(\App\Support\LiveClasses\LiveClassLifecycle::class)->lecturerPrimaryAction($lifecycle),
+            'countdown' => app(\App\Support\LiveClasses\LiveClassLifecycle::class)->countdown($lifecycle),
+            // Concluding a class is a DIFFERENT question from managing it, and a
+            // wider one: a lecturer whose appointment has since moved on must still
+            // be able to close out a session they actually ran, or the record stays
+            // permanently unclaimed. The lifecycle table still refuses the move if
+            // it is not legal.
+            'canConclude' => app(\App\Support\LiveClasses\LiveClassAccessService::class)
+                ->canLecturerConclude(Auth::user(), $liveClass),
+            'canManageRecording' => $this->canManageRecording(Auth::user(), $liveClass),
+            // What the provider can genuinely do - PIIE authority is not provider
+            // authority, and the page must not blur the two.
+            'platform' => app(\App\Support\LiveClasses\LiveClassPlatform::class)
+                ->describe($liveClass, (bool) $lifecycle['canHost']),
+            'display' => app(\App\Support\LiveClasses\LiveClassDisplay::class)->for($liveClass, Auth::user()),
+            'startedByName' => $this->actorName($liveClass, 'started_by'),
+            'endedByName' => $this->actorName($liveClass, 'ended_by'),
+            'cancelledByName' => $this->actorName($liveClass, 'cancelled_by'),
+        ]);
+    }
+
+    /**
+     * Who performed a recorded lifecycle action, in this tenant only.
+     *
+     * Read through the class's own school_id rather than by a bare id, so a
+     * column can never resolve to somebody from another institution.
+     */
+    private function actorName(LiveClass $liveClass, string $column): ?string
+    {
+        $id = $liveClass->{$column};
+
+        if (empty($id)) {
+            return null;
+        }
+
+        return \App\Models\User::query()
+            ->where('school_id', $liveClass->school_id)
+            ->whereKey($id)
+            ->value('name');
+    }
+
+    /**
+     * May this person attach or correct a recording?
+     *
+     * A completed class is read-only, but this stays available on purpose: a
+     * recording is normally produced AFTER the class ends, so refusing it would
+     * make the resource workflow impossible to use. What is refused is a
+     * recording claiming to be "available" for a class that has not concluded -
+     * the controller enforces that, because a published recording of a class
+     * that never ran asserts teaching that did not happen.
+     */
+    private function canManageRecording(\App\Models\User $user, LiveClass $liveClass): bool
+    {
+        $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+
+        return $access->canManagePostClassResources($user, $liveClass);
     }
 
     public function edit(LiveClass $liveClass)
@@ -434,18 +683,203 @@ class LiveClassController extends Controller
         return redirect()->back()->with('success', get_phrase('Live class deleted'));
     }
 
+    /**
+     * End a class the lecturer has finished teaching.
+     *
+     * A governed lifecycle action, not a delete and not an unpublish: the row,
+     * its history and its notifications all survive, and no attendance is
+     * written. Ending a class that never ran is refused with a plain message,
+     * because a class that was never live has no "end".
+     */
+    public function end(LiveClass $liveClass)
+    {
+        abort_unless((int) $liveClass->school_id === (int) $this->school_id, 404);
+        $this->authorizeClassManage($liveClass);
+
+        if ($liveClass->status === LiveClass::STATUS_CANCELLED) {
+            return redirect()->back()->with('error', get_phrase('This Live Class was cancelled, so there is nothing to end.'));
+        }
+
+        if (! $liveClass->is_published) {
+            return redirect()->back()->with('error', get_phrase('This Live Class was never published, so there is nothing to end.'));
+        }
+
+        // The lifecycle table is the authority on whether this move exists at
+        // all. Without it a second End press would silently rewrite who ended
+        // the class and when, and a concluded class could be reopened.
+        abort_unless(
+            $liveClass->canTransitionTo(LiveClass::STATUS_ENDED),
+            403,
+            get_phrase('This Live Class has already been concluded and cannot be ended again.')
+        );
+
+        app(\App\Support\LiveClasses\LiveClassService::class)
+            ->endMeeting(Auth::user(), (int) $liveClass->id);
+
+        return redirect()->back()->with('success', get_phrase('Live Class ended. It is kept in the record as completed.'));
+    }
+
     public function cancel(LiveClass $liveClass)
     {
         abort_unless((int) $liveClass->school_id === (int) $this->school_id, 404);
         $this->authorizeClassManage($liveClass);
 
-        $liveClass->update([
-            'status' => LiveClass::STATUS_CANCELLED,
-            'updated_by' => Auth::id(),
+        $wasCancelled = $liveClass->status === LiveClass::STATUS_CANCELLED;
+        $notified = 0;
+
+        // COMPLETED IS TERMINAL.
+        //
+        // authorizeClassManage() already refuses an ended class, but the rule is
+        // restated here as a named transition so it holds on EVERY authorization
+        // path - including the legacy K12 route, which falls through to a generic
+        // policy and would otherwise carry no lifecycle guard at all. Hiding the
+        // Cancel button is a courtesy; this is the rule.
+        abort_unless(
+            $liveClass->canTransitionTo(LiveClass::STATUS_CANCELLED),
+            403,
+            get_phrase('This Live Class has already been completed and is kept as a record. It cannot be cancelled.')
+        );
+
+        // Decided BEFORE the write, because after it the answer is
+        // unrecoverable - and because it decides the wording. Deliberately not
+        // phrased as "the meeting was ended": PIIE closes its own side, not a
+        // conference running on someone else's server.
+        $wasOpenExternally = ! $wasCancelled
+            && (in_array($liveClass->computed_status, [LiveClass::STATUS_LIVE, LiveClass::STATUS_NOT_CONCLUDED], true)
+                || ($liveClass->scheduled_at !== null
+                    && $liveClass->ends_at !== null
+                    && now()->betweenIncluded($liveClass->scheduled_at, $liveClass->ends_at)));
+
+        DB::transaction(function () use ($liveClass, &$notified, $wasCancelled): void {
+            $liveClass->update([
+                'status' => LiveClass::STATUS_CANCELLED,
+                // Authoritative evidence of the decision and of who made it.
+                // Written once, on the first transition only, and never invented
+                // for a class that predates the columns.
+                'cancelled_at' => $wasCancelled ? $liveClass->cancelled_at : now(),
+                'cancelled_by' => $wasCancelled ? $liveClass->cancelled_by : Auth::id(),
+                'updated_by' => Auth::id(),
+            ]);
+
+            // Only the first transition announces. A second click on an
+            // already-cancelled class is a no-op for students, and the
+            // unique-index dedup in LiveClassNotifier enforces that even if
+            // this guard were removed.
+            if (! $wasCancelled && $liveClass->course_offering_id !== null) {
+                $notified = \App\Support\LiveClasses\LiveClassNotifier::announceCancelled($liveClass);
+            }
+
+            AuditLog::record('update', 'Live Classes', "Cancelled live class: {$liveClass->title}");
+        });
+
+        $message = $this->announcedCount($liveClass, $notified) ?: get_phrase('Live class cancelled');
+
+        if ($wasOpenExternally) {
+            // Two separate facts, which the interface must not merge. PIIE has
+            // closed ITS side: cancelled, no further joins, students told. PIIE
+            // has NOT closed the provider's conference - nothing here can, and
+            // nothing here tried. Anyone already inside may still be in that
+            // room, and only a moderator of the provider's meeting can end it.
+            // Claiming otherwise would leave a room of students believing the
+            // session had been shut down when it had not.
+            $message .= ' ' . get_phrase('No further joins are possible through PIIE. If the meeting was already open, PIIE has not ended it: end it from the meeting provider, which only a moderator of that meeting can do.');
+        }
+
+        return redirect()->back()->with('success', $message);
+    }
+
+    /**
+     * Attach or correct a recording, through the same protected resource
+     * architecture as every other Live Class material.
+     *
+     * WHY ATTACHING IS THE NORMAL CASE
+     *
+     * Neither Jitsi nor Google Meet hands this app a finished recording file
+     * over any API PIIE can call here, and PIIE has no way to know that a
+     * recording was even made. So the honest workflow is that an authorised
+     * lecturer or administrator attaches the recording once the provider has
+     * produced it - the same way any other resource is attached - and the state
+     * is declared truthfully rather than inferred from a link appearing.
+     *
+     * The four states are kept distinct because a student genuinely needs to
+     * tell them apart: nobody recorded, still processing, available, or failed.
+     *
+     * A completed class is REQUIRED for "available" - a recording of a class
+     * that is still running, or that was cancelled, would assert teaching that
+     * either has not finished or did not happen.
+     */
+    public function attachRecording(Request $request, LiveClass $liveClass)
+    {
+        abort_unless((int) $liveClass->school_id === (int) $this->school_id, 404);
+        // Deliberately NOT authorizeClassManage(): that refuses a concluded class,
+        // and attaching a recording to a COMPLETED class is the normal case - the
+        // provider needs time to produce the file after the class ends. Requiring
+        // the class to still be manageable would make the resource workflow
+        // impossible to use for the only classes it exists for.
+        abort_unless($this->canManageRecording(Auth::user(), $liveClass), 403);
+
+        $validated = $request->validate([
+            'recording_status' => ['required', Rule::in([
+                LiveClass::RECORDING_NONE,
+                LiveClass::RECORDING_PROCESSING,
+                LiveClass::RECORDING_AVAILABLE,
+                LiveClass::RECORDING_UNAVAILABLE,
+            ])],
+            'recording_url' => ['nullable', 'url:https', 'max:500'],
+        ], [
+            'recording_url.url' => get_phrase('The recording link must be a valid https address.'),
         ]);
 
-        AuditLog::record('update', 'Live Classes', "Cancelled live class: {$liveClass->title}");
-        return redirect()->back()->with('success', get_phrase('Live class cancelled'));
+        $status = $validated['recording_status'];
+        $url = trim((string) ($validated['recording_url'] ?? '')) ?: null;
+
+        // "Usable" is decided by the SAME accessor the screens read, so a class
+        // can never be announced as having a recording while showing none. A
+        // non-empty string is not enough: it must be a real https URL.
+        $usableUrl = $url !== null
+            ? (new LiveClass())->forceFill(['recording_url' => $url])->safe_recording_url
+            : null;
+
+        if ($status === LiveClass::RECORDING_AVAILABLE && $usableUrl === null) {
+            return redirect()->back()->with('error', get_phrase('A recording marked available must include a working https recording link. It has not been published, and no student has been told otherwise.'));
+        }
+
+        // A recording may only be PUBLISHED for a class that has actually
+        // concluded. The test is the outcome, not whether the move happens to be
+        // legal from the current status: a live class can still be ended, so
+        // "can transition to ended" would have said yes and let a recording of a
+        // session that has not finished be announced to students.
+        if ($status === LiveClass::RECORDING_AVAILABLE && ! $liveClass->hasConclusiveOutcome()) {
+            return redirect()->back()->with('error', get_phrase('A recording can only be published for a class that has been completed. End the class first.'));
+        }
+
+        $wasAvailable = $liveClass->isRecordingAvailable();
+        $notified = 0;
+
+        DB::transaction(function () use ($liveClass, $status, $url, &$notified, $wasAvailable): void {
+            $liveClass->update([
+                'recording_status' => $status,
+                'recording_url' => $url,
+                'updated_by' => Auth::id(),
+            ]);
+
+            // Announce only on the first transition INTO a genuinely available
+            // recording. Re-read from the model rather than trusting the posted
+            // state, so a link that turns out to be unusable never produces a
+            // notification about a recording nobody can open.
+            $nowAvailable = $liveClass->fresh()->isRecordingAvailable();
+            if (! $wasAvailable && $nowAvailable && $liveClass->course_offering_id !== null) {
+                $notified = \App\Support\LiveClasses\LiveClassNotifier::announceRecordingAvailable($liveClass);
+            }
+
+            AuditLog::record('update', 'Live Classes', "Recording {$status} for live class: {$liveClass->title}");
+        });
+
+        return redirect()->back()->with(
+            'success',
+            $this->announcedCount($liveClass, $notified)
+                ?: get_phrase('Recording state saved. Students see exactly this, and nothing more.')
+        );
     }
 
     public function publish(LiveClass $liveClass)
@@ -473,6 +907,26 @@ class LiveClassController extends Controller
         });
 
         return redirect()->back()->with('success', get_phrase('Live class publication updated'));
+    }
+
+    /**
+     * How many registered students a lifecycle event actually reached.
+     *
+     * Returned to the lecturer as a count, never as identifiers, so the
+     * success message can say "3 registered students were notified" without
+     * exposing who they are. Any failure inside notification delivery is
+     * already contained by LiveClassNotifier, so this is 0 rather than an
+     * exception when a channel is unavailable.
+     */
+    private function announcedCount(LiveClass $liveClass, int $count): string
+    {
+        if ($count > 0) {
+            return get_phrase('Live Class saved. ').$count.' '.($count === 1
+                ? get_phrase('registered student was notified.')
+                : get_phrase('registered students were notified.'));
+        }
+
+        return get_phrase('Live Class saved. ').get_phrase('No registered students were notified.');
     }
 
     public function join(LiveClass $liveClass)
@@ -505,12 +959,36 @@ class LiveClassController extends Controller
 
         $offeringBacked = $access->isOfferingBacked($liveClass);
         if (($offeringBacked && $access->withinJoinWindow($liveClass)) || (!$offeringBacked && $liveClass->shouldAllowJoin())) {
+            // Authoritative evidence that somebody actually opened the classroom.
+            // Written once, on the first entry, and only by whoever entered - so
+            // the record distinguishes "the meeting was opened" from "the
+            // scheduled time passed", which is the whole point of the column.
+            // It is participation telemetry only: it NEVER writes official Course
+            // Offering Attendance, which stays lecturer-finalised.
+            $this->recordClassroomOpened($liveClass);
+
             $attendance = $this->recordJoin($liveClass);
 
             if ($this->shouldRenderEmbeddedMeeting($liveClass)) {
-                $isModerator = $offeringBacked
+                // PIIE authority and PROVIDER authority are different things, and
+                // only the first is something this app controls.
+                //
+                // Being authorised in PIIE says who may open the room. It does
+                // NOT make anybody a moderator in Jitsi: on a public meet.jit.si
+                // room with no JWT secret configured, Jitsi authenticates nobody
+                // and grants moderator rights to no one, no matter what PIIE
+                // believes. Claiming otherwise would tell a lecturer they control
+                // a room they cannot moderate, and would leave them blamed for a
+                // room full of students they cannot actually silence.
+                //
+                // So the flag means exactly one thing: "PIIE can prove, to the
+                // provider, that this person is a moderator." That requires an
+                // authorised host AND a real signed token.
+                $piiAuthorisedHost = $offeringBacked
                     ? ($access->canLecturerHost(Auth::user(), $liveClass) || $access->canTenantAdmin(Auth::user(), $liveClass, 'live_classes.manage_all'))
                     : Auth::user()->can('update', $liveClass);
+                $jitsiConfigured = JitsiTokenService::isConfigured();
+                $isModerator = $piiAuthorisedHost && $jitsiConfigured;
                 $jitsiJwt = JitsiTokenService::generate($liveClass, Auth::user(), $isModerator);
                 $meetingUrl = $liveClass->safe_meeting_url;
 
@@ -519,8 +997,12 @@ class LiveClassController extends Controller
                     'meetingUrl' => $meetingUrl,
                     'attendanceId' => $attendance?->id,
                     'isModerator' => $isModerator,
+                    // Kept separately so the room can say the truthful thing:
+                    // "you may host here" and "you are a Jitsi moderator" are
+                    // not the same statement.
+                    'piiAuthorisedHost' => $piiAuthorisedHost,
                     'jitsiJwt' => $jitsiJwt,
-                    'jitsiConfigured' => JitsiTokenService::isConfigured(),
+                    'jitsiConfigured' => $jitsiConfigured,
                     'displayName' => Auth::user()->name,
                     // Everything after the domain: just the room slug on
                     // plain meet.jit.si, "{appId}/{room}" on 8x8 JaaS — the
@@ -532,12 +1014,21 @@ class LiveClassController extends Controller
             }
 
             if ($liveClass->platform === 'google_meet') {
-                // Google Meet events created by this app are always owned by
-                // one single, school-wide Google account (services.google_meet.
-                // refresh_token — see createGoogleMeetUrl()), never the
-                // individual teacher's own Google identity. Whoever opens the
-                // link while signed into a *different* Google account in
-                // their browser is not recognised as host and lands on
+                // Google Meet events are owned by WHATEVER Google account created
+                // them, and there are genuinely two possibilities:
+                //
+                //  - the scheduling lecturer's OWN connected account, now the
+                //    required path for a lecturer scheduling against a Course
+                //    Offering. A Calendar event id is recorded for it.
+                //  - the installation-wide credential
+                //    (services.google_meet.refresh_token — see
+                //    createGoogleMeetUrl()), which returns a bare hangoutLink
+                //    and records no event id, and which still serves an
+                //    administrator scheduling on someone's behalf.
+                //
+                // The view tells them apart using that same discriminator.
+                // Whoever opens the link while signed into a *different* Google
+                // account than the owner is not recognised as host and lands on
                 // Meet's "Ask to join" knock screen instead of being let
                 // straight in — surface that before sending them away, since
                 // Meet's own UI gives no hint why.
@@ -558,10 +1049,39 @@ class LiveClassController extends Controller
     }
 
     /**
+     * Note, once, that somebody opened this classroom.
+     *
+     * Failures here are swallowed on purpose. This is supporting evidence, not
+     * the action the user asked for: they asked to join a meeting, and a
+     * bookkeeping hiccup must not deny them the room. The join itself has
+     * already been authorised and must proceed either way.
+     */
+    private function recordClassroomOpened(LiveClass $liveClass): void
+    {
+        try {
+            if ($liveClass->hasStartEvidence()) {
+                return;
+            }
+
+            $liveClass->forceFill([
+                'started_at' => now(),
+                'started_by' => Auth::id(),
+            ])->saveQuietly();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
      * One attendance row per click of Join, for students only — a lecturer
      * opening their own class isn't "attending" it. Only recorded when the
      * class has attendance tracking switched on (attendance_enabled), so
      * classes nobody asked to track don't accumulate rows regardless.
+     *
+     * This table is PARTICIPATION TELEMETRY, not academic attendance. It is
+     * offered to a lecturer as evidence beside a Course Offering Attendance
+     * session and never written to one: official attendance remains a separate,
+     * lecturer-finalised record.
      */
     private function recordJoin(LiveClass $liveClass): ?LiveClassAttendance
     {
@@ -678,11 +1198,31 @@ class LiveClassController extends Controller
         $allMaterials = $liveClass->materials()->orderByDesc('id')->get();
         $resources = $allMaterials->where('category', LiveClassMaterial::CATEGORY_RESOURCE)->values();
         $recordings = $allMaterials->where('category', LiveClassMaterial::CATEGORY_RECORDING)->values();
+
+        // The authoritative recording state, and the primary recording when it is
+        // genuinely available.
+        //
+        // This is why a PROCESSING class must not be listed as a recording: the
+        // drawer is the place a student looks for something they can watch, and
+        // an entry there with no playable link behind it reads as a broken
+        // release rather than as "not ready yet". A primary recording only joins
+        // the list when the state says available AND there is a usable https URL.
+        $recordingState = $liveClass->recordingState();
+        $primaryRecordingAvailable = $recordingState === LiveClass::RECORDING_AVAILABLE
+            && $liveClass->course_offering_id !== null
+            && $liveClass->safe_recording_url !== null;
         $canManage = $access->isOfferingBacked($liveClass)
             ? ($access->canLecturerManageMaterials(Auth::user(), $liveClass) || $access->canTenantAdminManage(Auth::user(), $liveClass))
             : Auth::user()->can('update', $liveClass);
 
-        return view('admin.live_class.materials', compact('liveClass', 'resources', 'recordings', 'canManage'));
+        return view('admin.live_class.materials', compact(
+            'liveClass',
+            'resources',
+            'recordings',
+            'canManage',
+            'recordingState',
+            'primaryRecordingAvailable'
+        ));
     }
 
     /** Render the small, Offering-contextual creation entry point. */
@@ -702,15 +1242,80 @@ class LiveClassController extends Controller
             abort_if($facilitators->isEmpty(), 403);
         }
 
+        $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
+
         $liveClass = new LiveClass([
-            'platform' => $this->defaultPlatform(),
+            'platform' => $scheduling->defaultPlatform($actor),
             'status' => LiveClass::STATUS_DRAFT,
-            'timezone' => config('app.timezone', 'UTC'),
+            // The institution's own configured timezone, never a hardcoded one.
+            'timezone' => $scheduling->timezone($actor),
             'is_published' => false,
             'course_offering_id' => $offering->id,
         ]);
-        $platformStatus = $this->platformConfigurationStatus();
-        return view('admin.live_class.offering_create', compact('offering', 'facilitators', 'isAdmin', 'liveClass', 'platformStatus'));
+
+        // Only offer "Change Course Offering" when there is somewhere to change
+        // to. With a single manageable Offering the link is just noise.
+        $otherManageableOfferings = $scheduling->isHigherEducation($actor)
+            ? $scheduling->manageableOfferings($actor)->where('id', '!=', $offering->id)->count()
+            : 0;
+
+        // The academic context shown on the form is derived by the same code
+        // that decorates "My Course Offerings", so the two can never disagree.
+        $contextOffering = $scheduling->offeringContext($actor, $offering);
+
+        // Prefer the derived count; fall back to a direct read only when the
+        // registrations table is actually present.
+        $registeredCount = $scheduling->confirmedCount($contextOffering);
+        if ($registeredCount === 0 && \Illuminate\Support\Facades\Schema::hasTable('course_registrations')) {
+            $registeredCount = \App\Models\CourseRegistration::query()
+                ->where('school_id', $offering->school_id)
+                ->where('course_offering_id', $offering->id)
+                ->where('status', \App\Models\CourseRegistration::STATUS_CONFIRMED)
+                ->count();
+        }
+
+        return view('admin.live_class.offering_create', [
+            'offering' => $contextOffering,
+            'facilitators' => $facilitators,
+            'isAdmin' => $isAdmin,
+            'liveClass' => $liveClass,
+            'platformStatus' => $this->platformConfigurationStatus(),
+            'scheduling' => $scheduling,
+            'platformOptions' => $scheduling->platformOptions($actor),
+            'institutionTimezone' => $scheduling->timezone($actor),
+            'institutionTimezoneLabel' => $scheduling->timezoneLabel($actor),
+            'hasConfiguredTimezone' => $scheduling->hasConfiguredTimezone($actor),
+            // Which clock this lecturer reads and types in, and what the
+            // institution's clock reads for the same instant.
+            'timezones' => $scheduling->timezoneDescription($actor),
+            'inputTimezone' => $scheduling->effectiveTimezone($actor),
+            'otherManageableOfferings' => $otherManageableOfferings,
+            'registeredCount' => $registeredCount,
+            // The same Google connection facts the Live Classes index passes, so
+            // the ONE existing partial can be reused here unchanged instead of a
+            // second, divergent copy of the connect control. `googleConnection` is
+            // always the signed-in user's OWN row and is null for everyone else,
+            // so this cannot surface another lecturer's grant.
+            'googleConnection' => app(GoogleAccountService::class)->forUser($actor),
+            'googleConfigured' => GoogleOAuthCredentials::isConfigured(),
+            // Offering context survives the OAuth round trip: a lecturer who
+            // connects from this form is returned to THIS form for THIS Offering
+            // rather than being dropped onto the generic Live Classes list.
+            //
+            // `route()` yields an ABSOLUTE url (scheme + host), and the return path
+            // is deliberately restricted to a same-site PATH — that restriction is
+            // the open-redirect defence and must not be weakened to accommodate
+            // this convenience. So the path is taken out of the generated route
+            // rather than passing the whole url through.
+            'googleReturnPath' => (string) parse_url(
+                route($this->getRoutePrefix($request).'.course_offerings.live_classes.create', $contextOffering->id),
+                PHP_URL_PATH
+            ),
+            'programmeNames' => $scheduling->programmes($contextOffering),
+            'stageNames' => $scheduling->stages($contextOffering),
+            'studyPlanVersions' => $scheduling->studyPlans($contextOffering),
+            'roleLabel' => $scheduling->roleLabel($contextOffering),
+        ]);
     }
 
     /** The route supplies the Offering; no academic/tenant identity comes from the form. */
@@ -735,7 +1340,19 @@ class LiveClassController extends Controller
         abort_unless($isAdmin || $lecturerAllowed, 403);
 
         $validated = $request->validated();
-        $timezone = $validated['timezone'] ?? config('app.timezone', 'UTC');
+
+        // The typed date/time is interpreted in the SCHEDULER'S own clock - a
+        // lecturer in London typing 08:00 means 08:00 London - and normalised
+        // to UTC for storage, exactly as before. The submitted `timezone` is
+        // deliberately NOT trusted: it is a presentation field, and letting a
+        // client choose the zone its own input is read in would let a typo
+        // silently move a class by whole hours. The institution's own official
+        // timezone is used when a tenant administrator schedules on a
+        // lecturer's behalf, because that is an institutional act.
+        $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
+        $timezone = $isAdmin
+            ? $scheduling->timezone($actor)
+            : $scheduling->effectiveTimezone($actor);
         $scheduledAt = Carbon::parse($validated['start_date'].' '.$validated['start_time'], $timezone);
         $endsAt = Carbon::parse($validated['start_date'].' '.$validated['end_time'], $timezone);
         $allocationsForMeeting = $access->activeManagerAllocationsForOffering($offering, $scheduledAt);
@@ -758,23 +1375,77 @@ class LiveClassController extends Controller
         }
 
         $meetingUrl = $validated['meeting_url'] ?? null;
+        $googleEventId = null;
+        $googleConferenceStatus = null;
+
         if (empty($meetingUrl) && in_array($platform, ['jitsi', 'zoom', 'google_meet'], true)) {
-            $meetingUrl = $this->resolveMeetingUrl($platform, $validated['title'], $scheduledAt, $endsAt, $timezone);
+            // The FULL resolution, not just the URL — same call the non-Offering
+            // path makes. This route previously used resolveMeetingUrl(), which
+            // returns only a string, so a Google event created here recorded
+            // neither its Calendar event id nor its conference state. The result
+            // was an orphaned conference: PIIE held a join link it could no
+            // longer reach the calendar entry behind, so cancelling the class
+            // left the Meet link live on the lecturer's own calendar while PIIE
+            // reported the class as cancelled.
+            $resolution = $this->resolveMeeting(
+                $platform,
+                $validated['title'],
+                $scheduledAt,
+                $endsAt,
+                $timezone,
+                null,
+                $validated['description'] ?? null,
+                // A lecturer scheduling against a Course Offering gets the
+                // conference on their OWN calendar or not at all. The
+                // installation-wide credential is never substituted for a missing
+                // personal connection here.
+                true
+            );
+
+            $meetingUrl = $resolution->url !== '' ? $resolution->url : null;
+            $googleEventId = $resolution->eventId;
+            $googleConferenceStatus = $resolution->conferenceStatus;
         }
-        if (empty($meetingUrl)) {
+
+        // A Google conference that has not materialised yet is a real, scheduled
+        // class, not a failure. The event exists and carries the id needed to fetch
+        // the link later, so the class is saved and the card reads "Link not ready
+        // yet". Rejecting it here — as the empty-URL check below did — would tell
+        // a lecturer that Google had failed when it had in fact succeeded.
+        $isGooglePending = $googleConferenceStatus === GoogleConferenceStatus::PENDING;
+
+        if (empty($meetingUrl) && ! $isGooglePending) {
             throw ValidationException::withMessages(['meeting_url' => get_phrase('Enter a secure HTTPS provider URL for this platform.')]);
         }
 
-        $published = (bool) ($validated['is_published'] ?? false);
-        $status = $this->deriveStatus($validated['status'] ?? LiveClass::STATUS_DRAFT, $scheduledAt, $endsAt, $published);
+        // A lecturer chooses an ACTION, not a lifecycle state. "Save as Draft"
+        // and "Schedule & Notify Students" are the two real intentions, and the
+        // system derives is_published/status from them. The previous form asked
+        // the lecturer to pick an internal state (and pre-filled a dropdown
+        // that could read "Live" the moment the form opened), which is how a
+        // future class came to look live before it was ever scheduled.
+        $action = $validated['action'] ?? null;
+        if ($action === null) {
+            // Existing admin API / integration callers still post is_published.
+            // Kept so the tightened form contract does not break them, and only
+            // when no action was supplied - the lecturer form always sends one.
+            $action = ! empty($validated['is_published']) ? 'publish' : 'draft';
+        }
+        $publish = $scheduling->isPublishAction($action);
+        $published = $publish;
+        $status = $this->deriveStatus($scheduling->statusForAction($action), $scheduledAt, $endsAt, $publish);
+
         $attributes = [
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'teacher_id' => $facilitatorId,
             'platform' => $platform,
             'meeting_url' => $meetingUrl,
-            'meeting_id' => $validated['meeting_id'] ?? null,
-            'meeting_password' => $validated['meeting_password'] ?? null,
+            // Provider-internal identifiers are generated by the provider or
+            // unused for the auto-created platforms. The lecturer form no
+            // longer offers them, so anything posted here is ignored.
+            'meeting_id' => null,
+            'meeting_password' => null,
             'scheduled_at' => $scheduledAt->timezone('UTC')->format('Y-m-d H:i:s'),
             'ends_at' => $endsAt->timezone('UTC')->format('Y-m-d H:i:s'),
             'start_date' => $validated['start_date'],
@@ -783,9 +1454,34 @@ class LiveClassController extends Controller
             'timezone' => $timezone,
             'status' => $status,
             'is_published' => $published,
-            'attendance_enabled' => (bool) ($validated['attendance_enabled'] ?? false),
-            'recording_url' => $validated['recording_url'] ?? null,
+            // Participation evidence is a K12 habit. For an Offering-backed
+            // class it stays off, because official Attendance is the certified
+            // Course Offering Attendance workflow and is always
+            // lecturer-controlled - joining must never mark anyone present.
+            'attendance_enabled' => false,
+            // A recording is an AFTER-class action, not something known at
+            // scheduling time. Publishing one notifies registered students
+            // through the recording event.
+            'recording_url' => null,
         ];
+
+        /**
+         * Google Calendar bookkeeping, added ONLY when there is something to record.
+         *
+         * Identical reasoning, and identical conditional shape, to the non-Offering
+         * path in buildPayload(): writing an explicit NULL names a column that some
+         * of this application's test fixtures do not define, and a payload naming an
+         * absent column is a hard SQL error rather than a skipped write. Omitting the
+         * key lets those fixtures keep working, and in production the column takes
+         * its own default of NULL — which is the value we wanted anyway.
+         *
+         * Both keys travel together. An event id with no conference status, or a
+         * status with no event, each describe half a Google class.
+         */
+        if ($googleEventId !== null || $googleConferenceStatus !== null) {
+            $attributes['google_calendar_event_id'] = $googleEventId;
+            $attributes['google_conference_status'] = $googleConferenceStatus;
+        }
 
         try {
             $liveClass = app(\App\Support\LiveClasses\LiveClassService::class)
@@ -794,20 +1490,27 @@ class LiveClassController extends Controller
             throw ValidationException::withMessages(['live_class' => get_phrase($exception->getMessage())]);
         }
 
+        $notified = 0;
         if ($published || in_array($status, [LiveClass::STATUS_SCHEDULED, LiveClass::STATUS_LIVE], true)) {
-            $this->createStudentLiveClassNotice($liveClass, $published ? 'published' : 'scheduled');
+            // Returns how many confirmed students were actually told, so the
+            // lecturer gets a useful confirmation rather than a bare "saved".
+            $notified = $this->createStudentLiveClassNotice($liveClass, $published ? 'published' : 'scheduled');
         }
+        $successMessage = $published
+            ? $this->announcedCount($liveClass, $notified)
+            : get_phrase('Live Class saved as a draft. Publish it when you are ready for students to see it.');
+
         $routePrefix = $this->getRoutePrefix($request);
         if ($request->expectsJson() || $request->ajax()) {
             return response()->json([
                 'status' => 'success',
-                'message' => get_phrase('Offering-backed Live Class scheduled'),
+                'message' => $successMessage,
                 'redirect' => route($routePrefix.'.live_classes.show', $liveClass->id),
             ]);
         }
 
         return redirect()->route($routePrefix.'.live_classes.show', $liveClass->id)
-            ->with('success', get_phrase('Offering-backed Live Class scheduled'));
+            ->with('success', $successMessage);
     }
 
     private function tenantOfferingOrFail(int $offeringId): CourseOffering
@@ -1058,6 +1761,66 @@ class LiveClassController extends Controller
         return true;
     }
 
+    /**
+     * The student's read-only Live Class page.
+     *
+     * Separates two different intentions that were previously conflated:
+     *
+     *  - VIEW  - "tell me about this class". Governed by publication and, for an
+     *            Offering-backed class, a confirmed registration. A student can
+     *            read a scheduled class long before it starts.
+     *  - JOIN  - "put me in the meeting". Governed additionally by the join
+     *            window, and it is where the provider link is disclosed.
+     *
+     * A notification's "View Live Class" action lands here, never on /join.
+     * Nothing provider-internal is rendered: the platform is named, not linked,
+     * and the meeting link is reached only through the authorised join action.
+     */
+    public function studentShow(LiveClass $liveClass)
+    {
+        abort_unless((int) $liveClass->school_id === (int) $this->school_id, 404);
+        $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+        $user = Auth::user();
+
+        $isStudent = (int) $user->role_id === 7;
+        $canView = $access->isOfferingBacked($liveClass)
+            ? ($isStudent
+                ? $access->canStudentViewClass($user, $liveClass)
+                : ($access->canLecturerView($user, $liveClass) || $access->canTenantAdmin($user, $liveClass)))
+            : Auth::user()->can('view', $liveClass);
+
+        // An unpublished class must not be confirmable by guessing an id.
+        abort_unless($canView, 404);
+
+        $liveClass->loadMissing(['subject', 'teacher', 'courseOffering.academicYear', 'courseOffering.academicPeriod']);
+
+        $resolver = app(\App\Support\LiveClasses\LiveClassLifecycle::class);
+        $state = $resolver->for($liveClass, $user);
+
+        return view('admin.live_class.student_show', [
+            'liveClass' => $liveClass,
+            'isOfferingBacked' => $access->isOfferingBacked($liveClass),
+            'lifecycle' => $state,
+            'canJoin' => $state['canJoin'],
+            'joinMessage' => $resolver->studentMessage($state, $liveClass),
+            'countdown' => $resolver->countdown($state),
+              // Who cancelled it, and what the provider can genuinely do, so a
+              // retained cancelled page states the facts instead of showing a
+              // status badge with nothing to read.
+              'cancelledByName' => $liveClass->cancelled_by
+                  ? \App\Models\User::query()->where('school_id', $liveClass->school_id)->whereKey($liveClass->cancelled_by)->value('name')
+                  : null,
+              'platform' => app(\App\Support\LiveClasses\LiveClassPlatform::class)
+                  ->describe($liveClass, (bool) $state['canHost']),            'registeredCount' => $liveClass->course_offering_id && \Illuminate\Support\Facades\Schema::hasTable('course_registrations')
+                ? \App\Models\CourseRegistration::query()
+                    ->where('school_id', $liveClass->school_id)
+                    ->where('course_offering_id', $liveClass->course_offering_id)
+                    ->where('status', \App\Models\CourseRegistration::STATUS_CONFIRMED)
+                    ->count()
+                : null,
+        ]);
+    }
+
     public function studentIndex(Request $request)
     {
         $this->authorize('viewAny', LiveClass::class);
@@ -1131,15 +1894,30 @@ class LiveClassController extends Controller
         $endsAt = Carbon::parse($validated['start_date'] . ' ' . $validated['end_time'], $validated['timezone'] ?? config('app.timezone', 'UTC'));
 
         $meetingUrl = $validated['meeting_url'] ?? ($existing?->meeting_url ?? null);
+        $googleEventId = $existing?->google_calendar_event_id;
+        $googleConferenceStatus = $existing?->google_conference_status;
+
         if (empty($meetingUrl)) {
             $platform = $validated['platform'] ?? 'jitsi';
-            $meetingUrl = $this->resolveMeetingUrl(
+
+            // The full resolution, not just the URL: a Google event's id is the
+            // only handle that lets a later edit or cancel reach the calendar entry
+            // and revoke the Meet link. Discarding it here would leave an orphan
+            // conference — and a join link — alive on the lecturer's real calendar
+            // after PIIE believes the class is cancelled.
+            $resolution = $this->resolveMeeting(
                 $platform,
                 $validated['title'] ?? 'class',
                 $scheduledAt,
                 $endsAt,
-                $validated['timezone'] ?? config('app.timezone', 'UTC')
+                $validated['timezone'] ?? config('app.timezone', 'UTC'),
+                $existing,
+                $validated['description'] ?? null
             );
+
+            $meetingUrl = $resolution->url !== '' ? $resolution->url : null;
+            $googleEventId = $resolution->eventId;
+            $googleConferenceStatus = $resolution->conferenceStatus;
         }
 
         $isPublished = array_key_exists('is_published', $validated)
@@ -1175,6 +1953,28 @@ class LiveClassController extends Controller
             'created_by' => $existing?->created_by ?: Auth::id(),
             'updated_by' => Auth::id(),
         ];
+
+        /**
+         * Google Calendar bookkeeping is added ONLY when there is something to
+         * record.
+         *
+         * Writing an explicit NULL is indistinguishable from omitting the key for
+         * any class on another platform, but it is not indistinguishable to the
+         * database: it names a column that a good number of this application's
+         * test fixtures do not define, and a payload naming an absent column is a
+         * hard SQL error rather than a skipped write. Omitting it means those
+         * fixtures keep working untouched, and in production the column simply
+         * takes its own default of NULL — which is the value we wanted anyway.
+         *
+         * Both keys travel together. An event id with no conference status, or a
+         * conference status with no event, each describe half a Google class.
+         */
+        if ($googleEventId !== null || $googleConferenceStatus !== null) {
+            $payload['google_calendar_event_id'] = $googleEventId;
+            $payload['google_conference_status'] = $googleConferenceStatus;
+        }
+
+        return $payload;
     }
 
     /** Legacy/K12 forms cannot attach an HEI Offering by supplying a raw ID. */
@@ -1321,16 +2121,98 @@ class LiveClassController extends Controller
         try {
             return $call();
         } catch (\Illuminate\Http\Client\ConnectionException | \Illuminate\Http\Client\RequestException | \GuzzleHttp\Exception\TransferException $e) {
-            \Illuminate\Support\Facades\Log::warning("Live class: {$provider} API could not be reached", [
+            /*
+             * Classify the failure before deciding what to tell the lecturer.
+             *
+             * This handler used to report one flat "could not be reached right now"
+             * for every transport-level fault, which is how a missing CA bundle on
+             * the host was indistinguishable from a genuine Google outage: the
+             * request never left the machine, yet the message blamed Google. The
+             * log line below now names the transport error and, for a TLS fault,
+             * says so, so the next occurrence is diagnosable from the log alone
+             * rather than requiring a live reproduction.
+             *
+             * Logged fields are deliberately limited to the exception class, the
+             * transport error code and its short description. No access token,
+             * refresh token, client secret, authorization code or response body
+             * is recorded - `getMessage()` on a Guzzle exception can echo a
+             * request URL with query parameters, so only the cURL error is used.
+             */
+            $transport = $this->describeTransportFailure($e);
+
+            \Illuminate\Support\Facades\Log::warning("Live class: {$provider} transport failure ({$transport['kind']})", [
                 'exception' => get_class($e),
+                'failure_kind' => $transport['kind'],
+                'curl_errno' => $transport['errno'],
+                'curl_error' => $transport['message'],
+                'hint' => $transport['hint'],
                 'school_id' => auth()->user()->school_id ?? null,
                 'user_id' => auth()->id(),
             ]);
 
             throw ValidationException::withMessages([
-                'meeting_url' => get_phrase($provider . ' could not be reached right now, so the class was not saved. Please try again shortly, or paste a meeting link to schedule it now.'),
+                'meeting_url' => get_phrase($transport['userMessage'] ?? $provider . ' could not be reached right now, so the class was not saved. Please try again shortly, or paste a meeting link to schedule it now.'),
             ]);
         }
+    }
+
+    /**
+     * Turn a transport-level HTTP exception into a diagnosable classification.
+     *
+     * The distinction that matters: a TLS trust failure is a fault in THIS
+     * installation's PHP configuration, so retrying will never help and the
+     * administrator has to act. Reporting that as a transient outage sends the
+     * lecturer into a retry loop and sends the administrator to the wrong system
+     * entirely - which is exactly the wrong turn this investigation took.
+     *
+     * No secret material is read. `getMessage()` is not used, because a Guzzle
+     * message may echo the full request URL.
+     */
+    private function describeTransportFailure(\Throwable $e): array
+    {
+        $errno = 0;
+        $curlError = '';
+
+        if ($e instanceof \Illuminate\Http\Client\RequestException) {
+            // Laravel wraps Guzzle; the original exception carries the transport detail.
+            $e = $e->getPrevious() instanceof \Throwable ? $e->getPrevious() : $e;
+        }
+
+        if (method_exists($e, 'getHandlerContext')) {
+            $context = $e->getHandlerContext();
+            if (is_array($context)) {
+                $errno = (int) ($context['errno'] ?? 0);
+                $curlError = substr((string) ($context['error'] ?? ''), 0, 200);
+            }
+        }
+
+        // cURL 60/35/51/58/59/77/83 are all certificate-trust failures. Grouping
+        // them is the point: the remediation is the same in every case.
+        if (in_array($errno, [35, 51, 58, 59, 60, 77, 83], true)) {
+            return [
+                'kind' => 'tls_trust_failure',
+                'errno' => $errno,
+                'message' => $curlError,
+                'hint' => 'PHP cannot verify the provider\'s TLS certificate. Check curl.cainfo / openssl.cafile in php.ini point to a readable CA bundle.',
+                'userMessage' => get_phrase('This server cannot establish a secure connection to the meeting provider, so the class was not saved. This is a configuration fault, not something that will resolve by retrying. Please paste a meeting link to schedule the class now, and ask your administrator to check the server\'s TLS certificate settings.'),
+            ];
+        }
+
+        if (in_array($errno, [5, 6, 7, 28], true)) {
+            return [
+                'kind' => 'network_unreachable',
+                'errno' => $errno,
+                'message' => $curlError,
+                'hint' => 'DNS resolution, connection or timeout failure reaching the provider.',
+            ];
+        }
+
+        return [
+            'kind' => 'transport_error',
+            'errno' => $errno,
+            'message' => $curlError,
+            'hint' => 'Unclassified transport failure; inspect the exception class.',
+        ];
     }
 
     /**
@@ -1356,31 +2238,188 @@ class LiveClassController extends Controller
 
     private function resolveMeetingUrl(string $platform, string $title, Carbon $scheduledAt, Carbon $endsAt, string $timezone): string
     {
+        return $this->resolveMeeting($platform, $title, $scheduledAt, $endsAt, $timezone, null)->url;
+    }
+
+    /**
+     * Resolve a meeting, returning everything the provider told us.
+     *
+     * `$class` is optional and only used for Google, which needs the description
+     * and the guest list to build a faithful event. Callers that already hold the
+     * LiveClass being created pass it; callers that do not (an ad-hoc "meet now")
+     * get an event without a description, which Google accepts.
+     *
+     * `resolveMeetingUrl()` above remains as the string-returning shortcut so the
+     * three existing call sites and their tests keep working unchanged.
+     *
+     * `$description` is the class description being scheduled. It is a separate
+     * parameter rather than read off `$class` because on CREATE there is no class
+     * yet — the row is written after this runs — so the text exists only in the
+     * validated input. `$class` is still consulted, but only as the fallback for
+     * an edit where the field was left untouched.
+     */
+    private function resolveMeeting(string $platform, string $title, Carbon $scheduledAt, Carbon $endsAt, string $timezone, ?LiveClass $class = null, ?string $description = null, bool $requireOwnGoogleAccount = false): MeetingResolution
+    {
         if ($platform === 'jitsi') {
-            return $this->generateMeetingUrl('jitsi', $title);
+            return MeetingResolution::urlOnly($this->generateMeetingUrl('jitsi', $title));
         }
 
         if ($platform === 'zoom') {
             $url = $this->callMeetingProvider('Zoom', fn () => $this->createZoomMeetingUrl($title, $scheduledAt, $endsAt, $timezone));
             if (!empty($url)) {
-                return $url;
+                return MeetingResolution::urlOnly($url);
             }
 
             throw $this->meetingLinkFailure('zoom', 'Zoom', 'Zoom API is not configured. Add ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, and ZOOM_CLIENT_SECRET in your .env file.');
         }
 
         if ($platform === 'google_meet') {
-            $url = $this->callMeetingProvider('Google Meet', fn () => $this->createGoogleMeetUrl($title, $scheduledAt, $endsAt, $timezone));
-            if (!empty($url)) {
-                return $url;
+            /**
+             * The lecturer's OWN Google account takes precedence.
+             *
+             * This is the whole point of the OAuth work: the conference lands on
+             * the calendar of the person who will actually teach it, and PIIE never
+             * needs to hold a shared service credential. Where the lecturer has
+             * connected an account, the institution-wide fallback below is not
+             * consulted — mixing the two would create classes on a calendar
+             * belonging to whoever set up the installation, which the lecturer
+             * cannot then edit or cancel.
+             */
+            $own = $this->createGoogleMeetEventForActor(
+                $title,
+                $description ?? ($class->description ?? null),
+                $scheduledAt,
+                $endsAt,
+                $timezone,
+                $class
+            );
+
+            if ($own !== null) {
+                return $own;
             }
 
-            throw $this->meetingLinkFailure('google_meet', 'Google Meet', 'Google Meet API is not configured. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN in your .env file.');
+            /**
+             * NO SILENT SUBSTITUTION — the Course Offering workflow.
+             *
+             * An unconnected lecturer used to fall straight through to the
+             * installation-wide credential below, so choosing Google Meet quietly
+             * created the conference on the institution's calendar instead of the
+             * lecturer's own. Nothing said so. The class was created, the students
+             * were notified, and the lecturer's own calendar — the one they can edit
+             * or cancel from — never saw the class at all. That is not a fallback,
+             * it is a substitution, and it is refused here rather than performed.
+             *
+             * The shared credential is left completely intact: it still serves the
+             * non-Offering path and an administrator scheduling on someone's behalf.
+             * Only the lecturer's own automatic creation is refused, and it is
+             * refused LOUDLY and BEFORE any Google request, so nothing is written to
+             * any calendar as a side effect of the mistake.
+             *
+             * Failing on `platform` rather than `meeting_url`: this is a problem with
+             * the provider the lecturer chose, not with the meeting link they may
+             * still paste in by hand. Manual entry is untouched.
+             */
+            if ($requireOwnGoogleAccount) {
+                throw ValidationException::withMessages([
+                    'platform' => get_phrase('Connect your Google Account before scheduling a Google Meet class.'),
+                ]);
+            }
+
+            $url = $this->callMeetingProvider('Google Meet', fn () => $this->createGoogleMeetUrl($title, $scheduledAt, $endsAt, $timezone));
+            if (!empty($url)) {
+                return MeetingResolution::urlOnly($url);
+            }
+
+            throw $this->meetingLinkFailure('google_meet', 'Google Meet',
+                'Google Meet is not configured for this account. Connect your Google Account on the Live Classes page, or ask your administrator to configure the installation-wide Google Meet settings.'
+            );
         }
 
         throw ValidationException::withMessages([
             'platform' => get_phrase('Automatic link generation is supported only for Jitsi, Zoom API, or Google Meet API.'),
         ]);
+    }
+
+    /**
+     * Create a Meet conference using the ACTING USER's own connected Google account.
+     *
+     * Returns null — meaning "fall through to the installation-wide path" — only
+     * when there is nothing to use: the user never connected, or their grant has
+     * lapsed. It does NOT return null when Google is reachable but refused the
+     * request; that is a real failure and must be reported, because falling
+     * through would silently create the class on a different calendar and the
+     * lecturer would learn of it only when students could not get in.
+     *
+     * Guests come from the same school-scoped guest list the installation-wide
+     * path uses, so switching between the two does not change who is invited.
+     */
+    private function createGoogleMeetEventForActor(
+        string $title,
+        ?string $description,
+        Carbon $scheduledAt,
+        Carbon $endsAt,
+        string $timezone,
+        ?LiveClass $class,
+    ): ?MeetingResolution {
+        $actor = Auth::user();
+
+        // Only an individual lecturer's own account is used. An administrator
+        // scheduling on someone's behalf has no business writing to that
+        // lecturer's calendar, and the installation-wide path remains available.
+        //
+        // This compares against PermissionService::TEACHER (role_id 3), the same
+        // value TeacherMiddleware admits. It previously read 6, which is the
+        // PARENT role - so it locked out every real lecturer (including the one
+        // who reported the failure) while admitting a parent, who would then have
+        // written the class onto a lecturer's personal Google calendar. The
+        // tenancy of the calendar is not re-derived here: accessTokenFor() only
+        // ever returns the caller's OWN connection row.
+        if (! $actor || (int) $actor->role_id !== PermissionService::TEACHER) {
+            return null;
+        }
+
+        $access = app(GoogleAccountService::class)->accessTokenFor($actor);
+
+        if ($access === null) {
+            return null;
+        }
+
+        $attendees = LiveClassMeetGuest::forSchool($this->school_id)
+            ->pluck('email')
+            ->map(fn (string $email) => ['email' => $email])
+            ->values()
+            ->all();
+
+        try {
+            $result = app(GoogleCalendarService::class)->createMeetingEvent(
+                $access['token'],
+                $access['connection']->calendar_id ?: 'primary',
+                [
+                    'title' => $title,
+                    'description' => $description,
+                    'starts_at' => $scheduledAt,
+                    'ends_at' => $endsAt,
+                    // Africa/Kampala unless the tenant explicitly scheduled in
+                    // another zone. Forcing Kampala over a deliberate choice would
+                    // put the class at the wrong hour on the lecturer's calendar.
+                    'timezone' => $timezone ?: GoogleCalendarService::DEFAULT_TIMEZONE,
+                    'attendees' => $attendees,
+                ]
+            );
+        } catch (RuntimeException $e) {
+            // Recorded, not swallowed: the message is Google's own error text,
+            // which contains no credential.
+            \Illuminate\Support\Facades\Log::warning('Google Meet event creation failed.', [
+                'live_class_id' => $class->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
+
+            throw $this->meetingLinkFailure('google_meet', 'Google Meet', $e->getMessage());
+        }
+
+        return $result['conference_status'] === GoogleCalendarService::CONFERENCE_PENDING
+            ? MeetingResolution::googlePending($result['event_id'], $result['html_link'])
+            : MeetingResolution::googleReady($result['event_id'], $result['meeting_url'], $result['html_link']);
     }
 
     private function createZoomMeetingUrl(string $title, Carbon $scheduledAt, Carbon $endsAt, string $timezone): ?string
@@ -1511,21 +2550,23 @@ class LiveClassController extends Controller
         return null;
     }
 
-    private function createStudentLiveClassNotice(LiveClass $liveClass, string $eventType): void
+    /**
+     * @return int registered students notified (0 for the legacy
+     *             school-wide path, which is a Noticeboard entry and has no
+     *             recipient-scoped recipient count to report)
+     */
+    private function createStudentLiveClassNotice(LiveClass $liveClass, string $eventType): int
     {
         $liveClass->loadMissing(['subject', 'classRoom', 'academicSession']);
 
         if ($liveClass->course_offering_id !== null) {
-            $recipientIds = \App\Support\LiveClasses\LiveClassEligibility::eligibleStudentUserIds($liveClass);
-            \App\Support\Notifications\NotificationService::notifyMany(
-                $recipientIds,
-                (int) $liveClass->school_id,
-                'Live Class '.($eventType === 'published' ? 'published' : 'scheduled').': '.$liveClass->title,
-                'A Live Class is available. Open it through PIIE to check your current access.',
-                route('student.live_classes.join', $liveClass->id),
-                'live_class_'.$eventType
-            );
-            return;
+            // Recipient-scoped and deduplicated. A school-wide Noticeboard entry
+            // would disclose an Offering's class to every student in the
+            // institution, so the Offering-backed path never uses one: it goes
+            // only to CONFIRMED registrations for that exact Offering, and the
+            // live_class_notifications unique index stops a repeated publish or
+            // a repeated save from re-notifying the same students.
+            return \App\Support\LiveClasses\LiveClassNotifier::announcePublished($liveClass);
         }
 
         $classInfo = $liveClass->class_id
@@ -1564,6 +2605,8 @@ class LiveClassController extends Controller
             'school_id' => $this->school_id,
             'session_id' => $sessionId > 0 ? $sessionId : 0,
         ]);
+
+        return 0;
     }
 
     /**

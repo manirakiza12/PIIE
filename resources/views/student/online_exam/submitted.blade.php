@@ -14,17 +14,23 @@
 </div></div></div>
 
 <div class="row justify-content-center"><div class="col-lg-8"><div class="eSection-wrap">
-    <div class="alert alert-success">
+    <div class="alert alert-success" data-testid="result-status-{{ $statusMessage['key'] }}">
         <h5>{{ get_phrase('Exam submitted successfully.') }}</h5>
-        @if($submission->status === \App\Models\OnlineExamSubmission::STATUS_PENDING_MANUAL)
-            <p class="mb-0">{{ get_phrase('Some answers are awaiting marking. Your result will be available after marking and publication.') }}</p>
-        @elseif($submission->status === \App\Models\OnlineExamSubmission::STATUS_SUBMITTED)
-            <p class="mb-0">{{ get_phrase('Marking is complete. Your result is awaiting publication after finalization.') }}</p>
-        @elseif($submission->status === \App\Models\OnlineExamSubmission::STATUS_FINALIZED)
-            <p class="mb-0">{{ get_phrase('Your result is finalized and awaiting publication.') }}</p>
-        @else
-            <p class="mb-0">{{ get_phrase('Your result is awaiting publication.') }}</p>
-        @endif
+        {{--
+            STATE-AWARE, AND DECIDED IN THE CONTROLLER.
+
+            This used to branch on `status === 'finalized'` and say "Your result is
+            finalized and awaiting publication." Exam 17 submission 12 was displayed
+            that way while its marking had never been performed and never handed to
+            anyone — a false claim about a result no human had reached. The wording now
+            comes from the real review state via `studentResultStatusMessage()`.
+
+            It deliberately reveals nothing: no score, no mark, no feedback, and no hint
+            that the record needed administrative repair. A student in that state is
+            told only that the result is being processed, which is both true and the
+            only thing they can act on.
+        --}}
+        <p class="mb-0">{{ $statusMessage['message'] }}</p>
     </div>
     <p class="text-muted">{{ $submission->exam->title }}</p>
     <a href="{{ route('student.online_exam.list') }}" class="eBtn eBtn-primary">{{ get_phrase('Back to Exams') }}</a>

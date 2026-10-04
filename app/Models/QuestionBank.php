@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Support\CourseContent\HtmlSanitizer;
 use Illuminate\Database\Eloquent\Model;
 
 class QuestionBank extends Model
@@ -24,6 +25,41 @@ class QuestionBank extends Model
         'marks' => 'integer',
         'question_schema_version' => 'integer',
     ];
+
+    /**
+     * The sanitised prompt, for a `{!! !!}` render. A method, not an accessor, so
+     * the bank tables and the CSV exporter keep escaping by default.
+     */
+    public function prosePrompt(): string
+    {
+        return app(HtmlSanitizer::class)->sanitize($this->attributes['question'] ?? '');
+    }
+
+    public function plainPrompt(int $limit = 160): string
+    {
+        return app(HtmlSanitizer::class)->toText($this->attributes['question'] ?? '', $limit);
+    }
+
+    /**
+     * The bank's prompt is AUTHORED PROSE, filtered on the way in.
+     *
+     * The bank is shared - an entry authored here is copied into many exams, and is
+     * rendered by the admin bank screens as well as the teacher one. A rich editor
+     * on this form is therefore only safe with the filter attached, which is why
+     * the filter lives on the model rather than in whichever form happened to post
+     * it. `correct_ans` and the option letters are left untouched, for the reason
+     * given on `OnlineExamQuestion`.
+     */
+    public function setQuestionAttribute($value): void
+    {
+        if ($value === null || trim((string) $value) === '') {
+            $this->attributes['question'] = $value;
+
+            return;
+        }
+
+        $this->attributes['question'] = app(HtmlSanitizer::class)->sanitize((string) $value);
+    }
 
     public function subject()
     {

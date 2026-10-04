@@ -43,6 +43,10 @@
 
     <hr>
     <h6>{{ get_phrase('Instructions') }}</h6>
-    <p>{{ $exam->instructions ?: '—' }}</p>
+    {{-- The sanitised read, not the raw attribute: instructions are now authored
+         with the academic editor, so a list of rules or a table of notation would
+         otherwise reach the reader as literal tags. Filtered on the way in by the
+         model's mutator, and again here on the way out. --}}
+    <div class="piie-prose">{!! $exam->proseInstructions() ?: '—' !!}</div>
 </div>
 @endsection

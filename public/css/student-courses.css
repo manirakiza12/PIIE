@@ -1,0 +1,233 @@
+/* ==========================================================================
+   STUDENT COURSE CATALOGUE — responsive course cards
+   --------------------------------------------------------------------------
+   Layout contract (asserted by StudentCourseCatalogueUiTest):
+     desktop  4 columns   >= 1200px
+     tablet   2 columns   >= 768px
+     mobile   1 column
+   Implemented with a 4-column grid whose track count steps down, rather than
+   with row/col utility classes, so the contract is one declaration to read
+   instead of four.
+   ========================================================================== */
+
+.sc-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+@media (min-width: 768px) {
+    .sc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1200px) {
+    .sc-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* minmax(0, 1fr) above is load-bearing: the default `1fr` is `minmax(auto, 1fr)`,
+   so a long unbroken course code would refuse to shrink and push the track wider
+   than its share, breaking the row. */
+
+/* ── Filter bar ─────────────────────────────────────────────────────────── */
+
+.sc-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: .75rem;
+}
+
+@media (min-width: 768px) {
+    .sc-filters { grid-template-columns: 2fr 1fr 1fr auto; align-items: end; }
+}
+
+.sc-filters__field { display: flex; flex-direction: column; gap: .25rem; }
+.sc-filters__label {
+    font-size: .75rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #64748B;
+}
+
+/* ── Card ───────────────────────────────────────────────────────────────── */
+
+.sc-card {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    overflow: hidden;
+    /* Equal-height cards in a row. Without min-height:0 a long title would push
+       one card taller than its neighbours and the row's action buttons would sit
+       at different heights. */
+    height: 100%;
+}
+
+.sc-card__media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #F1F5F9;
+    overflow: hidden;
+}
+
+.sc-card__media img {
+    width: 100%;
+    height: 100%;
+    /* cover, not contain: the frame is the fixed ratio the course was cropped to.
+       `contain` would letterbox a mismatched legacy image inside a card that is
+       supposed to look like a photograph. */
+    object-fit: cover;
+    display: block;
+}
+
+/* Neutral branded placeholder. A deterministic gradient plus the course code —
+   never a stock photograph, and never an empty grey rectangle. */
+.sc-card__fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .3rem;
+    height: 100%;
+    padding: 1rem;
+    text-align: center;
+    color: rgba(255, 255, 255, .96);
+}
+
+.sc-card__fb-a { background: linear-gradient(135deg, #0d3a5c 0%, #1466AF 62%, #2d7ec9 100%); }
+.sc-card__fb-b { background: linear-gradient(135deg, #14304a 0%, #1f6f5c 62%, #35a07c 100%); }
+.sc-card__fb-c { background: linear-gradient(135deg, #3a2440 0%, #7a3b6b 62%, #b2638f 100%); }
+.sc-card__fb-d { background: linear-gradient(135deg, #3d2a12 0%, #a86a1f 62%, #d9963f 100%); }
+
+.sc-card__fb-mark {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    line-height: 1;
+}
+
+.sc-card__fb-label {
+    font-size: .6875rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    opacity: .88;
+    /* Long codes must wrap rather than overflow the media box. */
+    overflow-wrap: anywhere;
+}
+
+/* ── Card body ──────────────────────────────────────────────────────────── */
+
+.sc-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    padding: .875rem .9375rem 1rem;
+    flex: 1;
+    min-height: 0;
+}
+
+.sc-card__status {
+    align-self: flex-start;
+    font-size: .6875rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: .2rem .5rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+}
+
+.sc-card__status--info { background: #E0F2FE; color: #075985; border-color: #BAE6FD; }
+.sc-card__status--warning { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+.sc-card__status--success { background: #DCFCE7; color: #166534; border-color: #BBF7D0; }
+.sc-card__status--secondary { background: #F1F5F9; color: #475569; border-color: #E2E8F0; }
+
+.sc-card__code {
+    font-size: .6875rem;
+    letter-spacing: .06em;
+    color: #64748B;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-wrap: anywhere;
+}
+
+.sc-card__title {
+    font-size: .9375rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: #0F172A;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.sc-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .5rem;
+    font-size: .75rem;
+    color: #64748B;
+}
+
+.sc-card__meta span { white-space: nowrap; }
+
+/* Lecturer. truncation-safe: the name is set in full, not cut off mid-word by
+   overflow, because a card showing "Dr Jane D" is worse than one wrapping. */
+.sc-card__lecturer {
+    font-size: .8125rem;
+    color: #334155;
+    overflow-wrap: anywhere;
+}
+
+.sc-card__foot {
+    margin-top: auto;
+    padding-top: .75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .375rem;
+}
+
+.sc-card__foot > * { flex: 1 1 auto; }
+
+.sc-card__note {
+    font-size: .75rem;
+    color: #64748B;
+    font-style: italic;
+}
+
+/* ── Section ────────────────────────────────────────────────────────────── */
+
+.sc-section { margin-bottom: 1.75rem; }
+
+.sc-section__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: .75rem;
+}
+
+.sc-section__title {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin: 0;
+    color: #0F172A;
+}
+
+.sc-section__count {
+    font-size: .75rem;
+    color: #64748B;
+}
+
+.sc-empty {
+    font-size: .875rem;
+    color: #64748B;
+    background: #F8FAFC;
+    border: 1px dashed #CBD5E1;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sc-card__foot .btn,
+    .sc-filters .btn { transition: none; }
+}

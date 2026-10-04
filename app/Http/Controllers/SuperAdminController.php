@@ -52,7 +52,12 @@ use Stripe, DB;
 use PaytmWallet;
 use File;
 use App\Mail\SuperAdminAproved;
+use App\Mail\PlatformMailTestMessage;
+use App\Support\Mail\PlatformSmtpConfiguration;
+use App\Support\Mail\SmtpPasswordSecret;
 use App\Support\ProfilePhoto;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use App\Support\TenantConfiguration;
 
 class SuperAdminController extends Controller
@@ -112,6 +117,9 @@ class SuperAdminController extends Controller
             'school' => $school,
             'currencies' => Currency::all(),
             'countryCodes' => config('tenant.country_codes'),
+            // Every identifier PHP supports, grouped by region. The value
+            // stored is the IANA identifier; the label a person reads.
+            'timezoneOptions' => app(\App\Support\TenantTimezone::class)->groupedOptions(),
         ]);
     }
 
@@ -125,8 +133,16 @@ class SuperAdminController extends Controller
             'school_info' => ['sometimes', 'required', 'string'],
             'school_currency' => ['nullable', 'string', 'max:20'],
             'currency_position' => ['nullable', 'in:left,right,left-space,right-space'],
+            // Required here, on the one screen an administrator uses to set it.
+            // Left nullable everywhere else so no other write path is forced
+            // to supply it, and so a tenant created before this field existed
+            // stays editable.
+            'timezone' => ['required', 'timezone'],
         ]);
-        $validated = $request->validate($rules);
+        $validated = $request->validate($rules, [
+            'timezone.required' => get_phrase('Please choose your institution timezone.'),
+            'timezone.timezone' => get_phrase('That is not a recognised timezone.'),
+        ]);
 
         // Update only fields intentionally exposed by this school form. In particular,
         // request data cannot alter running_session, school_id, or arbitrary columns.
@@ -659,46 +675,140 @@ class SuperAdminController extends Controller
 
     public function smtpSettings()
     {
-        return view('superadmin.settings.smtp_settings');
+        $passwordConfigured = false;
+        try {
+            $storedPassword = DB::table('global_settings')->where('key', 'smtp_pass')->value('value');
+            $passwordConfigured = is_string($storedPassword) && $storedPassword !== '';
+        } catch (\Throwable $exception) {
+            $this->logMailSettingsFailure($exception, 'display');
+        }
+
+        return view('superadmin.settings.smtp_settings', compact('passwordConfigured'));
     }
 
     public function smtpUpdate(Request $request)
     {
-        $data = $request->all();
+        $oldInput = $request->only([
+            'smtp_protocol', 'smtp_crypto', 'smtp_host', 'smtp_port', 'smtp_user', 'from_email', 'from_name',
+        ]);
 
-        unset($data['_token']);
-        foreach($data as $key => $value){
-            if($key == 'smtp_protocol'){
-                set_config('MAIL_MAILER', $value);
-            }elseif($key == 'smtp_crypto'){
-                set_config('MAIL_ENCRYPTION', $value);
-            }elseif($key == 'smtp_host'){
-                set_config('MAIL_HOST', $value);
-            }elseif($key == 'smtp_port'){
-                set_config('MAIL_PORT', $value);
-            }elseif($key == 'smtp_user'){
-                set_config('MAIL_USERNAME', $value);
-            }elseif($key == 'smtp_pass'){
-                set_config('MAIL_PASSWORD', $value);
-            } 
+        try {
+            $storedPassword = DB::table('global_settings')->where('key', 'smtp_pass')->value('value');
+            $passwordConfigured = is_string($storedPassword) && $storedPassword !== '';
 
-            set_config('MAIL_FROM_ADDRESS', get_settings('system_email'));
+            $validator = Validator::make($request->only([
+                'smtp_protocol', 'smtp_crypto', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'from_email', 'from_name',
+            ]), [
+                'smtp_protocol' => ['required', 'in:smtp'],
+                'smtp_crypto' => ['required', 'in:tls,ssl'],
+                'smtp_host' => ['required', 'string', 'max:253', 'regex:/^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/'],
+                'smtp_port' => ['required', 'integer', 'between:1,65535'],
+                'smtp_user' => ['required', 'string', 'email:rfc', 'max:191'],
+                'smtp_pass' => $passwordConfigured
+                    ? ['nullable', 'string', 'max:4096']
+                    : ['required', 'string', 'max:4096'],
+                'from_email' => ['required', 'string', 'email:rfc', 'max:191'],
+                'from_name' => ['required', 'string', 'max:100', 'not_regex:/[\r\n]/'],
+            ], [
+                'smtp_protocol.required' => 'Select a supported mail protocol.',
+                'smtp_protocol.in' => 'The mail protocol must be SMTP.',
+                'smtp_crypto.required' => 'Select TLS or SSL encryption.',
+                'smtp_crypto.in' => 'Select TLS or SSL encryption.',
+                'smtp_host.required' => 'Enter the SMTP host.',
+                'smtp_host.regex' => 'Enter a valid SMTP host name.',
+                'smtp_port.required' => 'Enter the SMTP port.',
+                'smtp_port.integer' => 'Enter a whole-number SMTP port.',
+                'smtp_port.between' => 'The SMTP port must be between 1 and 65535.',
+                'smtp_user.required' => 'Enter the SMTP username.',
+                'smtp_user.email' => 'Enter a valid SMTP mailbox email address.',
+                'smtp_pass.required' => 'Enter the SMTP password for the first configuration.',
+                'from_email.required' => 'Enter the platform sender email address.',
+                'from_email.email' => 'Enter a valid platform sender email address.',
+                'from_name.required' => 'Enter the platform sender name.',
+                'from_name.not_regex' => 'The platform sender name may not contain line breaks.',
+            ]);
 
-            if (DB::table('global_settings')->where('key', $key)->get()->count() > 0) {
-                GlobalSettings::where('key', $key)->update([
-                    'key' => $key,
-                    'value' => $value,
-                ]);
-            } else {
-                GlobalSettings::create([
-                    'key' => $key,
-                    'value' => $value,
-                ]);
+            if ($validator->fails()) {
+                return redirect()->back()->withErrors($validator)->withInput($oldInput);
             }
+
+            $data = $validator->validated();
+            DB::transaction(function () use ($data): void {
+                $passwordToStore = filled($data['smtp_pass'] ?? null)
+                    ? SmtpPasswordSecret::protect((string) $data['smtp_pass'])
+                    : SmtpPasswordSecret::protectStored(DB::table('global_settings')->where('key', 'smtp_pass')->value('value'));
+
+                if (!$passwordToStore) {
+                    throw new \RuntimeException('SMTP authentication password is unavailable.');
+                }
+
+                $settings = [
+                    'smtp_protocol' => 'smtp',
+                    'smtp_crypto' => $data['smtp_crypto'],
+                    'smtp_host' => trim($data['smtp_host']),
+                    'smtp_port' => (string) $data['smtp_port'],
+                    'smtp_user' => trim($data['smtp_user']),
+                    'smtp_pass' => $passwordToStore,
+                    // Reuse the existing platform sender identity settings.
+                    'system_email' => trim($data['from_email']),
+                    'system_title' => trim($data['from_name']),
+                ];
+
+                foreach ($settings as $key => $value) {
+                    DB::table('global_settings')->updateOrInsert(['key' => $key], ['value' => $value]);
+                }
+            });
+
+            return redirect()->back()->with('message', 'Email settings saved successfully.');
+        } catch (\Throwable $exception) {
+            $this->logMailSettingsFailure($exception, 'save');
+
+            return redirect()->back()
+                ->withErrors(['mail_settings' => "We couldn't save the email settings. Please review the highlighted fields and try again."])
+                ->withInput($oldInput);
+        }
+    }
+
+    public function smtpTestEmail(Request $request, PlatformSmtpConfiguration $configuration)
+    {
+        $validator = Validator::make($request->only('recipient_email'), [
+            'recipient_email' => ['required', 'string', 'email:rfc', 'max:191'],
+        ], [
+            'recipient_email.required' => 'Enter a test recipient email address.',
+            'recipient_email.email' => 'Enter a valid test recipient email address.',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()->withErrors($validator)->withInput($request->except('smtp_pass'));
         }
 
+        try {
+            $configuration->apply();
+            $sent = \App\Support\Mail\SafeMail::send(
+                $validator->validated()['recipient_email'],
+                new PlatformMailTestMessage(),
+                'platform-smtp-test'
+            );
 
-        return redirect()->back()->with('message','Smtp settings updated successfully.');
+            if (!$sent) {
+                return redirect()->back()->with('error', "We couldn't send the test email. Please check the email settings and try again.");
+            }
+
+            return redirect()->back()->with('message', 'The test email was sent using the configured mail settings.');
+        } catch (\Throwable $exception) {
+            $this->logMailSettingsFailure($exception, 'test-email');
+
+            return redirect()->back()->with('error', "We couldn't send the test email. Please check the email settings and try again.");
+        }
+    }
+
+    private function logMailSettingsFailure(\Throwable $exception, string $operation): void
+    {
+        Log::error('Platform mail settings operation failed', [
+            'operation' => $operation,
+            'exception' => get_class($exception),
+            'actor_id' => auth()->id(),
+        ]);
     }
 
 

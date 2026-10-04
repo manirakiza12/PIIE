@@ -51,10 +51,7 @@
                         <a class="btn btn-primary" href="{{ route($type['form']) }}"><i class="bi bi-plus-lg"></i> {{ get_phrase('+ Add Other Staff') }}</a>
                         <a href="{{ route($type['list']) }}" class="btn btn-outline-secondary">{{ get_phrase('Staff Directory') }}</a>
                     @else
-                    <button type="button" class="btn btn-primary" data-create-route="{{ route($type['form']) }}"
-                            onclick="rightModal('{{ route($type['form']) }}', '{{ get_phrase('Create ' . $type['label']) }}')">
-                        <i class="bi bi-plus-lg"></i> {{ get_phrase('Create ' . $type['label']) }}
-                    </button>
+                    <a class="btn btn-primary" href="{{ route('admin.staff.create', $key === 'teacher' ? 'lecturer' : $key) }}"><i class="bi bi-plus-lg"></i> {{ get_phrase('Create ' . $type['label']) }}</a>
                     <a href="{{ route($type['list']) }}" class="btn btn-outline-secondary">{{ get_phrase('View list') }}</a>
                     @endif
                 </div>

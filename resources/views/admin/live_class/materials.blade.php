@@ -98,10 +98,41 @@
                 </form>
             @endif
 
+            {{-- The authoritative recording, when there genuinely is one.
+
+                 Only when the state says available AND there is a usable https
+                 link. A PROCESSING class is deliberately NOT listed here: this
+                 tab is where a student looks for something to watch, and an
+                 entry with no playable file behind it reads as a broken release
+                 rather than "not ready yet". --}}
+            @if($primaryRecordingAvailable)
+                <div class="border rounded p-3 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <div class="fw-semibold"><i class="bi bi-camera-video me-1"></i>{{ get_phrase('Recording of this class') }}</div>
+                        <div class="small text-muted">{{ $liveClass->recordingStateLabel() }}.</div>
+                    </div>
+                    <a href="{{ route('live_classes.recording.access', $liveClass->id) }}"
+                       class="eBtn eBtn-primary" target="_blank" rel="noopener">{{ get_phrase('Watch Recording') }}</a>
+                </div>
+            @endif
+
             @forelse($recordings as $material)
                 @include('admin.live_class._material_item', ['material' => $material, 'canManage' => $canManage, 'routePrefix' => $routePrefix])
             @empty
-                <p class="text-muted text-center py-3">{{ get_phrase('No recordings have been added yet.') }}</p>
+                @if(! $primaryRecordingAvailable)
+                    @if($recordingState === \App\Models\LiveClass::RECORDING_PROCESSING)
+                        <p class="text-muted text-center py-3 mb-0">
+                            {{ get_phrase('The recording is being prepared. It will appear here when it becomes available.') }}
+                        </p>
+                        <p class="small text-center text-muted mb-0">
+                            {{ get_phrase('Your lecturer has set this state manually. PIIE does not track progress on the meeting provider.') }}
+                        </p>
+                    @elseif($recordingState === \App\Models\LiveClass::RECORDING_UNAVAILABLE)
+                        <p class="text-muted text-center py-3 mb-0">{{ get_phrase('No recording is available for this class.') }}</p>
+                    @else
+                        <p class="text-muted text-center py-3 mb-0">{{ get_phrase('No recording is available for this class.') }}</p>
+                    @endif
+                @endif
             @endforelse
         </div>
     </div>

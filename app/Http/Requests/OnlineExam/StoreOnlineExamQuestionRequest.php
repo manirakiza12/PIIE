@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use App\Support\OnlineExams\AnswerKey;
 use App\Support\OnlineExams\QuestionContract;
+use App\Support\OnlineExams\QuestionPrompt;
 
 class StoreOnlineExamQuestionRequest extends FormRequest
 {
@@ -34,6 +35,11 @@ class StoreOnlineExamQuestionRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
+            // `required` is now MEANINGFUL rather than nominal. See
+            // QuestionPrompt::normaliseForAuthoring(): an empty rich-text document
+            // (`<p><br></p>`) is normalised to '' in prepareForValidation(), so this
+            // rule refuses it instead of storing an unanswerable question. Exam 20
+            // shipped four of them.
             'question' => ['required', 'string'],
             'type' => ['required', Rule::in(['multiple_choice', 'multiple_select', 'numeric', 'matching', 'ordering', 'true_false', 'fill_blank', 'short_answer', 'essay', 'mcq', 'short'])],
             'option_a' => ['nullable', 'string'],
@@ -135,6 +141,10 @@ class StoreOnlineExamQuestionRequest extends FormRequest
             'type' => $type,
             'correct_ans' => $correctAns,
             'auto_grade_fill_blank' => $this->boolean('auto_grade_fill_blank'),
+            // An empty rich-text document is not a question. Normalising it to ''
+            // is what makes the `required` rule above actually refuse it, so an
+            // unanswerable question can never be created again. See QuestionPrompt.
+            'question' => QuestionPrompt::normaliseForAuthoring($payload['question'] ?? null),
         ]));
     }
 
@@ -148,6 +158,14 @@ class StoreOnlineExamQuestionRequest extends FormRequest
             if ($this->exam->isStructurallyLocked()) {
                 $validator->errors()->add('question', 'Questions cannot be modified after attempts have started.');
                 return;
+            }
+
+            // `required` refuses the empty editor document, but its own wording is
+            // "The question field is required." - which points at a field the lecturer
+            // has demonstrably filled in. The empty rich-text document is the real
+            // problem and needs naming, because it is invisible in the editor.
+            if (QuestionPrompt::isEmpty((string) $this->input('question', ''))) {
+                $validator->errors()->add('question', QuestionPrompt::MESSAGE);
             }
 
             $type = (string) $this->input('type');

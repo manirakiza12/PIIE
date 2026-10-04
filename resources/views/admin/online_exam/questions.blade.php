@@ -39,7 +39,7 @@
     <div class="card mb-3 online-exam-question-card">
         <div class="card-body">
             <div class="d-flex justify-content-between">
-                <div><strong>Q{{ $i+1 }}.</strong> {{ $q->question }}
+                <div class="piie-prose"><strong>Q{{ $i+1 }}.</strong> {!! $q->prosePrompt() !!}
                     <span class="badge bg-{{ in_array($q->normalized_type, ['multiple_choice','multiple_select']) ? 'primary' : ($q->normalized_type=='true_false' ? 'warning' : 'info') }} ms-2">{{ strtoupper(str_replace('_', ' ', $q->normalized_type)) }}</span>
                     <span class="badge bg-secondary ms-1">{{ $q->marks }} mark(s)</span>
                 </div>
@@ -69,7 +69,19 @@
                 <form method="POST" action="{{ route('admin.online_exams.questions.update', $q->id) }}" class="row g-2 mt-2">
                     @csrf
                     <input type="hidden" name="question_id" value="{{ $q->id }}">
-                    <div class="col-md-5"><input class="form-control" name="question" value="{{ $q->question }}" required></div>
+                                    <div class="col-12">
+                    {{-- The same reason as the lecturer's inline edit: an `<input>`
+                         cannot hold markup, so re-saving a formatted question through
+                         it would replace the formatting with escaped tag text. --}}
+                    <x-academic-editor
+                        name="question"
+                        :id="'admin-edit-question-'.$q->id"
+                        :value="$q->getAttributes()['question'] ?? ''"
+                        :required="true"
+                        :height="220"
+                        help="Formatting, lists, tables and mathematical notation are kept."
+                        testid="exam-question-edit-editor" />
+                </div>
                     @php($structuredConfig = $q->question_schema_version ? json_decode($q->question_config, true) : [])
                     @php($structuredMarking = $q->question_schema_version ? json_decode($q->marking_config, true) : [])
                     <div class="col-md-2"><select class="form-select" name="type"><option value="mcq" @selected($q->type === 'mcq' && !in_array(($structuredConfig['type'] ?? null), ['multiple_select','matching','ordering'], true))>MCQ</option><option value="multiple_select" @selected(($structuredConfig['type'] ?? null) === 'multiple_select')>Multiple Select</option><option value="numeric" @selected(($structuredConfig['type'] ?? null) === 'numeric')>Numerical Answer</option><option value="matching" @selected(($structuredConfig['type'] ?? null) === 'matching')>Matching</option><option value="ordering" @selected(($structuredConfig['type'] ?? null) === 'ordering')>Ordering / Sequencing</option><option value="true_false" @selected($q->type === 'true_false')>True/False</option><option value="short" @selected($q->type === 'short' && ($structuredConfig['type'] ?? null) !== 'numeric')>Short</option><option value="essay" @selected($q->type === 'essay')>Essay</option></select></div>

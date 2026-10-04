@@ -57,7 +57,7 @@ class MailFailureResilienceTest extends TestCase
         $this->assertNotSame(500, $response->getStatusCode());
         $response->assertRedirect('/admin/teacher')->assertSessionHas('message');
         $this->assertTrue(User::where('email', 'mail-outage@example.test')->exists(), 'the account was created and kept');
-        Log::shouldHaveReceived('warning')->withArgs(fn ($message, $context) => str_contains($message, 'Mail delivery failed')
+        Log::shouldHaveReceived('error')->withArgs(fn ($message, $context) => str_contains($message, 'Mail delivery failed')
             && $context['purpose'] === 'staff-credentials' && $context['exception'] === TransportException::class
             && !str_contains(json_encode($context), 'mail-outage@example.test'))->once();
     }

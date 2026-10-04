@@ -5,8 +5,28 @@
         @csrf
         @if($question) @method('PUT') @endif
         <div class="form-row">
-            <div class="fpb-7"><label class="eForm-label">{{ get_phrase('Question') }} *</label>
-                <textarea class="form-control eForm-control" name="question" rows="3" required>{{ $question->question ?? '' }}</textarea></div>
+            <div class="fpb-7">
+                {{-- The admin's own Question Bank editor.
+
+                     This table is SHARED and long-lived - an entry authored here is
+                     copied into many exams and rendered by every one of them - so the
+                     editor is only safe because the filter is on the QuestionBank
+                     model's mutator rather than in this form. An editor here with no
+                     filter attached would have left an injection surface outliving any
+                     single exam.
+
+                     The raw attribute is read rather than the accessor, so the editor
+                     is handed the markup that was actually stored. --}}
+                <x-academic-editor
+                    name="question"
+                    :id="'admin-bank-question-'.($question->id ?? 'new')"
+                    :value="$question->getAttributes()['question'] ?? ''"
+                    :required="true"
+                    :rows="4"
+                    :height="260"
+                    help="Formatting, lists, tables and mathematical notation are kept."
+                    testid="bank-question-editor" />
+            </div>
             <div class="fpb-7 mt-2"><label class="eForm-label">{{ academic_term('subject', auth()->user()->school_id) }}</label>
                 <select class="form-control eForm-control" name="subject_id">
                     <option value="">{{ get_phrase('General') }}</option>

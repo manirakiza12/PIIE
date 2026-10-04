@@ -27,7 +27,22 @@ class OnlineExamBatch1RegressionTest extends TestCase
         $payload = ['submission_id' => $submission];
         $this->actingAs($student)->post(route('student.online_exam.submit', $exam), $payload)->assertRedirect();
         $this->actingAs($student)->post(route('student.online_exam.submit', $exam), $payload)->assertRedirect();
-        $this->assertDatabaseHas('online_exam_submissions', ['id' => $submission, 'status' => 'finalized', 'score' => 5]);
+
+        /**
+         * `submitted`, NOT `finalized`.
+         *
+         * Idempotence is what this test is about, and it holds either way - the second
+         * submit changed nothing. But the state word matters: a student's submit may
+         * no longer finalise a result. `finalized` is written only by
+         * `finalizeSubmission()`, a deliberate staff handover, because a student's own
+         * submit reaching it is what produced submission 12 - "Marking Complete /
+         * Finalized / Not Released" with an empty Actions column and no queue it
+         * belonged to.
+         *
+         * One auto-marked MCQ, so nothing needs a marker and `submitted` is right:
+         * closed, and still behind the handover and admin review gates.
+         */
+        $this->assertDatabaseHas('online_exam_submissions', ['id' => $submission, 'status' => 'submitted', 'score' => 5]);
         $this->assertDatabaseCount('online_exam_answers', 1);
     }
 
@@ -71,15 +86,21 @@ class OnlineExamBatch1RegressionTest extends TestCase
 
         $manualExam = $this->makeExam(['result_release_policy' => 'manual']);
         $manualSubmission = $this->makeSubmission(['online_exam_id' => $manualExam, 'student_id' => $student->id, 'school_id' => 1, 'status' => 'finalized', 'submitted_at' => now(), 'score' => 5]);
+
+        // A finalized row with no explicit review state is a legacy one, read as
+        // handed over — so the student is told their marking is complete and awaiting
+        // administrative review. The old page branched on `status === 'finalized'`
+        // alone and called this "awaiting publication", which claimed a release stage
+        // the record had not actually reached.
         $this->actingAs($student)->get(route('student.online_exam.result', $manualSubmission))
-            ->assertOk()->assertSee('awaiting publication');
+            ->assertOk()->assertSee('awaiting administrative review');
         $this->actingAs($admin)->post(route('admin.online_exams.submissions.publish_result', $manualSubmission))->assertRedirect();
         $this->actingAs($student)->get(route('student.online_exam.result', $manualSubmission))->assertOk();
 
         $futureExam = $this->makeExam(['result_release_policy' => 'after_exam_end', 'end_datetime' => now()->addHour()]);
         $futureSubmission = $this->makeSubmission(['online_exam_id' => $futureExam, 'student_id' => $student->id, 'school_id' => 1, 'status' => 'finalized', 'submitted_at' => now(), 'score' => 5]);
         $this->actingAs($student)->get(route('student.online_exam.result', $futureSubmission))
-            ->assertOk()->assertSee('awaiting publication');
+            ->assertOk()->assertSee('awaiting administrative review');
     }
 
     public function test_manual_finalization_requires_all_written_answers_marked(): void
@@ -90,7 +111,9 @@ class OnlineExamBatch1RegressionTest extends TestCase
         $submission = $this->makeSubmission(['online_exam_id' => $exam, 'student_id' => 1, 'school_id' => 1, 'status' => 'pending_manual_marking', 'submitted_at' => now()]);
         DB::table('online_exam_answers')->insert(['submission_id' => $submission, 'question_id' => $question, 'answer_text' => 'response', 'created_at' => now(), 'updated_at' => now()]);
 
-        $this->actingAs($admin)->post(route('admin.online_exams.submissions.finalize', $submission))->assertStatus(422);
+        $this->assertHandoverRefusedWithExplanation(
+            $this->actingAs($admin)->post(route('admin.online_exams.submissions.finalize', $submission))
+        );
         $this->assertDatabaseHas('online_exam_submissions', ['id' => $submission, 'status' => 'pending_manual_marking']);
     }
 
@@ -102,7 +125,20 @@ class OnlineExamBatch1RegressionTest extends TestCase
         $submission = $this->makeSubmission(['online_exam_id' => $exam, 'student_id' => 1, 'school_id' => 1, 'status' => 'in_progress']);
         $answer = DB::table('online_exam_answers')->insertGetId(['submission_id' => $submission, 'question_id' => $question, 'answer_text' => 'response', 'created_at' => now(), 'updated_at' => now()]);
 
-        $this->actingAs($teacher)->post(route('teacher.online_exams.answers.mark', $answer), ['answer_id' => $answer, 'awarded_marks' => 1])->assertStatus(422);
+        // An attempt still in progress cannot be marked. The rule is unchanged; only the
+        // presentation is - the lecturer is returned to the page with the reason
+        // instead of being shown a bare error document.
+        $this->actingAs($teacher)
+            ->post(route('teacher.online_exams.answers.mark', $answer), [
+                'answer_id' => $answer, 'awarded_marks' => 1,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('awarded_marks');
+
+        $this->assertNull(
+            DB::table('online_exam_answers')->where('id', $answer)->value('awarded_marks'),
+            'a refused mark must leave the answer untouched'
+        );
     }
 
     public function test_teacher_and_administrator_can_mark_only_eligible_written_answers(): void

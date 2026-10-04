@@ -144,6 +144,12 @@ trait OnlineExamTestHelper
             $table->unsignedBigInteger('class_id')->nullable();
             $table->unsignedBigInteger('programme_id')->nullable()->index();
             $table->unsignedBigInteger('session_id')->nullable()->index();
+            // The Course Offering delivery context, mirroring the additive migration
+            // 2026_09_30_140000. Nullable, so every legacy Class/Section exam above
+            // and every existing test in this suite keeps meaning exactly what it
+            // meant - and the engine's own null-guards in CourseOfferingExamAccess
+            // are exercised by virtue of this being NULL for all of them.
+            $table->unsignedBigInteger('course_offering_id')->nullable()->index();
             $table->string('exam_type')->default('cat');
             $table->dateTime('start_datetime')->nullable();
             $table->dateTime('end_datetime')->nullable();
@@ -161,6 +167,9 @@ trait OnlineExamTestHelper
             $table->string('result_release_policy', 30)->default('immediate');
             $table->boolean('webcam_required')->default(false);
             $table->boolean('fullscreen_required')->default(false);
+            // Added by 2026_10_02_000002. NULL is the default and means "full
+            // restrictions", so every exam in a test schema behaves as before.
+            $table->string('integrity_accommodation', 32)->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('creator_id')->nullable();
             $table->unsignedBigInteger('updater_id')->nullable();
@@ -205,6 +214,17 @@ trait OnlineExamTestHelper
             $table->string('submitted_via', 20)->nullable();
             $table->string('status', 40)->default('in_progress');
             $table->string('result_review_state', 30)->nullable();
+
+            /**
+             * PUBLICATION AUDIT, MIRRORING THE REAL MIGRATION.
+             *
+             * This hand-built schema has to carry every column the production table has,
+             * or a test proves nothing about the real thing: with these absent, the
+             * publish action raised "no such column: published_at" instead of exercising
+             * the write it was written to verify.
+             */
+            $table->timestamp('published_at')->nullable();
+            $table->unsignedBigInteger('published_by')->nullable();
             $table->dateTime('timeout_at')->nullable();
             $table->integer('total_marks_snapshot')->nullable();
             $table->decimal('objective_score', 8, 2)->nullable();
@@ -460,14 +480,30 @@ trait OnlineExamTestHelper
         ]);
     }
 
-    protected function makeUser(int $roleId, int $schoolId, string $status = 'active'): User
+    /**
+     * @param  string  $status  The ACCOUNT status (`active`, `disabled`, …).
+     * @param  string|null  $name  A real name.
+     *
+     * The name is a parameter because a tenant-isolation test that asserts on
+     * display strings is not testing tenants. Two people can share a name, and a
+     * fixture that auto-generated one would produce exactly that collision - which
+     * is how a legitimate colleague in the home institution once got reported as a
+     * cross-tenant leak.
+     */
+    protected function makeUser(int $roleId, int $schoolId, string $status = 'active', ?string $name = null): User
     {
-        return User::factory()->create([
+        $user = User::factory()->create([
             'role_id' => $roleId,
             'school_id' => $schoolId,
             'account_status' => $status,
             'menu_permission' => null,
         ]);
+
+        if ($name !== null) {
+            $user->forceFill(['name' => $name])->save();
+        }
+
+        return $user;
     }
 
     protected function makeClass(int $schoolId): int
@@ -565,6 +601,45 @@ trait OnlineExamTestHelper
         ];
 
         return (int) DB::table('online_exam_submissions')->insertGetId(array_merge($defaults, $overrides));
+    }
+
+    /**
+     * A REFUSED HANDOVER IS EXPLAINED, NOT A 422 ERROR PAGE.
+     *
+     * ── WHY THIS HELPER EXISTS ──────────────────────────────────────────────
+     *
+     * Both finalize endpoints — the lecturer's handover and the administrator's — used
+     * to let `finalizeSubmission()`'s 422 reach the browser as a bare
+     * `422 Unprocessable Content` page. Eight tests asserted that status directly, and
+     * the brief records it as a defect: an ordinary workflow rejection must return to
+     * the relevant screen with an actionable message, because a lecturer who has
+     * finished their marking cannot tell "one question is undecided" from "this
+     * endpoint is broken".
+     *
+     * So the contract is asserted in ONE place and it is STRICTER than the status
+     * code it replaces:
+     *
+     *   - a redirect back to a screen, not an error document;
+     *   - an error against `result`, i.e. a named field the views already render;
+     *   - a non-empty explanation the lecturer can act on;
+     *   - and, where the caller cares, that nothing was written.
+     *
+     * A test that only checked `assertStatus(422)` would have passed while the
+     * message was missing. These four would not.
+     */
+    protected function assertHandoverRefusedWithExplanation($response, ?string $expectedFragment = null): void
+    {
+        $response->assertRedirect();
+        $response->assertSessionHasErrors('result');
+
+        $message = (string) session('errors')->first('result');
+
+        $this->assertNotSame('', trim($message),
+            'a refused handover must explain itself, not return a bare rejection');
+
+        if ($expectedFragment !== null) {
+            $this->assertStringContainsString($expectedFragment, $message);
+        }
     }
 
     /**

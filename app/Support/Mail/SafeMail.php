@@ -49,12 +49,25 @@ final class SafeMail
 
     private static function logFailure(Mailable $mailable, string $purpose, \Throwable $exception): void
     {
-        Log::warning('Mail delivery failed; the completed action was kept', [
+        $driver = config('mail.default');
+        $smtp = config('mail.mailers.'.$driver.'.transport') === 'smtp';
+        $host = config('mail.mailers.'.$driver.'.host');
+        $port = config('mail.mailers.'.$driver.'.port');
+        $encryption = config('mail.mailers.'.$driver.'.encryption');
+        // Read the already-built sender. Do not rebuild token-bearing mailables here.
+        $sender = $mailable->from[0]['address'] ?? config('mail.from.address');
+
+        Log::error('Mail delivery failed; the completed action was kept', [
             'purpose' => $purpose,
             'mailable' => get_class($mailable),
             'exception' => get_class($exception),
+            'transport' => $smtp ? 'smtp' : 'other',
+            'smtp_host' => $smtp && is_string($host) && preg_match('/\A[A-Za-z0-9.-]{1,253}\z/', $host) ? $host : null,
+            'smtp_port' => $smtp && filter_var($port, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 65535]]) ? (int) $port : null,
+            'encryption' => $smtp && in_array($encryption, ['tls', 'ssl'], true) ? $encryption : null,
+            'sender_address' => is_string($sender) && filter_var($sender, FILTER_VALIDATE_EMAIL) ? $sender : null,
             'user_id' => auth()->id(),
             'school_id' => auth()->user()->school_id ?? null,
-        ]);
+        ] + MailFailureDiagnostic::describe($exception));
     }
 }

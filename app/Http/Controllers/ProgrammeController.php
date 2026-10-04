@@ -51,21 +51,52 @@ class ProgrammeController extends Controller
         $schoolType = \Illuminate\Support\Facades\DB::table('schools')->where('id', $this->school_id)->value('school_type') ?: 'k12';
         $canSeeProgrammes = $schoolType !== 'k12';
 
+        // The departments that actually exist in THIS tenant. A programme may
+        // only be filed under one of these; anything else is unresolved.
+        $knownDepartmentIds = $departments->pluck('id')->map(fn ($id) => (int) $id)->all();
+
         // Every configured faculty gets a section even when it currently has
         // no programmes — an empty faculty is exactly when an admin most
         // wants to be reminded "you haven't added anything here yet", not
-        // something to hide. Unassigned programmes (no faculty set) get
-        // their own group at the end rather than being silently dropped.
+        // something to hide. Programmes whose faculty cannot be resolved get
+        // their own clearly-labelled group at the end rather than being
+        // silently dropped (see $unresolved below).
         $groups = $departments->map(function ($department) use ($programmes) {
+            $id = (int) $department->id;
+
             return [
                 'department' => $department,
-                'programmes' => $programmes->where('department_id', $department->id)->values(),
+                'programmes' => $programmes
+                    ->filter(fn ($p) => $p->department_id !== null && (int) $p->department_id === $id)
+                    ->values(),
             ];
         })->values();
 
-        $unassigned = $programmes->whereNull('department_id')->values();
-        if ($unassigned->isNotEmpty() || $departments->isEmpty()) {
-            $groups->push(['department' => null, 'programmes' => $unassigned]);
+        // Deliberately WIDER than "no faculty set". A programme whose
+        // department_id points at a department that no longer exists — the
+        // usual cause is a faculty deleted after the programme was created,
+        // which nothing warns about — used to match no faculty group and was
+        // not in the unassigned group either, so it was fetched, counted in
+        // totalCount, and then silently dropped from a screen that reported
+        // it as present. This bucket is "I cannot show you a faculty for
+        // this", which is both honest and never lossy.
+        //
+        // Tenant isolation: $programmes is already scoped to this school and
+        // $knownDepartmentIds holds only this school's departments, so a
+        // programme belonging to another tenant can neither be grouped nor
+        // counted here. A programme pointing at another school's department
+        // correctly lands here rather than leaking that department's name.
+        $unresolved = $programmes->filter(function ($programme) use ($knownDepartmentIds) {
+            return $programme->department_id === null
+                || ! in_array((int) $programme->department_id, $knownDepartmentIds, true);
+        })->values();
+
+        if ($unresolved->isNotEmpty() || $departments->isEmpty()) {
+            $groups->push([
+                'department' => null,
+                'isUnresolvedGroup' => true,
+                'programmes' => $unresolved,
+            ]);
         }
 
         // A search or department filter narrows the results; drop the

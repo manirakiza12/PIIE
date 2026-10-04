@@ -54,9 +54,11 @@ class HomeController extends Controller
             $websiteSections = collect();
             $websiteItems = collect();
             $websiteSettings = collect();
+            $allPages = collect();
             $seo = null;
 
             if (
+                Schema::hasTable('website_pages') &&
                 Schema::hasTable('website_sections') &&
                 Schema::hasTable('website_items') &&
                 Schema::hasTable('website_settings') &&
@@ -64,6 +66,26 @@ class HomeController extends Controller
             ) {
                 // Security Phase 2H: only the public-site school's CMS content (App\Support\PublicTenantResolver).
                 $publicSchoolId = PublicTenantResolver::resolveSchoolId();
+
+                /**
+                 * THE PUBLISHED PAGES, for the redesigned header and footer.
+                 *
+                 * Additive only. `websitePage()` already loads exactly this list, and
+                 * the redesign needs it on the homepage as well so the navigation and
+                 * the footer can link to pages that ACTUALLY EXIST.
+                 *
+                 * Without it the footer had to hardcode slugs, and a hardcoded slug
+                 * that no page carries renders a 404 - which is how a Privacy Policy
+                 * link that pointed nowhere got into the first version of this design.
+                 * Filtering on `status` here means an UNPUBLISHED page cannot appear
+                 * in the menu either.
+                 */
+                $allPages = WebsitePage::where('status', 1)
+                    ->where(fn ($q) => $q->where('school_id', $publicSchoolId)->orWhereNull('school_id'))
+                    ->orderBy('display_order')
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get();
 
                 $websiteSections = WebsiteSection::where('status', 1)->where(fn ($q) => $q->where('school_id', $publicSchoolId)->orWhereNull('school_id'))
                     ->orderBy('sort_order')
@@ -93,6 +115,7 @@ class HomeController extends Controller
                 'websiteItems' => $websiteItems,
                 'websiteSettings' => $websiteSettings,
                 'websiteSeo' => $seo,
+                'allPages' => $allPages,
             ]);
         } else {
             return redirect(route('login'));

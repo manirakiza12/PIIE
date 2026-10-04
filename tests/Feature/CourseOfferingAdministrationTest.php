@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CourseOffering;
 use App\Models\User;
+use App\Support\CourseOffering\CourseOfferingLecturerAllocationService;
 use App\Support\CourseOffering\CourseOfferingService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -14,12 +15,14 @@ use Tests\TestCase;
 class CourseOfferingAdministrationTest extends TestCase
 {
     use StaffModuleTestHelper;
+    use \Tests\Feature\Support\FrozenClock;
 
     private array $tenants;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->freezeClock();
         $this->bootStaffModuleTestSchema();
         Schema::table('schools', function (Blueprint $table): void {
             $table->string('school_type')->default('k12');
@@ -45,7 +48,14 @@ class CourseOfferingAdministrationTest extends TestCase
             $table->date('start_date')->nullable(); $table->time('start_time')->nullable(); $table->time('end_time')->nullable();
             $table->string('status')->default('draft'); $table->boolean('is_published')->default(false); $table->boolean('attendance_enabled')->default(true);
             $table->text('recording_url')->nullable(); $table->unsignedBigInteger('created_by')->nullable(); $table->unsignedBigInteger('updated_by')->nullable();
-            $table->timestamps();
+            $table->dateTime('started_at')->nullable();
+                $table->dateTime('ended_at')->nullable();
+                $table->dateTime('cancelled_at')->nullable();
+                $table->unsignedBigInteger('started_by')->nullable();
+                $table->unsignedBigInteger('ended_by')->nullable();
+                $table->unsignedBigInteger('cancelled_by')->nullable();
+                $table->string('recording_status', 20)->default('none');
+$table->timestamps();
         });
         Schema::create('live_class_materials', function (Blueprint $table): void {
             $table->id(); $table->unsignedBigInteger('school_id'); $table->unsignedBigInteger('live_class_id');
@@ -78,7 +88,7 @@ class CourseOfferingAdministrationTest extends TestCase
             ->assertSee('A-OWN')->assertSee('CORE-1 — Core 1')
             ->assertSee('Offering Reference:')->assertSee('Academic Year:')->assertSee('2026')
             ->assertSee('Semester:')->assertSee('Semester 1')
-            ->assertSee('No Programme Study Plans have been linked to this Course Offering yet.')
+            ->assertSee('No Study Plan has been linked yet. Add the applicable Study Plan before opening this Course Offering.')
             ->assertSee('No lecturers have been assigned yet.')
             ->assertSee('No students are registered for this Course Offering yet.')
             ->assertSee('A Programme Study Plan must be linked before this Course Offering can be opened.')
@@ -104,7 +114,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $inProgress = $this->createOffering($a, 'IP-A');
         $this->attach($a, $inProgress, $a['member']);
         app(CourseOfferingService::class)->open(1, $inProgress->id);
-        app(CourseOfferingService::class)->start(1, $inProgress->id);
+app(CourseOfferingService::class)->start(1, $inProgress->id);
         $memberB = $this->tenants[2]['member'];
         $viewOnly = $this->staff(1, ['academic.course_offering.view']);
 
@@ -284,7 +294,7 @@ class CourseOfferingAdministrationTest extends TestCase
             'user_id' => $progressLecturer->id, 'role' => 'teaching_assistant', 'starts_on' => '2026-05-20', 'ends_on' => '2026-05-25',
         ])->assertRedirect();
         $progressAllocation = DB::table('course_offering_lecturer_allocations')->where('course_offering_id', $offeringA->id)->where('user_id', $progressLecturer->id)->first();
-        app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
+app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
         $this->post(route('admin.course_offerings.lecturers.activate', [$offeringA->id, $progressAllocation->id]))->assertRedirect();
         $this->assertDatabaseHas('course_offering_lecturer_allocations', ['id' => $progressAllocation->id, 'status' => 'active']);
         DB::table('users')->where('id', $teacherA->id)->update(['staff_status' => 'terminated']);
@@ -296,7 +306,22 @@ class CourseOfferingAdministrationTest extends TestCase
             ->assertSee($manager->name)->assertSee(now()->format('Y-m-d'))
             ->assertDontSee('Lecturer B')->assertDontSee('Tenant B Actor');
 
+        // Completion must not silently leave active teaching-team allocations behind.
+        try {
+            app(CourseOfferingService::class)->complete($tenantA['school'], $offeringA->id);
+            $this->fail('Completing with active lecturer allocations must be rejected.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('lecturer allocations remain active', $exception->getMessage());
+        }
+        $this->assertSame('in_progress', $offeringA->fresh()->status);
+
+        foreach (DB::table('course_offering_lecturer_allocations')->where('course_offering_id', $offeringA->id)->whereIn('status', ['planned', 'active'])->get() as $stillAllocated) {
+            $this->post(route('admin.course_offerings.lecturers.end', [$offeringA->id, $stillAllocated->id]), ['ends_on' => '2026-06-30'])->assertRedirect();
+        }
+        $this->assertSame(0, DB::table('course_offering_lecturer_allocations')->where('course_offering_id', $offeringA->id)->whereIn('status', ['planned', 'active'])->count());
+
         app(CourseOfferingService::class)->complete($tenantA['school'], $offeringA->id);
+        $this->assertSame('completed', $offeringA->fresh()->status);
         $this->get(route('admin.course_offerings.lecturers.index', $offeringA->id))
             ->assertOk()->assertSee('This Offering is complete. Lecturer allocations are retained as history.')
             ->assertDontSee('Assign Lecturer')->assertDontSee('Activate');
@@ -437,8 +462,8 @@ class CourseOfferingAdministrationTest extends TestCase
         $this->assertNotSame('CLIENT-SUPPLIED-REFERENCE', $created->reference);
         $this->assertDatabaseMissing('course_offerings', ['id' => $created->id, 'programme_id' => $a['programme']]);
 
-        $this->put(route('admin.course_offerings.update', $created->id), $this->draftPayload($a, 'UPDATED'))->assertRedirect();
-        $this->assertSame('UPDATED', $created->fresh()->reference);
+        $this->put(route('admin.course_offerings.update', $created->id), $this->draftPayload($a, 'ATTEMPTED-OVERRIDE'))->assertRedirect();
+        $this->assertSame('CORE-1-2026-S1', $created->fresh()->reference);
         $this->post(route('admin.course_offerings.open', $created->id))->assertSessionHasErrors('lifecycle');
         $this->post(route('admin.course_offerings.applicability.store', $created->id), ['curriculum_membership_id' => $a['member']])->assertRedirect();
         $this->assertDatabaseHas('course_offering_curriculum_memberships', ['school_id' => 1, 'course_offering_id' => $created->id, 'curriculum_membership_id' => $a['member']]);
@@ -465,7 +490,7 @@ class CourseOfferingAdministrationTest extends TestCase
             $cancel = $this->createOffering($a, 'CANCEL-'.$state);
             $this->attach($a, $cancel, $a['member']);
             app(CourseOfferingService::class)->open(1, $cancel->id);
-            if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cancel->id);
+if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cancel->id);
             $this->post(route('admin.course_offerings.cancel', $cancel->id), ['reason' => 'Institutional change'])->assertRedirect();
             $this->assertSame('cancelled', $cancel->fresh()->status);
         }
@@ -864,7 +889,8 @@ class CourseOfferingAdministrationTest extends TestCase
             ->assertDontSee('PARALLEL SECRET SESSION')
             ->assertDontSee('CROSS TENANT SECRET SESSION')->assertDontSee('LEGACY SECRET SESSION')
             ->assertSee('Schedule Live Class')->assertSee(route('admin.course_offerings.live_classes.create', $offeringA->id), false)
-            ->assertSee('Scheduled')->assertSee('Ended')->assertSee('Cancelled')
+            ->assertSee('Scheduled')->assertSee('Completed')->assertSee('Cancelled')
+        ->assertDontSee('Ended')
             ->assertSee('View')->assertSee('Edit')->assertSee('Cancel')->assertSee('Join Evidence')
             ->assertDontSee('DO-NOT-LEAK')->assertDontSee('DO-NOT-LEAK-ID')->assertDontSee('DO-NOT-LEAK-PASSWORD')
             ->assertDontSee('SECRET-STORAGE-KEY')->assertDontSee('SECRET-LINK')->assertDontSee('private/live-classes')
@@ -954,10 +980,352 @@ class CourseOfferingAdministrationTest extends TestCase
                 ->get(route('admin.course_offerings.show', $offering->id))
                 ->assertOk()
                 ->assertSee('Draft')->assertSee('Scheduled')->assertSee('Starting Soon')
-                ->assertSee('Live Now')->assertSee('Ended')->assertSee('Cancelled');
+                // "Completed", not the stored "ended": the same convention the
+                // rest of the interface uses, asserted here too so the two
+                // workspaces cannot drift apart again.
+                ->assertSee('Live Now')->assertSee('Completed')->assertSee('Cancelled')
+                ->assertDontSee('Ended');
         } finally {
             \Illuminate\Support\Carbon::setTestNow();
         }
+    }
+
+    public function test_study_plan_picker_and_linked_table_display_stage(): void
+    {
+        $a = $this->tenants[1];
+        $draft = $this->createOffering($a, 'STAGE-VISIBLE');
+        $manager = $this->staff(1, ['academic.course_offering.view', 'academic.course_offering.manage']);
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $draft->id))
+            ->assertOk()->assertSee('Year 1');
+        $this->attach($a, $draft, $a['member']);
+        $this->get(route('admin.course_offerings.show', $draft->id))
+            ->assertOk()->assertSee('Stage / Year of Study')->assertSee('Year 1');
+    }
+
+    public function test_index_action_link_says_view_not_open_offering(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'VIEW-LABEL');
+        $viewer = $this->staff(1, ['academic.course_offering.view']);
+        $this->actingAs($viewer)->get(route('admin.course_offerings.index'))
+            ->assertOk()->assertSee('>View</a>', false)->assertDontSee('Open Offering');
+    }
+
+    public function test_view_only_user_cannot_reach_create_page(): void
+    {
+        $viewer = $this->staff(1, ['academic.course_offering.view']);
+        $this->actingAs($viewer)->get(route('admin.course_offerings.create'))->assertForbidden();
+
+        $manager = $this->staff(1, ['academic.course_offering.manage']);
+        $this->actingAs($manager)->get(route('admin.course_offerings.create'))->assertOk();
+    }
+
+    public function test_open_offering_wording_is_reserved_for_the_draft_lifecycle_transition(): void
+    {
+        $a = $this->tenants[1];
+        $draft = $this->createOffering($a, 'WORDING-DRAFT');
+        $open = $this->createOffering($a, 'WORDING-OPEN');
+        $this->attach($a, $open, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $open->id);
+
+        $manager = $this->staff(1, ['academic.course_offering.view', 'academic.course_offering.manage', 'academic.course_offering.lifecycle']);
+
+        // "Open Offering" is the Draft -> Open lifecycle action only.
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $draft->id))
+            ->assertOk()->assertSee('>Open Offering</button>', false);
+        $this->get(route('admin.course_offerings.show', $open->id))
+            ->assertOk()->assertDontSee('>Open Offering</button>', false)->assertSee('>Start Course Offering</button>', false);
+
+        // Navigation/view controls say "View".
+        $this->get(route('admin.course_offerings.index'))
+            ->assertOk()->assertSee('>View</a>', false)->assertDontSee('Open Offering');
+    }
+
+    public function test_state_aware_guidance_names_the_next_step_for_every_lifecycle_state(): void
+    {
+        $a = $this->tenants[1];
+        $manager = $this->staff(1, [
+            'academic.course_offering.view', 'academic.course_offering.manage', 'academic.course_offering.lifecycle',
+            'academic.course_offering.lecturer.view', 'academic.course_registration.view',
+        ]);
+
+        $draft = $this->createOffering($a, 'GUIDE-DRAFT');
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $draft->id))
+            ->assertOk()->assertSee('This Course Offering is being prepared.')
+            ->assertSee('Link a compatible Programme Study Plan before opening this Course Offering.');
+
+        // A user who may view but not manage is told to ask an authorized administrator.
+        $viewer = $this->staff(1, ['academic.course_offering.view']);
+        $this->actingAs($viewer)->get(route('admin.course_offerings.show', $draft->id))
+            ->assertOk()
+            ->assertSee('A Programme Study Plan must be linked before this Course Offering can be opened. Ask an authorized administrator to link one.');
+
+        $prepared = $this->createOffering($a, 'GUIDE-PREPARED');
+        $this->attach($a, $prepared, $a['member']);
+        $this->get(route('admin.course_offerings.show', $prepared->id))
+            ->assertOk()->assertSee('This Course Offering is being prepared.')
+            ->assertSee('Confirm Study Plan applicability, assign the teaching team, then open registration when ready.');
+
+        $open = $this->createOffering($a, 'GUIDE-OPEN');
+        $this->attach($a, $open, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $open->id);
+        $this->get(route('admin.course_offerings.show', $open->id))
+            ->assertOk()->assertSee('Preparation and student registration are open.')
+            // Open always names student registration, teaching-team actions and Start.
+            ->assertSee('Assign the teaching team and register eligible students, then Start the Course Offering when registration is done.');
+
+        $inProgress = $this->createOffering($a, 'GUIDE-IP');
+        $this->attach($a, $inProgress, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $inProgress->id);
+app(CourseOfferingService::class)->start($a['school'], $inProgress->id);
+        $this->get(route('admin.course_offerings.show', $inProgress->id))
+            ->assertOk()->assertSee('Teaching is currently in progress.')
+            ->assertSee('Live Classes')->assertSee('Attendance')->assertSee('Assignments')->assertSee('Online Exams');
+
+        $completed = $this->createOffering($a, 'GUIDE-DONE');
+        $this->attach($a, $completed, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $completed->id);
+app(CourseOfferingService::class)->start($a['school'], $completed->id);
+        app(CourseOfferingService::class)->complete($a['school'], $completed->id);
+        $this->get(route('admin.course_offerings.show', $completed->id))
+            ->assertOk()->assertSee('This Course Offering has been completed.')
+            ->assertSee('Its teaching and registration history is retained and read-only.')
+            ->assertSee('Audit / History')->assertSee('read-only');
+    }
+
+    public function test_detail_page_shows_study_plan_applicability_stage_and_student_summary(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'SUMMARY-UI');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+
+        $manager = $this->staff(1, [
+            'academic.course_offering.view', 'academic.course_offering.manage',
+            'academic.course_registration.view', 'academic.course_offering.lecturer.view',
+        ]);
+
+        // A draft Offering explains that the reference is system-generated and read-only.
+        $draft = $this->createOffering($a, 'SUMMARY-REF');
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $draft->id))
+            ->assertOk()
+            ->assertSee('Offering Reference:')
+            ->assertSee('generated automatically and cannot be edited')
+            ->assertDontSee('name="reference"', false);
+
+        $this->get(route('admin.course_offerings.show', $offering->id))
+            ->assertOk()
+            // Identity and academic context
+            ->assertSee('SUMMARY-UI')
+            ->assertSee('Offering reference')
+            ->assertSee('Academic Year:')
+            ->assertSee('Semester 1')
+            // Study Plan applicability and Stage / Year of Study
+            ->assertSee('Study Plan Applicability:')
+            ->assertSee('Stage / Year of Study:')
+            ->assertSee('Year 1')
+            // Status and teaching team
+            ->assertSee('Open')
+            ->assertSee('Teaching Team')
+            // Student registration summary
+            ->assertSee('Eligible')->assertSee('Registered')->assertSee('Confirmed')->assertSee('Dropped')
+            ->assertSee('No students are registered for this Course Offering yet.');
+    }
+
+    public function test_completion_blockers_are_explained_and_enforced_server_side(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'BLOCKERS');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+app(CourseOfferingService::class)->start($a['school'], $offering->id);
+
+        $lecturer = User::factory()->create([
+            'name' => 'Blocker Lecturer', 'role_id' => 3, 'school_id' => $a['school'],
+            'account_status' => 'active', 'staff_status' => 'active',
+        ]);
+        $allocation = (int) DB::table('course_offering_lecturer_allocations')->insertGetId([
+            'school_id' => $a['school'], 'course_offering_id' => $offering->id, 'user_id' => $lecturer->id,
+            'role' => 'primary_lecturer', 'starts_on' => '2026-01-05', 'status' => 'active',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $manager = $this->staff(1, [
+            'academic.course_offering.view', 'academic.course_offering.lifecycle',
+            'academic.course_offering.lecturer.view', 'academic.course_offering.lecturer.manage',
+            'academic.course_registration.view',
+        ]);
+
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $offering->id))
+            ->assertOk()
+            ->assertSee('This Course Offering cannot be completed yet.')
+            ->assertSee('Lecturer allocations are still active.')
+            ->assertSee('End the remaining teaching team allocations before completing this Course Offering.');
+
+        $this->post(route('admin.course_offerings.complete', $offering->id))->assertSessionHasErrors('lifecycle');
+        $this->assertStringContainsString('lecturer allocation remains active', session('errors')->first('lifecycle'));
+        $this->assertSame('in_progress', $offering->fresh()->status);
+        // The refused completion must not end the allocation on the administrator's behalf.
+        $this->assertDatabaseHas('course_offering_lecturer_allocations', ['id' => $allocation, 'status' => 'active']);
+
+        $this->post(route('admin.course_offerings.lecturers.end', [$offering->id, $allocation]), ['ends_on' => '2026-06-30'])->assertRedirect();
+        $this->get(route('admin.course_offerings.show', $offering->id))
+            ->assertOk()->assertDontSee('This Course Offering cannot be completed yet.');
+    }
+
+    public function test_cancelled_offering_shows_its_cancellation_reason_and_is_read_only(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'CANCELLED-UI');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        app(CourseOfferingService::class)->cancel($a['school'], $offering->id, 'Programme restructured; unit withdrawn');
+
+        $manager = $this->staff(1, [
+            'academic.course_offering.view', 'academic.course_offering.manage', 'academic.course_offering.lifecycle',
+            'academic.course_offering.lecturer.view', 'academic.course_registration.view',
+        ]);
+
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $offering->id))
+            ->assertOk()
+            ->assertSee('This Course Offering was cancelled.')
+            ->assertSee('Programme restructured; unit withdrawn')
+            ->assertSee('Cancellation reason:')
+            ->assertSee('read-only')
+            // Read-only: no mutation controls remain.
+            ->assertDontSee('>Open Offering</button>', false)
+            ->assertDontSee('>Start Course Offering</button>', false)
+            ->assertDontSee('>Complete Course Offering</button>', false)
+            ->assertDontSee('>Cancel Offering</button>', false)
+            ->assertDontSee('Link Study Plan</button>', false)
+            ->assertDontSee('>Save</button>', false);
+    }
+
+    public function test_view_only_user_sees_no_mutation_controls_on_the_detail_page(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'VIEW-ONLY-UI');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+
+        $viewer = $this->staff(1, [
+            'academic.course_offering.view', 'academic.course_registration.view',
+            'academic.course_offering.lecturer.view',
+        ]);
+
+        $page = $this->actingAs($viewer)->get(route('admin.course_offerings.show', $offering->id));
+        $page->assertOk()
+            // A viewer may read the whole page...
+            ->assertSee('VIEW-ONLY-UI')
+            ->assertSee('Study Plan Applicability:')
+            ->assertSee('Teaching Team')
+            // ...but sees no mutation control anywhere on it.
+            ->assertDontSee('>Open Offering</button>', false)
+            ->assertDontSee('>Start Course Offering</button>', false)
+            ->assertDontSee('>Complete Course Offering</button>', false)
+            ->assertDontSee('>Cancel Offering</button>', false)
+            ->assertDontSee('>Save</button>', false)
+            ->assertDontSee('Link Study Plan</button>', false)
+            ->assertDontSee('>Remove</button>', false);
+        $this->assertStringNotContainsString('action="'.route('admin.course_offerings.update', $offering->id).'"', $page->getContent());
+        $this->assertStringNotContainsString('action="'.route('admin.course_offerings.open', $offering->id).'"', $page->getContent());
+        $this->assertStringNotContainsString('action="'.route('admin.course_offerings.applicability.store', $offering->id).'"', $page->getContent());
+        $this->assertStringNotContainsString('action="'.route('admin.course_offerings.cancel', $offering->id).'"', $page->getContent());
+
+        // The student workspace is read-only for a viewer too.
+        $this->get(route('admin.course_offerings.eligible_students', $offering->id))
+            ->assertOk()
+            ->assertDontSee('>Register Selected</button>', false)
+            ->assertDontSee('>Register</button>', false)
+            ->assertDontSee('>Register Eligible Cohort Students</button>', false);
+        $this->get(route('admin.course_offerings.registrations', $offering->id))
+            ->assertOk()
+            ->assertDontSee('>Confirm Selected</button>', false)
+            ->assertDontSee('>Withdraw</button>', false);
+    }
+
+    public function test_unexpected_exception_never_exposes_database_detail_on_the_teaching_team_path(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'SAFE-LECTURER');
+        $lecturer = User::factory()->create([
+            'name' => 'Safe Path Lecturer', 'role_id' => 3, 'school_id' => $a['school'],
+            'account_status' => 'active', 'staff_status' => 'active',
+        ]);
+        $manager = $this->staff(1, ['academic.course_offering.lecturer.view', 'academic.course_offering.lecturer.manage']);
+
+        $this->mock(CourseOfferingLecturerAllocationService::class, function ($mock): void {
+            $mock->shouldReceive('createPlanned')->once()
+                ->andThrow(new \RuntimeException('SQLSTATE[42S02]: Base table or view not found: 1146 secret_internal_table'));
+        });
+
+        $response = $this->actingAs($manager)->post(route('admin.course_offerings.lecturers.store', $offering->id), [
+            'user_id' => $lecturer->id, 'role' => 'primary_lecturer', 'starts_on' => '2026-01-05',
+        ]);
+
+        $response->assertSessionHasErrors('allocation');
+        $message = session('errors')->first('allocation');
+        $this->assertStringContainsString('Something went wrong while updating the teaching team.', $message);
+        foreach (['SQLSTATE', 'secret_internal_table', '1146', 'Base table or view not found'] as $leak) {
+            $this->assertStringNotContainsString($leak, $message);
+        }
+    }
+
+    public function test_offering_cannot_start_before_its_academic_period_begins(): void
+    {
+        $a = $this->tenants[1];
+        $futureYear = (int) DB::table('academic_years')->insertGetId(['school_id' => $a['school'], 'label' => '2099', 'start_date' => '2099-01-01', 'end_date' => '2099-12-31', 'status' => 'planned', 'created_at' => now(), 'updated_at' => now()]);
+        $futurePeriod = (int) DB::table('academic_periods')->insertGetId(['school_id' => $a['school'], 'academic_year_id' => $futureYear, 'type' => 'semester', 'label' => 'Semester 1', 'sequence' => 1, 'start_date' => '2099-01-01', 'end_date' => '2099-06-30', 'status' => 'planned', 'created_at' => now(), 'updated_at' => now()]);
+        $future = app(CourseOfferingService::class)->createDraft($a['school'], $a['subject'], $futureYear, $futurePeriod);
+        app(CourseOfferingService::class)->addApplicability($a['school'], $future->id, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $future->id);
+
+        $manager = $this->staff(1, ['academic.course_offering.lifecycle']);
+        $this->actingAs($manager)->post(route('admin.course_offerings.start', $future->id))
+            ->assertSessionHasErrors('lifecycle');
+        $this->assertStringContainsString('cannot start before Semester 1 begins on 1 January 2099', session('errors')->first('lifecycle'));
+        $this->assertSame('open', $future->fresh()->status);
+    }
+
+    public function test_completion_is_blocked_by_unresolved_registrations_and_succeeds_once_resolved(): void
+    {
+        Schema::table('course_registrations', function (Blueprint $table): void {
+            $table->unsignedBigInteger('course_offering_id')->nullable();
+            $table->unsignedBigInteger('curriculum_membership_id')->nullable();
+        });
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'COMPLETE-CHECK');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+app(CourseOfferingService::class)->start($a['school'], $offering->id);
+        DB::table('course_registrations')->insert(['student_id' => 1, 'subject_id' => $a['subject'], 'school_id' => $a['school'], 'status' => 'registered', 'course_offering_id' => $offering->id, 'curriculum_membership_id' => $a['member']]);
+
+        $manager = $this->staff(1, ['academic.course_offering.lifecycle']);
+        $this->actingAs($manager)->post(route('admin.course_offerings.complete', $offering->id))
+            ->assertSessionHasErrors('lifecycle');
+        $this->assertStringContainsString('1 student registration still requires confirmation or withdrawal', session('errors')->first('lifecycle'));
+        $this->assertSame('in_progress', $offering->fresh()->status);
+
+        DB::table('course_registrations')->where('course_offering_id', $offering->id)->update(['status' => 'confirmed']);
+        $this->post(route('admin.course_offerings.complete', $offering->id))->assertRedirect();
+        $this->assertSame('completed', $offering->fresh()->status);
+    }
+
+    public function test_unexpected_exception_does_not_expose_raw_message(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'SAFE-MESSAGE');
+        $this->mock(CourseOfferingService::class, function ($mock) use ($a, $offering): void {
+            $mock->shouldReceive('addApplicability')->once()
+                ->andThrow(new \RuntimeException('SQLSTATE[42S02]: Base table or view not found: 1146 secret_internal_table'));
+        });
+        $manager = $this->staff(1, ['academic.course_offering.manage']);
+        $response = $this->actingAs($manager)->post(route('admin.course_offerings.applicability.store', $offering->id), ['curriculum_membership_id' => $a['member']]);
+        $response->assertSessionHasErrors('applicability');
+        $message = session('errors')->first('applicability');
+        $this->assertStringNotContainsString('SQLSTATE', $message);
+        $this->assertStringNotContainsString('secret_internal_table', $message);
+        $this->assertStringContainsString('Something went wrong', $message);
     }
 
     private function insertWorkspaceClass(int $schoolId, int $subjectId, ?int $offeringId, string $title, string $status, bool $published, ?string $scheduledAt = null): int
@@ -989,6 +1357,904 @@ class CourseOfferingAdministrationTest extends TestCase
         Schema::create('course_offerings', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('subject_id'); $t->unsignedBigInteger('academic_year_id'); $t->unsignedBigInteger('academic_period_id'); $t->string('reference',50)->nullable(); $t->string('status',20)->default('draft'); $t->timestamps(); });
         Schema::create('course_offering_curriculum_memberships', function (Blueprint $t): void { $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('course_offering_id'); $t->unsignedBigInteger('curriculum_id'); $t->unsignedBigInteger('curriculum_membership_id'); $t->unsignedBigInteger('subject_id'); $t->timestamps(); $t->primary(['school_id','course_offering_id','curriculum_membership_id']); });
         Schema::create('course_registrations', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('student_id'); $t->unsignedBigInteger('subject_id'); $t->unsignedBigInteger('session_id')->nullable(); $t->unsignedBigInteger('school_id'); $t->string('status'); });
+    }
+
+    // ==================================================== Teaching Team display
+    //
+    // The Course Offering WORKSPACE used to filter the current teaching team with
+    //     status = 'active' AND starts_on <= today AND (ends_on IS NULL OR ends_on >= today)
+    // while the Teaching Team page filtered on status alone. Offering #5's real,
+    // ACTIVE Primary Lecturer was allocated 2026-10-01 to 2027-01-25 while today
+    // was 2026-09-28, so the workspace hid him and rendered
+    // "No lecturers have been assigned yet" even though the allocation existed.
+    // Currency is the allocation's own status; forward-dating is normal because
+    // lecturers are assigned before the term starts.
+
+    /** Widens the tenant's period so allocation dates may sit after today. */
+    private function widenPeriod(array $tenant): void
+    {
+        DB::table('academic_periods')->where('id', $tenant['period'])
+            ->update(['start_date' => '2026-01-01', 'end_date' => '2027-12-31']);
+    }
+
+    private function allocateFor(CourseOffering $offering, User $lecturer, string $status, string $role = 'primary_lecturer', string $startsOn = '2026-10-01', ?string $endsOn = null): void
+    {
+        $id = (int) DB::table('course_offering_lecturer_allocations')->insertGetId([
+            'school_id' => $offering->school_id, 'course_offering_id' => $offering->id, 'user_id' => $lecturer->id,
+            'role' => $role, 'starts_on' => $startsOn, 'ends_on' => $endsOn, 'status' => $status,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        if ($status === 'active') {
+            DB::table('course_offering_lecturer_allocations')->where('id', $id)->update(['status' => 'active']);
+        }
+    }
+
+    public function test_the_workspace_shows_a_forward_dated_active_lecturer(): void
+    {
+        $a = $this->tenants[1];
+        $this->widenPeriod($a);
+        $offering = $this->createOffering($a, 'TEAM-ACTIVE');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        $lecturer = $this->staffForSchool($a['school'], [], ['name' => 'Daniel Okello', 'role_id' => 3]);
+        $this->allocateFor($offering, $lecturer, 'active');
+
+        // Precondition: the allocation really is forward-dated, which is what
+        // the old date window used to hide.
+        $this->assertTrue(
+            \Illuminate\Support\Carbon::parse('2026-10-01')->isFuture(),
+            'the allocation starts after today, as in production Offering #5'
+        );
+
+        $manager = $this->staff(1, ['academic.course_offering.view', 'academic.course_offering.lecturer.view']);
+
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $offering->id))
+            ->assertOk()
+            ->assertSee('Daniel Okello')
+            ->assertSee('Primary Lecturer')
+            ->assertDontSee('No lecturers have been assigned yet.');
+    }
+
+    public function test_a_planned_lecturer_is_visible_but_is_not_the_current_team(): void
+    {
+        $a = $this->tenants[1];
+        $this->widenPeriod($a);
+        $offering = $this->createOffering($a, 'TEAM-PLANNED');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        $lecturer = $this->staffForSchool($a['school'], [], ['name' => 'Planned Lecturer', 'role_id' => 3]);
+        $this->allocateFor($offering, $lecturer, 'planned');
+
+        $manager = $this->staff(1, ['academic.course_offering.view', 'academic.course_offering.lecturer.view']);
+
+        $response = $this->actingAs($manager)->get(route('admin.course_offerings.show', $offering->id))->assertOk();
+        $response->assertSee('Planned Lecturer')->assertSee('Planned');
+        $response->assertViewHas('activeTeachingTeam', fn ($team) => $team->isEmpty());
+        $response->assertViewHas('plannedTeachingTeam', fn ($team) => $team->count() === 1);
+    }
+
+    public function test_ended_and_cancelled_lecturers_are_not_the_current_team(): void
+    {
+        $a = $this->tenants[1];
+        $this->widenPeriod($a);
+        $offering = $this->createOffering($a, 'TEAM-HISTORY');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        $this->allocateFor($offering, $this->staffForSchool($a['school'], [], ['name' => 'Ended Lecturer', 'role_id' => 3]), 'ended', 'primary_lecturer', '2026-02-01', '2026-03-01');
+        $this->allocateFor($offering, $this->staffForSchool($a['school'], [], ['name' => 'Cancelled Lecturer', 'role_id' => 3]), 'cancelled');
+
+        $manager = $this->staff(1, ['academic.course_offering.view', 'academic.course_offering.lecturer.view']);
+
+        $response = $this->actingAs($manager)->get(route('admin.course_offerings.show', $offering->id))->assertOk();
+        $response->assertViewHas('activeTeachingTeam', fn ($team) => $team->isEmpty());
+        $response->assertViewHas('plannedTeachingTeam', fn ($team) => $team->isEmpty());
+        $response->assertDontSee('Ended Lecturer')->assertDontSee('Cancelled Lecturer');
+
+        // History is still available where it belongs.
+        $this->actingAs($manager)->get(route('admin.course_offerings.lecturers.index', $offering->id))
+            ->assertOk()->assertSee('Ended Lecturer')->assertSee('Cancelled Lecturer');
+    }
+
+    public function test_an_active_allocation_whose_end_date_has_passed_is_not_the_current_team(): void
+    {
+        $a = $this->tenants[1];
+        $this->widenPeriod($a);
+        $offering = $this->createOffering($a, 'TEAM-STALE');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        $this->allocateFor($offering, $this->staffForSchool($a['school'], [], ['name' => 'Stale Active Lecturer', 'role_id' => 3]), 'active', 'primary_lecturer', '2026-02-01', '2026-03-01');
+
+        $manager = $this->staff(1, ['academic.course_offering.view', 'academic.course_offering.lecturer.view']);
+
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $offering->id))
+            ->assertOk()
+            ->assertViewHas('activeTeachingTeam', fn ($team) => $team->isEmpty())
+            ->assertDontSee('Stale Active Lecturer');
+    }
+
+    public function test_a_cross_tenant_allocation_is_never_displayed_on_the_workspace(): void
+    {
+        $a = $this->tenants[1];
+        $b = $this->tenants[2];
+        $this->widenPeriod($a);
+        $offering = $this->createOffering($a, 'TEAM-TENANT');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        $foreign = $this->staffForSchool($b['school'], [], ['name' => 'Foreign Tenant Lecturer', 'role_id' => 3]);
+        // An allocation row that names this Offering but belongs to another school.
+        DB::table('course_offering_lecturer_allocations')->insert([
+            'school_id' => $b['school'], 'course_offering_id' => $offering->id, 'user_id' => $foreign->id,
+            'role' => 'primary_lecturer', 'starts_on' => '2026-10-01', 'ends_on' => null, 'status' => 'active',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $manager = $this->staff(1, ['academic.course_offering.view', 'academic.course_offering.lecturer.view']);
+
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $offering->id))
+            ->assertOk()
+            ->assertViewHas('activeTeachingTeam', fn ($team) => $team->isEmpty())
+            ->assertDontSee('Foreign Tenant Lecturer');
+    }
+
+    public function test_a_cancelled_academic_period_cannot_be_started(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'PERIOD-CANCELLED');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+
+        DB::table('academic_periods')->where('id', $a['period'])->update(['status' => 'cancelled']);
+        try {
+            app(CourseOfferingService::class)->start($a['school'], $offering->id);
+            $this->fail('A cancelled Academic Period must not be startable.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('Academic Period has been cancelled', $exception->getMessage());
+        }
+        $this->assertSame('open', $offering->fresh()->status, 'a refused start changes nothing');
+    }
+
+    // ==================================================== Governed early start
+    //
+    // The normal Open -> In Progress rule is untouched and still refuses a start
+    // before the Academic Period begins. This task adds a separate, explicit,
+    // audited administrator action for the case the institution needs to run
+    // delivery early. It changes ONLY the Offering's own status: the Academic
+    // Period, Study Plan, Programme Cohort, Academic Placement, student
+    // registrations and lecturer allocation dates are all left untouched.
+
+    /** Puts the tenant's period in the future so the normal start is refused. */
+    private function futurePeriod(array $tenant, string $label = 'Semester 1'): void
+    {
+        DB::table('academic_periods')->where('id', $tenant['period'])->update([
+            'start_date' => now()->addMonth()->startOfMonth()->toDateString(),
+            'end_date' => now()->addMonths(6)->endOfMonth()->toDateString(),
+            'status' => 'active',
+        ]);
+    }
+
+    /** An OPEN Offering whose Academic Period has not yet begun. */
+    private function openAwaitingPeriod(array $tenant, string $reference): CourseOffering
+    {
+        $this->futurePeriod($tenant);
+        $offering = $this->createOffering($tenant, $reference);
+        $this->attach($tenant, $offering, $tenant['member']);
+        app(CourseOfferingService::class)->open($tenant['school'], $offering->id);
+
+        return $offering->fresh();
+    }
+
+    private function manager(array $tenant): User
+    {
+        return $this->staff($tenant['school'], ['academic.course_offering.view', 'academic.course_offering.manage', 'academic.course_offering.lifecycle']);
+    }
+
+    // 1. The normal start path still refuses an early start.
+    public function test_normal_start_still_refuses_an_early_start(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-NORMAL-REFUSED');
+
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start', $offering->id))
+            ->assertSessionHasErrors('lifecycle')
+            ->assertRedirect();
+
+        $this->assertSame('open', $offering->fresh()->status, 'a refused normal start changes nothing');
+    }
+
+    // 2. The governed early-start action succeeds with a reason.
+    public function test_authorised_early_start_succeeds_with_a_reason(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-OK');
+
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start_early', $offering->id), [
+                'reason' => 'Pre-semester end-to-end academic delivery testing.',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        // 13. The Offering becomes In Progress.
+        $this->assertSame('in_progress', $offering->fresh()->status);
+    }
+
+    // 3. A blank reason is refused.
+    public function test_early_start_requires_a_nonblank_reason(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-BLANK-REASON');
+        $service = app(CourseOfferingService::class);
+
+        foreach (['', '   '] as $blank) {
+            try {
+                $service->startEarly($a['school'], $offering->id, $blank);
+                $this->fail('A blank early-start reason must be refused.');
+            } catch (\DomainException $exception) {
+                $this->assertStringContainsString('nonblank reason is required', $exception->getMessage());
+            }
+        }
+
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start_early', $offering->id), ['reason' => ''])
+            ->assertSessionHasErrors('reason');
+
+        $this->assertSame('open', $offering->fresh()->status, 'a refused early start changes nothing');
+    }
+
+    // 4. An unauthorised user is refused.
+    public function test_unauthorised_user_cannot_start_early(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-UNAUTHORISED');
+
+        // A staff member with view only: no lifecycle permission.
+        $viewer = $this->staff($a['school'], ['academic.course_offering.view']);
+        $this->actingAs($viewer)
+            ->post(route('admin.course_offerings.start_early', $offering->id), ['reason' => 'Unauthorised attempt'])
+            ->assertForbidden();
+
+        // A staff member with no permissions at all.
+        $this->actingAs($this->staff($a['school'], []))
+            ->post(route('admin.course_offerings.start_early', $offering->id), ['reason' => 'Unauthorised attempt'])
+            ->assertForbidden();
+
+        $this->assertSame('open', $offering->fresh()->status, 'the Offering is untouched');
+    }
+
+    // 5. A cross-tenant Offering is refused.
+    public function test_cross_tenant_early_start_is_refused(): void
+    {
+        $a = $this->tenants[1];
+        $b = $this->tenants[2];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-CROSS-TENANT');
+
+        $this->actingAs($this->manager($b))
+            ->post(route('admin.course_offerings.start_early', $offering->id), ['reason' => 'Wrong tenant'])
+            ->assertNotFound();
+
+        // The service refuses it too, even with the right identifier.
+        try {
+            app(CourseOfferingService::class)->startEarly($b['school'], $offering->id, 'Wrong tenant');
+            $this->fail('Another tenant must not be able to start this Offering early.');
+        } catch (\Throwable $exception) {
+            $this->assertNotSame('', trim($exception->getMessage()));
+        }
+
+        $this->assertSame('open', $offering->fresh()->status);
+    }
+
+    // 6. A cancelled Academic Period is refused.
+    public function test_cancelled_academic_period_cannot_be_started_early(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-CANCELLED-PERIOD');
+        DB::table('academic_periods')->where('id', $a['period'])->update(['status' => 'cancelled']);
+
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start_early', $offering->id), ['reason' => 'Testing'])
+            ->assertSessionHasErrors('lifecycle');
+
+        $this->assertSame('open', $offering->fresh()->status, 'a cancelled period cannot be overridden');
+    }
+
+    // 7. Draft cannot use early start.
+    public function test_draft_cannot_use_early_start(): void
+    {
+        $a = $this->tenants[1];
+        $this->futurePeriod($a);
+        $draft = $this->createOffering($a, 'EARLY-DRAFT');
+
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start_early', $draft->id), ['reason' => 'Testing'])
+            ->assertSessionHasErrors('lifecycle');
+
+        $this->assertSame('draft', $draft->fresh()->status, 'an early start is not an Open action');
+    }
+
+    // 8. In Progress cannot use early start again.
+    public function test_in_progress_cannot_use_early_start_again(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-REPEAT');
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start_early', $offering->id), ['reason' => 'First early start'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('in_progress', $offering->fresh()->status);
+
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start_early', $offering->id), ['reason' => 'Second early start'])
+            ->assertSessionHasErrors('lifecycle');
+
+        $this->assertSame('in_progress', $offering->fresh()->status, 'the transition is not repeated');
+    }
+
+    // 9. Completed and Cancelled cannot use early start.
+    public function test_completed_and_cancelled_cannot_use_early_start(): void
+    {
+        $a = $this->tenants[1];
+
+        $cancelled = $this->openAwaitingPeriod($a, 'EARLY-CANCELLED-OFFERING');
+        app(CourseOfferingService::class)->cancel($a['school'], $cancelled->id, 'Withdrawn');
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start_early', $cancelled->id), ['reason' => 'Testing'])
+            ->assertSessionHasErrors('lifecycle');
+        $this->assertSame('cancelled', $cancelled->fresh()->status, 'cancelled stays terminal');
+
+        $completed = $this->openAwaitingPeriod($a, 'EARLY-COMPLETED-OFFERING');
+        $service = app(CourseOfferingService::class);
+        $service->startEarly($a['school'], $completed->id, 'Testing');
+        // Completion is a separate governed rule and still requires the Academic
+        // Period to have begun; advance the period to satisfy it.
+        DB::table('academic_periods')->where('id', $a['period'])
+            ->update(['start_date' => now()->subDay()->toDateString()]);
+        DB::table('course_offering_lecturer_allocations')
+            ->where('course_offering_id', $completed->id)->whereIn('status', ['planned', 'active'])
+            ->update(['status' => 'ended', 'ends_on' => now()->toDateString()]);
+        $service->complete($a['school'], $completed->id);
+        $this->assertSame('completed', $completed->fresh()->status);
+
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start_early', $completed->id), ['reason' => 'Testing'])
+            ->assertSessionHasErrors('lifecycle');
+        $this->assertSame('completed', $completed->fresh()->status, 'completed stays terminal');
+    }
+
+    // 10, 11, 12, 14. Nothing but the Offering status may change, and the
+    // reason plus both dates must be recorded.
+    public function test_early_start_changes_nothing_but_the_status_and_is_fully_audited(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-NO-SIDE-EFFECTS');
+
+        $periodBefore = DB::table('academic_periods')->where('id', $a['period'])->first();
+        $lecturer = $this->staffForSchool($a['school'], [], ['name' => 'Daniel Okello', 'role_id' => 3]);
+        $this->allocateFor($offering, $lecturer, 'active', 'primary_lecturer', '2026-10-01', '2027-01-25');
+        $allocationBefore = DB::table('course_offering_lecturer_allocations')
+            ->where('course_offering_id', $offering->id)->first();
+        $registrationsBefore = DB::table('course_registrations')->where('school_id', $a['school'])->get();
+        $applicabilityBefore = DB::table('course_offering_curriculum_memberships')
+            ->where('course_offering_id', $offering->id)->get();
+
+        $reason = 'Pre-semester end-to-end academic delivery testing.';
+        $admin = $this->manager($a);
+        $this->actingAs($admin)
+            ->post(route('admin.course_offerings.start_early', $offering->id), ['reason' => $reason])
+            ->assertSessionHasNoErrors();
+
+        // 13. Offering becomes In Progress.
+        $this->assertSame('in_progress', $offering->fresh()->status);
+
+        // 10. Academic Period dates unchanged.
+        $periodAfter = DB::table('academic_periods')->where('id', $a['period'])->first();
+        $this->assertEquals($periodBefore->start_date, $periodAfter->start_date, 'period start date unchanged');
+        $this->assertEquals($periodBefore->end_date, $periodAfter->end_date, 'period end date unchanged');
+        $this->assertEquals($periodBefore->status, $periodAfter->status, 'period status unchanged');
+
+        // 11. Lecturer allocation dates unchanged, and no duplicate created.
+        $allocationsAfter = DB::table('course_offering_lecturer_allocations')
+            ->where('course_offering_id', $offering->id)->get();
+        $this->assertCount(1, $allocationsAfter, 'no duplicate allocation');
+        $this->assertEquals($allocationBefore->starts_on, $allocationsAfter[0]->starts_on, 'allocation start unchanged');
+        $this->assertEquals($allocationBefore->ends_on, $allocationsAfter[0]->ends_on, 'allocation end unchanged');
+        $this->assertEquals('active', $allocationsAfter[0]->status, 'allocation status unchanged');
+
+        // 12. Registrations unchanged: none added, none dropped.
+        $registrationsAfter = DB::table('course_registrations')->where('school_id', $a['school'])->get();
+        $this->assertCount($registrationsBefore->count(), $registrationsAfter, 'no registration created or removed');
+
+        // Study Plan applicability untouched.
+        $applicabilityAfter = DB::table('course_offering_curriculum_memberships')
+            ->where('course_offering_id', $offering->id)->get();
+        $this->assertCount($applicabilityBefore->count(), $applicabilityAfter, 'Study Plan applicability unchanged');
+
+        // 14. The audit event records the reason, the administrator, and both dates.
+        $audit = \App\Models\AuditLog::where('action', 'COURSE_OFFERING_EARLY_START')
+            ->where('record_id', $offering->id)->latest('id')->first();
+        $this->assertNotNull($audit, 'an explicit early-start audit event is written');
+        $values = is_array($audit->new_values) ? $audit->new_values : json_decode((string) $audit->new_values, true);
+        $this->assertSame($reason, $values['reason'], 'the reason is recorded');
+        $this->assertSame($offering->id, $values['offering_id'], 'the Offering id is recorded');
+        $this->assertSame($offering->reference, $values['offering_reference'], 'the reference is recorded');
+        $this->assertSame((string) $periodBefore->start_date, (string) $values['academic_period_start_date'], 'the original period start date is recorded');
+        $this->assertSame(now()->toDateString(), $values['early_start_date'], 'the actual early-start date is recorded');
+        $this->assertSame($admin->id, (int) $values['administrator_user_id'], 'the administrator is recorded');
+        $this->assertTrue($values['started_early']);
+    }
+
+    // 15. Normal start on/after the period start is unchanged.
+    public function test_normal_start_still_works_on_or_after_the_period_start(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->createOffering($a, 'EARLY-NORMAL-OK');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        // Period already under way.
+        DB::table('academic_periods')->where('id', $a['period'])->update([
+            'start_date' => now()->subDay()->toDateString(), 'status' => 'active',
+        ]);
+
+        $this->actingAs($this->manager($a))
+            ->post(route('admin.course_offerings.start', $offering->id))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('in_progress', $offering->fresh()->status);
+    }
+
+    // The early-start control appears only when it is actually available.
+    public function test_early_start_control_is_shown_only_when_the_period_has_not_begun(): void
+    {
+        $a = $this->tenants[1];
+        $earlyWindow = $this->openAwaitingPeriod($a, 'EARLY-UI-EARLY');
+        $alreadyBegun = $this->createOffering($a, 'EARLY-UI-BEGUN');
+        $this->attach($a, $alreadyBegun, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $alreadyBegun->id);
+
+        $manager = $this->manager($a);
+
+        // Period has NOT begun: the early control is offered, normal start is not.
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $earlyWindow->id))
+            ->assertOk()
+            ->assertSee('>Start Course Offering Early</button>', false)
+            ->assertDontSee('>Start Course Offering</button>', false)
+            ->assertViewHas('canStartEarly', true)
+            ->assertViewHas('earlyStartBlockers', []);
+
+        // A viewer without the lifecycle permission is offered neither.
+        $this->actingAs($this->staff($a['school'], ['academic.course_offering.view']))
+            ->get(route('admin.course_offerings.show', $earlyWindow->id))
+            ->assertOk()
+            ->assertDontSee('>Start Course Offering Early</button>', false)
+            ->assertViewHas('canStartEarly', false);
+
+        // Period has begun: the normal control is offered, early start is not.
+        DB::table('academic_periods')->where('id', $a['period'])
+            ->update(['start_date' => now()->subDay()->toDateString()]);
+        $this->actingAs($manager)->get(route('admin.course_offerings.show', $alreadyBegun->id))
+            ->assertOk()
+            ->assertSee('>Start Course Offering</button>', false)
+            ->assertDontSee('>Start Course Offering Early</button>', false)
+            ->assertViewHas('canStartEarly', false);
+    }
+
+    // OPEN is preparation + registration, not a block on preparation.
+    public function test_open_state_is_described_as_preparation_and_registration(): void
+    {
+        $a = $this->tenants[1];
+        $offering = $this->openAwaitingPeriod($a, 'EARLY-OPEN-SEMANTICS');
+
+        $this->actingAs($this->manager($a))
+            ->get(route('admin.course_offerings.show', $offering->id))
+            ->assertOk()
+            ->assertSee('Preparation and student registration are open')
+            ->assertSee('may prepare academic delivery');
+    }
+
+    // ==================================================== System Tester (staff)
+    //
+    // system.testing.prestart_lecturer is an ADDITIONAL capability, never a role.
+    // It relaxes exactly ONE condition: today being before the allocation's
+    // agreed start date, on a Course Offering that was deliberately early-started
+    // through the governed workflow. Every other authorization condition - tenant,
+    // Lecturer identity, allocation existence, allocation status, Offering
+    // lifecycle, account status - is still enforced, and no date is ever written.
+
+    /**
+     * An IN_PROGRESS Offering whose Academic Period has not begun, with an ACTIVE
+     * allocation that starts in the future — the exact situation testing must
+     * cover. When $earlyStarted is false the Offering was started the normal way,
+     * so no COURSE_OFFERING_EARLY_START evidence exists.
+     */
+    private function preStartScenario(array $tenant, string $reference, bool $earlyStarted, User $lecturer): CourseOffering
+    {
+        $this->futurePeriod($tenant);
+        $offering = $this->createOffering($tenant, $reference);
+        $this->attach($tenant, $offering, $tenant['member']);
+        $service = app(CourseOfferingService::class);
+        $service->open($tenant['school'], $offering->id);
+
+        if ($earlyStarted) {
+            $service->startEarly($tenant['school'], $offering->id, 'Pre-semester end-to-end academic delivery testing.');
+        } else {
+            // Reached in progress the ordinary way: put the period in the past first.
+            DB::table('academic_periods')->where('id', $tenant['period'])
+                ->update(['start_date' => now()->subDay()->toDateString()]);
+            $service->start($tenant['school'], $offering->id);
+            // Then move the period back so the allocation is genuinely pre-start.
+            DB::table('academic_periods')->where('id', $tenant['period'])
+                ->update(['start_date' => now()->addMonth()->startOfMonth()->toDateString()]);
+        }
+
+        $this->allocateFor($offering, $lecturer, 'active', 'primary_lecturer', '2026-10-01', '2027-01-25');
+
+        return $offering->fresh();
+    }
+
+    private function tester(array $tenant, array $extra = []): User
+    {
+        return $this->staffForSchool($tenant['school'], [\App\Support\CourseOffering\SystemTesterAccess::PERMISSION], $extra);
+    }
+
+    // The lecturer-allocation audit carries COURSE_OFFERING_LECTURER_ALLOCATION
+    // (35 chars) - the identifier that was failing in the live database with
+    // "Data too long for column 'event_type'". The allocation transaction and its
+    // audit must commit together. Allocation business rules are untouched here.
+    public function test_a_lecturer_allocation_and_its_audit_commit_together(): void
+    {
+        $a = $this->tenants[1];
+        $this->widenPeriod($a);
+        $offering = $this->createOffering($a, 'ALLOCATION-AUDIT');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        $lecturer = $this->staffForSchool($a['school'], [], ['name' => 'Audited Lecturer', 'role_id' => 3]);
+
+        $this->actingAs($this->staffForSchool($a['school'], [
+            'academic.course_offering.view',
+            'academic.course_offering.lecturer.view',
+            'academic.course_offering.lecturer.manage',
+        ], ['name' => 'Allocation Manager', 'role_id' => 2]))
+            ->post(route('admin.course_offerings.lecturers.store', $offering->id), [
+                'user_id' => $lecturer->id,
+                'role' => 'primary_lecturer',
+                'starts_on' => now()->addDay()->toDateString(),
+                'ends_on' => now()->addMonths(3)->toDateString(),
+            ])->assertSessionHasNoErrors();
+
+        $allocation = DB::table('course_offering_lecturer_allocations')
+            ->where('course_offering_id', $offering->id)
+            ->where('user_id', $lecturer->id)->first();
+        $this->assertNotNull($allocation, 'the allocation committed');
+
+        $audit = \App\Models\AuditLog::where('action', 'COURSE_OFFERING_LECTURER_ALLOCATION_CREATED')
+            ->where('record_id', $allocation->id)->latest('id')->first();
+
+        $this->assertNotNull($audit, 'the audit committed with the allocation');
+        $this->assertSame('COURSE_OFFERING_LECTURER_ALLOCATION', $audit->event_type,
+            'the full 35-character event_type is stored, not truncated');
+        $this->assertSame(35, strlen((string) $audit->event_type));
+    }
+
+    /** A published Live Class for this Offering, used by the tester/Live Class tests. */
+    private function liveClass(CourseOffering $offering, string $title): \App\Models\LiveClass
+    {
+        $id = DB::table('live_classes')->insertGetId([
+            'school_id' => $offering->school_id, 'subject_id' => $offering->subject_id,
+            'course_offering_id' => $offering->id, 'teacher_id' => null, 'title' => $title,
+            'status' => 'scheduled', 'is_published' => true,
+            'scheduled_at' => now()->addDay(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return \App\Models\LiveClass::find($id);
+    }
+
+    // 1. A normal lecturer with a future allocation stays read-only.
+    public function test_normal_lecturer_with_a_future_allocation_remains_read_only(): void
+    {
+        $a = $this->tenants[1];
+        $lecturer = $this->staffForSchool($a['school'], [], ['name' => 'Normal Lecturer']);
+        $offering = $this->preStartScenario($a, 'TESTER-NORMAL', true, $lecturer);
+
+        $this->actingAs($lecturer)
+            ->get(route('teacher.course_offerings.show', $offering->id))
+            ->assertOk()
+            ->assertSee('Your teaching allocation is not currently in force.')
+            ->assertDontSee('Testing access active');
+
+        $this->assertFalse(
+            app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)
+                ->resolveForLecturer($lecturer, $offering->id)
+                ->getAttribute('my_allocation_is_current')
+        );
+    }
+
+    // 4. A tester lecturer on a governed early-started Offering is writable.
+    public function test_tester_lecturer_gets_a_writable_workspace_on_an_early_started_offering(): void
+    {
+        $a = $this->tenants[1];
+        $lecturer = $this->tester($a, ['name' => 'Daniel Okello']);
+        $offering = $this->preStartScenario($a, 'TESTER-OK', true, $lecturer);
+
+        $this->assertTrue(
+            app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)
+                ->teachingActionsAllowed(
+                    app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)
+                        ->resolveForLecturer($lecturer, $offering->id)
+                ),
+            'an authorised tester may act on a governed early-started Offering'
+        );
+
+        $this->actingAs($lecturer)
+            ->get(route('teacher.course_offerings.show', $offering->id))
+            ->assertOk()
+            ->assertSee('Testing access active')
+            ->assertSee('pre-start access has been granted for authorised system testing')
+            ->assertDontSee('Your teaching allocation is not currently in force.');
+    }
+
+    // 2. The permission alone cannot bypass a non-early-started Offering.
+    public function test_tester_lecturer_is_blocked_when_the_offering_was_not_early_started(): void
+    {
+        $a = $this->tenants[1];
+        $lecturer = $this->tester($a, ['name' => 'Tester No Early Start']);
+        $offering = $this->preStartScenario($a, 'TESTER-NO-EARLY', false, $lecturer);
+
+        $this->assertFalse(
+            app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)
+                ->resolveForLecturer($lecturer, $offering->id)
+                ->getAttribute('my_allocation_is_current'),
+            'the permission alone must not unlock a normally-started Offering'
+        );
+    }
+
+    // 3. The permission alone cannot bypass the Offering lifecycle.
+    public function test_tester_lecturer_is_blocked_when_the_offering_is_only_open(): void
+    {
+        $a = $this->tenants[1];
+        $this->futurePeriod($a);
+        $offering = $this->createOffering($a, 'TESTER-ONLY-OPEN');
+        $this->attach($a, $offering, $a['member']);
+        app(CourseOfferingService::class)->open($a['school'], $offering->id);
+        $lecturer = $this->tester($a, ['name' => 'Tester Open Only']);
+        $this->allocateFor($offering, $lecturer, 'active', 'primary_lecturer', '2026-10-01', '2027-01-25');
+
+        $this->assertFalse(
+            app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)
+                ->resolveForLecturer($lecturer, $offering->id)
+                ->getAttribute('my_allocation_is_current'),
+            'an Open Offering is never unlocked by the permission'
+        );
+    }
+
+    // 4b / 10. The permission alone cannot bypass allocation existence or a
+    // different Offering, and a cross-tenant lecturer is refused.
+    public function test_tester_lecturer_needs_an_allocation_for_the_exact_offering_and_tenant(): void
+    {
+        $a = $this->tenants[1];
+        $b = $this->tenants[2];
+        $other = $this->staffForSchool($a['school'], [], ['name' => 'Unallocated Tester']);
+        $allocated = $this->staffForSchool($a['school'], [], ['name' => 'Allocated Tester']);
+        $foreign = $this->tester($b, ['name' => 'Foreign Tenant Tester']);
+        $offering = $this->preStartScenario($a, 'TESTER-EXACT', true, $allocated);
+
+        $access = app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class);
+
+        // No allocation at all.
+        $this->assertNull(
+            $access->resolveForLecturer($other, $offering->id),
+            'a tester with no allocation reaches nothing'
+        );
+
+        // Allocation exists, but for another Offering in the same tenant.
+        $this->preStartScenario($a, 'TESTER-UNRELATED', true, $this->tester($a, ['name' => 'Tester Other Offering']));
+        $this->assertNull(
+            $access->resolveForLecturer($foreign, $offering->id),
+            'a cross-tenant tester reaches nothing'
+        );
+    }
+
+    // 8, 9. Cancelled and ended allocations stay blocked even for a tester.
+    public function test_cancelled_and_ended_allocations_stay_blocked_for_a_tester(): void
+    {
+        $a = $this->tenants[1];
+        $access = app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class);
+
+        foreach (['cancelled' => 'TESTER-CANCELLED', 'ended' => 'TESTER-ENDED'] as $status => $reference) {
+            $lecturer = $this->tester($a, ['name' => 'Tester '.ucfirst($status)]);
+            $offering = $this->preStartScenario($a, $reference, true, $lecturer);
+            DB::table('course_offering_lecturer_allocations')
+                ->where('course_offering_id', $offering->id)
+                ->update(['status' => $status, 'ends_on' => $status === 'ended' ? '2026-10-15' : null]);
+
+            $resolved = $access->resolveForLecturer($lecturer->fresh(), $offering->id);
+            $this->assertTrue(
+                $resolved === null || ! $resolved->getAttribute('my_allocation_is_current'),
+                "a {$status} allocation is never unlocked by testing access"
+            );
+        }
+    }
+
+    // 12. A suspended or disabled lecturer is still refused.
+    public function test_suspended_or_disabled_lecturer_is_still_blocked(): void
+    {
+        $a = $this->tenants[1];
+
+        foreach (['suspended' => 'staff_status', 'disable' => 'account_status'] as $value => $field) {
+            $lecturer = $this->tester($a, ['name' => 'Tester '.ucfirst($value), $field => $value]);
+            $offering = $this->preStartScenario($a, 'TESTER-'.$field, true, $lecturer);
+
+            $resolved = app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)
+                ->resolveForLecturer($lecturer->fresh(), $offering->id);
+            $this->assertTrue(
+                $resolved === null || ! $resolved->getAttribute('my_allocation_is_current'),
+                "a lecturer with {$field}={$value} is refused"
+            );
+        }
+    }
+
+    // 5, 6, 7, 8/registrations. Nothing is written by the tester capability.
+    public function test_testing_access_writes_no_dates_period_or_registrations(): void
+    {
+        $a = $this->tenants[1];
+        $lecturer = $this->tester($a, ['name' => 'Daniel Okello']);
+        $offering = $this->preStartScenario($a, 'TESTER-NO-WRITES', true, $lecturer);
+
+        $periodBefore = DB::table('academic_periods')->where('id', $a['period'])->first();
+        $allocationBefore = DB::table('course_offering_lecturer_allocations')
+            ->where('course_offering_id', $offering->id)->first();
+        $registrationsBefore = DB::table('course_registrations')->where('school_id', $a['school'])->get()->count();
+        $offeringBefore = DB::table('course_offerings')->where('id', $offering->id)->first();
+
+        $this->actingAs($lecturer)->get(route('teacher.course_offerings.show', $offering->id))->assertOk();
+        app(\App\Support\LiveClasses\LiveClassAccessService::class)
+            ->activeManagerAllocationsForOffering($offering->fresh(), now());
+
+        $this->assertEquals($allocationBefore->starts_on, DB::table('course_offering_lecturer_allocations')
+            ->where('id', $allocationBefore->id)->value('starts_on'), 'starts_on unchanged');
+        $this->assertEquals($allocationBefore->ends_on, DB::table('course_offering_lecturer_allocations')
+            ->where('id', $allocationBefore->id)->value('ends_on'), 'ends_on unchanged');
+        $this->assertEquals($periodBefore->start_date, DB::table('academic_periods')
+            ->where('id', $a['period'])->value('start_date'), 'Academic Period start unchanged');
+        $this->assertEquals($periodBefore->end_date, DB::table('academic_periods')
+            ->where('id', $a['period'])->value('end_date'), 'Academic Period end unchanged');
+        $this->assertEquals($registrationsBefore, DB::table('course_registrations')
+            ->where('school_id', $a['school'])->get()->count(), 'registrations unchanged');
+        $this->assertEquals($offeringBefore->status, DB::table('course_offerings')
+            ->where('id', $offering->id)->value('status'), 'Offering status unchanged');
+        $this->assertCount(1, DB::table('course_offering_lecturer_allocations')
+            ->where('course_offering_id', $offering->id)->get(), 'no duplicate allocation');
+    }
+
+    // 13. Revoking the permission immediately restores the normal date gate.
+    public function test_removing_the_permission_restores_the_normal_date_gate(): void
+    {
+        $a = $this->tenants[1];
+        $lecturer = $this->tester($a, ['name' => 'Revocable Tester']);
+        $offering = $this->preStartScenario($a, 'TESTER-REVOKE', true, $lecturer);
+        $access = app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class);
+
+        $this->assertTrue(
+            $access->resolveForLecturer($lecturer, $offering->id)->getAttribute('my_allocation_is_current'),
+            'testing access works while the grant exists'
+        );
+
+        DB::table('user_permissions')->where('user_id', $lecturer->id)
+            ->where('permission', \App\Support\CourseOffering\SystemTesterAccess::PERMISSION)->delete();
+
+        $this->assertFalse(
+            $access->resolveForLecturer($lecturer->fresh(), $offering->id)->getAttribute('my_allocation_is_current'),
+            'removing the grant restores the normal pre-start restriction immediately'
+        );
+    }
+
+    // 14. Live Classes use the same narrow exception.
+    public function test_live_class_authorization_uses_the_same_narrow_tester_rule(): void
+    {
+        $a = $this->tenants[1];
+        $lecturer = $this->tester($a, ['name' => 'Live Class Tester']);
+        $offering = $this->preStartScenario($a, 'TESTER-LIVE', true, $lecturer);
+        $live = $this->liveClass($offering, 'Pre-semester rehearsal');
+
+        $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+        $managers = $access->activeManagerAllocationsForOffering($offering->fresh(), now());
+        $this->assertCount(1, $managers, 'the tester appears as a facilitator under the same rule');
+
+        // Without the grant the same Live Class rules refuse.
+        DB::table('user_permissions')->where('user_id', $lecturer->id)
+            ->where('permission', \App\Support\CourseOffering\SystemTesterAccess::PERMISSION)->delete();
+        $this->assertCount(0, $access->activeManagerAllocationsForOffering($offering->fresh(), now()),
+            'revoking the grant removes Live Class facilitation immediately');
+    }
+
+    // 21, 22, 24, 25. RBAC surface, primary role preservation, audited grant/revoke.
+    public function test_permission_is_assignable_removable_audited_and_preserves_the_primary_role(): void
+    {
+        $a = $this->tenants[1];
+        $permission = \App\Support\CourseOffering\SystemTesterAccess::PERMISSION;
+        // RBAC administration is reserved for a School Admin, as the existing
+        // Roles & Permissions tests already establish.
+        $admin = User::factory()->create([
+            'name' => 'RBAC Admin', 'role_id' => 2, 'school_id' => $a['school'], 'account_status' => 'active',
+        ]);
+        $lecturer = $this->staffForSchool($a['school'], [], ['name' => 'Daniel Okello']);
+
+        // 21. Visible in the Roles & Permissions UI.
+        $this->actingAs($admin)
+            ->get(route('admin.rbac.staff.show', $lecturer->id))
+            ->assertOk()
+            ->assertSee($permission);
+
+        // 22. Assignable by an authorised administrator, and audited. The
+        // permission is sensitive, so the existing UI requires the deliberate
+        // acknowledgement before it will be granted.
+        $this->actingAs($admin)
+            ->from(route('admin.rbac.staff.show', $lecturer->id))
+            ->post(route('admin.rbac.staff.permissions.grant', $lecturer->id), ['permissions' => [$permission]])
+            ->assertSessionHas('error');
+        $this->assertDatabaseMissing('user_permissions', ['user_id' => $lecturer->id, 'permission' => $permission]);
+        $this->assertTrue(true, 'a sensitive permission is never granted without acknowledgement');
+
+        $this->actingAs($admin)
+            ->from(route('admin.rbac.staff.show', $lecturer->id))
+            ->post(route('admin.rbac.staff.permissions.grant', $lecturer->id), [
+                'permissions' => [$permission], 'acknowledge_sensitive' => 1,
+            ])
+            ->assertRedirect();
+        $this->assertDatabaseHas('user_permissions', ['user_id' => $lecturer->id, 'permission' => $permission]);
+        $this->assertNotNull(\App\Models\AuditLog::where('module', 'RBAC')
+            ->where('new_values', 'like', '%'.$permission.'%')->latest('id')->first(), 'the grant is audited');
+
+        // 24. The primary role is untouched: still a Lecturer.
+        $this->assertSame(3, (int) $lecturer->fresh()->role_id, 'users.role_id is unchanged');
+        $this->assertSame('Daniel Okello', $lecturer->fresh()->name, 'the account keeps its identity');
+
+        // 25. Removable, audited, and effective immediately.
+        $this->actingAs($admin)
+            ->delete(route('admin.rbac.staff.permissions.revoke', [$lecturer->id, $permission]))
+            ->assertRedirect();
+        $this->assertDatabaseMissing('user_permissions', ['user_id' => $lecturer->id, 'permission' => $permission]);
+        $this->assertNotNull(\App\Models\AuditLog::where('module', 'RBAC')
+            ->where('action', 'like', '%REVOKE%')->latest('id')->first(), 'the removal is audited');
+        $this->assertSame(3, (int) $lecturer->fresh()->role_id, 'users.role_id is still unchanged');
+    }
+
+    // 23. An unauthorised user cannot assign it.
+    public function test_unauthorised_user_cannot_assign_the_testing_permission(): void
+    {
+        $a = $this->tenants[1];
+        $permission = \App\Support\CourseOffering\SystemTesterAccess::PERMISSION;
+        $lecturer = $this->staffForSchool($a['school'], [], ['name' => 'Target Lecturer']);
+        $intruder = $this->staffForSchool($a['school'], ['academic.course_offering.view']);
+
+        $this->actingAs($intruder)
+            ->post(route('admin.rbac.staff.permissions.grant', $lecturer->id), [
+                'permissions' => [$permission], 'acknowledge_sensitive' => 1,
+            ])
+            ->assertForbidden();
+        $this->assertDatabaseMissing('user_permissions', ['user_id' => $lecturer->id, 'permission' => $permission]);
+    }
+
+    // Students are untouched: role 7 can never hold the staff testing permission,
+    // and a confirmed registration remains the only thing that opens an Offering.
+    public function test_students_never_receive_the_staff_testing_permission(): void
+    {
+        $permission = \App\Support\CourseOffering\SystemTesterAccess::PERMISSION;
+        $student = User::factory()->create([
+            'name' => 'Test Student', 'role_id' => 7,
+            'school_id' => $this->tenants[1]['school'], 'account_status' => 'active',
+        ]);
+
+        // A row may physically exist, but it must grant the Student nothing.
+        DB::table('user_permissions')->insert([
+            'school_id' => $student->school_id, 'user_id' => $student->id,
+            'permission' => $permission, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->assertFalse(
+            app(\App\Support\Permissions\PermissionService::class)->allows($student->fresh(), $permission),
+            'the non-staff RBAC boundary is unchanged: a Student holds no staff permission'
+        );
+        $this->assertSame([], app(\App\Support\Permissions\PermissionService::class)
+            ->grantedPermissions($student->fresh()), 'no grants are read for a Student');
     }
 
     private function tenant(int $schoolId, string $type): array
@@ -1034,6 +2300,7 @@ class CourseOfferingAdministrationTest extends TestCase
     {
         app(CourseOfferingService::class)->addApplicability($tenant['school'],$offering->id,$membership);
     }
+
 
     private function draftPayload(array $tenant, string $reference = ''): array
     {

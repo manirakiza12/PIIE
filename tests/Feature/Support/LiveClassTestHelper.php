@@ -139,7 +139,14 @@ trait LiveClassTestHelper
             $table->string('recording_url', 500)->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
-            $table->timestamps();
+            $table->dateTime('started_at')->nullable();
+                $table->dateTime('ended_at')->nullable();
+                $table->dateTime('cancelled_at')->nullable();
+                $table->unsignedBigInteger('started_by')->nullable();
+                $table->unsignedBigInteger('ended_by')->nullable();
+                $table->unsignedBigInteger('cancelled_by')->nullable();
+                $table->string('recording_status', 20)->default('none');
+$table->timestamps();
         });
 
         Schema::create('live_class_attendances', function (Blueprint $table) {

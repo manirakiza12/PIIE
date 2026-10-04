@@ -11,14 +11,14 @@
 </div>
 
 <div class="eSection-wrap">
-    <p><strong>{{ get_phrase('Instructions') }}:</strong> {{ $exam->instructions ?: '—' }}</p>
+    <p class="piie-prose"><strong>{{ get_phrase('Instructions') }}:</strong> {!! $exam->proseInstructions() ?: '—' !!}</p>
     <p><strong>{{ get_phrase('Duration') }}:</strong> {{ $exam->duration_mins }} {{ get_phrase('minutes') }}</p>
     <hr>
 
     @foreach($questions as $index => $q)
         <div class="card mb-2">
             <div class="card-body">
-                <div><strong>{{ $index + 1 }}.</strong> {{ $q->question }}</div>
+                <div class="piie-prose"><strong>{{ $index + 1 }}.</strong> {!! $q->prosePrompt() !!}</div>
                 <div class="small text-muted">{{ strtoupper($q->type) }} | {{ $q->marks }} {{ get_phrase('marks') }}</div>
                 @if($q->type === 'mcq')
                     <ul class="mb-0">

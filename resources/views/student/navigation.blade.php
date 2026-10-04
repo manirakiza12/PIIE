@@ -26,8 +26,13 @@
     <!-- Select2 css -->
     <link rel="stylesheet" href="{{ asset('assets/css/select2.min.css') }}" />
 
-    <link rel="stylesheet" type="text/css"
-        href="{{ asset('assets/vendors/bootstrap-icons-1.8.1/bootstrap-icons.css') }}" />
+    <link rel="stylesheet" href="{{ asset('assets/vendors/bootstrap-icons-1.8.1/bootstrap-icons.css') }}" />
+
+    <!-- The responsive course-card grid on My Courses. Loaded here, next to the
+         other student stylesheets, so the card rules are cached with the rest of
+         the shell instead of arriving after first paint. Scoped entirely to .sc-*
+         classes, so nothing else on the student area is affected. -->
+    <link rel="stylesheet" type="text/css" href="{{ asset('css/student-courses.css') }}" />
 
     <!--Toaster css-->
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/toastr.min.css') }}" />
@@ -512,7 +517,6 @@
 
                     <div class="col-auto d-flex">
                         @include('notifications._bell')
-                        @include('online_exam.notifications')
                         <div class="message">
                             @php
                                 $last_message = DB::table('message_thrades')

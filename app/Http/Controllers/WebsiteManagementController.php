@@ -12,6 +12,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
+use App\Support\Images\ImageOptimizer;
 use App\Support\PublicTenantResolver;
 use App\Support\SafeUpload;
 use Illuminate\Validation\Rule;
@@ -208,6 +209,108 @@ class WebsiteManagementController extends Controller
         ];
     }
 
+    /**
+     * The image profile an item's own content type calls for.
+     *
+     * ── WHY THIS IS PER ITEM TYPE AND NOT GLOBAL ─────────────────────────────
+     * `saveImage()` is shared by every kind of website content: 67 programmes, 4
+     * leadership portraits, news items, partner logos. Applying the 16:9 programme
+     * crop to ALL of them would centre-crop a head-and-shoulders portrait into a
+     * landscape frame and cut the person in half — a visible regression in exchange
+     * for a specification that only ever applied to programme covers.
+     *
+     * So the crop is applied to programme catalogue items ONLY. Everything else keeps
+     * the original upload behaviour byte-for-byte, which is also why the other
+     * content on the site is unaffected by the optimiser at all.
+     *
+     * @return array{width:int,height:int}|null null = leave the image as uploaded
+     */
+    private function imageProfileFor(?string $sectionKey, ?string $itemType): ?array
+    {
+        $isProgramme = $itemType === 'programme'
+            || (is_string($sectionKey) && str_starts_with($sectionKey, 'programme_catalog'));
+
+        if (! $isProgramme) {
+            return null;
+        }
+
+        // Dimensions only. The wording shown to an administrator lives in the Blade
+        // partial, which reads the same constants, so there is no second copy of
+        // the specification here to drift.
+        return [
+            'width' => ImageOptimizer::TARGET_WIDTH,
+            'height' => ImageOptimizer::TARGET_HEIGHT,
+        ];
+    }
+
+    /**
+     * Store an item image, optimising it when the item type calls for it.
+     *
+     * The rules that must hold for EVERY image are unchanged from `saveImage()`:
+     * a generated filename, an extension allow-list, content-based MIME checking, and
+     * the superseded file deleted only after the new one is safely written.
+     *
+     * With a profile, the bytes additionally go through the verified
+     * `ImageOptimizer`, which centre-crops to the target ratio and re-encodes.
+     * Without one, the original `SafeUpload` path runs untouched.
+     *
+     * @param  array{width:int,height:int}|null  $profile
+     */
+    private function saveItemImage(Request $request, ?array $profile, ?string $old = null): ?string
+    {
+        if (! $request->hasFile('image')) {
+            // No replacement uploaded: the existing image is preserved. This is what
+            // makes editing a programme's title safe.
+            return $old;
+        }
+
+        $dir = public_path('assets/uploads/website/');
+
+        if (! File::exists($dir)) {
+            File::makeDirectory($dir, 0755, true);
+        }
+
+        $file = $request->file('image');
+
+        if ($profile === null) {
+            $name = SafeUpload::store($file, $dir, ['jpg', 'jpeg', 'png', 'webp'])
+                ?? abort(422, 'This file type is not allowed.');
+
+            $this->discardIfPresent($dir, $old);
+
+            return $name;
+        }
+
+        // The optimiser validates, crops and re-encodes. A validation failure is a
+        // ValidationException, which Laravel renders as a field error on the form —
+        // so an administrator sees "That file is not a valid PNG image." rather than
+        // a 422 page.
+        //
+        // Constructed directly rather than through the container: the class takes
+        // only plain ints and has no dependencies, and resolving those by name
+        // through the container is version-dependent behaviour for no benefit.
+        $result = (new ImageOptimizer($profile['width'], $profile['height']))->process($file);
+
+        // Application-generated name. The client's filename never reaches the disk,
+        // and the extension comes from what was actually produced, not from what the
+        // client claimed.
+        $name = bin2hex(random_bytes(16)).'.'.$result['extension'];
+
+        File::put($dir.$name, $result['bytes']);
+
+        $this->discardIfPresent($dir, $old);
+
+        return $name;
+    }
+
+    /** Remove a superseded file, if there is one and it is really there. */
+    private function discardIfPresent(string $dir, ?string $old): void
+    {
+        if (! empty($old) && File::exists($dir.$old)) {
+            File::delete($dir.$old);
+        }
+    }
+
     private function saveImage(Request $request, $field, $old = null)
     {
         if (!$request->hasFile($field)) {
@@ -228,6 +331,57 @@ class WebsiteManagementController extends Controller
         }
 
         return $name;
+    }
+
+    /**
+     * Handle an explicit "remove this image" request.
+     *
+     * ── WHY THIS IS NEEDED ───────────────────────────────────────────────────
+     * `saveImage()` returns the existing filename when no new file is posted, which
+     * is correct: an edit form that omits the file field means "leave the image
+     * alone", and without that rule every unrelated save of a programme's title would
+     * silently delete its photograph.
+     *
+     * The consequence, however, is that once an image is set there was NO WAY to
+     * remove it. The CMS could upload and replace, but not clear — so an
+     * administrator who uploaded the wrong photograph, or who wants a programme to
+     * return to the designed fallback, had no route to do it except editing the
+     * database by hand. The brief asks for images to be "uploaded, replaced and
+     * managed", and managing includes removing.
+     *
+     * Returns the new filename to store, or NULL when nothing was requested (so the
+     * caller falls through to `saveImage()`). The old file is deleted only AFTER the
+     * database row is updated by the caller, which is the same ordering
+     * `saveImage()` uses.
+     *
+     * @return string|null '' = remove, null = not requested
+     */
+    private function removeItemImage(Request $request, ?string $current): ?string
+    {
+        if (! $request->boolean('remove_image')) {
+            return null;
+        }
+
+        return '';
+    }
+
+    /**
+     * Delete an item's image file from disk, if it has one.
+     *
+     * Called after the row has been updated, so a failure here cannot leave the
+     * database pointing at a file that no longer exists.
+     */
+    private function deleteStoredImage(?string $filename): void
+    {
+        if (empty($filename)) {
+            return;
+        }
+
+        $path = public_path('assets/uploads/website/'.$filename);
+
+        if (File::exists($path)) {
+            File::delete($path);
+        }
     }
 
     private function backToPanel(Request $request, $message)
@@ -388,6 +542,7 @@ class WebsiteManagementController extends Controller
             'link' => 'nullable|string|max:191',
             'button_text' => 'nullable|string|max:191',
             'meta_json' => 'nullable|string',
+            'featured' => 'nullable|boolean',
             'sort_order' => 'nullable|integer',
             'status' => 'nullable|integer',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
@@ -396,7 +551,14 @@ class WebsiteManagementController extends Controller
         $data['item_type'] = $data['item_type'] ?? 'general';
         $data['sort_order'] = $data['sort_order'] ?? 0;
         $data['status'] = $data['status'] ?? 1;
-        $data['image'] = $this->saveImage($request, 'image');
+        $data['image'] = $this->saveItemImage(
+            $request,
+            $this->imageProfileFor($data['section_key'], $data['item_type'])
+        );
+        $data['meta_json'] = $this->applyFeaturedFlag($request, $data['meta_json'] ?? null);
+
+        // `featured` is a UI convenience for `meta_json`, not a column.
+        unset($data['featured']);
 
         $this->createOwned(WebsiteItem::class, $data);
 
@@ -419,6 +581,9 @@ class WebsiteManagementController extends Controller
             'link' => 'nullable|string|max:191',
             'button_text' => 'nullable|string|max:191',
             'meta_json' => 'nullable|string',
+            'featured' => 'nullable|boolean',
+            // Explicit "remove the current image" opt-in. See removeItemImage().
+            'remove_image' => 'nullable|boolean',
             'sort_order' => 'nullable|integer',
             'status' => 'nullable|integer',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
@@ -427,11 +592,97 @@ class WebsiteManagementController extends Controller
         $data['item_type'] = $data['item_type'] ?? 'general';
         $data['sort_order'] = $data['sort_order'] ?? 0;
         $data['status'] = $data['status'] ?? 1;
-        $data['image'] = $this->saveImage($request, 'image', $item->image);
+        $data['image'] = $this->removeItemImage($request, $item->image)
+            ?? $this->saveItemImage(
+                $request,
+                // Read from the request when it was actually posted, else from the
+                // stored row. `$data['item_type'] ?? $item->item_type` would be dead:
+                // line above defaults it to 'general', so the fallback could never
+                // run. That matters because the profile is chosen by item type —
+                // silently deciding 'general' here would store a programme cover
+                // uncropped and then, on the NEXT save, crop it. The edit form does
+                // post item_type, so this is a guard rather than a live path.
+                $this->imageProfileFor(
+                    $data['section_key'],
+                    $request->filled('item_type') ? $data['item_type'] : $item->item_type
+                ),
+                $item->image
+            );
+
+        // Merge onto the STORED meta_json, not the submitted one. The edit form does
+        // not render a meta_json textarea, so `$request->input('meta_json')` is null
+        // on an ordinary save; reading from the request instead of the stored row
+        // would therefore silently wipe any other meta an item already carries.
+        $data['meta_json'] = $this->applyFeaturedFlag($request, $item->meta_json);
+
+        unset($data['featured'], $data['remove_image']);
+
+        // Capture the outgoing filename BEFORE the update, so the file can be deleted
+        // only once the row no longer points at it. Deleting first would leave a
+        // window where the database references a file that is already gone.
+        $outgoingImage = $item->image;
 
         $item->update($data);
 
+        // Only when the image was explicitly cleared, and only when the row really no
+        // longer references it.
+        if ($request->boolean('remove_image') && $item->fresh()->image !== $outgoingImage) {
+            $this->deleteStoredImage($outgoingImage);
+        }
+
         return $this->backToPanel($request, 'Item updated successfully.');
+    }
+
+    /**
+     * Translate the CMS form's `featured` checkbox into the `meta_json` column.
+     *
+     * ── WHY meta_json AND NOT A NEW COLUMN ────────────────────────────────────
+     * `website_items.meta_json` already exists, is already writable through this
+     * controller, and is empty for all 121 rows. A "featured programme" flag is
+     * exactly the kind of per-item metadata that column is for, so storing it there
+     * needs no migration, no schema lock on a live table, and no change to any
+     * existing row.
+     *
+     * A dedicated `is_featured` column would be marginally faster to query. On 121
+     * rows, and with the JSON decoded in PHP after a single fetch, that is not a
+     * consideration — and a migration on a table this size in a live system is a
+     * larger risk than the query it would optimise.
+     *
+     * ── WHAT IS PRESERVED ─────────────────────────────────────────────────────
+     * Any OTHER key already in meta_json survives. Only `featured` is written, so
+     * using this form cannot discard unrelated metadata.
+     *
+     * ── UNCHECKING REMOVES THE KEY ────────────────────────────────────────────
+     * Not set to false. An absent key and an explicit false both read as "not
+     * featured"; removing it keeps the stored JSON minimal and means a later reader
+     * cannot be confused by a stale `false`.
+     */
+    private function applyFeaturedFlag(Request $request, ?string $existing): ?string
+    {
+        // Decode the STORED value. This has to happen before anything is written, or
+        // ticking the box silently discards whatever else the item already carried.
+        //
+        // It was a real bug: `$meta` was initialised to `[]`, which is already an
+        // array, so the `if (! is_array($meta))` guard below could never be true and
+        // the decode never ran. Every existing meta_json key was therefore dropped on
+        // any save that included the Featured checkbox — the precise outcome this
+        // method's own comment claims to prevent.
+        $meta = [];
+
+        if (is_array($existing)) {
+            $meta = $existing;
+        } elseif (is_string($existing) && trim($existing) !== '') {
+            $decoded = json_decode($existing, true);
+            $meta = is_array($decoded) ? $decoded : [];
+        }
+
+        if ($request->boolean('featured')) {
+            $meta['featured'] = true;
+        } else {
+            unset($meta['featured']);
+        }
+
+        return $meta === [] ? null : json_encode($meta);
     }
 
     public function deleteItem(Request $request, $id)

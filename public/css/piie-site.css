@@ -1,0 +1,960 @@
+/* ==========================================================================
+   PIIE PUBLIC WEBSITE — DESIGN SYSTEM
+   --------------------------------------------------------------------------
+   Introduced by the public-site redesign. Loaded AFTER the existing
+   frontend/assets/css/style.css so these rules win without that file being
+   edited. Every original rule still applies; nothing here un-styles the LMS.
+
+   BRAND TOKENS are taken from the values already in use on the live homepage
+   (landing_page.blade.php), so the redesign reuses the established identity
+   rather than inventing one.
+
+   SECTIONS ARE SELF-CONTAINED. Each homepage section is wrapped in
+   `[data-pii-section]`, so removing one section removes exactly its own rules
+   and can never leave half a layout behind.
+   ========================================================================== */
+
+:root {
+    /* Brand - unchanged from the existing site. */
+    --piie-primary: #1466AF;
+    --piie-primary-dark: #0E4C87;
+    --piie-primary-light: #2F82C9;
+    --piie-secondary: #F15F23;
+    --piie-secondary-dark: #C94A16;
+    --piie-accent: #7CA7CD;
+    --piie-ink: #14202B;
+    --piie-body: #3C4A57;
+    --piie-muted: #64748B;
+    --piie-line: #E2E8F0;
+    --piie-surface: #FFFFFF;
+    --piie-surface-alt: #F5F8FB;
+
+    /* Type scale - a fixed ratio, so headings never drift between sections. */
+    --piie-font-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --piie-font-head: Georgia, "Times New Roman", "Segoe UI", serif;
+
+    /* A single spacing rhythm. Sections use --piie-section-y. */
+    --piie-space-1: 0.25rem;
+    --piie-space-2: 0.5rem;
+    --piie-space-3: 1rem;
+    --piie-space-4: 1.5rem;
+    --piie-space-5: 2rem;
+    --piie-space-6: 3rem;
+    --piie-space-7: 4rem;
+
+    /* Layout. The brief's maximum content width. */
+    --piie-max: 1280px;
+    --piie-section-y: clamp(3rem, 6vw, 5.5rem);
+    --piie-radius: 10px;
+    --piie-radius-sm: 6px;
+
+    --piie-shadow-sm: 0 1px 2px rgba(20, 32, 43, .06), 0 1px 3px rgba(20, 32, 43, .08);
+    --piie-shadow: 0 4px 6px -1px rgba(20, 32, 43, .08), 0 2px 4px -2px rgba(20, 32, 43, .06);
+    --piie-shadow-lg: 0 18px 32px -12px rgba(20, 32, 43, .22);
+
+    /* Focus ring. One definition, so every control matches. */
+    --piie-focus: 0 0 0 3px rgba(20, 102, 175, .45);
+}
+
+/* --------------------------------------------------------------------------
+   BASE
+   -------------------------------------------------------------------------- */
+
+.piie-site {
+    font-family: var(--piie-font-body);
+    color: var(--piie-body);
+    background: var(--piie-surface);
+    line-height: 1.65;
+    /* NO `overflow-x: hidden` anywhere, by design. It was in the first draft and it
+       concealed rather than fixed anything: an over-wide section simply disappeared
+       instead of being laid out correctly. This file therefore contains ZERO
+       `overflow-x` declarations - verified by the test suite.
+
+       Horizontal overflow is prevented at the source instead: every grid column is
+       `minmax(0, 1fr)` so it can shrink below its content, every fluid measure is
+       `clamp()`, and no layout block carries a fixed pixel width. If something does
+       overflow it is a genuine bug and stays visible.
+
+       `overflow: hidden` IS used in six places, all of them legitimate containment
+       rather than concealment: cropping a photograph to a 4:3 frame, clipping an
+       image to its card's rounded corners, and the `.visually-hidden-piie` utility
+       that keeps a label for screen readers off the screen. None of them hides page
+       content. The test suite enumerates them by selector so a new one cannot be
+       added silently. */
+}
+
+.piie-site h1, .piie-site h2, .piie-site h3, .piie-site h4 {
+    font-family: var(--piie-font-head);
+    color: var(--piie-ink);
+    line-height: 1.2;
+    margin: 0 0 var(--piie-space-3);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.piie-site h2 { font-size: clamp(1.65rem, 1.15rem + 1.6vw, 2.5rem); }
+.piie-site h3 { font-size: clamp(1.2rem, 1rem + 0.8vw, 1.5rem); }
+.piie-site h4 { font-size: 1.0625rem; }
+.piie-site p { margin: 0 0 var(--piie-space-3); }
+.piie-site p:last-child { margin-bottom: 0; }
+
+.piie-site a { color: var(--piie-primary); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.piie-site a:hover { color: var(--piie-primary-dark); }
+
+/* A visible focus indicator on EVERY interactive element. Never removed. */
+.piie-site a:focus-visible,
+.piie-site button:focus-visible,
+.piie-site input:focus-visible,
+.piie-site select:focus-visible,
+.piie-site textarea:focus-visible,
+.piie-site summary:focus-visible,
+.piie-site [tabindex]:focus-visible {
+    outline: 2px solid var(--piie-primary);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+.piie-skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 2000;
+    background: var(--piie-primary);
+    color: #fff;
+    padding: .75rem 1.25rem;
+    font-weight: 600;
+    border-radius: 0 0 var(--piie-radius-sm) 0;
+}
+.piie-site .piie-skip-link:focus {
+    left: 0;
+    color: #fff;
+}
+
+.piie-wrap {
+    width: 100%;
+    max-width: var(--piie-max);
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 4vw, 2rem);
+}
+
+.piie-section { padding-block: var(--piie-section-y); }
+.piie-section--alt { background: var(--piie-surface-alt); }
+.piie-section--tight { padding-block: clamp(2rem, 4vw, 3rem); }
+
+/* Section heading block: eyebrow + title + lede. */
+.piie-eyebrow {
+    display: inline-block;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--piie-secondary);
+    margin-bottom: var(--piie-space-2);
+}
+.piie-lede {
+    font-size: 1.0625rem;
+    color: var(--piie-muted);
+    max-width: 62ch;
+}
+.piie-head-center { text-align: center; margin-inline: auto; max-width: 70ch; }
+.piie-head-center .piie-lede { margin-inline: auto; }
+
+/* --------------------------------------------------------------------------
+   BUTTONS - ONE design, used everywhere
+   -------------------------------------------------------------------------- */
+
+.piie-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    padding: .8rem 1.6rem;
+    border-radius: var(--piie-radius-sm);
+    border: 2px solid transparent;
+    font-family: var(--piie-font-body);
+    font-size: .9375rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
+}
+.piie-btn:hover { transform: translateY(-1px); }
+.piie-btn:active { transform: translateY(0); }
+
+.piie-btn--primary { background: var(--piie-secondary); border-color: var(--piie-secondary); color: #fff; }
+.piie-btn--primary:hover { background: var(--piie-secondary-dark); border-color: var(--piie-secondary-dark); color: #fff; }
+
+.piie-btn--primary-alt { background: #fff; border-color: #fff; color: var(--piie-ink); }
+.piie-btn--primary-alt:hover { background: #EEF3F8; border-color: #EEF3F8; color: var(--piie-ink); }
+
+.piie-btn--ghost { background: transparent; border-color: currentColor; color: var(--piie-primary); }
+.piie-btn--ghost:hover { background: rgba(20, 102, 175, .07); color: var(--piie-primary-dark); }
+.piie-btn--ghost-light { background: transparent; border-color: rgba(255, 255, 255, .7); color: #fff; }
+.piie-btn--ghost-light:hover { background: rgba(255, 255, 255, .14); color: #fff; }
+
+.piie-btn-row { display: flex; flex-wrap: wrap; gap: var(--piie-space-3); }
+.piie-head-center .piie-btn-row { justify-content: center; }
+
+/* --------------------------------------------------------------------------
+   01 · VIDEO HERO
+   -------------------------------------------------------------------------- */
+
+.piie-hero {
+    position: relative;
+    isolation: isolate;
+    /* Desktop ~85vh, bounded so an ultrawide monitor does not produce a
+       banner taller than the fold. */
+    min-height: min(85vh, 780px);
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    background-color: #0B1A2B; /* the poster/fallback colour, so no white flash */
+    color: #fff;
+}
+
+.piie-hero__media {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    margin: 0;
+}
+
+.piie-hero__video,
+.piie-hero__poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border: 0;
+}
+
+.piie-hero__poster { z-index: 1; }
+/* Once the video reports it can play, the poster is removed from view but stays
+   in the DOM for the instant between load and first frame. */
+.piie-hero.is-playing .piie-hero__poster { opacity: 0; visibility: hidden; }
+
+/* The readability overlay. Two stops plus a left-weighted wash, so the copy is
+   legible over ANY frame of the footage rather than only the dark ones. */
+.piie-hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+        linear-gradient(90deg, rgba(6, 17, 30, .82) 0%, rgba(6, 17, 30, .58) 46%, rgba(6, 17, 30, .34) 100%),
+        linear-gradient(180deg, rgba(6, 17, 30, .55) 0%, rgba(6, 17, 30, .12) 38%, rgba(6, 17, 30, .72) 100%);
+}
+
+.piie-hero__inner { position: relative; z-index: 2; padding-block: clamp(5rem, 12vh, 8rem) clamp(4rem, 10vh, 6rem); }
+.piie-hero__content { max-width: 44rem; }
+
+.piie-hero__badge {
+    display: inline-block;
+    padding: .4rem 1rem;
+    border: 1px solid rgba(255, 255, 255, .45);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .12);
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: var(--piie-space-4);
+}
+
+.piie-hero h1 {
+    color: #fff;
+    font-size: clamp(2rem, 1.1rem + 3.6vw, 3.9rem);
+    margin-bottom: var(--piie-space-4);
+    text-wrap: balance;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, .45);
+}
+.piie-hero__sub {
+    font-size: clamp(1.0625rem, 1rem + .5vw, 1.3rem);
+    color: rgba(255, 255, 255, .95);
+    max-width: 40rem;
+    text-shadow: 0 1px 12px rgba(0, 0, 0, .5);
+}
+.piie-hero__copy { color: rgba(255, 255, 255, .9); max-width: 38rem; text-shadow: 0 1px 12px rgba(0, 0, 0, .5); }
+.piie-hero .piie-btn-row { margin-top: var(--piie-space-5); }
+
+/* Pause / play control. Always visible - a video that cannot be stopped is a
+   WCAG 2.2.2 failure, not a preference. */
+.piie-hero__toggle-label {
+    /* The visible text AND the control's accessible name.
+     *
+     * The toggle is absolutely positioned against the hero's right edge, so it grows
+     * leftward and cannot overflow the right side. It can still get wide enough to
+     * look broken on a 320px screen, so the label is capped and allowed to wrap
+     * rather than being truncated: the name has to stay complete, because a
+     * "Pause..." that reads as "Pause backg..." is not a name. */
+    max-width: 9.5rem;
+    text-align: left;
+    line-height: 1.25;
+}
+
+.piie-hero__toggle {
+    position: absolute;
+    right: clamp(1rem, 3vw, 2rem);
+    bottom: clamp(1rem, 3vw, 2rem);
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .55rem 1.1rem;
+    min-height: 44px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, .5);
+    background: rgba(6, 17, 30, .55);
+    color: #fff;
+    font-size: .8125rem;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+}
+.piie-hero__toggle:hover { background: rgba(6, 17, 30, .78); }
+.piie-hero__toggle .piie-hero__icon { font-size: .7rem; line-height: 1; }
+
+/* --------------------------------------------------------------------------
+   HEADER + NAVIGATION
+   -------------------------------------------------------------------------- */
+
+.piie-header {
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    background: #fff;
+    border-bottom: 1px solid var(--piie-line);
+}
+
+/* ── Utility bar ────────────────────────────────────────────────────────────
+   The slim strip above the main bar. Hidden below 992px, where the same
+   channels are repeated inside the mobile panel instead - a phone-width strip
+   of email addresses and a telephone number would wrap onto three lines and
+   push the navigation off the screen. */
+.piie-utility {
+    /* Mobile-first: the strip is hidden by default and restored at 992px. Its
+       channels are repeated inside the mobile panel, so nothing is lost. */
+    display: none;
+    background: var(--piie-primary-dark);
+    color: #fff;
+    font-size: .8125rem;
+}
+.piie-utility__inner { display: flex; justify-content: flex-end; }
+/* The strip is a landmark in its own right, so a screen-reader user can reach it
+   as a group rather than hearing three loose links before the main navigation. */
+.piie-utility__nav { display: block; }
+.piie-utility__list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0 clamp(.875rem, 2vw, 1.5rem);
+    list-style: none;
+    margin: 0;
+    padding: .5rem 0;
+}
+.piie-utility__list li { display: flex; }
+.piie-utility__list a {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .4rem;
+    color: rgba(255, 255, 255, .92);
+    text-decoration: none;
+    padding-block: .1rem;
+}
+.piie-utility__list a:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Pushes the brochure to the right-hand end of the strip while the contact channels
+   stay grouped on the left. `margin-left: auto` on the ITEM (not the link) so the
+   whole `li` moves, keeping its padding and hit area intact. */
+.piie-utility__item--end { margin-left: auto; }
+.piie-utility__label {
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    opacity: .7;
+}
+.piie-utility__value { font-weight: 600; }
+
+/* ── Main bar ───────────────────────────────────────────────────────────────
+   `grid-template-columns: auto 1fr auto` with the navigation centred inside the
+   middle track.
+
+   This replaces `display: flex` + `justify-content: space-between`. With three
+   children, space-between dumps every spare pixel into the two outer gaps, so
+   on a wide screen the logo sat far from the navigation and the navigation far
+   from Apply Now - which is exactly the complaint that the spacing "between the
+   logo and the Apply Now button" was excessive. A flexible centre track
+   distributes the slack evenly on both sides of the navigation instead of
+   pooling it in one visible void, and the bar stays balanced at any width. */
+.piie-header__bar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: clamp(.75rem, 2vw, 1.5rem);
+    min-height: 68px;
+}
+.piie-header__bar > .piie-burger { grid-column: 3; justify-self: end; }
+
+.piie-brand { display: flex; align-items: center; gap: .75rem; text-decoration: none; flex-shrink: 0; }
+.piie-brand__mark { height: 44px; width: auto; display: block; }
+.piie-brand__text { display: none; line-height: 1.15; }
+.piie-brand__name { display: block; font-family: var(--piie-font-head); font-size: 1rem; font-weight: 700; color: var(--piie-ink); }
+.piie-brand__motto { display: block; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--piie-secondary); }
+
+.piie-nav { display: none; }
+.piie-nav__list {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .1rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* 15px / 600 as specified. `min-height: 44px` is kept so every target meets the
+   44x44 minimum even though the horizontal padding is tighter. */
+.piie-nav__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: .5rem .6rem;
+    border-radius: var(--piie-radius-sm);
+    color: var(--piie-ink);
+    font-size: .9375rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+}
+.piie-nav__link:hover { background: var(--piie-surface-alt); color: var(--piie-primary); }
+.piie-nav__link[aria-current="page"] { color: var(--piie-primary); box-shadow: inset 0 -3px 0 var(--piie-secondary); }
+
+/* Dropdown: opened by the button, not by hover, so it is keyboard-operable. */
+.piie-nav__group { position: relative; }
+.piie-nav__caret { font-size: .6rem; margin-left: .4rem; opacity: .7; }
+
+.piie-nav__dropdown {
+    position: absolute;
+    top: calc(100% + .35rem);
+    left: 0;
+    min-width: 15rem;
+    background: #fff;
+    border: 1px solid var(--piie-line);
+    border-radius: var(--piie-radius-sm);
+    box-shadow: var(--piie-shadow-lg);
+    list-style: none;
+    margin: 0;
+    padding: .4rem;
+    display: none;
+}
+.piie-nav__group.is-open .piie-nav__dropdown { display: block; }
+.piie-nav__dropdown a {
+    display: block;
+    padding: .55rem .75rem;
+    min-height: 40px;
+    border-radius: 4px;
+    color: var(--piie-ink);
+    font-size: .9rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+.piie-nav__dropdown a:hover { background: var(--piie-surface-alt); color: var(--piie-primary); }
+
+.piie-header__actions { display: none; gap: .5rem; align-items: center; }
+.piie-header__actions .piie-btn { padding: .6rem 1.1rem; font-size: .875rem; }
+
+.piie-burger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--piie-line);
+    border-radius: var(--piie-radius-sm);
+    background: #fff;
+    cursor: pointer;
+    color: var(--piie-ink);
+}
+.piie-burger span,
+.piie-burger span::before,
+.piie-burger span::after {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: currentColor;
+    position: relative;
+}
+.piie-burger span::before { content: ""; position: absolute; top: -6px; }
+.piie-burger span::after { content: ""; position: absolute; top: 6px; }
+
+/* --------------------------------------------------------------------------
+   CARDS
+   -------------------------------------------------------------------------- */
+
+.piie-grid { display: grid; gap: var(--piie-space-4); }
+.piie-grid--2 { grid-template-columns: 1fr; }
+.piie-grid--3 { grid-template-columns: 1fr; }
+.piie-grid--4 { grid-template-columns: 1fr; }
+.piie-grid--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.piie-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--piie-surface);
+    border: 1px solid var(--piie-line);
+    border-radius: var(--piie-radius);
+    overflow: hidden;
+    box-shadow: var(--piie-shadow-sm);
+    transition: box-shadow .2s ease, transform .2s ease, border-color .2s ease;
+}
+.piie-card:hover { box-shadow: var(--piie-shadow); transform: translateY(-2px); border-color: #CBD5E1; }
+
+/* A 4:3 frame that every programme image is cropped into, so cards in a row
+   never end up ragged. */
+.piie-card__media {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    background: var(--piie-surface-alt);
+    overflow: hidden;
+}
+.piie-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform .35s ease;
+}
+.piie-card:hover .piie-card__media img { transform: scale(1.04); }
+.piie-card__media--empty { display: grid; place-items: center; color: var(--piie-muted); font-size: .8125rem; }
+
+/* Programme covers are stored 16:9 by the CMS (1600x900), so the frame has to be
+   16:9 as well. Left at 4:3 the browser would crop the top and bottom off an image
+   that was already cropped correctly at upload — the administrator's composition
+   would be silently lost in the last step, and `object-fit: cover` would hide the
+   fact that it had happened.
+
+   `object-fit: cover` is retained rather than changed to `contain`: a cover whose
+   aspect ratio is still wrong (a legacy 4:3 upload from before this feature) should
+   fill the frame, not sit in it with letterbox bars. Scoped to the programme variant
+   so leadership portraits keep their taller frame. */
+.piie-card--programme .piie-card__media { aspect-ratio: 16 / 9; }
+
+.piie-card__body { padding: var(--piie-space-4); display: flex; flex-direction: column; gap: .5rem; flex: 1; }
+.piie-card__title { font-size: 1.0625rem; margin: 0; }
+.piie-card__meta { display: flex; flex-wrap: wrap; gap: .4rem .75rem; font-size: .8125rem; color: var(--piie-muted); }
+.piie-card__excerpt { font-size: .9375rem; color: var(--piie-body); margin: 0; }
+.piie-card__foot { margin-top: auto; padding-top: var(--piie-space-3); }
+
+.piie-tag {
+    display: inline-block;
+    padding: .25rem .6rem;
+    border-radius: 999px;
+    background: rgba(20, 102, 175, .09);
+    color: var(--piie-primary-dark);
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.piie-tag--accent { background: rgba(241, 95, 35, .1); color: var(--piie-secondary-dark); }
+
+/* Two-column image/text block. */
+.piie-split { display: grid; gap: var(--piie-space-5); align-items: center; }
+.piie-split__media { border-radius: var(--piie-radius); overflow: hidden; box-shadow: var(--piie-shadow); }
+.piie-split__media img { width: 100%; height: 100%; object-fit: cover; display: block; aspect-ratio: 4 / 3; }
+
+.piie-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--piie-space-3); }
+.piie-list li { display: flex; gap: .75rem; align-items: flex-start; }
+.piie-list__mark {
+    flex: 0 0 auto;
+    width: 26px; height: 26px;
+    margin-top: 2px;
+    border-radius: 50%;
+    background: rgba(20, 102, 175, .1);
+    color: var(--piie-primary);
+    font-size: .75rem;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+}
+
+/* Steps — numbered, connected by a rule on wide screens. */
+.piie-steps { display: grid; gap: var(--piie-space-4); counter-reset: piie-step; list-style: none; margin: 0; padding: 0; }
+.piie-steps > li {
+    counter-increment: piie-step;
+    position: relative;
+    padding-left: 3.25rem;
+    min-height: 44px;
+}
+.piie-steps > li::before {
+    content: counter(piie-step);
+    position: absolute;
+    left: 0; top: 0;
+    width: 2.35rem; height: 2.35rem;
+    border-radius: 50%;
+    background: var(--piie-primary);
+    color: #fff;
+    font-weight: 700;
+    font-size: .9375rem;
+    display: grid;
+    place-items: center;
+}
+
+/* --------------------------------------------------------------------------
+   10 · NEWS + EVENTS
+   -------------------------------------------------------------------------- */
+
+.piie-card__date {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .8125rem;
+    color: var(--piie-muted);
+}
+.piie-card__date time { font-weight: 600; }
+
+.piie-pill-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+/* --------------------------------------------------------------------------
+   11 · FAQ ACCORDION
+   Native <details>, so it is keyboard-operable and screen-reader-correct with
+   no JavaScript at all. The script only adds the open/close animation.
+   -------------------------------------------------------------------------- */
+
+.piie-faq { display: grid; gap: .75rem; max-width: 56rem; margin-inline: auto; }
+.piie-faq__item {
+    border: 1px solid var(--piie-line);
+    border-radius: var(--piie-radius-sm);
+    background: #fff;
+    overflow: hidden;
+}
+.piie-faq__item[open] { border-color: #CBD5E1; box-shadow: var(--piie-shadow-sm); }
+.piie-faq__q {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--piie-space-3);
+    padding: 1rem 1.15rem;
+    min-height: 56px;
+    cursor: pointer;
+    font-family: var(--piie-font-head);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--piie-ink);
+    list-style: none;
+}
+.piie-faq__q::-webkit-details-marker { display: none; }
+.piie-faq__q:hover { background: var(--piie-surface-alt); }
+.piie-faq__q::after {
+    content: "+";
+    flex: 0 0 auto;
+    font-size: 1.35rem;
+    line-height: 1;
+    color: var(--piie-secondary);
+    font-family: var(--piie-font-body);
+}
+.piie-faq__item[open] .piie-faq__q::after { content: "\2212"; }
+.piie-faq__a { padding: 0 1.15rem 1.15rem; color: var(--piie-body); font-size: .9375rem; }
+.piie-faq__a > :last-child { margin-bottom: 0; }
+
+/* --------------------------------------------------------------------------
+   12 · FINAL CTA
+   -------------------------------------------------------------------------- */
+
+.piie-cta {
+    background:
+        radial-gradient(1100px 380px at 15% 0%, rgba(255, 255, 255, .12), transparent 60%),
+        linear-gradient(120deg, var(--piie-primary-dark) 0%, var(--piie-primary) 55%, #1E7CC7 100%);
+    color: #fff;
+    text-align: center;
+}
+.piie-cta h2 { color: #fff; }
+.piie-cta .piie-lede { color: rgba(255, 255, 255, .9); margin-inline: auto; }
+
+/* --------------------------------------------------------------------------
+   13 · FOOTER
+   -------------------------------------------------------------------------- */
+
+.piie-footer { background: #0F1D2B; color: rgba(255, 255, 255, .78); font-size: .9375rem; }
+.piie-footer a { color: rgba(255, 255, 255, .85); text-decoration: none; }
+.piie-footer a:hover { color: #fff; text-decoration: underline; }
+.piie-footer h3 { color: #fff; font-size: .8125rem; letter-spacing: .12em; text-transform: uppercase; margin-bottom: var(--piie-space-3); }
+.piie-footer__grid { display: grid; gap: var(--piie-space-5); padding-block: var(--piie-section-y); }
+.piie-footer__links { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.piie-footer__brand img { height: 46px; width: auto; margin-bottom: var(--piie-space-3); }
+.piie-footer__social { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: var(--piie-space-3); }
+.piie-footer__social a {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, .28);
+    display: grid;
+    place-items: center;
+    font-size: .75rem;
+    font-weight: 700;
+}
+.piie-footer__social a:hover { background: rgba(255, 255, 255, .12); }
+.piie-footer__bottom {
+    border-top: 1px solid rgba(255, 255, 255, .14);
+    padding-block: var(--piie-space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--piie-space-3);
+    justify-content: space-between;
+    font-size: .8125rem;
+    color: rgba(255, 255, 255, .66);
+}
+.piie-footer__legal { display: flex; flex-wrap: wrap; gap: var(--piie-space-4); }
+
+/* --------------------------------------------------------------------------
+   SHARED BITS
+   -------------------------------------------------------------------------- */
+
+.piie-cta-note {
+    display: flex;
+    gap: .75rem;
+    align-items: flex-start;
+    padding: 1rem 1.15rem;
+    border-left: 4px solid var(--piie-primary);
+    background: var(--piie-surface-alt);
+    border-radius: 0 var(--piie-radius-sm) var(--piie-radius-sm) 0;
+    font-size: .9375rem;
+}
+
+.piie-motto {
+    font-family: var(--piie-font-head);
+    font-size: clamp(1.1rem, 1rem + .8vw, 1.5rem);
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--piie-secondary);
+    font-weight: 700;
+}
+
+/* An honest empty state. The brief forbids invented announcements, so an empty
+   section says so plainly rather than rendering a filler card. */
+.piie-empty {
+    padding: var(--piie-space-5);
+    border: 1px dashed var(--piie-line);
+    border-radius: var(--piie-radius);
+    text-align: center;
+    color: var(--piie-muted);
+    font-size: .9375rem;
+    background: var(--piie-surface-alt);
+}
+
+/* ── Footer brand block ─────────────────────────────────────────────────────
+   The crest is the institution's real `logo.png`, which has a white background and
+   dark ink. On the dark footer it would be invisible, so it is presented on a white
+   rounded panel — the standard treatment for a light crest on a dark ground, and not
+   a substitute logo. */
+.piie-footer__crest {
+    width: 88px;
+    height: 88px;
+    padding: 6px;
+    margin-bottom: 1rem;
+    background: #fff;
+    border-radius: var(--piie-radius);
+    display: grid;
+    place-items: center;
+}
+.piie-footer__crest img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.piie-footer__name {
+    font-family: var(--piie-font-head);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #fff;
+    margin: 0 0 .5rem;
+    /* The name is long ("Prime International Institute of Excellence (PIIE)") and the
+       footer column is narrow, so it is allowed to wrap rather than being truncated
+       or forced onto one line with a negative letter-spacing. */
+    text-wrap: balance;
+}
+
+.piie-footer__motto {
+    color: var(--piie-secondary);
+    margin: .75rem 0 0;
+    font-size: .8125rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+}
+
+.piie-footer__contact {
+    list-style: none;
+    margin: 1.25rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+}
+.piie-footer__contact li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem; }
+.piie-footer__contact a { color: rgba(255, 255, 255, .88); font-size: .875rem; word-break: break-word; }
+.piie-footer__contact a:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.piie-footer__contact-label {
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .55);
+    min-width: 5.5rem;
+}
+
+.visually-hidden-piie {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* --------------------------------------------------------------------------
+   RESPONSIVE
+   Breakpoints follow the widths the brief asks to be checked. Everything below
+   lg is single-column; nothing carries a fixed pixel width, so no breakpoint can
+   produce horizontal scrolling.
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 480px) {
+    .piie-brand__text { display: block; }
+}
+
+@media (min-width: 576px) {
+    .piie-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .piie-footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 768px) {
+    .piie-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .piie-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .piie-grid--5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .piie-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .piie-split__media img { aspect-ratio: 16 / 10; }
+}
+
+@media (min-width: 992px) {
+    .piie-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .piie-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .piie-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .piie-split--reverse .piie-split__media { order: 2; }
+    .piie-footer__grid { grid-template-columns: 1.6fr 1fr 1fr 1.2fr; }
+
+    /* The utility bar appears only once there is room for it beside a single row of
+       channels. Below this the same links are inside the mobile panel. */
+    .piie-utility { display: block; }
+}
+
+/* Desktop: the full navigation replaces the burger.
+ *
+ * `.piie-header__actions` is restored HERE and not at 992px. It used to be restored
+ * at 992px while the navigation waited until 1024px, which produced a 32px-wide
+ * window (992-1023) with the Apply Now CTA and the Student Portal on screen and no
+ * navigation at all - a header that gave the visitor two actions and no menu. Eight
+ * navigation entries plus two buttons do not fit at 992px, which is why the break is
+ * here rather than lower; so the actions wait with them, and between 992 and 1024 the
+ * bar is burger-only, with Apply Now and the portal available inside the panel. */
+@media (min-width: 1024px) {
+    .piie-nav { display: block; }
+    .piie-burger { display: none; }
+    .piie-header__actions { display: flex; }
+}
+
+@media (min-width: 1366px) {
+    .piie-hero { min-height: min(86vh, 840px); }
+}
+
+@media (min-width: 1920px) {
+    /* The wrap caps at 1280px, so the banner simply gets taller, not wider. */
+    .piie-hero { min-height: min(88vh, 900px); }
+}
+
+/* Mobile: the navigation becomes a panel. Toggled by the burger with
+   aria-expanded, so it is announced correctly. */
+.piie-mobile-nav {
+    display: none;
+    border-top: 1px solid var(--piie-line);
+    background: #fff;
+    padding: var(--piie-space-3) 0 var(--piie-space-4);
+}
+.piie-mobile-nav.is-open { display: block; }
+.piie-mobile-nav ul { list-style: none; margin: 0; padding: 0; }
+.piie-mobile-nav a {
+    display: block;
+    padding: .75rem 0;
+    min-height: 44px;
+    border-bottom: 1px solid var(--piie-surface-alt);
+    color: var(--piie-ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+.piie-mobile-nav a:hover { color: var(--piie-primary); }
+
+/* The utility-bar channels repeated inside the mobile panel: separated from the
+   page links by a rule, so it reads as contact information and not as more
+   navigation. */
+.piie-mobile-nav__utility {
+    list-style: none;
+    margin: var(--piie-space-4) 0 0;
+    padding: var(--piie-space-3) 0 0;
+    border-top: 1px solid var(--piie-line);
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+.piie-mobile-nav__utility a { min-height: 34px; font-size: .875rem; }
+.piie-mobile-nav .piie-btn-row { margin-top: var(--piie-space-4); }
+
+@media (max-width: 575.98px) {
+    .piie-hero { min-height: auto; }
+    .piie-hero__inner { padding-block: 4.5rem 4rem; }
+    .piie-hero .piie-btn-row .piie-btn { width: 100%; }
+    .piie-grid--5 { grid-template-columns: 1fr; }
+    .piie-footer__bottom { flex-direction: column; }
+}
+
+@media (max-width: 1023.98px) {
+    .piie-mobile-nav { display: none; }
+    .piie-mobile-nav.is-open { display: block; }
+}
+
+/* --------------------------------------------------------------------------
+   REDUCED MOTION
+   Honoured in CSS for animation, and in JS for the video: a visitor who asks
+   for less motion gets a still image, not a moving one they cannot stop.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .piie-site *,
+    .piie-site *::before,
+    .piie-site *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+        scroll-behavior: auto !important;
+    }
+    .piie-btn:hover, .piie-card:hover, .piie-card:hover .piie-card__media img { transform: none; }
+}
+
+/* --------------------------------------------------------------------------
+   PRINT
+   -------------------------------------------------------------------------- */
+
+@media print {
+    .piie-header, .piie-mobile-nav, .piie-hero__toggle, .piie-footer { display: none !important; }
+    .piie-hero { min-height: auto; color: #000; }
+    .piie-hero::after { display: none; }
+    .piie-hero__video, .piie-hero__poster { display: none; }
+    .piie-hero h1, .piie-hero__sub, .piie-hero__copy { color: #000; text-shadow: none; }
+    .piie-section { padding-block: 1.5rem; }
+}

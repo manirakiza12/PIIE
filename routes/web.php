@@ -10,19 +10,32 @@ use App\Http\Controllers\LibrarianController;
 use App\Http\Controllers\ParentController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SuperAdminController;
+use App\Http\Controllers\RegionalPreferenceController;
 use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\Updater;
 use App\Http\Controllers\WebsiteManagementController;
 use App\Http\Controllers\WardenController;
 // New HEI Controllers
 use App\Http\Controllers\ProgrammeController;
+use App\Http\Controllers\PublicEnquiryController;
+use App\Http\Controllers\SuperAdminEnquiryController;
 use App\Http\Controllers\Admin\AdmissionWizardController;
 use App\Http\Controllers\AdmissionsController;
 use App\Http\Controllers\FeeStructureController;
 use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\OnlineExamController;
 use App\Http\Controllers\AssignmentController;
+use App\Http\Controllers\TeacherCourseOfferingAttendanceController;
+use App\Http\Controllers\TeacherCourseOfferingController;
+use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\LiveClassController;
+use App\Http\Controllers\CourseOfferingContentController;
+use App\Http\Controllers\TeacherCourseOfferingAssignmentController;
+use App\Http\Controllers\TeacherCourseOfferingExamController;
+use App\Http\Controllers\StudentCourseAssignmentController;
+use App\Http\Controllers\StudentCourseContentController;
+use App\Http\Controllers\StudentCourseController;
+use App\Http\Controllers\StudentCourseExamsController;
 use App\Http\Controllers\AcademicCalendarController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\GraduationController;
@@ -84,6 +97,22 @@ Route::controller(HomeController::class)->group(function () {
     Route::match(['get', 'post'], '/', 'home')->name('landingPage');
     Route::get('website/{slug}', 'websitePage')->name('website.page');
     Route::get('download-brochure', 'downloadBrochure')->name('download.brochure');
+
+    // ── PUBLIC ENQUIRY SUBMISSION ────────────────────────────────────────────
+    // The Contact page form. `throttle:6,1` is six submissions per IP per minute
+    // and is applied by the framework BEFORE the controller runs, so a flood never
+    // reaches validation or the database. `PublicEnquiryController` adds a
+    // per-email hourly limit, a honeypot, a link-count heuristic and a
+    // duplicate-submission guard on top.
+    //
+    // There is deliberately NO public route that reads an enquiry. The only reader
+    // is `SuperAdminEnquiryController`, behind `auth` + `superAdmin`. The brief's
+    // "do not expose submitted enquiries publicly" is therefore satisfied by the
+    // absence of a route rather than by remembering to filter one.
+    Route::post('website/contact/enquiry', [PublicEnquiryController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('website.enquiry.store');
+
     Route::post('school/create', 'schoolCreate')->name('school.create');
     Route::get('web_redirect_to_pay_fee', 'webRedirectToPayFee')->name('webRedirectToPayFee');
     // Mobile → web payment handoff: temporary signed URL + single-use key (no credential in the URL).
@@ -179,6 +208,19 @@ Route::controller(WebsiteManagementController::class)->middleware('auth', 'super
 
     Route::post('superadmin/website-management/settings/upsert', 'upsertSettings')->name('superadmin.website.settings.upsert');
     Route::post('superadmin/website-management/seo/upsert', 'upsertSeo')->name('superadmin.website.seo.upsert');
+});
+
+// ── SUPER ADMIN ENQUIRY INBOX ─────────────────────────────────────────────────
+// Inside this application's existing `auth` + `superAdmin` gate, which is what makes
+// it an *authorised* inbox. A student, lecturer, parent or ordinary school admin
+// cannot reach any of it: the School Admin website-management group below has no
+// equivalent routes, deliberately, because enquiry triage is an institution-level
+// duty rather than a per-school one.
+Route::controller(SuperAdminEnquiryController::class)->middleware('auth', 'superAdmin')->group(function () {
+    Route::get('superadmin/enquiries', 'index')->name('superadmin.enquiries.index');
+    Route::get('superadmin/enquiries/{id}', 'show')->whereNumber('id')->name('superadmin.enquiries.show');
+    Route::post('superadmin/enquiries/{id}/status', 'update')->whereNumber('id')->name('superadmin.enquiries.status');
+    Route::post('superadmin/enquiries/{id}/delete', 'destroy')->whereNumber('id')->name('superadmin.enquiries.destroy');
 });
 
 // Website management routes for School Admin
@@ -329,6 +371,7 @@ Route::controller(SuperAdminController::class)->middleware('auth', 'superAdmin')
     //Smtp settings routes
     Route::get('superadmin/settings/smtp', 'smtpSettings')->name('superadmin.smtp_settings');
     Route::post('superadmin/smtp/update', 'smtpUpdate')->name('superadmin.smtp.update');
+    Route::post('superadmin/smtp/test-email', 'smtpTestEmail')->name('superadmin.smtp.test-email');
 
     //About routes
     Route::get('superadmin/settings/about', 'about')->name('superadmin.about');
@@ -845,7 +888,20 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\P
     Route::post('admin/programme-cohorts/{id}/placement/{membershipId}', 'place')->name('admin.programme_cohorts.placement.store');
 });
 
+// Personal timezone preference, shared by every portal so the rule
+// "NULL means follow your institution" is written down exactly once.
+// Presentation only: it can never change the institution's official
+// timezone, another user's record, or any stored instant. Deliberately at
+// root scope rather than inside a role group, because a lecturer, a student
+// and a member of staff must all reach the same screen under the same rules.
+Route::middleware('auth')->group(function () {
+    Route::get('profile/regional-settings', [RegionalPreferenceController::class, 'edit'])->name('profile.regional.edit');
+    Route::post('profile/regional-settings', [RegionalPreferenceController::class, 'update'])->name('profile.regional.update');
+});
+
 //Teacher routes are here
+
+
 Route::controller(TeacherController::class)->middleware('teacher', 'auth')->group(function () {
 
     Route::get('teacher/dashboard', 'teacherDashboard')->name('teacher.dashboard')->middleware('role_id');
@@ -1025,6 +1081,140 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
     Route::get('student/id-card', 'idCardGenerate')->name('student.id_card');
     Route::get('student/id-card/pdf', 'idCardPdf')->name('student.id_card.pdf');
     Route::get('student/my-courses', 'myCourses')->name('student.my_courses');
+
+    // ── Course Assignments (student) ─────────────────────────────────────
+    // Reads and submissions only. There is deliberately no student route that
+    // can create, edit, publish, close or grade: authority over an assignment is
+    // an allocation, and a registration must never imply it.
+    Route::controller(StudentCourseAssignmentController::class)
+        ->prefix('student/courses/{id}/assignments')->whereNumber('id')
+        ->name('student.courses.assignments.')
+        ->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/{assignment}', 'show')
+                ->whereNumber('assignment')->name('show');
+            // Both are POSTs. Saving a draft is NOT submitting, and submitting
+            // consumes an attempt - neither may ever be a link.
+            Route::post('/{assignment}/draft', 'saveDraft')->whereNumber('assignment')->name('draft');
+            Route::post('/{assignment}/submit', 'submit')->whereNumber('assignment')->name('submit');
+            Route::get('/{assignment}/submissions/{submission}', 'submission')
+                ->whereNumber('assignment')->whereNumber('submission')->name('submissions.show');
+            // The student's own work for one attempt. Authorised exactly as the
+            // page that links it, and the only way to reach it: stored paths are
+            // outside the web root.
+            Route::get('/{assignment}/submissions/{submission}/file', 'submissionFile')
+                ->whereNumber('assignment')->whereNumber('submission')->name('submissions.file');
+
+            // Play back the student's OWN audio or video inline, so a recording they
+            // attach can be listened to and watched rather than downloaded and
+            // opened in another program.
+            //
+            // Authorised through resolveSubmissionForStudent(), which proves the
+            // attempt belongs to the authenticated student inside the released
+            // assignment - so another student's recording is a 404, and the bytes
+            // live outside the web root so there is no other way in. A SEPARATE
+            // route from evidence because only a strict mime allowlist may be
+            // rendered inside a page.
+            Route::get('/{assignment}/submissions/{submission}/media/{item}', 'evidenceMedia')
+                ->whereNumber('assignment')->whereNumber('submission')->whereNumber('item')
+                ->name('submissions.media');
+
+            // ONE piece of that evidence. A submission can carry a written
+            // response, a document, a photograph, a recording and a link at once,
+            // so each is addressed separately - addressing the attempt alone would
+            // assume one file per attempt, which this feature removes.
+            //
+            // Authorised as above, then scoped to THIS attempt: a confirmed
+            // registration, the released assignment, the attempt belonging to THIS
+            // student, and the item belonging to THAT attempt.
+            Route::get('/{assignment}/submissions/{submission}/evidence/{item}', 'evidenceFile')
+                ->whereNumber('assignment')->whereNumber('submission')->whereNumber('item')
+                ->name('submissions.evidence');
+
+        });
+
+    // A Course Offering cover image, on the STUDENT's own route and under the
+    // student's middleware. The lecturer route cannot serve a student: its
+    // middleware group redirects them away before any authorisation runs.
+    //
+    // A SIBLING of the assignments group rather than a member of it, so the
+    // group's own `/{id}/assignments` prefix is not applied again. Both routes
+    // call the same service method, so there is one rule with two doors.
+    Route::controller(StudentCourseAssignmentController::class)->group(function () {
+        Route::get('student/courses/{id}/cover-image', 'coverImage')
+            ->whereNumber('id')
+            ->name('student.courses.cover');
+    });
+    // A lecturer's handout, for a student.
+    //
+    // A SIBLING of the assignments group, not a member of it: the group above
+    // carries ->prefix('student/courses/{id}/assignments') and a name prefix, so
+    // a route placed inside it gets both applied again. The handout row already
+    // carries the Offering, so the URL needs no Offering segment at all.
+    //
+    // Its own controller group is stated explicitly. The enclosing
+    // Route::controller(StudentController::class) block contributes the middleware
+    // but NOT the controller, and StudentController has no resource() method - so
+    // left to inherit, this binds to nothing and 404s with nothing in the log.
+    Route::controller(StudentCourseAssignmentController::class)->group(function () {
+        Route::get('student/courses/assignment-resources/{resource}', 'resource')
+            ->whereNumber('resource')
+            ->name('student.courses.assignments.resources.file');
+    });
+
+    // Course Home (the landing page for a confirmed Course Offering).
+    //
+    // Reads only. There is deliberately no student route that can change anything
+    // about a course: authority over content and over assignments is an
+    // ALLOCATION, and a confirmed registration must never imply it.
+    //
+    // Its own controller group, named explicitly - the enclosing
+    // `Route::controller(StudentController::class)` block contributes middleware
+    // but not a controller binding, so a route left to inherit it would bind to
+    // StudentController, which has no `show()` for this, and 404 with nothing in
+    // the log to say why.
+    Route::controller(StudentCourseController::class)
+        ->prefix('student/courses/{id}')
+        ->whereNumber('id')
+        ->name('student.courses.')
+        ->group(function () {
+            Route::get('/', 'show')->name('show');
+
+            // Quizzes & Exams.
+            //
+            // A LIST, and nothing else. Starting, resuming, saving, submitting and
+            // reading a released result are all the online exam engine's existing
+            // `student.online_exam.*` routes - deliberately not re-registered here,
+            // because a second attempt lifecycle would be a second engine.
+            Route::get('/exams', [StudentCourseExamsController::class, 'index'])->name('exams');
+        });
+
+    // ── Course Content (student reader) ───────────────────────────────────
+    // Reads and progress only. There is deliberately no student route that can
+    // create, edit, reorder or publish anything: authority for content changes
+    // is an allocation, not a registration, and registration must never imply
+    // it.
+    Route::controller(StudentCourseContentController::class)->prefix('student/courses/{id}')->whereNumber('id')->name('student.courses.')->group(function () {
+        Route::get('/content', 'index')->name('content');
+        Route::get('/content/lessons/{lesson}', 'show')->whereNumber('lesson')->name('content.lessons.show');
+        // Completion is a POST, never a GET: a link prefetch or a crawler
+        // following a URL must not be able to mark a lesson complete.
+        Route::post('/content/lessons/{lesson}/complete', 'complete')->whereNumber('lesson')->name('content.lessons.complete');
+    });
+    // Attachment bytes, in their OWN controller group.
+    //
+    // The group is repeated rather than nested so the URL carries only the
+    // resource id: the row already carries the Offering through its lesson, so
+    // an Offering id in the path would be a value nobody reads and a second
+    // thing that could only contradict the real one. The controller group must
+    // be stated explicitly - inside the enclosing `Route::controller(StudentController::class)`
+    // this route would silently bind to StudentController and its authorisation
+    // would never run at all.
+    Route::controller(StudentCourseContentController::class)->group(function () {
+        Route::get('student/course-content/resources/{resource}', 'resource')
+            ->whereNumber('resource')
+            ->name('student.courses.content.resources.show');
+    });
     Route::post('student/my-courses/register', 'registerCourses')->name('student.my_courses.register');
     Route::post('student/my-courses/{id}/confirm', 'confirmCourse')->name('student.my_courses.confirm');
     Route::post('student/my-courses/{id}/drop', 'dropCourse')->name('student.my_courses.drop');
@@ -1419,12 +1609,16 @@ Route::controller(\App\Http\Controllers\CourseOfferingController::class)->middle
     Route::delete('/{id}/applicability/{membershipId}', 'removeApplicability')->whereNumber('id')->whereNumber('membershipId')->name('applicability.destroy');
     Route::post('/{id}/open', 'lifecycle')->defaults('action', 'open')->whereNumber('id')->name('open');
     Route::post('/{id}/start', 'lifecycle')->defaults('action', 'start')->whereNumber('id')->name('start');
+    Route::post('/{id}/start-early', 'lifecycle')->defaults('action', 'startEarly')->whereNumber('id')->name('start_early');
     Route::post('/{id}/complete', 'lifecycle')->defaults('action', 'complete')->whereNumber('id')->name('complete');
     Route::post('/{id}/cancel', 'lifecycle')->defaults('action', 'cancel')->whereNumber('id')->name('cancel');
     Route::get('/{id}/eligible-students', 'eligibleStudents')->whereNumber('id')->name('eligible_students');
     Route::get('/{id}/registrations', 'registeredStudents')->whereNumber('id')->name('registrations');
     Route::post('/{id}/registrations', 'registerStudent')->whereNumber('id')->name('registrations.store');
     Route::post('/{id}/registrations/{registration}/drop', 'dropStudent')->whereNumber('id')->whereNumber('registration')->name('registrations.drop');
+    Route::post('/{id}/registrations/bulk', 'registerBulk')->whereNumber('id')->name('registrations.bulk');
+    Route::post('/{id}/registrations/confirm', 'confirmBulk')->whereNumber('id')->name('registrations.confirm_bulk');
+    Route::post('/{id}/registrations/{registration}/confirm', 'confirmStudent')->whereNumber('id')->whereNumber('registration')->name('registrations.confirm');
     Route::controller(\App\Http\Controllers\CourseOfferingLecturerController::class)->prefix('/{offering}/lecturers')->name('lecturers.')->group(function () {
         Route::get('/', 'index')->whereNumber('offering')->name('index');
         Route::get('/history', 'history')->whereNumber('offering')->name('history');
@@ -1566,11 +1760,31 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'admin', 'rba
     Route::delete('admin/online-exams/questions/delete/{id}', 'destroyQuestion')->name('admin.online_exams.questions.destroy');
     Route::get('admin/online-exams/{id}/submissions',        'submissions')->name('admin.online_exams.submissions');
     Route::get('admin/online-exams/{id}/results',            'results')->name('admin.online_exams.results');
+    // Results AWAITING AN ADMINISTRATOR'S DECISION, across every exam in the
+    // institution. Registered here, ABOVE `admin/online-exams/{id}`, because that
+    // route's `{id}` is unconstrained and would otherwise swallow the literal.
+    Route::get('admin/online-exams-results-review',           'resultReviewQueue')->name('admin.online_exams.result_review_queue');
     Route::get('admin/online-exams/{id}/proctoring/{submission}', 'reviewProctoring')->name('admin.online_exams.proctoring.review');
     Route::post('admin/online-exams/answers/{answer}/manual-mark', 'manualMarking')->name('admin.online_exams.answers.manual_mark');
     Route::post('admin/online-exams/submissions/{submission}/finalize', 'finalizeResult')->name('admin.online_exams.submissions.finalize');
     Route::post('admin/online-exams/submissions/{submission}/publish-result', 'publishResult')->name('admin.online_exams.submissions.publish_result');
     Route::post('admin/online-exams/submissions/{submission}/return', 'returnResultForCorrection')->name('admin.online_exams.submissions.return');
+    // Recovery for a result the old student-submit path marked `finalized` WITHOUT
+    // handing it over - a state no current path can reach, and which therefore
+    // belongs to no queue and admits no action.
+    //
+    // ADMINISTRATOR ONLY. Deliberately NOT a lecturer route, and deliberately NOT
+    // named with "reopen":
+    // `CourseOfferingAttendanceTest::test_lecturer_can_never_reopen_a_finalised_register`
+    // sweeps EVERY route URI in the application for the substring "reopen", because a
+    // lecturer able to undo a state transition is the hazard that test guards
+    // against. Rather than narrow that guard, this is (a) an admin action, and
+    // (b) named `return-to-marking`, which matches the vocabulary already used for
+    // `.../return` (returned_for_correction). The lecturer is shown the anomaly and
+    // escalates.
+    //
+    // Audited, and refused for any coherent row. See adminReopenMarkingForReview().
+    Route::post('admin/online-exams/submissions/{submission}/return-to-marking', 'adminReopenMarkingForReview')->name('admin.online_exams.submissions.return_to_marking');
     // Question Bank
     Route::get('admin/question-bank',                        'questionBank')->name('admin.question_bank.index');
     Route::get('admin/question-bank/metadata',               'questionMetadata')->name('admin.question_bank.metadata');
@@ -1602,6 +1816,12 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'student')->g
     Route::post('student/online-exams/submissions/{submission}/readiness', 'readiness')->name('student.online_exam.readiness');
     Route::post('student/online-exams/submissions/{submission}/save-answer', 'saveAnswer')->name('student.online_exam.save_answer');
     Route::post('student/online-exams/submissions/{submission}/heartbeat', 'heartbeat')->name('student.online_exam.heartbeat');
+
+    // Restricted-mode incidents (focus lost/returned, tab hidden, connection lost or
+    // restored) recorded against the student's OWN attempt. Records evidence only: it
+    // never submits, penalises or disqualifies, because no institutional policy
+    // authorises an automatic consequence for leaving the page.
+    Route::post('student/online-exams/submissions/{submission}/incident', 'recordExamIncident')->name('student.online_exam.incident');
     Route::post('student/online-exams/submissions/{submission}/proctoring-event', 'proctoringEvent')->name('student.online_exam.proctoring_event');
     Route::post('student/online-exams/submissions/{submission}/timeout-submit', 'timeoutSubmit')->name('student.online_exam.timeout_submit');
     Route::get('student/online-exams/{id}/take',    'takeExam')->name('student.online_exam.take');
@@ -1653,7 +1873,20 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'teacher')->g
     Route::get('teacher/online-exams/{exam}/proctoring/{submission_id}', 'teacherReviewProctoring')->name('teacher.online_exams.proctoring.review');
     Route::get('teacher/online-exams/{exam}/results', 'teacherResults')->name('teacher.online_exams.results');
     Route::post('teacher/online-exams/answers/{answer}/mark', 'teacherMarkAnswer')->name('teacher.online_exams.answers.mark');
+
+    // Recording a marking decision keyed by (submission, question) rather than by
+    // answer id, because a question the student left blank may have NO answer row at
+    // all — and that is exactly the case a lecturer must still be able to decide.
+    // Without this, exam 17 submission 12's question 39 was visible as outstanding but
+    // had nothing to act on, so "Submit Marks for Admin Review" could only ever 422.
+    // Registered above the results/{submission} routes so it is never shadowed.
+    Route::post('teacher/online-exams/submissions/{submission}/questions/{question}/decision', 'recordQuestionDecision')
+        ->name('teacher.online_exams.submissions.record_decision');
     Route::post('teacher/online-exams/results/{submission}/finalize', 'teacherFinalizeResult')->name('teacher.online_exams.results.finalize');
+    // Recovery for a result that was marked finalized WITHOUT being handed over -
+    // the unreachable state written by the old student-submit path. ADMINISTRATOR
+    // ONLY: no lecturer route may reopen a state transition. See
+    // adminReopenMarkingForReview().
     Route::post('teacher/online-exams/results/{submission}/publish', 'publishResult')->name('teacher.online_exams.results.publish');
 });
 
@@ -1698,6 +1931,11 @@ Route::controller(LiveClassController::class)->middleware('auth', 'admin', 'rbac
     Route::delete('admin/live-classes/{liveClass}',    'destroy')->name('admin.live_classes.destroy');
 
     Route::post('admin/live-classes/{liveClass}/cancel',  'cancel')->name('admin.live_classes.cancel');
+Route::post('admin/live-classes/{liveClass}/recording', 'attachRecording')->name('admin.live_classes.recording.attach');
+    // "End Class": the lecturer finished teaching. Deliberately a different
+    // action from cancel (the class will not run) and from unpublish (withdraw
+    // it from students). It records completion and preserves all history.
+    Route::post('admin/live-classes/{liveClass}/end',     'end')->name('admin.live_classes.end');
     Route::post('admin/live-classes/{liveClass}/publish', 'publish')->name('admin.live_classes.publish');
     Route::get('admin/live-classes/{liveClass}/join',     'join')->name('admin.live_classes.join');
     Route::post('admin/live-classes/{liveClass}/attendance-leave', 'attendanceLeave')->name('admin.live_classes.attendance_leave');
@@ -1718,9 +1956,331 @@ Route::controller(LiveClassController::class)->middleware('auth', 'admin', 'rbac
 
 Route::controller(LiveClassController::class)->middleware('auth', 'student')->group(function () {
     Route::get('student/live-classes',                    'studentIndex')->name('student.live_classes.index');
+    // The student's read-only detail page. A notification's "View Live Class"
+    // lands here, NOT on /join: joining is a separate, deliberate action that
+    // is only available inside the join window. Pointing the CTA straight at
+    // /join meant a student who clicked "View" on a perfectly valid scheduled
+    // class was told "Joining is not available for this meeting right now",
+    // which reads as a broken class rather than a class that has not started.
+    Route::get('student/live-classes/{liveClass}',         'studentShow')->name('student.live_classes.show');
     Route::get('student/live-classes/{liveClass}/join',   'join')->name('student.live_classes.join');
     Route::post('student/live-classes/{liveClass}/attendance-leave', 'attendanceLeave')->name('student.live_classes.attendance_leave');
     Route::get('student/live-classes/{liveClass}/materials', 'materials')->name('student.live_classes.materials');
+});
+
+// Lecturer academic workspace (HEI Course Offerings).
+// My Course Offerings and the per-Offering teaching workspace are resolved
+// exclusively from the signed-in lecturer's own CourseOfferingLecturerAllocation,
+// tenant-checked in LecturerCourseOfferingAccess; no hidden navigation, no id trust.
+Route::controller(TeacherCourseOfferingController::class)->middleware('auth', 'teacher')->prefix('teacher/course-offerings')->name('teacher.course_offerings.')->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/{id}', 'show')->whereNumber('id')->name('show');
+                // A Course Offering cover image, served through an authorising route
+            // because the bytes live OUTSIDE the web root. Nothing renders this
+            // yet: the card design is deferred, and a link with no design around
+            // it is a stub. The capability and the safe read path exist first so
+            // the image never has to be moved later.
+                        // A LEAF name, not a full one: the enclosing group already applies
+            // ->name('teacher.course_offerings.'), and a full name here would
+            // register DOUBLED. The URI above is relative for the same reason.
+            Route::get('/{id}/cover-image', 'coverImage')->whereNumber('id')->name('cover');
+
+    // The course cover UPLOAD, on the same group as the read above - so the same
+    // prefix, the same name prefix and the same `auth, teacher` middleware apply
+    // without being restated, and a URL cannot end up doubled.
+    //
+    // The bytes now HAVE somewhere to come from. `CourseCoverImage` was written as
+    // capability with no interface: the relationship, the safe read path and
+    // `set()`/`clear()` behind an allocation check all existed, and nothing called
+    // them - so a lecturer had no way to give a course a cover and the read path
+    // led to nothing. The service enforces the allocation, the extension
+    // allowlist, the 4 MB limit, the private location and the disposal of the
+    // superseded file; these routes only hand it the upload.
+    Route::post('/{id}/cover-image', 'setCoverImage')->whereNumber('id')->name('cover.set');
+    Route::post('/{id}/cover-image/remove', 'clearCoverImage')->whereNumber('id')->name('cover.clear');
+Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
+    // ── Course Offering Quizzes & Exams ─────────────────────────────────────
+    //
+    // A CONTEXT BINDER, not an exam engine. `store()` creates an assessment bound
+    // to this Offering and then redirects to the ENGINE's own question page
+    // (`teacher.online_exams.questions.index`), so authoring, the Question Bank,
+    // the manual marking queue, publication and result release all stay in the one
+    // place they have always lived.
+    //
+    // The Offering in the URL is the authority for both sides: the lecturer must be
+    // allocated to it, and the exam must belong to it. Neither is inferred from
+    // the request body.
+    Route::controller(TeacherCourseOfferingExamController::class)
+        ->prefix('/{id}/exams')->whereNumber('id')->name('exams.')
+        ->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/create', 'create')->name('create');
+            Route::post('/', 'store')->name('store');
+        });
+
+    // ── Course Offering Assignments (lecturer author) ───────────────────
+    // Authoring is a full page, never a drawer: an assignment is a document.
+    // See TeacherCourseOfferingAssignmentController for why every write
+    // re-resolves the assignment inside the Offering in the URL.
+    Route::controller(TeacherCourseOfferingAssignmentController::class)
+        ->prefix('/{id}/assignments')->whereNumber('id')->name('assignments.')
+        ->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/create', 'create')->name('create');
+            Route::post('/', 'store')->name('store');
+            Route::get('/{assignment}', 'show')->whereNumber('assignment')->name('show');
+            Route::get('/{assignment}/edit', 'edit')->whereNumber('assignment')->name('edit');
+            Route::put('/{assignment}', 'update')->whereNumber('assignment')->name('update');
+            Route::delete('/{assignment}', 'destroy')->whereNumber('assignment')->name('destroy');
+
+            // Preview as a student will read it. Also POSTs, so an unsaved
+            // draft can be checked before committing.
+            Route::get('/{assignment}/preview', 'preview')->whereNumber('assignment')->name('preview');
+            Route::post('/{assignment}/preview', 'preview')->whereNumber('assignment')->name('preview.draft');
+
+            // Lifecycle: draft -> scheduled/published -> closed. One action, with
+            // the target state in the URL, so the permitted moves are the ones
+            // AssignmentLifecycle allows and nothing else is reachable.
+            Route::post('/{assignment}/state/{to}', 'transition')
+                ->whereNumber('assignment')->whereIn('to', ['draft', 'scheduled', 'published', 'closed'])
+                ->name('state');
+
+            // -- The question builder ------------------------------------------------
+            //
+            // RELATIVE paths and LEAF names throughout: the enclosing group already
+            // applies ->prefix('/{id}/assignments') and ->name('assignments.'). A
+            // leading slash or a dotted name here would register
+            // teacher/course-offerings/teacher/course-offerings/... and present as a
+            // 404 with nothing in the log. Declared before the /{question} routes so
+            // the file reads in the order a browser matches.
+            Route::get('/{assignment}/questions', 'questions')->whereNumber('assignment')->name('questions');
+            Route::post('/{assignment}/questions', 'storeQuestion')->whereNumber('assignment')->name('questions.store');
+            Route::post('/{assignment}/questions/order', 'reorderQuestions')->whereNumber('assignment')->name('questions.reorder');
+            // Make the assignment total equal the sum of its questions: the one-click
+            // that makes mark integrity achievable without a lecturer adding up the
+            // paper they just wrote.
+            Route::post('/{assignment}/questions/adopt-marks', 'adoptQuestionMarks')
+                ->whereNumber('assignment')->name('questions.adopt_marks');
+            Route::put('/{assignment}/questions/{question}', 'updateQuestion')
+                ->whereNumber('assignment')->whereNumber('question')->name('questions.update');
+            Route::delete('/{assignment}/questions/{question}', 'destroyQuestion')
+                ->whereNumber('assignment')->whereNumber('question')->name('questions.destroy');
+
+            // Marking
+            Route::get('/{assignment}/submissions', 'submissions')->whereNumber('assignment')->name('submissions');
+            Route::get('/{assignment}/submissions/{submission}', 'submission')
+                ->whereNumber('assignment')->whereNumber('submission')->name('submissions.show');
+            // The file a student submitted, for marking. Authorised exactly as
+            // the page that links it, and it is the only way to reach one: the
+            // stored path is outside the web root.
+            Route::get('/{assignment}/submissions/{submission}/file', 'submissionFile')
+                ->whereNumber('assignment')->whereNumber('submission')->name('submissions.file');
+
+            // Play back the student's OWN audio or video inline, so a recording they
+            // attach can be listened to and watched rather than downloaded and
+            // opened in another program.
+            //
+            // Authorised through resolveSubmissionForStudent(), which proves the
+            // attempt belongs to the authenticated student inside the released
+            // assignment - so another student's recording is a 404, and the bytes
+            // live outside the web root so there is no other way in. A SEPARATE
+            // route from evidence because only a strict mime allowlist may be
+            // rendered inside a page.
+            Route::get('/{assignment}/submissions/{submission}/media/{item}', 'evidenceMedia')
+                ->whereNumber('assignment')->whereNumber('submission')->whereNumber('item')
+                ->name('submissions.media');
+            // ONE piece of a student's evidence, for marking. The submission is
+            // resolved through the manager path first, which proves a current
+            // allocation on the Offering in the URL and that the submission
+            // belongs to the assignment in that Offering; the item is then scoped
+            // to THAT attempt.
+            Route::get('/{assignment}/submissions/{submission}/evidence/{item}', 'evidenceFile')
+                ->whereNumber('assignment')->whereNumber('submission')->whereNumber('item')
+                ->name('submissions.evidence');
+
+            // Mark a QUESTION-BASED attempt question by question.
+            //
+            // This route HAS NO marks_awarded INPUT, by design. The total is the sum
+            // of the per-question marks, so there is nothing a lecturer could type
+            // that would contradict the marks they just gave.
+            Route::post('/{assignment}/submissions/{submission}/grade-by-question', 'gradeByQuestion')
+                ->whereNumber('assignment')->whereNumber('submission')->name('submissions.grade_by_question');
+
+            // Render ONE evidence item inline, for a marker.
+            //
+            // A SEPARATE route from evidence, not a ?inline=1 flag on it. Whether a
+            // file is safe to render inside a page belongs in the route table, not
+            // in whatever built the URL. This one streams and refuses any mime not
+            // on a strict allowlist; evidence always downloads.
+            Route::get('/{assignment}/submissions/{submission}/media/{item}', 'evidenceMedia')
+                ->whereNumber('assignment')->whereNumber('submission')->whereNumber('item')
+                ->name('submissions.media');
+
+            // Recording a mark and RETURNING it to the student are separate
+            // actions, because recording one must not be the same as publishing it.
+            Route::post('/{assignment}/submissions/{submission}/grade', 'grade')
+                ->whereNumber('assignment')->whereNumber('submission')->name('submissions.grade');
+            Route::post('/{assignment}/submissions/{submission}/release', 'release')
+                ->whereNumber('assignment')->whereNumber('submission')->name('submissions.release');
+            Route::post('/{assignment}/submissions/{submission}/unrelease', 'unrelease')
+                ->whereNumber('assignment')->whereNumber('submission')->name('submissions.unrelease');
+
+            // Lecturer handouts
+            Route::post('/{assignment}/resources', 'storeResource')->whereNumber('assignment')->name('resources.store');
+        });
+
+    // Handout bytes. RELATIVE paths, because the enclosing group already applies
+    // ->prefix('teacher/course-offerings') and ->name('teacher.course_offerings.')
+    // to every route declared inside it. A full path AND a full name here
+    // registers DOUBLED - teacher/course-offerings/teacher/course-offerings/...
+    // - which presents as a puzzling failure only on the data shape that
+    // reaches the bad line. The resource row already carries the Offering, so
+    // the Offering id does not need to be in this path at all.
+    //
+    // The controller group is stated explicitly: left to inherit the enclosing
+    // TeacherCourseOfferingController, these bind to a class with no
+    // resourceFile() method and 404 with nothing in the log.
+    Route::controller(TeacherCourseOfferingAssignmentController::class)->group(function () {
+        Route::post('assignment-resources/{resource}/delete', 'destroyResource')
+            ->whereNumber('resource')
+            ->name('assignments.resources.destroy');
+        Route::get('assignment-resources/{resource}', 'resourceFile')
+            ->whereNumber('resource')
+            ->name('assignments.resources.file');
+    });
+
+    // ── Course Content (lecturer author) ─────────────────────────────────
+    // Full-page authoring, never a drawer or modal. Content lives inside a
+    // module, which lives inside this Offering - the Offering is the only
+    // delivery container, so there is no second Course and no second content
+    // tree to drift from it.
+    //
+    // The group sets the route-name PREFIX and the prefix is applied by the
+    // enclosing group's own name(), so the `name()` here supplies only the
+    // leaf. Chaining a second name() would OVERWRITE the prefix rather than
+    // append to it, which is a silent and very confusing way to lose a route.
+    Route::controller(CourseOfferingContentController::class)->prefix('/{id}/content')->whereNumber('id')->name('content.')->group(function () {
+        Route::get('/', 'index')->name('index');
+
+        Route::post('/modules', 'storeModule')->name('modules.store');
+        Route::put('/modules/{module}', 'updateModule')->whereNumber('module')->name('modules.update');
+        // THE MODULE LIFECYCLE, as ONE route with the target state in the URL.
+        //
+        // The same shape `assignments/{assignment}/state/{to}` already uses in this
+        // file, and for the same reason: the legal moves are decided in
+        // `CourseOfferingModuleLifecycle`, so the reachable moves are exactly those
+        // the rules permit and nothing else can be reached by editing the address.
+        //
+        // `scheduled` is NOT a status. It is `published` with a future
+        // `released_at`, already how `displayStatusLabel()` renders it and how
+        // `isReleasedToStudents()` decides visibility - so a fourth column value
+        // would create a SECOND answer to "may a student see this" rather than
+        // removing one. `released_at` is optional here: absent means publish NOW.
+        Route::post('/modules/{module}/state/{to}', 'transitionModule')
+        ->whereNumber('module')
+        ->whereIn('to', ['draft', 'published'])
+        ->name('modules.transition');
+        Route::post('/modules/order', 'reorderModules')->name('modules.reorder');
+        // Lesson order is scoped to a module, and the module is re-resolved
+        // inside the Offering - so a reorder cannot move a lesson between
+        // modules, Offerings or tenants, only renumber within one module.
+        Route::post('/modules/{module}/lessons/order', 'reorderLessons')
+            ->whereNumber('module')
+            ->name('lessons.reorder');
+
+        Route::get('/lessons/create', 'createLesson')->name('lessons.create');
+        Route::post('/lessons', 'storeLesson')->name('lessons.store');
+        Route::get('/lessons/{lesson}/edit', 'editLesson')->whereNumber('lesson')->name('lessons.edit');
+        Route::put('/lessons/{lesson}', 'updateLesson')->whereNumber('lesson')->name('lessons.update');
+        Route::get('/lessons/{lesson}/preview', 'previewLesson')->whereNumber('lesson')->name('lessons.preview');
+        // The editor also POSTs here, carrying the fields currently in the form,
+        // so "Preview" shows unsaved work rather than the last saved version.
+        // `preview_draft` is the flag that tells the controller to prefer the
+        // request body - and to hold it to the same sanitizer as a save, so
+        // preview cannot become a way to render unfiltered HTML.
+        Route::post('/lessons/{lesson}/preview', 'previewLesson')->whereNumber('lesson')->name('lessons.preview.draft');
+
+        Route::post('/lessons/{lesson}/resources', 'storeResource')->whereNumber('lesson')->name('resources.store');
+    });
+
+    // Attachment bytes.
+    //
+    // The controller group is stated explicitly. Left to inherit the enclosing
+    // `Route::controller(TeacherCourseOfferingController::class)`, this binds to
+    // a controller that has no `resourceFile` method - a 404 with no error
+    // anywhere, because the method simply does not exist over there.
+    //
+    // The path and the name are RELATIVE, and that is the load-bearing part.
+    // The enclosing group already carries ->prefix('teacher/course-offerings')
+    // and ->name('teacher.course_offerings.'), and Laravel applies BOTH to
+    // every route declared inside it - including routes in a nested group. So
+    // writing the full path and the full name here does not make the route
+    // absolute; it prefixes them a SECOND time and registers
+    //   uri   teacher/course-offerings/teacher/course-offerings/content/...
+    //   name  teacher.course_offerings.teacher.course_offerings.content....
+    // A view asking for `route('teacher.course_offerings.content.resources.file')`
+    // then throws "Route not defined" - and ONLY on a lesson that actually has
+    // an attachment, because the template resolves that route inside the loop
+    // over the lesson's resources. Every other route in this group is relative
+    // for exactly this reason.
+    Route::controller(CourseOfferingContentController::class)->group(function () {
+        Route::get('content/resources/{resource}', 'resourceFile')
+            ->whereNumber('resource')
+            ->name('content.resources.file');
+    });
+
+    // Offering-contextual Live Class creation for a LECTURER, mirroring the
+    // admin group. These are the SAME controller actions the admin uses, so the
+    // Offering remains the single authoritative delivery container: the Offering
+    // id is route context and is never a client-supplied field, and the
+    // authorization is the identical LiveClassAccessService check
+    // (canLecturerCreateForOffering), which routes through the single shared
+    // SystemTesterAccess definition for a pre-start tester. The generic
+    // teacher/live-classes/create form is left alone: it is the legacy
+    // Class/Section route and cannot express Offering context.
+    Route::controller(LiveClassController::class)->prefix('/{id}/live-classes')->name('live_classes.')->group(function () {
+        Route::get('/create', 'createForOffering')->whereNumber('id')->name('create');
+        Route::post('/', 'storeForOffering')->whereNumber('id')->name('store');
+    });
+});
+
+// Lecturer attendance for a Course Offering. Separate tables from the K12 daily
+// register and from Live Class participation: a session is one teaching
+// occurrence and a record is one student's status in it. Read-only for a
+// lecturer without a current allocation on an in-progress Offering.
+Route::controller(TeacherCourseOfferingAttendanceController::class)->middleware('auth', 'teacher')->prefix('teacher/course-offerings')->name('teacher.course_offerings.attendance.')->group(function () {
+    Route::get('/{id}/attendance', 'index')->whereNumber('id')->name('index');
+    Route::get('/{id}/attendance/create', 'create')->whereNumber('id')->name('create');
+    Route::post('/{id}/attendance', 'store')->whereNumber('id')->name('store');
+    Route::get('/{id}/attendance/{session}', 'show')->whereNumber('id')->whereNumber('session')->name('show');
+    Route::post('/{id}/attendance/{session}', 'mark')->whereNumber('id')->whereNumber('session')->name('mark');
+    Route::post('/{id}/attendance/{session}/finalise', 'finalise')->whereNumber('id')->whereNumber('session')->name('finalise');
+    // No lecturer reopen route: a finalised register is read-only to the lecturer.
+    // Reopening belongs to a future governed Admin/Academic Office workflow.
+});
+
+/*
+| ── Google OAuth ───────────────────────────────────────────────────────────
+|
+| The callback path `/auth/google/callback` is the URI registered in the Google
+| Cloud console and MUST NOT be changed without changing the registration too.
+| Google compares it exactly; a mismatch is `redirect_uri_mismatch` at the token
+| exchange, which reads like a credentials problem and is not one.
+|
+| `auth` only — no role middleware. The flow itself authorises nothing: it
+| connects a Google account to whoever is signed in. What that account may then
+| be used FOR is decided per-request by the lecturer's own allocation
+| (LiveClassAccessService), not here. Putting a role gate on the OAuth handshake
+| would couple "can start a class" to "may connect an account", which are not the
+| same question.
+|
+| Disconnect is POST: it changes state, so it must not be reachable by a GET that
+| a prefetcher, a chat client or a crawler's link preview could trigger.
+*/
+Route::controller(GoogleAuthController::class)->middleware('auth')->group(function () {
+    Route::get('auth/google/connect',     'redirect')->name('google.auth.connect');
+    Route::get('auth/google/callback',    'callback')->name('google.auth.callback');
+    Route::post('auth/google/disconnect', 'disconnect')->name('google.auth.disconnect');
 });
 
 Route::controller(LiveClassController::class)->middleware('auth', 'teacher')->group(function () {
@@ -1734,6 +2294,8 @@ Route::controller(LiveClassController::class)->middleware('auth', 'teacher')->gr
     Route::delete('teacher/live-classes/{liveClass}',     'destroy')->name('teacher.live_classes.destroy');
 
     Route::post('teacher/live-classes/{liveClass}/cancel',  'cancel')->name('teacher.live_classes.cancel');
+Route::post('teacher/live-classes/{liveClass}/recording', 'attachRecording')->name('teacher.live_classes.recording.attach');
+    Route::post('teacher/live-classes/{liveClass}/end',     'end')->name('teacher.live_classes.end');
     Route::post('teacher/live-classes/{liveClass}/publish', 'publish')->name('teacher.live_classes.publish');
     Route::get('teacher/live-classes/{liveClass}/join',     'join')->name('teacher.live_classes.join');
     Route::post('teacher/live-classes/{liveClass}/attendance-leave', 'attendanceLeave')->name('teacher.live_classes.attendance_leave');
@@ -1902,12 +2464,49 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\A
     Route::delete('admin/roles-permissions/staff/{id}/permissions/{permission}', 'staffRevoke')->name('admin.rbac.staff.permissions.revoke');
 });
 
+// Staff record management reached from the Staff Directory: View Profile and
+// the full-page Edit Staff correction form.
+//
+// Deliberately NOT under the admin.rbac.staff.* prefix, which is access
+// governance (users.assign_roles). These are HR profile routes and are gated by
+// staff.view / staff.edit instead, so correcting a designation never requires —
+// and never implies — the right to change somebody's permissions.
+Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\Admin\StaffProfileController::class)->group(function () {
+    Route::get('admin/staff/{id}/profile', 'show')->name('admin.staff.profile.show');
+    Route::get('admin/staff/{id}/profile/edit', 'edit')->name('admin.staff.profile.edit');
+    Route::put('admin/staff/{id}/profile', 'update')->name('admin.staff.profile.update');
+    Route::post('admin/staff/{id}/employment-status', 'status')->name('admin.staff.profile.status');
+});
+
+// Staff account access: the EXISTING governed setup workflow
+// (GenericStaffAccountAccessController), reachable for every staff base role.
+// Gated by staff.accounts — the platform's own "Staff account access" permission —
+// and NOT by users.assign_roles, because issuing a password setup link is an
+// account concern, not the Roles & Permissions surface. Same controller, same
+// broker, same mail, same audit action as the other-staff entry points below.
+Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\Admin\GenericStaffAccountAccessController::class)->group(function () {
+    Route::get('admin/staff/{id}/account-access', 'show')->name('admin.staff.account-access.show');
+    Route::post('admin/staff/{id}/account-access/setup-link', 'sendSetupLink')->name('admin.staff.account-access.send');
+});
+
 // Staff → Add Staff: a launcher into the existing per-role create workflows (no creation logic of
 // its own). Same 'school_admin:hr' guard as the create routes it opens.
 Route::middleware(['auth', 'admin', 'rbac', 'school_admin:hr'])->group(function () {
     Route::get('admin/staff/add', [\App\Http\Controllers\Admin\StaffLauncherController::class, 'index'])->name('admin.staff.add');
     Route::get('admin/staff/add/other', [\App\Http\Controllers\Admin\OtherStaffController::class, 'create'])->name('admin.staff.other.create');
     Route::post('admin/staff/add/other', [\App\Http\Controllers\Admin\OtherStaffController::class, 'store'])->name('admin.staff.other.store');
+// One professional full-page Create Staff form for every staff type, replacing
+// the narrow drawer. Additive: the per-role create routes above are unchanged
+// and remain the authority when a form is opened directly.
+Route::get('admin/staff/create/{type}', [\App\Http\Controllers\Admin\StaffCreateController::class, 'create'])
+    ->whereIn('type', array_keys(\App\Http\Controllers\Admin\StaffCreateController::TYPES))
+    ->name('admin.staff.create');
+Route::post('admin/staff/create/{type}', [\App\Http\Controllers\Admin\StaffCreateController::class, 'store'])
+    ->whereIn('type', array_keys(\App\Http\Controllers\Admin\StaffCreateController::TYPES))
+    ->name('admin.staff.create.store');
+// Post-creation confirmation. Reachable only for the record created in the
+// current session, and only once, so it exposes no other staff record.
+Route::get('admin/staff/created', [\App\Http\Controllers\Admin\StaffCreateController::class, 'created'])->name('admin.staff.created');
     Route::get('admin/staff/other/{id}/edit', [\App\Http\Controllers\Admin\OtherStaffController::class, 'edit'])->name('admin.staff.other.edit');
     Route::put('admin/staff/other/{id}', [\App\Http\Controllers\Admin\OtherStaffController::class, 'update'])->name('admin.staff.other.update');
 });

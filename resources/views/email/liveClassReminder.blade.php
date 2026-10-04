@@ -33,7 +33,31 @@
                                 <tr><td>{{ get_phrase('Lecturer') }}: <strong>{{ $data['teacher_name'] }}</strong></td></tr>
                             @endif
                             <tr><td>{{ get_phrase('Date') }}: <strong>{{ $data['date'] }}</strong></td></tr>
-                            <tr><td>{{ get_phrase('Time') }}: <strong>{{ $data['time'] }}</strong></td></tr>
+                            <tr>
+                                <td>
+                                    {{ get_phrase('Time') }}: <strong>{{ $data['time'] }}</strong>
+                                    {{-- Always name the zone. "10:00" on its own is
+                                         ambiguous between Kampala and London, and
+                                         the reader of this email is the only one
+                                         who knows where they are. --}}
+                                    @if(!empty($data['timezone_label']))
+                                        <span style="color:#7B7F84;">({{ $data['timezone_label'] }})</span>
+                                    @endif
+                                </td>
+                            </tr>
+                            @if(!empty($data['shows_institution_time']))
+                                {{-- Academically sensitive: also give the
+                                     institution's official reading of the very
+                                     same instant. Same event, two clocks - not
+                                     two events. --}}
+                                <tr>
+                                    <td style="color:#7B7F84;">
+                                        {{ get_phrase('Institution time') }}:
+                                        <strong>{{ $data['institution_date'] }} {{ $data['institution_time'] }}</strong>
+                                        ({{ $data['institution_timezone_label'] }})
+                                    </td>
+                                </tr>
+                            @endif
                         </table>
                     </td>
                 </tr>

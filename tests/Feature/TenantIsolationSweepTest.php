@@ -50,8 +50,12 @@ class TenantIsolationSweepTest extends TestCase
         'appraisals' => ['id' => 'n', 'school_id' => 'n', 'class_id' => 'n', 'teacher_id' => 's', 'ans_type' => 's', 'title' => 's', 'question' => 's', 'status' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
         'routines' => ['id' => 'n', 'class_id' => 'n', 'section_id' => 'n', 'subject_id' => 'n', 'programme_id' => 'n', 'starting_hour' => 'n', 'ending_hour' => 'n', 'starting_minute' => 'n', 'ending_minute' => 'n', 'day' => 's', 'teacher_id' => 'n', 'room_id' => 'n', 'session_id' => 'n', 'school_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
         'frontend_events' => ['id' => 'n', 'title' => 's', 'timestamp' => 'n', 'status' => 'n', 'school_id' => 'n', 'session_id' => 'n', 'created_by' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
-        'assignments' => ['id' => 'n', 'school_id' => 'n', 'title' => 's', 'subject_id' => 'n', 'class_id' => 'n', 'teacher_id' => 'n', 'instructions' => 's', 'due_date' => 'd', 'max_marks' => 'n', 'submission_type' => 's', 'is_published' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
-        'assignment_submissions' => ['id' => 'n', 'assignment_id' => 'n', 'student_id' => 'n', 'submission' => 's', 'file_path' => 's', 'link' => 's', 'submitted_at' => 'd', 'marks_awarded' => 'n', 'feedback' => 's', 'status' => 's', 'created_at' => 'd', 'updated_at' => 'd'],
+        // `course_offering_id` added to match production, where the Course
+        // Offering Assignments migration put it. Every row this sweep creates is
+        // NULL for it - these are the legacy K12 rows - which is what makes them
+        // visible to `->k12()` and keeps the sweep testing the legacy action.
+        'assignments' => ['id' => 'n', 'school_id' => 'n', 'title' => 's', 'subject_id' => 'n', 'class_id' => 'n', 'teacher_id' => 'n', 'instructions' => 's', 'due_date' => 'd', 'max_marks' => 'n', 'submission_type' => 's', 'is_published' => 'n', 'course_offering_id' => 'z', 'created_at' => 'd', 'updated_at' => 'd'],
+        'assignment_submissions' => ['id' => 'n', 'assignment_id' => 'n', 'student_id' => 'n', 'submission' => 's', 'file_path' => 's', 'link' => 's', 'submitted_at' => 'd', 'marks_awarded' => 'n', 'feedback' => 's', 'status' => 's', 'course_offering_id' => 'z', 'created_at' => 'd', 'updated_at' => 'd'],
     ];
 
     private const ROLE_BY_PREFIX = ['admin' => 2, 'accountant' => 4, 'librarian' => 5, 'teacher' => 3, 'warden' => 10, 'parent' => 6, 'student' => 7];
@@ -132,6 +136,12 @@ class TenantIsolationSweepTest extends TestCase
             $row[$name] = match ($type) {
                 'n' => $name === 'status' ? 0 : 1,
                 'd' => now()->toDateTimeString(),
+                // Always NULL. For columns meaningful only in the Course Offering
+                // world, so the rows this sweep creates stay LEGACY rows and keep
+                // exercising the legacy code paths. 'n' would fill them with 1 and
+                // silently reclassify them, which the "same-school operation still
+                // works" assertion is there to notice.
+                'z' => null,
                 default => $name === 'status' ? 'pending' : "{$marker}{$name}",
             };
         }

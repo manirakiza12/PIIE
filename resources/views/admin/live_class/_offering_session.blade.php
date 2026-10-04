@@ -1,4 +1,10 @@
 @php($actions = $liveClass->workspace_actions)
+{{-- The card's times come from the ONE stored instant, in the reader's own
+     clock, via the single display helper. They used to be formatted with a raw
+     ->timezone($liveClass->timezone) call, which pinned every reader to the
+     SCHEDULER's zone and produced a different number for a student who was not
+     in it. --}}
+@php($cardDisplay = app(App\Support\LiveClasses\LiveClassDisplay::class)->for($liveClass, auth()->user()))
 <article class="border rounded p-3 mb-2" aria-labelledby="live-class-title-{{ $liveClass->id }}">
     <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
         <div class="flex-grow-1">
@@ -10,9 +16,9 @@
                 @endif
             </div>
             <div class="d-flex flex-wrap gap-x-3 gap-y-1 text-muted small">
-                <span>{{ $liveClass->scheduled_at ? $liveClass->scheduled_at->timezone($liveClass->timezone ?: config('app.timezone'))->format('D, M j, Y') : get_phrase('Time to be confirmed') }}</span>
+                <span>{{ $cardDisplay->localStart() ? $cardDisplay->localStart()->format('D, M j, Y') : get_phrase('Time to be confirmed') }}</span>
                 @if($liveClass->scheduled_at)
-                    <span>{{ $liveClass->scheduled_at->timezone($liveClass->timezone ?: config('app.timezone'))->format('g:i A') }}@if($liveClass->ends_at) – {{ $liveClass->ends_at->timezone($liveClass->timezone ?: config('app.timezone'))->format('g:i A') }}@endif {{ $liveClass->timezone ?: config('app.timezone') }}</span>
+                    <span>{{ $cardDisplay->timeRange() }} ({{ $cardDisplay->zoneNote() }})</span>
                 @endif
                 <span>{{ get_phrase('Facilitator') }}: {{ $liveClass->teacher->name ?? '—' }}</span>
                 @if((int)$liveClass->resource_count > 0)<span>{{ $liveClass->resource_count }} {{ get_phrase('resources') }}</span>@endif

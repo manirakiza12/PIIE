@@ -47,6 +47,18 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
         Schema::create('addons', function (Blueprint $table): void {
             $table->id(); $table->string('unique_identifier')->nullable(); $table->string('status')->nullable();
         });
+        // Needed only by the System Testing student-boundary tests below: the RBAC
+        // grant table and the Academic Period, so "before the period starts" is a
+        // real condition rather than an assumed one.
+        Schema::create('user_permissions', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('school_id'); $table->unsignedBigInteger('user_id');
+            $table->string('permission', 100); $table->timestamps();
+            $table->unique(['user_id', 'permission']);
+        });
+        Schema::create('academic_periods', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('school_id'); $table->unsignedBigInteger('academic_year_id');
+            $table->string('label'); $table->date('start_date'); $table->date('end_date'); $table->string('status');
+        });
         DB::table('schools')->insert([['id' => 1, 'title' => 'Tenant A'], ['id' => 2, 'title' => 'Tenant B']]);
         $this->subjectA = $this->subject(1, 'Course A');
         $this->subjectB = $this->subject(1, 'Course B');
@@ -255,12 +267,47 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
             CourseOfferingLecturerAllocation::ROLE_TEACHING_ASSISTANT => false,
             CourseOfferingLecturerAllocation::ROLE_LAB_INSTRUCTOR => false,
             CourseOfferingLecturerAllocation::ROLE_GUEST_LECTURER => false,
-        ] as $role => $host) {
+        ] as $role => $isHostRole) {
             $lecturer = $this->user($role.'-join@example.test', 3, 1);
             $this->allocation($lecturer, $this->offeringA, $role);
             $response = $this->actingAs($lecturer)->get(route('teacher.live_classes.join', $class->id));
-            $response->assertOk()->assertViewHas('isModerator', $host);
+            $response->assertOk()
+                // PIIE authority: may this person open the classroom at all?
+                ->assertViewHas('piiAuthorisedHost', $isHostRole)
+                // Provider authority: can PIIE PROVE to Jitsi that this person is
+                // a moderator? Not on a public room with no JWT secret - nobody
+                // is, including a Primary Lecturer. Asserting the opposite is
+                // what used to happen, and it told a lecturer they controlled a
+                // room they could not actually moderate.
+                ->assertViewHas('isModerator', false)
+                ->assertViewHas('jitsiConfigured', false);
         }
+
+        // With a real signed token configured, the claim becomes TRUE and only
+        // then - which is the honest causal chain: provider credentials, not a
+        // PIIE role, make someone a moderator.
+        config([
+            'services.jitsi.algorithm' => 'HS256',
+            'services.jitsi.app_id' => 'vpaas-magic-cookie-abc',
+            'services.jitsi.app_secret' => str_repeat('s', 32),
+        ]);
+        $this->assertTrue(\App\Support\LiveClasses\JitsiTokenService::isConfigured());
+        $primary = $this->user('primary-moderator@example.test', 3, 1);
+        $this->allocation($primary, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
+        $this->actingAs($primary)->get(route('teacher.live_classes.join', $class->id))
+            ->assertOk()
+            ->assertViewHas('piiAuthorisedHost', true)
+            ->assertViewHas('isModerator', true)
+            ->assertViewHas('jitsiConfigured', true);
+
+        // And a Teaching Assistant is still not a moderator even WITH the token.
+        $ta = $this->user('ta-moderator@example.test', 3, 1);
+        $this->allocation($ta, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_TEACHING_ASSISTANT);
+        $this->actingAs($ta)->get(route('teacher.live_classes.join', $class->id))
+            ->assertOk()
+            ->assertViewHas('piiAuthorisedHost', false)
+            ->assertViewHas('isModerator', false);
+        config(['services.jitsi.algorithm' => 'RS256', 'services.jitsi.app_id' => '', 'services.jitsi.app_secret' => '']);
 
         $wrongOffering = $this->user('parallel-join@example.test', 3, 1);
         $this->allocation($wrongOffering, $this->parallelOffering, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
@@ -435,6 +482,83 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
         $this->actingAs($admin)->get(route('admin.live_classes.show', $foreignClass->id))
             ->assertNotFound()->assertDontSee('Foreign confidential title');
         $this->get(route('admin.live_classes.show', $localClass->id))->assertOk();
+    }
+
+    /**
+     * System Testing is a staff capability only. A Student must never be granted
+     * one, and there is deliberately no student pre-start permission, because no
+     * student-side pre-start date gate exists to relax.
+     */
+    public function test_system_testing_never_reaches_students(): void
+    {
+        $permissions = app(\App\Support\Permissions\PermissionService::class);
+
+        // No student testing permission is registered at all.
+        $this->assertFalse($permissions->exists('system.testing.prestart_student'));
+        $this->assertTrue($permissions->exists('system.testing.prestart_lecturer'),
+            'the lecturer capability exists');
+
+        // Even with a physical row, the non-staff boundary denies a Student.
+        $student = $this->user('tester-student@example.test', 7, 1);
+        DB::table('user_permissions')->insert([
+            'school_id' => 1, 'user_id' => $student->id,
+            'permission' => 'system.testing.prestart_lecturer',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $student->refresh();
+
+        $this->assertFalse($permissions->allows($student, 'system.testing.prestart_lecturer'));
+        $this->assertFalse($permissions->hasGrant($student, 'system.testing.prestart_lecturer'));
+        $this->assertSame([], $permissions->grantedPermissions($student),
+            'a Student holds no delegated permissions at all');
+    }
+
+    /**
+     * A confirmed Student already reaches student functionality before the
+     * Academic Period begins: there is no student pre-start date gate, so no
+     * testing permission is needed or used. Ownership rules are unchanged.
+     */
+    public function test_confirmed_student_access_is_unchanged_before_the_academic_period_starts(): void
+    {
+        // Put the Offering in progress while its Academic Period is still ahead.
+        $period = DB::table('academic_periods')->insertGetId([
+            'school_id' => 1, 'academic_year_id' => 1, 'label' => 'Semester 1',
+            'start_date' => Carbon::parse('2026-10-01'), 'end_date' => Carbon::parse('2027-01-25'),
+            'status' => 'active',
+        ]);
+        DB::table('course_offerings')->where('id', $this->offeringA)
+            ->update(['status' => 'in_progress', 'academic_period_id' => $period]);
+        $this->assertTrue(
+            Carbon::parse('2026-10-01')->isFuture(),
+            'the Academic Period really has not begun yet'
+        );
+
+        $class = $this->liveClass(1, 1, $this->offeringA, ['title' => 'Pre-semester student class']);
+        $this->material($class, 'Pre-semester material');
+
+        $confirmed = $this->user('pre-semester-confirmed@example.test', 7, 1);
+        $this->registration($confirmed, $this->offeringA, CourseRegistration::STATUS_CONFIRMED);
+
+        $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+        $liveClass = LiveClass::find($class->id);
+
+        $this->assertTrue($access->canStudentViewClass($confirmed, $liveClass),
+            'a confirmed registration is sufficient before the Academic Period begins');
+        $this->actingAs($confirmed)->get(route('student.live_classes.materials', $class->id))
+            ->assertOk()->assertSee('Pre-semester material');
+
+        // Ownership is unchanged: another student, a dropped registration and a
+        // cross-tenant student all remain refused.
+        $other = $this->user('pre-semester-other@example.test', 7, 1);
+        $dropped = $this->user('pre-semester-dropped@example.test', 7, 1);
+        $this->registration($dropped, $this->offeringA, CourseRegistration::STATUS_DROPPED);
+        $foreign = $this->user('pre-semester-foreign@example.test', 7, 2);
+
+        foreach ([$other, $dropped, $foreign] as $student) {
+            $response = $this->actingAs($student)->get(route('student.live_classes.materials', $class->id));
+            $this->assertContains($response->getStatusCode(), [403, 404],
+                'ownership still refuses: another student, a dropped registration and a cross-tenant student');
+        }
     }
 
     private function liveClass(int $id, int $schoolId, int $offeringId, array $attributes = []): LiveClass

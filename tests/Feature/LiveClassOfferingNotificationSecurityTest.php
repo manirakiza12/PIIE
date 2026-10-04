@@ -103,7 +103,7 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
             ->where('type', 'live_class_published')->orderBy('user_id')->pluck('user_id')->all());
         $notification = DB::table('user_notifications')->where('user_id', $confirmed->id)->first();
         $this->assertSame(1, (int) $notification->school_id);
-        $this->assertSame(route('student.live_classes.join', $class->id), $notification->url);
+        $this->assertSame(route('student.live_classes.show', $class->id), $notification->url);
         foreach (['provider-room-secret', 'meeting-password-secret', 'meeting-id-secret', 'recording-provider-secret', 'private-storage-key'] as $secret) {
             $this->assertStringNotContainsString($secret, json_encode($notification));
         }
@@ -150,20 +150,61 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
         $this->assertDatabaseHas('live_classes', ['id' => $class->id, 'is_published' => 0, 'status' => LiveClass::STATUS_DRAFT]);
     }
 
-    public function test_offering_update_and_cancel_do_not_emit_unimplemented_notifications(): void
+    /**
+     * RESCHEDULED, CANCELLED, and the security properties around both.
+     *
+     * This test previously asserted that an update and a cancel emit NOTHING,
+     * under the name "...do_not_emit_unimplemented_notifications". That was an
+     * accurate description of a gap: a student told "your class is on the 26th"
+     * had no way to learn it moved, and no way to learn it was called off. Both
+     * events are now implemented and governed, so the test is rewritten to pin
+     * the required behaviour rather than the missing behaviour. The security
+     * intent is unchanged and still asserted here: recipient-scoped delivery,
+     * no school-wide Noticeboard for an Offering-backed class, and no provider
+     * secret in the payload.
+     */
+    public function test_offering_reschedule_and_cancel_notify_only_the_confirmed_student(): void
     {
         $student = $this->student('update-cancel-target@example.test', 1);
         $this->registration($student, $this->offeringA, CourseRegistration::STATUS_CONFIRMED);
+        $unconfirmed = $this->student('update-cancel-unconfirmed@example.test', 1);
+        $this->registration($unconfirmed, $this->offeringA, CourseRegistration::STATUS_REGISTERED);
+        $parallel = $this->student('update-cancel-parallel@example.test', 1);
+        $this->registration($parallel, $this->parallelOffering, CourseRegistration::STATUS_CONFIRMED);
         $class = $this->liveClass(1, $this->offeringA, ['is_published' => 1]);
+
         $this->actingAs($this->primary)->put(route('teacher.live_classes.update', $class->id), [
-            'title' => 'Rescheduled without notification', 'platform' => 'jitsi',
+            'title' => 'Rescheduled class', 'platform' => 'jitsi',
             'meeting_url' => 'https://meet.example.test/provider-room-secret',
             'start_date' => '2026-09-26', 'start_time' => '11:00', 'end_time' => '12:00', 'timezone' => 'UTC',
             'status' => 'scheduled', 'is_published' => 1,
         ])->assertRedirect();
+
+        $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_rescheduled')->count());
+        $this->assertSame(
+            [(int) $student->id],
+            DB::table('user_notifications')->pluck('user_id')->map(fn ($id) => (int) $id)->all(),
+            'only the confirmed registration for THIS Offering is told'
+        );
+
         $this->post(route('teacher.live_classes.cancel', $class->id))->assertRedirect();
-        $this->assertSame(0, DB::table('user_notifications')->count());
-        $this->assertSame(0, DB::table('noticeboard')->count());
+
+        $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_cancelled')->count());
+
+        // A cancelled class is no longer manageable, so a repeat cancel is
+        // refused outright - and in any case cannot re-notify, because the
+        // dedup key was already claimed.
+        $this->post(route('teacher.live_classes.cancel', $class->id))->assertForbidden();
+        $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_cancelled')->count());
+
+        $this->assertSame(0, DB::table('noticeboard')->count(),
+            'an Offering-backed class is never announced school-wide');
+
+        foreach (DB::table('user_notifications')->get() as $notification) {
+            $haystack = $notification->title.' '.$notification->body.' '.$notification->url;
+            $this->assertStringNotContainsString('provider-room-secret', $haystack);
+            $this->assertStringNotContainsString('meet.example.test', $haystack);
+        }
     }
 
     public function test_real_reminder_command_uses_exact_recipients_and_deduplicates(): void
@@ -210,8 +251,8 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
         $this->assertSame([$confirmed->id, $confirmed->id], DB::table('user_notifications')->where('type', 'live_class_reminder')
             ->orderBy('url')->pluck('user_id')->all());
         $this->assertSame([
-            route('student.live_classes.join', $inside->id),
-            route('student.live_classes.join', $upperBoundary->id),
+            route('student.live_classes.show', $inside->id),
+            route('student.live_classes.show', $upperBoundary->id),
         ], DB::table('user_notifications')->where('type', 'live_class_reminder')->orderBy('url')->pluck('url')->all());
         $this->assertSame(2, DB::table('user_notifications')->where('type', 'live_class_reminder')->count());
         $this->assertSame(0, DB::table('noticeboard')->count());
@@ -225,7 +266,7 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
             $this->assertStringNotContainsString($secret, json_encode($mail->data));
         }
         $renderedMail = view('email.liveClassReminder', ['data' => $mail->data])->render();
-        $this->assertStringContainsString(route('student.live_classes.join', $inside->id), $renderedMail);
+        $this->assertStringContainsString(route('student.live_classes.show', $inside->id), $renderedMail);
         foreach (['provider-room-secret', 'meeting-password-secret', 'meeting-id-secret', 'recording-provider-secret', 'private-storage-key'] as $secret) {
             $this->assertStringNotContainsString($secret, $renderedMail);
         }
@@ -240,10 +281,13 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
         $this->actingAs($this->primary)->post(route('teacher.live_classes.publish', $class->id))->assertRedirect();
         $notice = DB::table('user_notifications')->where('user_id', $student->id)->first();
         $this->assertNotNull($notice);
-        $this->assertSame(route('student.live_classes.join', $class->id), $notice->url);
+        $this->assertSame(route('student.live_classes.show', $class->id), $notice->url);
 
         DB::table('course_registrations')->where('id', $registrationId)->update(['status' => CourseRegistration::STATUS_DROPPED]);
-        $this->actingAs($student)->get($notice->url)->assertRedirect();
+        // A 404, not a soft redirect: once the registration is dropped the class
+        // is not merely un-joinable, it is no longer disclosed to this student
+        // at all, so a notification link cannot confirm the class still exists.
+        $this->actingAs($student)->get($notice->url)->assertNotFound();
         $this->assertDatabaseHas('user_notifications', ['id' => $notice->id, 'user_id' => $student->id]);
         $this->assertDatabaseHas('live_classes', ['id' => $class->id, 'is_published' => 1]);
 

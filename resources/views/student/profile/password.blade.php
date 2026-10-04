@@ -63,40 +63,63 @@
                 aria-labelledby="basicInfo-tab"
             >
                 <div class="eForm-layouts">
-                <form action="{{route('student.password', 'update')}}" method="post">
+                @php $isFirstTime = (bool) auth()->user()->force_password_change; @endphp
+                @if($isFirstTime)
+                <div class="alert alert-info" role="status">
+                    {{ get_phrase('Welcome. Choose your portal password below to finish setting up your account. In the temporary password field, enter the temporary password from your activation email.') }}
+                </div>
+                @endif
+                @if(session('error'))
+                    <div class="alert alert-danger" role="alert">{{ session('error') }}</div>
+                @endif
+                @if(session('message'))
+                    <div class="alert alert-success" role="status">{{ session('message') }}</div>
+                @endif
+                <form action="{{route('student.password', 'update')}}" method="post" autocomplete="off">
                     @CSRF
 
                     <div class="fpb-7">
-                    <label for="new_password" class="eForm-label">{{ get_phrase('New Password') }}</label>
+                    <label for="old_password" class="eForm-label">
+                        {{ $isFirstTime ? get_phrase('Temporary Password (from your activation email)') : get_phrase('Current Password') }} *
+                    </label>
                     <input
                         type="password"
-                        class="form-control eForm-control"
-                        id="new_password"
-                        name="new_password"
-                        placeholder="Your current password"
-                    />
-                    </div>
-
-                    <div class="fpb-7">
-                    <label for="confirm_password" class="eForm-label">{{ get_phrase('Confirm Password') }}</label>
-                    <input
-                        type="password"
-                        class="form-control eForm-control"
-                        id="confirm_password"
-                        name="confirm_password"
-                        placeholder="Your current password"
-                    />
-                    </div>
-
-                    <div class="fpb-7">
-                    <label for="old_password" class="eForm-label">{{ get_phrase('Current Password') }}</label>
-                    <input
-                        type="password"
-                        class="form-control eForm-control"
+                        class="form-control eForm-control @error('old_password') is-invalid @enderror"
                         id="old_password"
                         name="old_password"
-                        placeholder="Your current password"
+                        placeholder="{{ $isFirstTime ? get_phrase('The temporary password in your activation email') : get_phrase('Your current password') }}"
+                        autocomplete="current-password"
+                        required
                     />
+                    @error('old_password')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="fpb-7">
+                    <label for="new_password" class="eForm-label">{{ get_phrase('New Password') }} *</label>
+                    <input
+                        type="password"
+                        class="form-control eForm-control @error('new_password') is-invalid @enderror"
+                        id="new_password"
+                        name="new_password"
+                        placeholder="{{ get_phrase('Choose a new password') }}"
+                        autocomplete="new-password"
+                        required
+                    />
+                    @error('new_password')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="fpb-7">
+                    <label for="confirm_password" class="eForm-label">{{ get_phrase('Confirm New Password') }} *</label>
+                    <input
+                        type="password"
+                        class="form-control eForm-control @error('confirm_password') is-invalid @enderror"
+                        id="confirm_password"
+                        name="confirm_password"
+                        placeholder="{{ get_phrase('Type the new password again') }}"
+                        autocomplete="new-password"
+                        required
+                    />
+                    @error('confirm_password')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                     </div>
                     <div class="fpb-7 text-end pt-3">
                         <button type="submit" class="btn btn-primary text-12px p-2">{{ get_phrase('Change Password') }}</button>

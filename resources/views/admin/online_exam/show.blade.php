@@ -15,5 +15,5 @@
 <div class="eSection-wrap"><div class="row">
     <div class="col-md-6"><p><strong>{{ academic_term('subject', auth()->user()->school_id) }}:</strong> {{ optional($exam->subject)->name ?? '—' }}</p><p><strong>{{ get_phrase('Workflow') }}:</strong> <span class="badge bg-secondary">{{ $workflowLabel }}</span></p><p><strong>{{ get_phrase('Lifecycle') }}:</strong> <span class="badge bg-info">{{ $lifecycleLabel }}</span></p><p><strong>{{ get_phrase('Schedule') }}:</strong> {{ optional($exam->start_datetime)->format('d M Y H:i') }} – {{ optional($exam->end_datetime)->format('d M Y H:i') }}</p></div>
     <div class="col-md-6"><p><strong>{{ get_phrase('Duration') }}:</strong> {{ $exam->duration_mins }} {{ get_phrase('minutes') }}</p><p><strong>{{ get_phrase('Total marks / pass mark') }}:</strong> {{ $exam->total_marks }} / {{ $exam->pass_mark }}</p><p><strong>{{ get_phrase('Questions') }}:</strong> {{ $exam->questions->count() }}</p></div>
-</div><hr><h6>{{ get_phrase('Instructions') }}</h6><p>{{ $exam->instructions ?: '—' }}</p></div>
+</div><hr><h6>{{ get_phrase('Instructions') }}</h6><div class="piie-prose">{!! $exam->proseInstructions() ?: '—' !!}</div></div>
 @endsection

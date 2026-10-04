@@ -13,12 +13,27 @@ class OnlineExamProctoringEvent extends Model
         'camera_started',
         'camera_stopped',
         'tab_hidden',
+        'focus_lost',
+        'focus_returned',
         'fullscreen_started',
         'fullscreen_exited',
         'connection_lost',
         'connection_restored',
         'snapshot_captured',
         'snapshot_failed',
+
+        // Restricted-interaction events. Distinct from `focus_lost` because they are
+        // different facts: a student reaching for the clipboard inside the exam is not
+        // the same evidence as a window that lost focus, and an examiner reviewing the
+        // record needs to be able to tell them apart.
+        //
+        // A BLOCKED action is recorded as ATTEMPTED-and-refused, never as "the student
+        // copied the question" — the page cannot know whether the clipboard received
+        // anything, and a log that claims it did would be false evidence.
+        'clipboard_blocked',
+        'context_menu_blocked',
+        'navigation_attempted',
+        'print_attempted',
     ];
 
     protected $table = 'online_exam_proctoring_events';

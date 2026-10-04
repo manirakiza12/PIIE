@@ -51,6 +51,54 @@ final class StaffDocumentStorage
     }
 
     /**
+     * Checks a file against every rule the private store applies, WITHOUT
+     * writing anything: name, extension allow-list, dangerous double
+     * extensions, size, and the server-side content sniff.
+     *
+     * Exposed so a form with several document fields can report the problem
+     * against the exact row the administrator filled in, instead of a single
+     * generic message for the whole request. store() uses the same rules.
+     *
+     * @return string|null a staff-facing message, or null when the file is acceptable
+     */
+    public static function validate(UploadedFile $file): ?string
+    {
+        if (!$file->isValid()) {
+            return 'The document could not be uploaded.';
+        }
+
+        $original = self::sanitizeName($file->getClientOriginalName());
+        $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+        if (!array_key_exists($extension, self::ALLOWED)) {
+            return 'Only '.self::acceptedLabel().' documents are accepted.';
+        }
+        foreach (array_slice(explode('.', strtolower($original)), 1, -1) as $segment) {
+            if (in_array($segment, self::DANGEROUS_SEGMENTS, true)) {
+                return 'This file name is not allowed.';
+            }
+        }
+
+        $size = (int) $file->getSize();
+        if ($size <= 0 || $size > self::maxKb() * 1024) {
+            return 'Documents must be at most '.round(self::maxKb() / 1024, 1).' MB.';
+        }
+
+        $path = $file->getRealPath();
+        $mime = $path ? (new \finfo(FILEINFO_MIME_TYPE))->file($path) : false;
+        if (!$mime || !in_array($mime, self::ALLOWED[$extension], true) || !self::signatureMatches($path, $extension)) {
+            return 'The file content does not match a '.self::acceptedLabel().' document.';
+        }
+
+        return null;
+    }
+
+    /** "PDF, JPG or PNG" - the accepted types as staff-facing wording. */
+    public static function acceptedLabel(): string
+    {
+        return 'PDF, JPG or PNG';
+    }
+
+    /**
      * Validates and stores $file privately for ($schoolId, $userId).
      *
      * @return array{storage_key: string, original_name: string, mime_type: string, size_bytes: int}
@@ -58,31 +106,16 @@ final class StaffDocumentStorage
      */
     public static function store(UploadedFile $file, int $schoolId, int $userId): array
     {
-        if (!$file->isValid()) {
-            throw new StaffRecordException('The document could not be uploaded.');
+        if ($problem = self::validate($file)) {
+            throw new StaffRecordException($problem);
         }
 
         $original = self::sanitizeName($file->getClientOriginalName());
         $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION));
-        if (!array_key_exists($extension, self::ALLOWED)) {
-            throw new StaffRecordException('Only PDF, JPG and PNG documents are accepted.');
-        }
-        foreach (array_slice(explode('.', strtolower($original)), 1, -1) as $segment) {
-            if (in_array($segment, self::DANGEROUS_SEGMENTS, true)) {
-                throw new StaffRecordException('This file name is not allowed.');
-            }
-        }
-
-        $size = (int) $file->getSize();
-        if ($size <= 0 || $size > self::maxKb() * 1024) {
-            throw new StaffRecordException('Documents must be at most ' . round(self::maxKb() / 1024, 1) . ' MB.');
-        }
-
         $path = $file->getRealPath();
-        $mime = $path ? (new \finfo(FILEINFO_MIME_TYPE))->file($path) : false;
-        if (!$mime || !in_array($mime, self::ALLOWED[$extension], true) || !self::signatureMatches($path, $extension)) {
-            throw new StaffRecordException('The file content does not match a PDF, JPG or PNG document.');
-        }
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+        // Read before the move: afterwards the source path no longer exists.
+        $size = (int) $file->getSize();
 
         $directory = $schoolId . '/' . $userId;
         $name = bin2hex(random_bytes(20)) . '.' . $extension;

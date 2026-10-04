@@ -63,8 +63,16 @@
                     @php
                         $department = $group['department'];
                         $groupProgrammes = $group['programmes'];
+                        // The last group is the catch-all: it holds programmes with no
+                        // faculty set AND programmes whose faculty no longer exists, so
+                        // no programme can ever be fetched-and-counted yet go unrendered.
+                        $isUnresolved = $group['isUnresolvedGroup'] ?? false;
                         $groupKey = $department ? 'dept-' . $department->id : 'unassigned';
-                        $groupTitle = $department ? $department->name : get_phrase('Unassigned (no faculty)');
+                        $groupTitle = $department
+                            ? $department->name
+                            : ($isUnresolved
+                                ? get_phrase('Unassigned / Unknown Department')
+                                : get_phrase('Unassigned (no faculty)'));
                     @endphp
                     <div class="accordion-item mb-2" style="border:1px solid #e7e9ee; border-radius:8px; overflow:hidden;">
                         <h2 class="accordion-header">
@@ -81,6 +89,15 @@
                                 @if($groupProgrammes->isEmpty())
                                     <p class="text-muted text-center py-3 mb-0">{{ get_phrase('No programmes in this faculty yet.') }}</p>
                                 @else
+                                    @if($isUnresolved)
+                                        {{-- Say why these are here, so an orphaned programme
+                                             reads as "needs a faculty assigned" rather than as
+                                             an unexplained extra row. --}}
+                                        <p class="text-muted small px-3 pt-3 mb-0">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            {{ get_phrase('These programmes have no faculty, or point at a faculty that no longer exists. Assign a faculty to each so they are grouped correctly.') }}
+                                        </p>
+                                    @endif
                                     <div class="table-responsive">
                                         <table class="table eTable mb-0">
                                             <thead>

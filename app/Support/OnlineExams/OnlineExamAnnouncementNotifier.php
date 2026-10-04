@@ -162,21 +162,27 @@ class OnlineExamAnnouncementNotifier
      * a class-scoped exam only reaches that class's enrolled students, a
      * school-wide exam (class_id null) reaches every student in the school.
      */
+    /**
+     * The students an announcement may reach.
+     *
+     * Delegates to `OnlineExamRecipients`, which is the same resolution the exam's
+     * visibility gate and the "exam published" notification both use.
+     *
+     * This method previously repeated the class-only narrowing:
+     *
+     *     if ($exam->class_id) { ... enrollment ... }
+     *
+     * so a Course Offering exam - `class_id` NULL by design - reached EVERY student
+     * in the school with a "your exam starts soon" reminder. A reminder is not
+     * harmless where a notification is: it asserts that the recipient has an exam
+     * coming, and a student who is not on the course would be told one was.
+     *
+     * The legacy arm is unchanged: a NULL `class_id` exam is still school-wide,
+     * because nine live exams depend on that.
+     */
     private static function eligibleStudents(OnlineExam $exam)
     {
-        $studentsQuery = User::where('school_id', $exam->school_id)
-            ->where('role_id', 7)
-            ->whereNotNull('email');
-
-        if ($exam->class_id) {
-            $studentsQuery->whereExists(function ($sub) use ($exam) {
-                $sub->selectRaw('1')->from('enrollment')
-                    ->whereColumn('enrollment.user_id', 'users.id')
-                    ->where('enrollment.class_id', $exam->class_id);
-            });
-        }
-
-        return $studentsQuery->get();
+        return User::whereIn('id', OnlineExamRecipients::forExam($exam))->get();
     }
 
     private static function send(User $student, OnlineExam $exam, array $content): bool

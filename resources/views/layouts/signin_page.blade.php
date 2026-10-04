@@ -10,7 +10,21 @@
   <meta content="" name="description" />
   <meta content="" name="author" />
   <!-- all the css files -->
-  <link rel="shortcut icon" href="{{ asset('assets/uploads/logo/'.get_settings('favicon')) }}" />
+  {{-- Favicon.
+         `favicon` is UNSET on this installation, so the original expression
+         concatenated an empty string and produced `.../assets/uploads/logo` - the
+         bare directory, which 404s. `favicon.png` ships in the repository.
+
+         Same rule as the sign-in logo: use the configured file only when it is set
+         AND exists on disk, otherwise fall back. An unset setting can no longer
+         produce a 404 on the sign-in page. Presentation only. --}}
+  @php
+      $piieFaviconSetting = trim((string) get_settings('favicon'));
+      $piieFaviconFile = ($piieFaviconSetting !== '' && is_file(public_path('assets/uploads/logo/'.$piieFaviconSetting)))
+          ? $piieFaviconSetting
+          : 'favicon.png';
+  @endphp
+  <link rel="shortcut icon" href="{{ asset('assets/uploads/logo/'.$piieFaviconFile) }}" />
   <!-- Bootstrap CSS -->
   <link rel="stylesheet" type="text/css" href="{{ asset('assets/vendors/bootstrap-5.1.3/css/bootstrap.min.css') }}">
 

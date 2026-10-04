@@ -818,3 +818,77 @@ a.list-group-item.list-group-item-action:last-child {
 }
 
 
+
+/* ============================================================
+   CMS IMAGE FIELD  (website_management item forms)
+   Upload / preview / replace / remove, and the 16:9 guidance
+   shown for programme covers.
+
+   The preview frame is 16:9 because that is what a programme
+   cover is cropped to at upload. Showing the administrator a
+   4:3 or full-height preview would not be a preview of what
+   will be published -- it would be a different picture.
+   ============================================================ */
+
+.piie-img__input {
+    display: block;
+    width: 100%;
+}
+
+.piie-img__preview {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+/* Dashed for the not-yet-saved state, solid for the saved one.
+   The visual difference is the whole point: an administrator can
+   tell at a glance which image is live on the website. */
+.piie-img__preview--pending {
+    border-style: dashed;
+    border-color: #94A3B8;
+}
+
+.piie-img__frame {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    background: #E2E8F0;
+    border-radius: 4px;
+}
+
+.piie-img__caption,
+.piie-img__note {
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #64748B;
+    margin: 0 0 6px;
+}
+
+.piie-img__note {
+    margin: 6px 0 0;
+    text-transform: none;
+    letter-spacing: 0;
+    font-style: italic;
+}
+
+.piie-img__meta {
+    font-size: 11px;
+    color: #64748B;
+    margin: 6px 0 0;
+    word-break: break-all;
+}
+
+.piie-img__hint {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #475569;
+    background: #F1F5F9;
+    border-left: 3px solid #1466AF;
+    border-radius: 3px;
+    padding: 7px 9px;
+    margin: 8px 0 0;
+}

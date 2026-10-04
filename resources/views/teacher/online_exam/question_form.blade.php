@@ -1,8 +1,21 @@
 <form method="POST" action="{{ route('teacher.online_exams.questions.store', $exam->id) }}" class="row g-2">
     @csrf
     <div class="col-md-12">
-        <label class="eForm-label">{{ get_phrase('Question') }}</label>
-        <textarea class="form-control eForm-control" name="question" required></textarea>
+        {{-- A question is a document: a worked calculation, a table of values, a
+             list of conditions. A primitive textarea turns all of that into
+             `df/dx`, `<= 0` and a column of figures the candidate has to
+             re-typeset in their head - and then they are marked against it. The
+             stored value is filtered server-side by the model's mutator, so this
+             field is the ONLY way markup enters the column, and it is the same
+             component used for lesson bodies, assignment instructions and student
+             answers. --}}
+        <x-academic-editor
+            name="question"
+            :label="get_phrase('Question')"
+            :required="true"
+            :height="300"
+            :help="$help ?? 'Formatting, lists, tables and mathematical notation are kept.'"
+            testid="exam-question-editor" />
     </div>
     <div class="col-md-3">
         <label class="eForm-label">{{ get_phrase('Type') }}</label>

@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class CourseRegistrationService
 {
-    public function __construct(private StudentRegistrationConfirmationEligibility $confirmationEligibility, private StudentCurriculumAssignmentService $assignments)
+    public function __construct(private StudentRegistrationConfirmationEligibility $confirmationEligibility, private StudentCurriculumAssignmentService $assignments, private CourseOfferingEligibility $eligibility)
     {
     }
 
@@ -29,7 +29,7 @@ class CourseRegistrationService
             $this->assertActor($student, $actorId);
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($offeringId)->first();
             if (! $offering) {
-                throw new DomainException('Course Offering not found in this tenant.');
+                throw new DomainException('This Course Offering could not be found in this institution.');
             }
             $membership = $this->applicableMembership($schoolId, $student, $offering, $membershipId);
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($offeringId)->lockForUpdate()->first();
@@ -40,7 +40,7 @@ class CourseRegistrationService
                 ->where('course_offering_id', $offeringId)->lockForUpdate()->first();
             if ($existing) {
                 if ((int) $existing->curriculum_membership_id !== (int) $membership->id) {
-                    throw new DomainException('An Offering registration already exists with different Curriculum provenance.');
+                    throw new DomainException('This student already has a registration for this Course Offering under a different Study Plan entry. The academic office should review it.');
                 }
                 if ($existing->status === CourseRegistration::STATUS_DROPPED) {
                     throw new DomainException('This student already has a dropped registration for this Offering; same-Offering re-registration is not allowed.');
@@ -83,23 +83,23 @@ class CourseRegistrationService
         return DB::transaction(function () use ($schoolId, $registrationId, $actorId): CourseRegistration {
             $registration = CourseRegistration::where('school_id', $schoolId)->whereKey($registrationId)->first();
             if (! $registration || ! $registration->course_offering_id) {
-                throw new DomainException('Offering-backed registration not found in this tenant.');
+                throw new DomainException('This Course Registration could not be found in this institution. The academic office should review it.');
             }
             $student = $this->student($schoolId, (int) $registration->student_id, true);
             $this->assertActor($student, $actorId);
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($registration->course_offering_id)->first();
             if (! $offering) {
-                throw new DomainException('Registration Offering and Subject context is invalid.');
+                throw new DomainException('This Course Registration no longer matches the Course Offering. The academic office should review it.');
             }
             $membership = $this->applicableMembership($schoolId, $student, $offering, (int) $registration->curriculum_membership_id, true);
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($registration->course_offering_id)->lockForUpdate()->first();
             $registration = CourseRegistration::where('school_id', $schoolId)->whereKey($registrationId)->lockForUpdate()->first();
             if (! $offering || (int) $offering->subject_id !== (int) $registration->subject_id) {
-                throw new DomainException('Registration Offering and Subject context is invalid.');
+                throw new DomainException('This Course Registration no longer matches the Course Offering. The academic office should review it.');
             }
             if ((string) $registration->registered_credits !== number_format((float) $membership->credits, 2, '.', '')
                 || $registration->registered_classification !== $membership->classification) {
-                throw new DomainException('Registration academic provenance snapshot is inconsistent.');
+                throw new DomainException('This Course Registration no longer matches the Course Unit it was registered for. The academic office should review it.');
             }
             if ($registration->status === CourseRegistration::STATUS_CONFIRMED) {
                 return $registration;
@@ -111,7 +111,7 @@ class CourseRegistrationService
                 throw new DomainException('Registration confirmation is allowed only while the Course Offering is open.');
             }
             if (! $this->confirmationEligibility->allows($student)) {
-                throw ValidationException::withMessages(['registration' => 'Outstanding fees must be settled before confirming course registration.']);
+                throw ValidationException::withMessages(['registration' => 'Outstanding fees must be settled before this Course Registration can be confirmed.']);
             }
 
             $registration->status = CourseRegistration::STATUS_CONFIRMED;
@@ -127,14 +127,14 @@ class CourseRegistrationService
         return DB::transaction(function () use ($schoolId, $registrationId, $actorId, $reason): CourseRegistration {
             $registration = CourseRegistration::where('school_id', $schoolId)->whereKey($registrationId)->first();
             if (! $registration || ! $registration->course_offering_id) {
-                throw new DomainException('Offering-backed registration not found in this tenant.');
+                throw new DomainException('This Course Registration could not be found in this institution. The academic office should review it.');
             }
             $student = $this->student($schoolId, (int) $registration->student_id, true);
             $this->assertActor($student, $actorId);
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($registration->course_offering_id)->lockForUpdate()->first();
             $registration = CourseRegistration::where('school_id', $schoolId)->whereKey($registrationId)->lockForUpdate()->first();
             if (! $offering || (int) $offering->subject_id !== (int) $registration->subject_id) {
-                throw new DomainException('Registration Offering and Subject context is invalid.');
+                throw new DomainException('This Course Registration no longer matches the Course Offering. The academic office should review it.');
             }
             $this->storedMembership($schoolId, $offering, $registration);
             if ($registration->status === CourseRegistration::STATUS_DROPPED) {
@@ -160,7 +160,7 @@ class CourseRegistrationService
         if ($lock) $query->lockForUpdate();
         $student = $query->first();
         if (! $student || (int) $student->role_id !== 7 || $student->account_status === 'disable') {
-            throw new DomainException('Student must be an enabled student User in this tenant.');
+            throw new DomainException('This student account is not active in this institution.');
         }
         return $student;
     }
@@ -169,7 +169,7 @@ class CourseRegistrationService
     {
         $actor = $actorId === null ? null : User::where('school_id', $student->school_id)->whereKey($actorId)->first();
         if (! $actor || $actor->account_status === 'disable') {
-            throw new DomainException('Registration actor must be an enabled User in this tenant.');
+            throw new DomainException('Your account is not active in this institution, so this Course Registration cannot be changed.');
         }
         if ((int) $actor->role_id === 7 && (int) $actor->id !== (int) $student->id) {
             throw new DomainException('Student self-service may act only on its own registration.');
@@ -178,45 +178,12 @@ class CourseRegistrationService
 
     private function applicableMembership(int $schoolId, User $student, CourseOffering $offering, ?int $membershipId, bool $allowRetired = false): CurriculumMembership
     {
-        $assignment = $this->assignments->assignmentForAcademicYear($schoolId, (int) $student->id, (int) $offering->academic_year_id, true);
-        if (! $assignment) throw new DomainException('No Student Curriculum assignment governs the Offering AcademicYear.');
-        $curriculum = Curriculum::where('school_id', $schoolId)->whereKey($assignment->curriculum_id)->first();
-        if (! $curriculum || (int) $curriculum->programme_id !== (int) $assignment->programme_id) {
-            throw new DomainException('Student Curriculum assignment Programme/Curriculum provenance is corrupt.');
-        }
-        $profile = StudentProfile::where('school_id', $schoolId)->where('user_id', $student->id)->first();
-        if ($profile?->programme_id !== null && (int) $profile->programme_id !== (int) $assignment->programme_id) {
-            throw new DomainException('StudentProfile Programme does not match the governing Curriculum assignment; repair is required.');
-        }
-        if (! Subject::where('school_id', $schoolId)->whereKey($offering->subject_id)->exists()) {
-            throw new DomainException('Course Offering Subject must belong to this tenant.');
-        }
-        $matches = DB::table('course_offering_curriculum_memberships as x')
-            ->join('curriculum_memberships as m', function ($join) use ($schoolId): void {
-                $join->on('m.id', '=', 'x.curriculum_membership_id')->where('m.school_id', '=', $schoolId);
-            })
-            ->where('x.school_id', $schoolId)->where('x.course_offering_id', $offering->id)
-            ->where('x.curriculum_id', $assignment->curriculum_id)
-            ->where('x.subject_id', $offering->subject_id)->where('m.subject_id', $offering->subject_id)
-            ->select('m.id')->get();
-        if ($matches->count() === 0) throw new DomainException('The assigned Curriculum has no Membership for this Offering Subject.');
-        if ($matches->count() !== 1) throw new DomainException('The assigned Curriculum has multiple applicable Memberships; registration provenance is ambiguous.');
-        $resolvedId = (int) $matches->first()->id;
-        if ($membershipId !== null && $membershipId !== $resolvedId) throw new DomainException('Supplied Curriculum Membership conflicts with the student assignment-governed Membership.');
-
-        $membership = CurriculumMembership::where('school_id', $schoolId)->where('curriculum_id', $assignment->curriculum_id)->whereKey($resolvedId)->first();
-        $allowedCurriculumStatuses = $allowRetired ? ['approved', 'retired'] : ['approved'];
-        if (! $membership || ! $curriculum || ! in_array($curriculum->status, $allowedCurriculumStatuses, true)) {
-            throw new DomainException('New registration requires Membership in an approved Curriculum.');
-        }
-        if (! DB::table('programmes')->where('school_id', $schoolId)->where('id', $curriculum->programme_id)->exists()) {
-            throw new DomainException('Curriculum Programme must belong to this tenant.');
-        }
-        if ((int) $membership->subject_id !== (int) $offering->subject_id) {
-            throw new DomainException('Curriculum Membership Subject must match the Offering Subject.');
+        $result = $this->eligibility->evaluate($offering, (int) $student->id, $membershipId, true, $allowRetired);
+        if (! $result->eligible || ! $result->membership || (int) $result->membership->subject_id !== (int) $offering->subject_id) {
+            throw new DomainException($result->eligible ? 'This Course Offering needs academic review before students can register.' : $result->message);
         }
 
-        return $membership;
+        return $result->membership;
     }
 
     private function storedMembership(int $schoolId, CourseOffering $offering, CourseRegistration $registration): CurriculumMembership
@@ -232,7 +199,7 @@ class CourseRegistrationService
             || ! in_array($curriculum->status, ['approved', 'retired'], true)
             || (string) $registration->registered_credits !== number_format((float) $membership->credits, 2, '.', '')
             || $registration->registered_classification !== $membership->classification) {
-            throw new DomainException('Stored registration Offering/Membership/snapshot provenance is corrupt.');
+            throw new DomainException('This Course Registration no longer matches its Study Plan entry. The academic office should review it.');
         }
         return $membership;
     }

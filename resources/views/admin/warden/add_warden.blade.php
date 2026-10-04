@@ -10,7 +10,8 @@
 
             <div class="fpb-7">
                 <label for="birthday" class="eForm-label">{{ get_phrase('Birthday') }}<span class="required"></span></label>
-                <input type="text" class="form-control eForm-control inputDate" id="birthday" name="birthday" value="{{ date('m/d/Y') }}" />
+                {{-- Blank by default: a new staff member's date of birth is never today. --}}
+                <input type="text" class="form-control eForm-control inputDate" id="birthday" name="birthday" value="" />
             </div>
         </div>
 

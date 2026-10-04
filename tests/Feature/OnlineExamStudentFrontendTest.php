@@ -95,7 +95,13 @@ class OnlineExamStudentFrontendTest extends TestCase
             ->get(route('student.online_exam.result', $submissionId))
             ->assertOk()
             ->assertSee('Exam submitted successfully.')
-            ->assertSee('awaiting marking')
+            // `pending_manual_marking` means a human still has work to do, so the student is
+            // told the result is being processed. The old page branched on `status` and
+            // could report "finalized and awaiting publication" for a submission whose
+            // marking had never happened — which is what exam 17 submission 12 showed.
+            ->assertSee('Your exam has been submitted successfully. Your result is being processed.')
+            ->assertDontSee('awaiting publication')
+            ->assertSee('being processed')
             ->assertViewIs('student.online_exam.submitted');
     }
 
@@ -266,9 +272,37 @@ class OnlineExamStudentFrontendTest extends TestCase
         $second = $this->actingAs($student)->get(route('student.online_exam.take', $examId));
 
         $first->assertStatus(200);
-        // The server-rendered countdown advances between requests; compare
-        // the question ordering while ignoring that expected timer delta.
-        $normalize = static fn (string $html): string => preg_replace('/var remainingSeconds = \d+;/', 'var remainingSeconds = __timer__;', $html);
+
+        /**
+         * The clock is excluded, and EVERY value derived from it has to be named.
+         *
+         * This normalisation used to cover one line, and the test passed — until the
+         * timer moved to a deadline and the page began carrying the server's remaining
+         * seconds in a second variable. That left a real difference between two renders
+         * of the same attempt, so the test became intermittent: it passed when both
+         * renders landed in the same second and failed when they straddled one.
+         *
+         * An intermittently failing test trains people to re-run it, which is how a real
+         * regression gets waved through. So the rule is: any server value that is a
+         * function of the current time is replaced, and the list is written out rather
+         * than pattern-matched loosely.
+         */
+        $normalize = static function (string $html): string {
+            $patterns = [
+                // The authoritative remaining time, and the countdown derived from it.
+                '/var serverRemainingSeconds = \d+;/' => 'var serverRemainingSeconds = __timer__;',
+                '/var remainingSeconds = \d+;/' => 'var remainingSeconds = __timer__;',
+                // Any ISO timestamp the page embeds for the client to re-sync against.
+                '/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2}/' => '__timestamp__',
+            ];
+
+            foreach ($patterns as $pattern => $replacement) {
+                $html = preg_replace($pattern, $replacement, $html) ?? $html;
+            }
+
+            return $html;
+        };
+
         $this->assertSame($normalize($first->getContent()), $normalize($second->getContent()));
     }
 
@@ -395,12 +429,31 @@ class OnlineExamStudentFrontendTest extends TestCase
 
         $response = $this->actingAs($student)->get(route('student.online_exam.take', $examId));
 
-        // Previously a 405 (GET against a POST-only route); must now finalise
-        // and land on the results page instead.
+        // Previously a 405 (GET against a POST-only route); must now CLOSE the
+        // attempt and land on the results page instead.
         $response->assertRedirect(route('student.online_exam.result', $submissionId));
 
+        /**
+         * "CLOSED", not "finalized".
+         *
+         * An expired attempt must not be reopenable, and it must not be reported as
+         * staff-finalised either. `finalized` is now written only by
+         * `finalizeSubmission()` - a deliberate handover by a lecturer or an
+         * administrator - because a student's own timeout reaching it is what created
+         * submission 12: a result that read "Marking Complete / Finalized / Not
+         * Released" with an empty Actions column and no queue it appeared in.
+         *
+         * One auto-marked MCQ here, so nothing needs a marker and `submitted` is the
+         * honest state: closed, awaiting the handover gate.
+         */
+        $this->assertNotSame(
+            OnlineExamSubmission::STATUS_IN_PROGRESS,
+            OnlineExamSubmission::find($submissionId)->status,
+            'an expired attempt must not remain reopenable'
+        );
+
         $this->assertSame(
-            OnlineExamSubmission::STATUS_FINALIZED,
+            OnlineExamSubmission::STATUS_SUBMITTED,
             OnlineExamSubmission::find($submissionId)->status
         );
     }

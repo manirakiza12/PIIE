@@ -22,7 +22,7 @@ class StaffProfile extends Model
         'title', 'middle_name', 'nationality', 'marital_status', 'religion',
         'alternative_phone', 'city', 'country', 'date_joined',
         'emergency_contact_name', 'emergency_contact_relationship', 'emergency_contact_phone',
-        'emergency_contact_alternative_phone', 'emergency_contact_address',
+        'emergency_contact_alternative_phone', 'emergency_contact_email', 'emergency_contact_address',
         'academic_title', 'specialisation', 'years_teaching_experience', 'research_interests',
         'created_by', 'updated_by',
     ];

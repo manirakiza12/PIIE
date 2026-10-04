@@ -40,9 +40,46 @@
     <div class="alert alert-danger"><strong>{{ get_phrase('Exam cannot be published yet.') }}</strong><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
 @endif
 
+@php
+    // The two kinds of academic attachment a lecturer can have, and how this page
+    // must speak about each.
+    //
+    // A COURSE OFFERING is the higher-education authority and is checked first,
+    // because a lecturer can hold one and no legacy subject at the same time -
+    // which is the normal case, and the case the old warning got wrong. It told
+    // Daniel Okello, primary lecturer of BBIT1103, that he had no assigned
+    // subjects while listing the exam he had just published for that course.
+    //
+    // The legacy warning is still correct when a lecturer genuinely has NEITHER,
+    // and when they have a legacy subject it simply does not appear.
+    $hasCourseOffering = ($courseOfferings ?? collect())->isNotEmpty();
+    $hasLegacySubject = $subjects->isNotEmpty();
+@endphp
+
 <div class="alert alert-info">
-    {{ get_phrase('Teachers manage questions and marking for their assigned subjects. Administrators control exam publication, schedule, and result-release policy.') }}
-    @if($subjects->isEmpty())<br><strong>{{ get_phrase('No assigned subjects are available for this account. Ask an administrator to configure the teacher class/subject assignment.') }}</strong>@endif
+    {{ get_phrase('Teachers manage questions and marking for the courses and subjects they are assigned to. Administrators control exam publication, schedule, and result-release policy.') }}
+    @if($hasCourseOffering)
+        <br><strong>{{ get_phrase('You are teaching the following Course Offerings. Their exams are listed below, and a new assessment for one of them is created from the course itself.') }}</strong>
+        <ul class="mb-0 mt-1">
+            @foreach($courseOfferings as $piieCourse)
+                <li>
+                    {{ $piieCourse->subject?->name ?? ('Course Offering #'.$piieCourse->id) }}
+                    @if($piieCourse->reference)<span class="text-muted">({{ $piieCourse->reference }})</span>@endif
+                    @if($piieCourse->academicYear || $piieCourse->academicPeriod)
+                        <span class="text-muted">
+                            {{ $piieCourse->academicYear?->label ?? '' }}{{ $piieCourse->academicPeriod ? ' — '.$piieCourse->academicPeriod->label : '' }}
+                        </span>
+                    @endif
+                </li>
+            @endforeach
+        </ul>
+    @endif
+
+    @unless($hasCourseOffering || $hasLegacySubject)
+        <br><strong data-testid="no-assignment-warning">{{ get_phrase('You are not currently assigned to any Course Offering or legacy class/subject, so there is nothing here to work on. Ask an administrator to add you to a course.') }}</strong>
+    @elseif(! $hasLegacySubject)
+        <br><span class="text-muted">{{ get_phrase('The Subject, Class and Programme filters below apply to legacy class-based exams only.') }}</span>
+    @endif
 </div>
 
 @php
@@ -77,6 +114,25 @@
             <label class="eForm-label">{{ get_phrase('Title') }}</label>
             <input class="form-control eForm-control" type="text" name="title" value="{{ request('title') }}" placeholder="{{ get_phrase('Search by title') }}">
         </div>
+        @if($hasCourseOffering)
+            {{-- Course Offering is offered BEFORE the legacy filters, because for a
+                 higher-education lecturer it is the primary axis: a Course Offering
+                 exam has no class at all, so filtering by Class could never find one.
+                 Only Offerings the lecturer is allocated to are listed, and the
+                 controller re-checks that intersection, so a forged id narrows to
+                 nothing rather than exposing another course. --}}
+            <div class="col-md-3">
+                <label class="eForm-label" for="filter-course-offering">{{ get_phrase('Course Offering') }}</label>
+                <select class="form-select eForm-select" name="course_offering_id" id="filter-course-offering" data-testid="filter-course-offering">
+                    <option value="">{{ get_phrase('All Course Offerings') }}</option>
+                    @foreach($courseOfferings as $piieCourse)
+                        <option value="{{ $piieCourse->id }}" {{ (string) request('course_offering_id') === (string) $piieCourse->id ? 'selected' : '' }}>
+                            {{ $piieCourse->subject?->name ?? ('Offering #'.$piieCourse->id) }}{{ $piieCourse->reference ? ' ('.$piieCourse->reference.')' : '' }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
         <div class="col-md-2">
             <label class="eForm-label">{{ get_phrase('Subject') }}</label>
             <select class="form-select eForm-select" name="subject_id">
@@ -149,7 +205,25 @@
                     <td class="fw-semibold">{{ $exam->title }}</td>
                     <td>
                         <div>{{ optional($exam->subject)->name ?? '—' }}</div>
-                        <div class="text-muted small">{{ optional($exam->classRoom)->name ?? get_phrase('All classes') }}</div>
+                        {{-- A COURSE OFFERING exam has `class_id` NULL BY DESIGN - filling
+                             it would enrol a whole class and bypass confirmed
+                             registration - so the legacy "All classes" fallback would
+                             print a LIE about it: this paper goes to the confirmed
+                             students of one course and nobody else.
+
+                             So the second line states the real scope for an Offering
+                             exam, and the legacy class line is left byte-identical for
+                             a legacy one. This is also what stops the workspace's
+                             "Quizzes & Exams" tab from reading as an unrelated legacy
+                             examination list: the course is named on the row. --}}
+                        @if($exam->course_offering_id !== null)
+                            <div class="text-muted small">
+                                {{ get_phrase('Course Offering') }} ·
+                                {{ $exam->courseOffering?->reference ?? ('#'.$exam->course_offering_id) }}
+                            </div>
+                        @else
+                            <div class="text-muted small">{{ optional($exam->classRoom)->name ?? get_phrase('All classes') }}</div>
+                        @endif
                     </td>
                     <td>{{ optional($exam->start_datetime)->format('d M Y H:i') ?? '—' }}</td>
                     <td>{{ optional($exam->end_datetime)->format('d M Y H:i') ?? '—' }}</td>

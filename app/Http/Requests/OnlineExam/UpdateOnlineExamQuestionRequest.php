@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use App\Support\OnlineExams\AnswerKey;
 use App\Support\OnlineExams\QuestionContract;
+use App\Support\OnlineExams\QuestionPrompt;
 
 class UpdateOnlineExamQuestionRequest extends FormRequest
 {
@@ -133,6 +134,10 @@ class UpdateOnlineExamQuestionRequest extends FormRequest
             'type' => $type,
             'correct_ans' => $correctAns,
             'auto_grade_fill_blank' => $this->boolean('auto_grade_fill_blank'),
+            // Same rule as the create form, for the same reason: an editor that posts
+            // `<p><br></p>` must be refused here too, or editing a good question
+            // would silently replace its text with nothing.
+            'question' => QuestionPrompt::normaliseForAuthoring($payload['question'] ?? null),
         ]));
     }
 
@@ -146,6 +151,11 @@ class UpdateOnlineExamQuestionRequest extends FormRequest
             if ($this->question->exam->isStructurallyLocked()) {
                 $validator->errors()->add('question', 'Questions cannot be modified after attempts have started.');
                 return;
+            }
+
+            // See the create form: the empty rich-text document is refused, and named.
+            if (QuestionPrompt::isEmpty((string) $this->input('question', ''))) {
+                $validator->errors()->add('question', QuestionPrompt::MESSAGE);
             }
 
             $type = (string) $this->input('type');
