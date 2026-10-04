@@ -3,6 +3,7 @@
 /.github            export-ignore
 /.gitattributes     export-ignore
 /.editorconfig      export-ignore
+/.env.example       export-ignore
 /.styleci.yml       export-ignore
 /tests              export-ignore
 /docs               export-ignore
