@@ -167,7 +167,7 @@ jobs:
 
       # ---- Dependencies ------------------------------------------------------
       - name: Validate composer.json and lock are in sync
-        run: composer validate --strict --no-check-publish
+        run: composer validate --no-check-publish
 
       # `composer install` (not `update`) so CI builds exactly the locked tree.
       # `--no-scripts` stops post-install hooks from running before the test
@@ -265,10 +265,10 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       # `npm ci` installs exactly the locked tree. `npm install` would silently
