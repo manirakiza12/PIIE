@@ -24,8 +24,8 @@ git archive --format=tar HEAD | tar -x -C "$STAGE"
 
 cd "$STAGE"
 
-echo "==> Composer (production dependencies only, from composer.lock)"
-composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader ${PIIE_COMPOSER_FLAGS:-}
+echo "==> Composer (production dependencies only; --no-scripts because package:discover boots the app and needs a DB; the server runs it)"
+composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --no-scripts ${PIIE_COMPOSER_FLAGS:-}
 
 # The repo ships compiled assets and has no webpack.mix.js, so there is nothing
 # to build. If one is added, Node runs HERE (CI), never on the host.
