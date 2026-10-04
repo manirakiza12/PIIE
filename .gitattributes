@@ -1,0 +1,29 @@
+# Files excluded from `git archive` (the release artefact). They stay in the
+# repository; they simply never ship to production.
+/.github            export-ignore
+/.gitattributes     export-ignore
+/.editorconfig      export-ignore
+/.styleci.yml       export-ignore
+/tests              export-ignore
+/docs               export-ignore
+/scripts            export-ignore
+/deploy             export-ignore
+/extension-amaq     export-ignore
+/phpunit.xml        export-ignore
+/package.json       export-ignore
+/package-lock.json  export-ignore
+/*.md               export-ignore
+/*.sql              export-ignore
+/demo.txt           export-ignore
+/add_page_fields.php            export-ignore
+/audit_links.php                export-ignore
+/check_roles.php                export-ignore
+/check_sections.php             export-ignore
+/populate_*.php                 export-ignore
+/update_*.php                   export-ignore
+/database/*.sql                 export-ignore
+/public/assets/install.sql      export-ignore
+# storage/ is a shared, persistent directory on the server; never ship it.
+/storage/app        export-ignore
+/storage/logs       export-ignore
+/storage/framework  export-ignore

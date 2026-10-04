@@ -2,120 +2,46 @@
 # PIIE — Production Deployment  (PREPARED — NOT ENABLED)
 # =============================================================================
 #
-#   ############################################################
-#   #  THIS WORKFLOW IS DELIBERATELY DISABLED.                #
-#   #  The final `on:` is commented out. As written this      #
-#   #  file can never run. To enable it you must approve the  #
-#   #  release strategy AND uncomment that block.             #
-#   ############################################################
+#   THIS WORKFLOW IS DELIBERATELY DISABLED, BY TWO INDEPENDENT LOCKS:
+#     1. the `on:` block below is commented out, so nothing can start it;
+#     2. every job additionally requires the repository VARIABLE
+#        PIIE_DEPLOY_ENABLED == 'true'.
+#   Full design, rollback and activation steps: docs/DEPLOYMENT.md
 #
-# It is committed as a reviewed artefact so the deployment design can be
-# discussed, corrected and approved before anything is capable of touching
-# production. It has never been executed.
+# WHAT IT DOES WHEN ENABLED
+#   gate    (no secrets)  CI for the exact SHA must have succeeded; new migrations
+#                         are scanned for destructive operations.
+#   deploy  (environment: production, required reviewer = manual approval,
+#            one at a time) downloads the artefact CI built from that SHA,
+#            verifies its checksum, uploads it over SSH to
+#            /home/piie/deployments/piie/, then runs deploy/remote/*.sh:
+#              preflight -> [activate only: DB+storage backup, verified]
+#              -> unpack, link shared .env/storage -> migrate --pretend review
+#              -> [activate only: migrate --force, atomic `current` swap]
+#              -> HTTP health check -> automatic CODE rollback on failure.
 #
-# ── WHY IT IS DISABLED RATHER THAN ABSENT ─────────────────────────────────────
-# A workflow that does not exist cannot be reviewed, and a review that happens
-# after it is written tends to be a rubber stamp. Writing it disabled means the
-# backups, the symlink swap and the rollback are all on the record BEFORE the
-# first production run.
+# `mode: stage` (default) unpacks and prepares a release on the server WITHOUT
+# backing up, migrating or switching anything. `mode: activate` is refused by the
+# server while public_html is not wired to current/public.
 #
-# ── WHY `workflow_dispatch` IS STILL AVAILABLE ───────────────────────────────
-# Manual dispatch, with a required typed confirmation, is the intended trigger.
-# It gives a human an explicit, auditable, deliberate act per deployment — which
-# is the whole point of "manually approved".
+# NEVER: migrate:fresh, db:wipe, seeders, rsync --delete, writing .env, building
+# on the server, or restoring the database automatically.
 #
-# ── THE SECRET DEPENDENCY ─────────────────────────────────────────────────────
-# This workflow requires five GitHub Actions secrets. Their EXISTENCE IN GITHUB
-# HAS NOT YET BEEN CONFIRMED, so this workflow could not run today even if the
-# `on:` block were uncommented:
+# SECRETS (names only; values live in GitHub, scoped to the `production`
+# environment, and are never echoed):
+#   PIIE_SSH_HOST  PIIE_SSH_PORT  PIIE_SSH_USER  PIIE_SSH_KEY  PIIE_SSH_KNOWN_HOSTS
+# PIIE_SSH_KEY must be the v3 key (SHA256:6Hnrk+QwL5lsM2cyqscy1/QSIxx1/AZXpl82Z5nY44U);
+# v1/v2 are revoked. The host key is pinned via PIIE_SSH_KNOWN_HOSTS (ED25519
+# SHA256:AJCXGAyIoflDFBnXb6kxSGAALqUI9kOE0Bo4SHsUbTE) - never ssh-keyscan at run time.
 #
-#   PIIE_SSH_HOST           production SSH hostname
-#   PIIE_SSH_PORT           production SSH port (25552, NOT the DirectAdmin port)
-#   PIIE_SSH_USER           production SSH user (piie)
-#   PIIE_SSH_KEY            the v3 replacement private deployment key
-#   PIIE_SSH_KNOWN_HOSTS    independently verified host key
-#
-# ── WHICH KEY IS AUTHORISED ───────────────────────────────────────────────────
-# v3 ONLY. Independently verified against the production host on 2026-10-03:
-#
-#   v3  SHA256:6Hnrk+QwL5lsM2cyqscy1/QSIxx1/AZXpl82Z5nY44U  ACCEPTED (whoami -> piie)
-#   v2  SHA256:kkAq1hmo102n0YJc9SedqkgYhjpqSpqZrLGGEtBXXiE  REJECTED (revoked)
-#
-# `PIIE_SSH_KEY` MUST contain the v3 private key. The v1/v2 keys are revoked and
-# must never be placed in that secret, in this repository, or in any log. This
-# workflow NEVER references a local key file: the key arrives only as a GitHub
-# secret, so no developer machine's filesystem is part of the deployment path.
-#
-# ── BLOCKING PREREQUISITES FOUND DURING THE 2026-10-03 PRODUCTION SURVEY ──────
-# Three things were verified read-only over the v3 key. Each must be resolved
-# before this workflow is enabled:
-#
-# 1. PHP 8.3 IS PRESENT AND IS THE CORRECT VERSION - but it is not the default.
-#
-#    Resolved 2026-10-03. An earlier survey reported "PHP 8.2.27" and inferred
-#    that 8.3 was unavailable. That inference was WRONG. What is actually true:
-#
-#      /usr/local/php83/bin/php              -> PHP 8.3.12  (CLI, intended build)
-#      /usr/local/php83/bin/lsphp            -> LiteSpeed handler, same 8.3 install
-#      /usr/local/bin/php                    -> php81 build = PHP 8.2.27
-#      /usr/local/directadmin/data/users/piie/php/php.ini -> alt-php82
-#
-#    BOTH versions are installed. DirectAdmin's PHP selector writes the per-user
-#    php.ini, and for this account it points at the 8.2 configuration.
-#
-#    CONSEQUENCE - this is why every PHP invocation below names the binary
-#    explicitly. A bare `php`, `composer` or `php artisan` resolves through PATH to
-#    8.2.27, and a dependency tree resolved for 8.3 (config.platform.php = 8.3.0)
-#    would then be running on 8.2. It is a PATH trap, not a missing runtime, and it
-#    is silent: both parsers accept the same source.
-#
-#    config.platform.php STAYS at 8.3.0. Do NOT downgrade it and do NOT re-lock
-#    for 8.2 - the application targets 8.3 and composer.lock is resolved for it.
-#    Operator-side remediation is to set the DirectAdmin PHP selector for this
-#    account to 8.3; until then, explicit binaries are mandatory.
-#
-# 2. DOCUMENT ROOT IS NOT A SYMLINK. `/home/piie/domains/piie.ac.ug/public_html`
-#      is a real directory that contains the APPLICATION ROOT (artisan, app/,
-#      vendor/, config/, and a nested public/). It is not a document root holding
-#      only index.php. Replacing it with a release symlink would change the served
-#      layout. The vhost document root in DirectAdmin must be confirmed first.
-#
-#   3. NO NODE ON THE HOST. Compiled Mix assets and `public/mix-manifest.php` must
-#      come from the repository, or the release will have no CSS or JS.
-#
-# ── THE HOST KEY IS PINNED ────────────────────────────────────────────────────
-# The host key is pinned, not discovered. Accepting whatever the server presents is
-# the mechanism by which a compromised server silently harvests a deployment key,
-# and `ssh-keyscan` at run time would reintroduce exactly that.
-#
-# Independently verified 2026-10-03:
-#   ED25519  SHA256:AJCXGAyIoflDFBnXb6kxSGAALqUI9kOE0Bo4SHsUbTE  <-- pin this one
-#   ECDSA    SHA256:V3IvgFSNvW9k/NCSsA1eS1C5kMs+O0EeqzlPvNyX9TE
-#   RSA      SHA256:JV8Mu6W0Kimlkuyy8qp3inEzKuP+3nOVhP9FfZM3g1E
-#
-# ── RELEASE LAYOUT ────────────────────────────────────────────────────────────
-#   /home/piie/deployments/piie/
-#     ├── releases/<timestamp>/     each deployed tree, retained
-#     ├── shared/                   survives across releases:
-#     │     ├── .env                 production environment, never overwritten
-#     │     └── storage/             logs, framework cache, generated uploads
-#     └── backups/                  database dumps taken before each deploy
-#
-# Only `shared/` is written to by the app. `releases/` is append-only.
-#
-# ── WHAT IS DELIBERATELY NOT DONE ─────────────────────────────────────────────
-#   - No `rsync --delete` against the live document root. The existing live tree
-#     is NOT a Git working tree, so it may hold files this repository does not
-#     know about. `--delete` would remove them permanently.
-#   - No migration is run without a verified backup immediately before it.
-#   - No `.env` is ever written from this repository.
-#   - Existing uploaded files are not touched; they are not in this repository.
+# HOST FACTS (surveyed 2026-10-03): PHP 8.3.12 is /usr/local/php83/bin/php; bare
+# `php` is 8.2.27. No Node on the host (assets are committed; any build runs in CI).
 # =============================================================================
 
 name: PIIE Deploy (disabled)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DISABLED. Uncomment ONLY after the release strategy is approved.
+# DISABLED (lock 1). Uncomment ONLY after the approval steps in docs/DEPLOYMENT.md.
 #
 # on:
 #   workflow_dispatch:
@@ -124,273 +50,145 @@ name: PIIE Deploy (disabled)
 #         description: 'Type "DEPLOY TO PRODUCTION" to proceed'
 #         required: true
 #         type: string
+#       mode:
+#         description: 'stage (prepare only) or activate (backup, migrate, go live)'
+#         required: true
+#         default: stage
+#         type: choice
+#         options: [stage, activate]
 #       ref:
-#         description: 'Git ref or SHA to deploy (defaults to the current commit)'
+#         description: 'Commit SHA to deploy (defaults to the workflow commit)'
 #         required: false
 #         default: ''
 #         type: string
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Kept out of reach while disabled. `if: false` is belt-and-braces: even a
-# stray `workflow_dispatch` or a re-enabled trigger cannot reach the SSH step.
 permissions:
   contents: read
+  actions: read
+
+# One deployment at a time, and never cancel one that is half-way through.
+concurrency:
+  group: piie-production-deploy
+  cancel-in-progress: false
 
 jobs:
-  preflight:
-    name: Deployment preflight (no production access)
+  gate:
+    name: Gate (no production access)
+    if: ${{ vars.PIIE_DEPLOY_ENABLED == 'true' }}   # lock 2
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    # Runs today. It touches nothing on the production host — it validates the
-    # release inputs and prints exactly what a deployment WOULD do, so the
-    # sequence can be reviewed while it is still inert.
-    if: false
-
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.sha }}
 
-      - name: Assert the manual-deployment confirmation gate is present
-        run: |
-          if ! grep -q 'DEPLOY TO PRODUCTION' .github/workflows/piie-deploy.yml; then
-            echo "::error::The typed-confirmation gate is missing."
-            exit 1
-          fi
-
-      - name: Assert this workflow is still disabled
-        run: |
-          if grep -qE '^\s*on:\s*$' .github/workflows/piie-deploy.yml; then
-            echo "::error::This workflow appears to be ENABLED. It must stay disabled until approved."
-            exit 1
-          fi
-          echo "Confirmed disabled."
-
-      - name: Assert composer.lock is tracked (CI reproducibility)
-        run: |
-          # Without this, every CI run resolves dependencies fresh instead of
-          # installing a tested tree. Verified 2026-10-03 as the single most
-          # important thing to fix before the first push.
-          if git ls-files --error-unmatch composer.lock >/dev/null 2>&1; then
-            echo "composer.lock is tracked."
-          else
-            echo "::warning::composer.lock is NOT tracked. CI will not be reproducible."
-          fi
-
-      - name: Report tracked files that .gitignore no longer covers
-        run: |
-          # Belt-and-braces. .gitignore protects NEW files; it does not untrack.
-          TRACKED=$(git ls-files -ci --exclude-standard || true)
-          if [ -n "$TRACKED" ]; then
-            echo "::warning::Tracked yet now gitignored (these ship regardless):"
-            echo "$TRACKED" | sed 's/^/  /'
-            echo "::warning::See STAGING-MANIFEST.md before the first push."
-          else
-            echo "No tracked-but-ignored files."
-          fi
-
-      - name: Require zero UNEXPECTED test failures before any deployment may be enabled
-        run: |
-          # ITEM 4 - a matching failure COUNT is not evidence that deployment is safe.
-          #
-          # The 14 failures in these four classes are pre-existing and unrelated to
-          # CI. But a count can match for the WRONG reason: a real regression that
-          # breaks one known failure while another is fixed leaves the total
-          # unchanged. A real gate must compare failing test IDENTITIES.
-          #
-          # This step REPORTS only. It deliberately does not pass or fail yet,
-          # because piie-ci.yml has never executed, so there is no run to compare
-          # against and nothing it could say would count as evidence.
-          echo "Classes permitted to fail at the deployment gate:"
-          echo "  CourseOfferingAdministrationTest"
-          echo "  LiveClassCertificationTest"
-          echo "  MultinationalTimezoneTest"
-          echo "  TenantTimezoneTest"
-          echo ""
-          echo "AUTOMATIC DEPLOYMENT MUST NOT BE ENABLED UNTIL:"
-          echo "  1. piie-ci.yml has completed a full run on this branch"
-          echo "  2. these 14 failures are fixed, or formally waived in writing"
-          echo "  3. the gate compares failing test NAMES, not counts"
-          echo ""
-          echo "A suite that cannot tell a regression from a known failure is not a"
-          echo "deployment gate. Treat the baseline as a ratchet, not as a pass."
-      - name: Assert the required secrets are present (names only, values never printed)
+      - name: Require the typed confirmation
         env:
-          PIIE_SSH_HOST: ${{ secrets.PIIE_SSH_HOST }}
-          PIIE_SSH_PORT: ${{ secrets.PIIE_SSH_PORT }}
-          PIIE_SSH_USER: ${{ secrets.PIIE_SSH_USER }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          [ "$CONFIRM" = "DEPLOY TO PRODUCTION" ] || { echo "::error::Confirmation phrase not given."; exit 1; }
+
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Require a successful CI run for exactly this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          RUN=$(gh api "repos/${{ github.repository }}/actions/workflows/piie-ci.yml/runs?head_sha=$SHA&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+          [ -n "$RUN" ] || { echo "::error::No successful PIIE CI run exists for $SHA."; exit 1; }
+          echo "CI run $RUN succeeded for $SHA"
+          echo "CI_RUN_ID=$RUN" >> "$GITHUB_ENV"
+
+      - name: Scan new migrations for destructive operations
+        env:
+          ALLOW: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS }}
+        run: |
+          bash deploy/check-migrations.sh origin/main || {
+            [ "$ALLOW" = "1" ] || { echo "::error::Destructive migration(s) need human review (set repo variable ALLOW_DESTRUCTIVE_MIGRATIONS=1 after review)."; exit 1; }
+          }
+
+  deploy:
+    name: Deploy to production
+    needs: gate
+    if: ${{ vars.PIIE_DEPLOY_ENABLED == 'true' }}   # lock 2
+    runs-on: ubuntu-22.04
+    environment: production        # configure required reviewers = manual approval
+    timeout-minutes: 45
+    env:
+      SHA: ${{ needs.gate.outputs.sha }}
+      REMOTE_BASE: /home/piie/deployments/piie
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+
+      - name: Download the CI-built release artefact for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN=$(gh api "repos/${{ github.repository }}/actions/workflows/piie-ci.yml/runs?head_sha=$SHA&status=success&per_page=1" --jq '.workflow_runs[0].id')
+          gh run download "$RUN" --name "piie-release-$SHA" --dir dist
+          ls -l dist
+          ( cd dist && sha256sum -c ./*.sha256 )
+          bash deploy/verify-release.sh dist/piie-release-${SHA:0:12}.tar.gz
+
+      - name: Install pinned host key and v3 deploy key
+        env:
           PIIE_SSH_KEY: ${{ secrets.PIIE_SSH_KEY }}
           PIIE_SSH_KNOWN_HOSTS: ${{ secrets.PIIE_SSH_KNOWN_HOSTS }}
         run: |
-          MISSING=0
-          for NAME in PIIE_SSH_HOST PIIE_SSH_PORT PIIE_SSH_USER PIIE_SSH_KEY PIIE_SSH_KNOWN_HOSTS; do
-            VALUE="${!NAME}"
-            if [ -z "$VALUE" ]; then
-              echo "  MISSING: $NAME"
-              MISSING=1
-            else
-              # Presence and length only. A value is never echoed.
-              echo "  present: $NAME (${#VALUE} chars)"
-            fi
-          done
-          if [ "$MISSING" != "0" ]; then
-            echo "::error::One or more deployment secrets are absent. Set them before enabling this workflow."
-            exit 1
-          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$PIIE_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$PIIE_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/known_hosts ~/.ssh/deploy_key
+          FP=$(ssh-keygen -lf ~/.ssh/deploy_key | awk '{print $2}')
+          [ "$FP" = "SHA256:6Hnrk+QwL5lsM2cyqscy1/QSIxx1/AZXpl82Z5nY44U" ] \
+            || { echo "::error::PIIE_SSH_KEY is not the authorised v3 key."; exit 1; }
+          cat > ~/.ssh/config <<EOF
+          Host piie-prod
+            HostName ${{ secrets.PIIE_SSH_HOST }}
+            Port ${{ secrets.PIIE_SSH_PORT }}
+            User ${{ secrets.PIIE_SSH_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            PasswordAuthentication no
+          EOF
 
-  # ===========================================================================
-  # THE FOLLOWING BLOCK IS THE PROPOSED DEPLOYMENT. IT IS NOT REACHABLE.
-  # It is retained so the design is reviewable line by line.
-  # ===========================================================================
-  # deploy:
-  #   name: Deploy to production
-  #   runs-on: ubuntu-22.04
-  #   needs: preflight
-  #   environment: production
-  #   timeout-minutes: 45
-  #
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         # Pinned to the commit that CI validated, never to a moving branch name.
-  #         ref: ${{ inputs.ref || github.sha }}
-  #
-  #     - name: Require the typed confirmation
-  #       run: |
-  #         if [ "${{ inputs.confirm }}" != "DEPLOY TO PRODUCTION" ]; then
-  #           echo "::error::Confirmation phrase not given."
-  #           exit 1
-  #         fi
-  #
-  #     - name: Write the known-hosts file from the pinned secret
-  #       env:
-  #         PIIE_SSH_KNOWN_HOSTS: ${{ secrets.PIIE_SSH_KNOWN_HOSTS }}
-  #       run: |
-  #         mkdir -p ~/.ssh
-  #         chmod 700 ~/.ssh
-  #         printf '%s\n' "$PIIE_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-  #         chmod 600 ~/.ssh/known_hosts
-  #
-  #     - name: Install the v3 deployment key from the GitHub secret
-  #       env:
-  #         PIIE_SSH_KEY: ${{ secrets.PIIE_SSH_KEY }}
-  #       run: |
-  #         # The key arrives ONLY as a GitHub Actions secret. No local key file
-  #         # is referenced anywhere in this workflow, so no developer's ~/.ssh
-  #         # is part of the deployment path.
-  #         test -n "$PIIE_SSH_KEY" || { echo "::error::PIIE_SSH_KEY is empty."; exit 1; }
-  #         printf '%s\n' "$PIIE_SSH_KEY" > ~/.ssh/deploy_key
-  #         chmod 600 ~/.ssh/deploy_key
-  #         # Confirm the key about to be trusted is v3, by FINGERPRINT ONLY. A
-  #         # revoked key is then caught here rather than as an opaque
-  #         # "Permission denied" halfway through a deployment.
-  #         FP=$(ssh-keygen -lf ~/.ssh/deploy_key | awk '{print $2}')
-  #         echo "fingerprint: $FP"
-  #         case "$FP" in
-  #           SHA256:6Hnrk+QwL5lsM2cyqscy1/QSIxx1/AZXpl82Z5nY44U)
-  #             echo "  v3 key confirmed." ;;
-  #           *)
-  #             echo "::error::PIIE_SSH_KEY is not the authorised v3 key (got $FP)."
-  #             echo "::error::v1 and v2 are revoked and must never be used."
-  #             exit 1 ;;
-  #         esac
-  #
-  #     - name: Verify SSH connectivity with the pinned host key
-  #       env:
-  #         HOST: ${{ secrets.PIIE_SSH_HOST }}
-  #         PORT: ${{ secrets.PIIE_SSH_PORT }}
-  #         USER_NAME: ${{ secrets.PIIE_SSH_USER }}
-  #       run: |
-  #         ssh -i ~/.ssh/deploy_key -p "$PORT" \
-  #             -o IdentitiesOnly=yes \
-  #             -o StrictHostKeyChecking=yes \
-  #             -o UserKnownHostsFile=~/.ssh/known_hosts \
-  #             -o PasswordAuthentication=no \
-  #             "$USER_NAME@$HOST" 'echo SSH_OK;
-  #               # The pinned binary. Bare `php` resolves to 8.2.27 on this host,
-  #               # which would run an 8.3-resolved dependency tree on 8.2.
-  #               # Composer is invoked THROUGH php83 for the same reason.
-  #               /usr/local/php83/bin/php -v | head -1;
-  #               /usr/local/php83/bin/php /usr/local/bin/composer --version'
-  #
-  #     - name: Back up the production database BEFORE anything else
-  #       env:
-  #         HOST: ${{ secrets.PIIE_SSH_HOST }}
-  #         PORT: ${{ secrets.PIIE_SSH_PORT }}
-  #         USER_NAME: ${{ secrets.PIIE_SSH_USER }}
-  #       run: |
-  #         TS=$(date +%Y%m%d-%H%M%S)
-  #         ssh ... "$USER_NAME@$HOST" "
-  #           set -e
-  #           mkdir -p /home/piie/deployments/piie/backups
-  #           # Credentials are read from the production .env on the server.
-  #           # They are never echoed and never travel back to the runner.
-  #           cd /home/piie/domains/piie.ac.ug 2>/dev/null || cd /home/piie
-  #           set -a; . ./.env; set +a
-  #           mysqldump --single-transaction --quick \
-  #             -h\"\$DB_HOST\" -u\"\$DB_USERNAME\" -p\"\$DB_PASSWORD\" \
-  #             \"\$DB_DATABASE\" \
-  #             | gzip > /home/piie/deployments/piie/backups/db-\$TS.sql.gz
-  #           echo \"backup written: db-\$TS.sql.gz\"
-  #         "
-  #         # A backup that did not produce a file is a failed deployment.
-  #         test -n "$(ls -t /home/piie/... 2>/dev/null || true)" || true
-  #
-  #     - name: Build the release tree on the server
-  #       run: |
-  #         # Archive is built LOCALLY from the validated commit and uploaded,
-  #         # so the server never runs a git checkout and there is no chance of
-  #         # deploying something other than the exact tested commit.
-  #         TS=$(date +%Y%m%d-%H%M%S)
-  #         git archive --format=tar.gz --output=release.tar.gz HEAD
-  #         scp -i ~/.ssh/deploy_key -P "$PORT" release.tar.gz \
-  #             "$USER_NAME@$HOST":/tmp/piie-release-$TS.tar.gz
-  #         ssh ... "$USER_NAME@$HOST" "
-  #           set -e
-  #           R=/home/piie/deployments/piie
-  #           mkdir -p \$R/releases/\$(date +%Y%m%d-%H%M%S)
-  #           # Extract to a fresh directory, then link shared state.
-  #           # NOTE: SKIPPED. Node is absent on production, so Mix assets must come
-  #           # from the repository. Composer must also be invoked THROUGH php83:
-  #           #   /usr/local/php83/bin/php /usr/local/bin/composer install --no-dev --optimize-autoloader
-  #           #     must be COMPILED AND COMMITTED. An unbuilt public/ means a
-  #           #     site with no CSS or JS. This is a blocking prerequisite.
-  #         "
-  #
-  #     - name: Preserve the production .env and shared storage
-  #       # shared/.env is created ONCE, by hand, on the server. It is never
-  #       # pushed from here. If it is missing, the deploy ABORTS rather than
-  #       # generating one: a generated .env would have a fresh APP_KEY and would
-  #       # invalidate every session, every encrypted column (including the
-  #       # Google OAuth tokens) and every signed URL.
-  #
-  #     - name: Run migrations
-  #       # Rules that MUST hold, and why:
-  #       #  - a verified backup exists from this run
-  #       #  - `/usr/local/php83/bin/php artisan migrate --pretend` runs first, and its
-  #       #    output is reviewed, so a destructive ALTER is visible before it executes
-  #       #  - `--force` is required only because APP_ENV is production
-  #       #  - if migrations fail, the release is rolled back BEFORE the symlink
-  #        #    is swapped, so the live site never points at a half-migrated tree
-  #
-  #     - name: Swap the live symlink atomically
-  #       #   ln -sfn \$R/releases/\$TS /home/piie/domains/piie.ac.ug/public_html
-  #       #   ^ ONLY after the release has been verified. `ln -sfn` is a single
-  #       #     atomic rename, so the site is never in a state where the document
-  #       #     root points at a half-copied directory.
-  #       #   ^ BLOCKING CAVEAT: the existing live public_html is NOT currently a
-  #       #     symlink. Replacing a real directory with a symlink is a change of
-  #       #     document-root STRUCTURE, and on DirectAdmin the vhost path may be
-  #       #     absolute. This must be verified in DirectAdmin first, and the
-  #       #     current tree preserved, before this step is enabled.
-  #
-  #     - name: Verify the release
-  #       #   - HTTP status of / and of a known public route
-  #       #   - `/usr/local/php83/bin/php artisan about` reports the expected release
-  #       #   - storage/ is writable by the web user
-  #       #   - the prior release symlink still exists, i.e. rollback is possible
-  #
-  #     - name: Rollback on verification failure
-  #       #   point the symlink back at the previous release, restore the database
-  #       #   backup only if migrations ran, and keep the failed release on disk
-  #       #   for diagnosis. Rollback is part of the same job so that a failure
-  #       #   cannot leave production pointed at a broken release.
+      - name: Upload the on-server scripts and the artefact
+        run: |
+          ssh piie-prod "mkdir -p $REMOTE_BASE/incoming $REMOTE_BASE/bin"
+          scp -q deploy/remote/*.sh piie-prod:$REMOTE_BASE/bin/
+          scp -q dist/piie-release-${SHA:0:12}.tar.gz piie-prod:$REMOTE_BASE/incoming/
+          ssh piie-prod "chmod +x $REMOTE_BASE/bin/*.sh"
+
+      - name: Remote preflight (read-only)
+        run: ssh piie-prod "$REMOTE_BASE/bin/preflight.sh"
+
+      - name: Install the release
+        env:
+          MODE: ${{ inputs.mode }}
+          ALLOW_DESTRUCTIVE: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS }}
+        run: |
+          RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
+          SUM=$(cut -d' ' -f1 dist/piie-release-${SHA:0:12}.tar.gz.sha256)
+          ssh piie-prod "ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/deploy-release.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
+
+      - name: Public smoke check
+        if: ${{ inputs.mode == 'activate' }}
+        run: |
+          for u in / /login; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://piie.ac.ug$u")
+            echo "$u -> $code"; [ "$code" = 200 ] || [ "$code" = 302 ] || exit 1
+          done
+
+      - name: Remove key material
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts ~/.ssh/config

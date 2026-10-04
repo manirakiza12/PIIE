@@ -330,3 +330,47 @@ jobs:
           name: composer-audit
           path: composer.lock
           retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Release artefact: built from this exact commit, verified, never deployed here
+  # ---------------------------------------------------------------------------
+  release-package:
+    name: Build and verify release artefact
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    needs: [php-tests, js-tests]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+          extensions: >-
+            bcmath, ctype, curl, dom, fileinfo, gd, intl, json, mbstring,
+            openssl, pdo_mysql, tokenizer, xml, zip
+
+      - name: Set up Node 24 (only used if a Mix config is ever added)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build the artefact (tracked files only, production dependencies)
+        run: PIIE_REQUIRE_CLEAN=1 bash deploy/build-release.sh dist
+
+      - name: Scan migrations added since main for destructive operations (report)
+        continue-on-error: true
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main || true
+          bash deploy/check-migrations.sh origin/main
+
+      - name: Publish the artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: piie-release-${{ github.sha }}
+          path: dist/
+          retention-days: 30
