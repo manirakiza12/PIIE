@@ -388,3 +388,5 @@ jobs:
         run: for f in deploy/*.sh deploy/remote/*.sh deploy/tests/*.sh; do bash -n "$f"; done
       - name: Run the sandbox tests (no host, database or network is touched)
         run: bash deploy/tests/sandbox.sh
+      - name: Run the first-cutover sandbox tests
+        run: bash deploy/tests/first-cutover-sandbox.sh

@@ -72,3 +72,16 @@ Storage: `tar -xzf backups/storage-<id>.tar.gz -C shared/storage`.
 5. Dispatch with `mode: stage`; inspect the pretend-migration output on the server.
 6. Dispatch with `mode: activate`; approve in the `production` environment; watch health check.
 7. Rehearse `rollback.sh`. Afterwards set `PIIE_DEPLOY_ENABLED` back to unset if you want the gate closed.
+
+## First cutover (one-time, separate from normal deployments)
+`deploy/remote/first-cutover.sh` converts the legacy flat `public_html` to the release shell. It does not
+change `deploy-release.sh`, whose `activate` guard still requires the shell.
+1. Stage the release: `deploy-release.sh <id> <artefact> <sha256> stage`.
+2. `first-cutover.sh check <id>` (read-only) must print `READY`.
+3. `PIIE_CONFIRM_FIRST_CUTOVER="CUTOVER <id> <db-name>" first-cutover.sh run <id>`.
+   It verifies prerequisites, takes and verifies DB + storage backups, reviews migrations (`--pretend`;
+   destructive SQL aborts), runs forward-only migrations, sets `current`, runs `docroot.sh apply` and
+   health-checks. A failed health check reverts the docroot and removes `current` (legacy site keeps serving).
+   Migrations are not undone; the backup is the recovery path.
+It refuses to run twice, and refuses if `current` or the shell already exists.
+Tests: `deploy/tests/first-cutover-sandbox.sh` (also run in CI).
