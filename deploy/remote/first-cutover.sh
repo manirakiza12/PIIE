@@ -39,7 +39,11 @@ prereqs() {
   grep -q PIIE-RELEASE-SHELL "$DOCROOT_LINK/index.php" 2>/dev/null && no "shell already installed: first cutover is one-time; use deploy-release.sh" || ok "legacy index.php still in place"
   [ ! -e "$BASE/current" ] && ok "no current release yet" || no "current already exists"
   [ -f "$HERE/../docroot/index.php" ] || [ -f "$BASE/bin/docroot-index.php" ] && ok "shell template available" || no "shell template missing"
-  for t in mysqldump flock gzip tar curl sha256sum; do command -v $t >/dev/null && ok "$t" || no "$t missing"; done
+  # mktemp is required by docroot.sh, which lists the document-root entries through a
+  # temporary file rather than process substitution. Checking it here means a host
+  # without it is caught by `check`, before anything is moved, instead of halfway
+  # through apply.
+  for t in mysqldump flock gzip tar curl sha256sum mktemp; do command -v $t >/dev/null && ok "$t" || no "$t missing"; done
   FREE=$(df -Pk "$BASE" | awk 'NR==2{print int($4/1024)}'); [ "${FREE:-0}" -ge 2048 ] && ok "free space ${FREE}MB" || no "less than 2GB free"
   if [ -f "$REL/artisan" ]; then ( cd "$REL" && "$PHP" artisan --version >/dev/null 2>&1 ) && ok "release boots" || no "release does not boot"; fi
 }

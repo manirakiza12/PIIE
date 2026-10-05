@@ -40,7 +40,19 @@ t "rollback refused with no current release"      "! bash $D/rollback.sh >/dev/n
 
 echo "docroot.sh"
 ln -s "$B/releases/$RID" "$B/current"
+# Regression guard for the first-cutover failure:
+#   /dev/fd/62: No such file or directory
+# Process substitution needs /dev/fd, which does not resolve on every host. This
+# sandbox runs where /dev/fd DOES work, so the failure cannot be reproduced here —
+# which is exactly why it needs a static assertion rather than a behavioural test.
+# Strip comments first so the explanatory prose about the removed pattern does not
+# trip the check.
+t "docroot.sh contains NO process substitution" \
+  "! grep -v '^[[:space:]]*#' \"$D/docroot.sh\" | grep -qE '[<>]\('"
+t "docroot.sh requires mktemp, and first-cutover checks for it" \
+  "grep -q 'mktemp' $D/docroot.sh && grep -q 'mktemp' $D/first-cutover.sh"
 bash "$D/docroot.sh" plan >/dev/null 2>&1;                          t "plan changes nothing"                "head -c 5 $DOC/index.php | grep -q '<?php' && [ ! -L $DOC/css ]"
+t "plan leaves no temp file behind"        "! ls /tmp/piie-docroot-entries.* >/dev/null 2>&1"
 t "apply refused without confirmation"            "! bash $D/docroot.sh apply >/dev/null 2>&1"
 CURL_CODE=404 PIIE_CONFIRM_DOCROOT_CUTOVER=yes bash "$D/docroot.sh" apply >/dev/null 2>&1; rc=$?
 t "failed health check -> apply exits non-zero"   "[ $rc -ne 0 ]"

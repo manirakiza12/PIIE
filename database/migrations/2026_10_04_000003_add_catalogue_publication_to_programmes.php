@@ -61,11 +61,47 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('programmes')) {
-            // Nothing to extend. Failing loudly beats creating columns on a
-            // table this migration does not own.
-            throw new RuntimeException('programmes table does not exist; run the earlier migrations first.');
-        }
+        /*
+         * NO `Schema::hasTable('programmes')` GUARD HERE — DELIBERATELY.
+         *
+         * This migration used to open with:
+         *
+         *     if (! Schema::hasTable('programmes')) {
+         *         throw new RuntimeException('programmes table does not exist; ...');
+         *     }
+         *
+         * which looked like the right defensive move and broke the deployment.
+         *
+         * `migrate --pretend` puts the connection into pretend mode, where queries
+         * are LOGGED instead of EXECUTED. Schema::hasTable() runs an
+         * information_schema SELECT, receives no rows, and returns FALSE EVEN WHEN
+         * THE TABLE EXISTS. Measured on MariaDB 10.6 against a database where
+         * `programmes` was present:
+         *
+         *     Schema::hasTable('programmes')  inside pretend = false
+         *     Schema::hasTable('programmes')  outside       = true
+         *
+         * So the guard always threw under `--pretend`, and
+         * first-cutover.sh step 5 is:
+         *
+         *     PRETEND="$("$PHP" artisan migrate --pretend --force 2>&1)" \
+         *         || die "migrate --pretend failed"
+         *
+         * which means the first cutover could never get past the migration-review
+         * gate: it aborted before touching anything, every single time.
+         *
+         * Nothing is lost by dropping it. If `programmes` really is absent, the
+         * Schema::table() call below fails on its own with MySQL 1146
+         * "Base table or view not found" — still fail-loud, with a clearer message
+         * than a hand-written one, and it points at the real cause.
+         *
+         * The per-column Schema::hasColumn() guards below are safe to keep. They
+         * also return false under pretend, but a false negative there is
+         * HARMLESS and in fact correct: it just means the DDL is printed, which is
+         * exactly what `--pretend` is for. The asymmetry is the whole lesson — a
+         * guard that skips work when a thing is absent survives pretend; a guard
+         * that requires a thing to be present does not.
+         */
 
         Schema::table('programmes', function (Blueprint $table): void {
             if (! Schema::hasColumn('programmes', 'cover_image_path')) {

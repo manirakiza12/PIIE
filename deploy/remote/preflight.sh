@@ -24,7 +24,9 @@ else
 fi
 
 echo "Tools"
-for t in mysqldump gzip tar curl flock sha256sum; do command -v $t >/dev/null && ok "$t" || no "$t missing"; done
+# mktemp is required by docroot.sh, which lists document-root entries through a
+# temporary file rather than process substitution.
+for t in mysqldump gzip tar curl flock sha256sum mktemp; do command -v $t >/dev/null && ok "$t" || no "$t missing"; done
 FREE=$(df -Pk "$BASE" | awk 'NR==2{print int($4/1024)}')
 [ "${FREE:-0}" -ge 2048 ] && ok "free space ${FREE}MB" || no "less than 2GB free (${FREE}MB)"
 
@@ -41,4 +43,26 @@ else
   no "public_html must be a real directory"
 fi
 if [ -L "$BASE/current" ]; then ok "current -> $(readlink "$BASE/current")"; else warn "no current release yet"; fi
+
+# Database dumps and other secrets inside the document root are served verbatim.
+#
+# This is a live problem, not a hypothetical one: `public/assets/install.sql` is a
+# tracked 136 KB schema dump that sits inside the web root, and `public/.htaccess`
+# contains no rule denying .sql. Because the file EXISTS, the front-controller
+# rewrite (`RewriteCond %{REQUEST_FILENAME} !-f`) does not match it and Apache
+# serves it as a plain download at /assets/install.sql.
+#
+# docroot.sh deliberately leaves install.sql where it is — it is excluded from the
+# entries list so it is neither moved nor symlinked — which means the cutover does
+# not remove it either. Read-only check; it reports, it does not delete.
+echo "Exposed data files in the document root"
+EXPOSED="$(find "$DOCROOT_LINK" -maxdepth 3 \( -name '*.sql' -o -name '*.sql.gz' -o -name '*.dump' -o -name '.env*' \) -type f 2>/dev/null | head -10)"
+if [ -n "$EXPOSED" ]; then
+  echo "$EXPOSED" | while read -r f; do
+    printf '  %s (%s bytes)\n' "${f#$DOCROOT_LINK/}" "$(stat -c %s "$f" 2>/dev/null || echo '?')"
+  done
+  no "data/secret files are web-servable from public_html — move them out of the docroot or deny them in .htaccess"
+else
+  ok "no .sql/.dump/.env files served from the document root"
+fi
 exit $bad
