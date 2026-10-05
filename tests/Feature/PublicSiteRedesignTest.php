@@ -831,7 +831,7 @@ class PublicSiteRedesignTest extends TestCase
         $this->assertStringNotContainsString('vacancies-empty', $after);
     }
 
-    public function test_the_catalogue_is_a_three_column_grid_with_search_and_filters(): void
+    public function test_the_catalogue_is_a_four_column_grid_with_search_and_filters(): void
     {
         // Enough programmes to need a second page, so the pagination control is
         // actually rendered rather than short-circuited away by a single page.
@@ -846,15 +846,35 @@ class PublicSiteRedesignTest extends TestCase
 
         $html = $this->get(route('website.page', 'academic-programmes'))->assertOk()->getContent();
 
-        // Three across on a desktop, two on a tablet, one on a phone.
+        // FOUR across on a desktop, two on a tablet, one on a phone.
+        //
+        // This was three across. Decision 1 changed it so the catalogue matches the
+        // homepage block exactly: the same programme was four-across on one page and
+        // three-across on the other, and the site contradicted itself. The assertion
+        // is on the whole media block rather than a bare `repeat(4, ...)`, because
+        // the breakpoint pairing is the actual contract — a `repeat(4, ...)` that
+        // appeared at the wrong width would satisfy a naive check and still be wrong.
         $css = (string) file_get_contents(public_path('css/piie-blocks.css'));
+
         $this->assertMatchesRegularExpression(
-            '/@media \(min-width: 992px\)[\s\S]*?piie-catalogue__grid\s*\{[^}]*repeat\(3,\s*minmax\(0,\s*1fr\)\)/',
+            '/@media \(min-width: 992px\)[\s\S]*?piie-catalogue__grid\s*\{[^}]*repeat\(4,\s*minmax\(0,\s*1fr\)\)/',
             $css,
-            'the catalogue must be three columns on a desktop'
+            'the catalogue must be four columns on a desktop'
         );
-        $this->assertStringContainsString('repeat(2, minmax(0, 1fr))', $css,
-            'the catalogue must be two columns on a tablet');
+
+        // 768px, not the old 576px: the tablet step must match the shared grid's,
+        // or the catalogue and the homepage break at different widths.
+        $this->assertMatchesRegularExpression(
+            '/@media \(min-width: 768px\)[\s\S]*?piie-catalogue__grid\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/',
+            $css,
+            'the catalogue must be two columns on a tablet, at the shared grid breakpoint'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/@media \(min-width: 576px\)\s*\{[^}]*piie-catalogue__grid\s*\{[^}]*repeat\(2/',
+            $css,
+            'the 576px block must not set the catalogue to two columns'
+        );
+
         $this->assertStringContainsString('grid-template-columns: minmax(0, 1fr);', $css,
             'the catalogue must collapse to one column on a phone');
 

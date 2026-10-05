@@ -170,49 +170,60 @@
 
         {{-- =====================================================================
              ACADEMIC PROGRAMMES — its own layout, because a catalogue is not a
-             prose page. Search, filters and a three-column grid.
+             prose page. Search, filters, pagination and a four-column grid.
+
+             READ PATH CHANGED IN STAGE 2: published academic Programmes are the
+             primary source, with hand-authored CMS cards retained only where no
+             published Programme already represents them. See
+             `PublicProgrammeCatalogue`.
         ===================================================================== --}}
         @if($piiePage && $piiePage->page_key === 'programs')
 
             @php
-                $piieAllProgrammes = collect()
-                    ->merge($piieFor('programme_catalog_graduate_school'))
-                    ->merge($piieFor('programme_catalog_business_management'))
-                    ->merge($piieFor('programme_catalog_humanities'))
-                    ->merge($piieFor('programme_catalog_education'))
-                    ->values();
+                $piieCatalogue = app(\App\Support\ProgrammeCatalogue\PublicProgrammeCatalogue::class);
+                $piieAllProgrammes = $piieCatalogue->cards();
 
                 $piieQuery = trim((string) request('q'));
                 $piieLevel = trim((string) request('level'));
                 $piieFaculty = trim((string) request('faculty'));
 
-                $piieFiltered = $piieAllProgrammes->filter(function ($p) use ($piieQuery, $piieLevel, $piieFaculty) {
+                $piieFiltered = $piieAllProgrammes->filter(function (array $p) use ($piieQuery, $piieLevel, $piieFaculty) {
                     if ($piieQuery !== '') {
-                        $haystack = strtolower(($p->title ?? '').' '.strip_tags((string) ($p->description ?? '')));
+                        // Search covers the fields a candidate would actually type:
+                        // the name, the code they were quoted, the level, and any
+                        // description an administrator wrote.
+                        $haystack = strtolower(implode(' ', array_filter([
+                            $p['title'],
+                            $p['code'],
+                            $p['level'],
+                            strip_tags((string) $p['excerpt']),
+                        ])));
                         if (! str_contains($haystack, strtolower($piieQuery))) { return false; }
                     }
 
-                    if ($piieLevel !== '' && strtolower((string) $p->subtitle) !== strtolower($piieLevel)) {
+                    if ($piieLevel !== '' && strtolower((string) $p['level']) !== strtolower($piieLevel)) {
                         return false;
                     }
 
-                    if ($piieFaculty !== '' && (string) $p->section_key !== $piieFaculty) {
+                    if ($piieFaculty !== '' && (string) $p['faculty_key'] !== $piieFaculty) {
                         return false;
                     }
 
                     return true;
                 })->values();
 
-                // Twelve to a page: enough to feel browsable, few enough that the
-                // grid is not a wall on a phone.
-                $piiePerPage = 12;
+                // Twelve to a page: three full rows of four, so the grid never ends on
+                // a ragged single card, and few enough that a phone is not a wall.
+                $piiePerPage = \App\Support\ProgrammeCatalogue\PublicProgrammeCatalogue::PER_PAGE;
                 $piiePageNo = max(1, (int) request('page', 1));
                 $piieTotalPages = max(1, (int) ceil($piieFiltered->count() / $piiePerPage));
+                // Clamped, not rejected: a bookmarked page number past the end shows
+                // the last page rather than an error.
                 $piiePageNo = min($piiePageNo, $piieTotalPages);
                 $piieOnPage = $piieFiltered->forPage($piiePageNo, $piiePerPage)->values();
 
-                $piieLevels = $piieAllProgrammes->pluck('subtitle')->filter()->unique()->sort()->values();
-                $piieFaculties = $piieAllProgrammes->pluck('section_key')->filter()->unique()->sort()->values();
+                $piieLevels = $piieCatalogue->levels();
+                $piieFacultyOptions = $piieCatalogue->faculties();
 
                 /**
                  * Fallback tone per faculty.
@@ -227,7 +238,7 @@
                  */
                 $piieTones = ['a', 'b', 'c', 'd'];
 
-                $piieToneByFaculty = $piieFaculties->values()
+                $piieToneByFaculty = collect(array_keys($piieFacultyOptions))->values()
                     ->mapWithKeys(fn ($key, $index) => [$key => $piieTones[$index % count($piieTones)]])
                     ->all();
             @endphp
@@ -259,13 +270,18 @@
                             <label for="piie-faculty">Faculty</label>
                             <select class="piie-form-control" id="piie-faculty" name="faculty">
                                 <option value="">All faculties</option>
-                                @foreach($piieFaculties as $piieFacultyKey)
-                                    <option value="{{ $piieFacultyKey }}" @selected($piieFaculty === $piieFacultyKey)>{{ \Illuminate\Support\Str::of($piieFacultyKey)->replace('programme_catalog_', '')->replace('_', ' ')->title() }}</option>
+                                @foreach($piieFacultyOptions as $piieFacultyKey => $piieFacultyLabel)
+                                    <option value="{{ $piieFacultyKey }}" @selected($piieFaculty === $piieFacultyKey)>{{ $piieFacultyLabel }}</option>
                                 @endforeach
                             </select>
                         </div>
 
-                        <div class="piie-field" style="justify-content:flex-end;">
+                        {{-- The submit cell. A class rather than an inline style,
+                             because the button must be sized to its own label at
+                             desktop widths — `.piie-field` is a flex column, so a
+                             plain `<button>` stretched to the full 2fr track (567px at
+                             1440px), which read as a banner rather than a control. --}}
+                        <div class="piie-field piie-filters__actions">
                             <button class="piie-btn piie-btn--primary" type="submit">Filter</button>
                         </div>
                     </form>
@@ -284,30 +300,40 @@
                     </div>
 
                     @if($piieOnPage->isEmpty())
-                        <div class="piie-empty">
-                            No programmes match those filters.
-                            <a href="{{ route('website.page', 'academic-programmes') }}">Show all programmes</a>
-                        </div>
-                    @else
-                        <div class="piie-catalogue__grid">
-                            @foreach($piieOnPage as $piieProgramme)
-                                @include('frontend.partials.blocks.card', [
-                                    'variant'  => 'programme',
-                                    'title'    => $piieProgramme->title,
-                                    'tag'      => $piieProgramme->subtitle ?: null,
-                                    'image'    => $piieImage($piieProgramme->image),
-                                    'alt'      => $piieProgramme->title,
-                                    'fallback' => $piieProgramme->section_key
-                                        ? \Illuminate\Support\Str::of($piieProgramme->section_key)->replace('programme_catalog_', '')->replace('_', ' ')->title()
-                                        : 'PIIE',
-                                    'fallbackTone' => $piieToneByFaculty[$piieProgramme->section_key] ?? null,
-                                    'excerpt'  => $piieProgramme->description
-                                        ? \Illuminate\Support\Str::limit(strip_tags($piieProgramme->description), 130)
-                                        : null,
-                                    'link'     => ['url' => $piieProgramme->link ?: '#', 'text' => 'View Programme'],
-                                ])
-                            @endforeach
-                        </div>
+                            {{-- Two different empty states, because they mean different
+                                 things. "Nothing matches your filters" is the visitor's
+                                 to fix; "nothing is published" is the institution's, and
+                                 telling a visitor to clear filters when there is nothing
+                                 to clear is actively unhelpful. --}}
+                            @if($piieAllProgrammes->isEmpty())
+                                <div class="piie-empty">
+                                    <p class="piie-empty__title" style="font-weight:600;margin:0 0 .5rem;">Programme catalogue is being prepared</p>
+                                    <p class="mb-0">No programmes have been published yet. Please check back shortly, or contact the admissions office for current offerings.</p>
+                                </div>
+                            @else
+                                <div class="piie-empty">
+                                    No programmes match those filters.
+                                    <a href="{{ route('website.page', 'academic-programmes') }}">Show all programmes</a>
+                                </div>
+                            @endif
+                        @else
+                            <div class="piie-catalogue__grid">
+                                @foreach($piieOnPage as $piieProgramme)
+                                    @include('frontend.partials.blocks.card', [
+                                        'variant'      => 'programme',
+                                        'title'        => $piieProgramme['title'],
+                                        'tag'          => $piieProgramme['level'],
+                                        'image'        => $piieProgramme['image'],
+                                        'alt'          => $piieProgramme['title'],
+                                        'fallback'     => $piieProgramme['fallback'],
+                                        'fallbackTone' => $piieToneByFaculty[$piieProgramme['faculty_key']] ?? null,
+                                        'excerpt'      => $piieProgramme['excerpt'],
+                                        'price'        => $piieProgramme['price'],
+                                        'contactLabel' => $piieProgramme['contact_label'],
+                                        'link'         => $piieProgramme['link'],
+                                    ])
+                                @endforeach
+                            </div>
 
                         @if($piieTotalPages > 1)
                             <nav class="piie-pagination" aria-label="Catalogue pages">

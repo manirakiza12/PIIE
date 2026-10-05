@@ -73,6 +73,23 @@ trait AdmissionsTestHelper
             $table->unsignedBigInteger('department_id')->nullable();
             $table->tinyInteger('is_active')->default(1);
             $table->timestamps();
+
+            // Catalogue publication metadata (migration
+            // 2026_10_04_000003). Part of this fixture rather than added by
+            // each caller, because ProgrammeController writes these columns
+            // unconditionally: a fixture without them would fail on every
+            // create/update for a reason that has nothing to do with the test.
+            $table->string('cover_image_path', 255)->nullable();
+            $table->string('cover_image_name', 191)->nullable();
+            $table->string('cover_image_mime', 100)->nullable();
+            $table->unsignedBigInteger('cover_image_size')->nullable();
+            $table->dateTime('cover_image_updated_at')->nullable();
+            $table->string('tuition_currency', 10)->nullable();
+            $table->string('tuition_fee_basis', 32)->nullable();
+            $table->tinyInteger('is_published')->default(0);
+            $table->integer('website_sort_order')->nullable();
+            $table->dateTime('published_at')->nullable();
+            $table->unsignedBigInteger('website_item_id')->nullable();
         });
 
         Schema::create('intake_sessions', function (Blueprint $table) {

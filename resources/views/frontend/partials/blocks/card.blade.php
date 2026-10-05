@@ -61,7 +61,39 @@
         {{-- A designed placeholder. An empty frame reads as a broken page; this
              reads as a deliberate category. --}}
         <div class="piie-card__media piie-card__media--fallback piie-card__media--fb-{{ $piieTone }}">
-            <span class="piie-card__fallback-mark" aria-hidden="true">{{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($piieFallbackLabel, 0, 3)) }}</span>
+            {{--
+                The mark is the first three letters of the most DISTINGUISHING word, not
+                of the label.
+
+                Taking the first three characters of the label gives "FAC" for "Faculty of
+                Business and Management", "Faculty of Engineering and Technology" AND
+                "Faculty of Education and Humanities" — three different faculties wearing
+                identical initials, which is the opposite of category-based. Found by
+                rendering the catalogue and reading the marks off the panels.
+
+                So a leading "Faculty of" is skipped and the next word used instead: BUS,
+                ENG, EDU. A label with no such prefix ("Graduate School") keeps its own
+                first three letters, GRA. The full name is always printed underneath, so
+                the mark is a visual anchor and never the only label — an abbreviation
+                that meant nothing would be worse than none.
+            --}}
+            @php
+                $piieMarkWords = preg_split('/\s+/', trim((string) $piieFallbackLabel)) ?: [];
+
+                // Skip the WHOLE "faculty of" prefix, not just the first word.
+                // Shifting only "Faculty" left "of" behind, so the mark became "OF" for
+                // all three faculties — the same defect as "FAC", one word further along.
+                $piieGeneric = ['faculty', 'faculties', 'school', 'department', 'of', 'the', 'and', 'for'];
+                while (count($piieMarkWords) > 1
+                    && in_array(strtolower(rtrim($piieMarkWords[0], ',')), $piieGeneric, true)) {
+                    array_shift($piieMarkWords);
+                }
+
+                $piieMark = \Illuminate\Support\Str::upper(
+                    mb_substr((string) ($piieMarkWords[0] ?? 'PIIE'), 0, 3)
+                );
+            @endphp
+            <span class="piie-card__fallback-mark" aria-hidden="true">{{ $piieMark }}</span>
             <span class="piie-card__fallback-label">{{ $piieFallbackLabel }}</span>
         </div>
     @endif
@@ -87,6 +119,28 @@
 
         @if(! empty($excerpt))
             <p class="piie-card__excerpt">{!! $excerpt !!}</p>
+        @endif
+
+        {{-- Price. Rendered ONLY when there is a complete price to state: an amount,
+             a currency and a basis. Anything less renders the contact line instead,
+             because a bare figure in a catalogue card reads as the price whatever is
+             missing — and a stored 0 reads as "free", which is a claim about the
+             institution rather than an absence of information.
+             The absence of a price is therefore a designed state, not a gap. --}}
+        @if(! empty($price) && is_array($price))
+            <p class="piie-card__price">
+                <span class="piie-card__price-amount">
+                    @if(! empty($price['currency']))
+                        <span class="piie-card__price-currency">{{ $price['currency'] }}</span>
+                    @endif
+                    <span class="piie-card__price-figure">{{ $price['amount'] }}</span>
+                </span>
+                @if(! empty($price['basis']))
+                    <span class="piie-card__price-basis">{{ $price['basis'] }}</span>
+                @endif
+            </p>
+        @elseif(! empty($contactLabel))
+            <p class="piie-card__price piie-card__price--contact">{{ $contactLabel }}</p>
         @endif
 
         @if(! empty($link) && ! empty($link['url']))

@@ -5,6 +5,53 @@
    frontend/assets/css/style.css so these rules win without that file being
    edited. Every original rule still applies; nothing here un-styles the LMS.
 
+   THE ROOT FONT-SIZE, AND WHY IT IS RESTORED HERE
+   --------------------------------------------------------------------------
+   `public/frontend/assets/css/style.css` — present since the initial commit —
+   sets `html { font-size: 62.5% }`, which computes to a 10px root on a 16px
+   browser default. That is a deliberate choice in ITS file, written for a
+   design system that sizes everything in px.
+
+   This design system sizes everything in rem, and every value below was authored
+   against the conventional 16px root. On a 10px root they all render at 62.5% of
+   their intended size: a card title authored at 1.0625rem measured 10.63px, a
+   button at .9375rem measured 9.38px, and a price amount at 1.25rem measured
+   12.5px. Verified in Chromium at 1440/1024/768/390px, and confirmed to be inherited
+   rather than introduced by recent work because it also reproduced on public pages
+   this work never touched (`/contact-us`, `/about-us`), which load the same legacy
+   stylesheet. It affects every rem value in both PIIE sheets.
+
+   NOT verified against piie.ac.ug: that host was unreachable from the environment
+   this was measured in. The rule being overridden lives in a file that has been in
+   the repository since the initial commit and is loaded by the public layout, so the
+   10px root is expected to be live in production — but confirm on the real host
+   before relying on it, and re-check the catalogue's typography there after this
+   ships, since these values will render larger than they have until now.
+
+   THE SCOPE OF THE RESET
+   --------------------------------------------------------------------------
+   Resetting `html` is blunt: rem is relative to the root, so there is no way to
+   re-base it for one subtree only. The reset is therefore scoped by WHICH PAGES
+   LOAD THIS SHEET rather than by selector.
+
+   `frontend/index.blade.php` is the only file that links either PIIE sheet, and it
+   is the parent layout of the public site — landing page, CMS pages, the
+   application form and the 404 page. The admin, student, lecturer and parent
+   portals render through `layouts/app.blade.php`, which loads neither sheet, so they
+   keep the 10px root their own px-based rules were written for and are entirely
+   unaffected. The one deliberate exception is the admin programme-catalogue
+   preview, which pushes this sheet through `@stack('public_design_styles')` so a
+   public card can be measured at its real size; it therefore gets the 16px root
+   too, which is the point of the preview.
+
+   `rem` in this file therefore means 16px, which is what every value below already
+   assumed.
+
+   `!important` is used because the rule being overridden lives in
+   `public/frontend/assets/css/style.css`, loaded earlier but written with a plain
+   `html` selector, and a same-specificity later rule would otherwise depend on
+   source order across files rather than on intent.
+
    BRAND TOKENS are taken from the values already in use on the live homepage
    (landing_page.blade.php), so the redesign reuses the established identity
    rather than inventing one.
@@ -14,6 +61,13 @@
    and can never leave half a layout behind.
    ========================================================================== */
 
+/* The root font-size, restored to the browser default. See the note at the head of
+   this file for why the 10px root this overrides is wrong for a rem-based system,
+   and why scoping this by which pages load the sheet keeps it off the portals. */
+html {
+    font-size: 100% !important;
+}
+
 :root {
     /* Brand - unchanged from the existing site. */
     --piie-primary: #1466AF;
@@ -21,10 +75,32 @@
     --piie-primary-light: #2F82C9;
     --piie-secondary: #F15F23;
     --piie-secondary-dark: #C94A16;
+
+    /* Orange used for TEXT, and for fills that sit behind white text. These are two
+       different questions and the brand orange answers neither.
+
+       `--piie-secondary` #F15F23 carries white text at 3.28:1, and as 12px text on a
+       light background at 3.28:1 on white and 3.08:1 on the #F5F8FB section tint.
+       WCAG AA wants 4.5:1 for text this size, so it fails every way it is used.
+
+       #C54916 clears AA in all three positions — 4.86:1 with white text, 4.86:1 as
+       text on white, 4.56:1 as text on the tint — and is a 2% darkening of
+       `--piie-secondary-dark`, so the hue is unchanged and the shift is
+       imperceptible. Every figure measured in Chromium, not estimated.
+
+       `--piie-secondary` stays as-is for decorative rules, borders and large display
+       text, where the contrast question does not arise the same way. */
+    --piie-on-secondary: #C54916;
     --piie-accent: #7CA7CD;
     --piie-ink: #14202B;
     --piie-body: #3C4A57;
-    --piie-muted: #64748B;
+    /* #63738A, not #64748B. The original cleared AA on white (4.76:1) but measured
+       4.47:1 on `--piie-surface-alt` #F5F8FB — used as body copy in `.piie-lede`
+       and in empty-state panels — which is short of the 4.5:1 required for text
+       this size. A 1% darkening of the same hue reaches 4.54:1 on the tint and
+       4.84:1 on white. Indistinguishable as a colour; the difference is that it
+       now passes. */
+    --piie-muted: #63738A;
     --piie-line: #E2E8F0;
     --piie-surface: #FFFFFF;
     --piie-surface-alt: #F5F8FB;
@@ -148,7 +224,11 @@
     font-weight: 700;
     letter-spacing: .12em;
     text-transform: uppercase;
-    color: var(--piie-secondary);
+    /* `--piie-on-secondary`, not the brand orange: this is 12px/700 TEXT on a light
+       background, which needs WCAG AA 4.5:1. The brand orange #F15F23 reaches only
+       3.28:1 on white and 3.08:1 on the #F5F8FB section tint; see the token's
+       definition for the measured figures. */
+    color: var(--piie-on-secondary);
     margin-bottom: var(--piie-space-2);
 }
 .piie-lede {
@@ -182,16 +262,41 @@
 .piie-btn:hover { transform: translateY(-1px); }
 .piie-btn:active { transform: translateY(0); }
 
-.piie-btn--primary { background: var(--piie-secondary); border-color: var(--piie-secondary); color: #fff; }
-.piie-btn--primary:hover { background: var(--piie-secondary-dark); border-color: var(--piie-secondary-dark); color: #fff; }
+/* --------------------------------------------------------------------------
+   BUTTON COLOUR MODIFIERS — SPECIFICITY IS PART OF THE SPEC HERE
+   --------------------------------------------------------------------------
+   Each modifier is written as `.piie-btn.piie-btn--x`, not `.piie-btn--x`.
 
-.piie-btn--primary-alt { background: #fff; border-color: #fff; color: var(--piie-ink); }
-.piie-btn--primary-alt:hover { background: #EEF3F8; border-color: #EEF3F8; color: var(--piie-ink); }
+   `.piie-site a` — the rule that gives every link on the public site the brand
+   blue — has specificity (0,1,1): one class plus one type. A bare modifier like
+   `.piie-btn--ghost-light` is (0,1,0): one class, no type. So the link rule wins
+   and every button silently inherited the blue, discarding the colour its own
+   modifier declared.
 
-.piie-btn--ghost { background: transparent; border-color: currentColor; color: var(--piie-primary); }
-.piie-btn--ghost:hover { background: rgba(20, 102, 175, .07); color: var(--piie-primary-dark); }
-.piie-btn--ghost-light { background: transparent; border-color: rgba(255, 255, 255, .7); color: #fff; }
-.piie-btn--ghost-light:hover { background: rgba(255, 255, 255, .14); color: #fff; }
+   The visible consequence was the closing CTA band on every inner page: all three
+   buttons rendered brand-blue on the dark navy gradient, and "Contact Admissions" —
+   a transparent button with a 70%-white border and blue text — was effectively
+   invisible. Found by rendering the page and reading the computed colour of each
+   button, not by reading this file.
+
+   Repeating the class raises the modifiers to (0,2,0) and their :hover states to
+   (0,3,0), which beats `.piie-site a` (0,1,1) and `.piie-site a:hover` (0,2,1)
+   without needing `!important` and without weakening the link styling that the
+   rest of the public site depends on. Keep the doubled class if these selectors are
+   ever refactored — a single class here silently reintroduces the bug.
+   -------------------------------------------------------------------------- */
+/* `--piie-on-secondary`, not `--piie-secondary`: white label text needs 4.5:1 and
+   the brand orange only reaches 3.28:1. See the token's definition above. */
+.piie-btn.piie-btn--primary { background: var(--piie-on-secondary); border-color: var(--piie-on-secondary); color: #fff; }
+.piie-btn.piie-btn--primary:hover { background: #AD4013; border-color: #AD4013; color: #fff; }
+
+.piie-btn.piie-btn--primary-alt { background: #fff; border-color: #fff; color: var(--piie-ink); }
+.piie-btn.piie-btn--primary-alt:hover { background: #EEF3F8; border-color: #EEF3F8; color: var(--piie-ink); }
+
+.piie-btn.piie-btn--ghost { background: transparent; border-color: currentColor; color: var(--piie-primary); }
+.piie-btn.piie-btn--ghost:hover { background: rgba(20, 102, 175, .07); color: var(--piie-primary-dark); }
+.piie-btn.piie-btn--ghost-light { background: transparent; border-color: rgba(255, 255, 255, .7); color: #fff; }
+.piie-btn.piie-btn--ghost-light:hover { background: rgba(255, 255, 255, .14); color: #fff; }
 
 .piie-btn-row { display: flex; flex-wrap: wrap; gap: var(--piie-space-3); }
 .piie-head-center .piie-btn-row { justify-content: center; }

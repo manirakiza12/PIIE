@@ -51,7 +51,27 @@
 
 </head>
 
-<body data-bs-spy="scroll" data-bs-target=".header-area" data-bs-offset="50" tabindex="0">
+{{--
+    `data-bs-spy="scroll"` is REMOVED here, and deliberately so.
+
+    It pointed at `.header-area`, an element from the pre-redesign markup that no
+    longer exists anywhere in the project — the header is now `.piie-header`. On a
+    page short enough that the spy never activated, the bad selector was invisible;
+    on a long CMS page it threw
+
+        TypeError: Cannot read properties of null (reading 'classList')
+            at ScrollSpy._activate (bootstrap.bundle.min.js)
+
+    once per page load, found by rendering the site at every width and reading the
+    console rather than by reading this template. Nothing consumed the spy: there
+    are no `nav-link`s wired to a scroll target, so removing the attributes loses
+    no behaviour and stops the exception.
+
+    The redesigned header highlights its own section via `.piie-header.is-scrolled`,
+    set in piie-hero.js. Reinstate a spy only alongside a real target selector AND
+    something that consumes it.
+--}}
+<body tabindex="0">
 
     @yield('content')
 

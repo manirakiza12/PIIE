@@ -91,6 +91,12 @@ coverage
 # uploads directory, so committing them would fork the live copy into git.
 /public/assets/uploads/website
 
+# Public programme cover images. Written at run time by ProgrammeCoverImage into
+# the web-served uploads tree, so on the server they live in the shared uploads
+# directory. Committing them would fork the live copy into git and put
+# institution-owned marketing photography into the repository.
+/public/assets/uploads/programme-covers
+
 
 #More
 /.phpunit.cache

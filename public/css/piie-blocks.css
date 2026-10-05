@@ -164,6 +164,70 @@
 .piie-card--faculty .piie-card__body { padding-top: var(--piie-space-5); }
 
 /* --------------------------------------------------------------------------
+   PRICE
+
+   A price is the single most consequential line on a programme card, because
+   it is the one a candidate is reading in order to decide whether to apply. It
+   is therefore set as its own element rather than as body text: the amount is
+   the largest thing in the body, and the currency and the billing basis are
+   visibly subordinate to it. A number with its unit shrunk to the same weight
+   is read as a bare figure, which is precisely the ambiguity the price basis
+   exists to remove.
+
+   The basis is what makes the number meaningful — "4,500,000" and
+   "4,500,000 per academic year" are different offers — so it is never omitted
+   from a priced card, and a card with no complete price shows the contact line
+   instead of a number. That is a designed state, not a missing one.
+   -------------------------------------------------------------------------- */
+.piie-card__price {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .125rem .5rem;
+    margin: var(--piie-space-4) 0 0;
+    padding-top: var(--piie-space-3);
+    border-top: 1px solid var(--piie-line);
+}
+.piie-card__price-amount {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .25rem;
+    color: var(--piie-ink);
+}
+.piie-card__price-currency {
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--piie-muted);
+}
+.piie-card__price-figure {
+    font-family: var(--piie-font-head);
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+}
+/* Wrapping the basis onto its own line on narrow viewports keeps a long basis
+   ("for the whole programme") from pushing the amount into a ragged two-line
+   block on a phone. */
+.piie-card__price-basis {
+    flex: 1 1 100%;
+    font-size: .8125rem;
+    line-height: 1.35;
+    color: var(--piie-muted);
+}
+/* No price available. Deliberately not an em dash, a zero, or a blank: an
+   applicant must be able to tell "ask us" apart from "it is free". */
+.piie-card__price--contact {
+    font-size: .875rem;
+    font-weight: 600;
+    color: var(--piie-muted);
+    font-style: italic;
+}
+
+/* --------------------------------------------------------------------------
    CATALOGUE — search, filters, results
    -------------------------------------------------------------------------- */
 
@@ -193,6 +257,18 @@
     border-radius: var(--piie-radius-sm);
 }
 .piie-field .piie-form-control:focus-visible { border-color: var(--piie-primary); }
+
+/* The filter submit cell.
+   `.piie-field` is a flex COLUMN, so children default to align-self:stretch and a
+   bare <button> filled the whole 2fr grid track — 567px of button at 1440px,
+   measured. That reads as a banner, not a control.
+
+   On a phone the button stays full width (a 324px target is the right one, and a
+   short one is a fiddly thumb press); from 576px up it shrinks to its label, and
+   `justify-content: flex-end` on the cell bottom-aligns it against the inputs
+   above. Note the axis: in a flex COLUMN the cross axis is horizontal, so
+   align-self is what controls the button's WIDTH. */
+.piie-filters__actions { justify-content: flex-end; }
 
 .piie-results-meta {
     display: flex;
@@ -498,19 +574,37 @@
 
 /* --------------------------------------------------------------------------
    RESPONSIVE
-   The catalogue columns and the timeline are the two places the old layout
-   collapsed, so they get explicit rules rather than relying on the shared grid.
+
+   1 column on a phone, 2 on a tablet, 4 on a desktop.
+
+   The breakpoints are the SHARED GRID's own — 768px and 992px — rather than the
+   576px/992px pair this file used before. That is the whole point of the change:
+   the catalogue and the homepage block must break at the SAME widths, or the same
+   programme is four-across on the homepage and three-across in the catalogue and
+   the site contradicts itself. The old 576px step also put two columns on a
+   large phone in landscape, where each card was ~170px wide and the fee basis
+   wrapped to four lines.
    -------------------------------------------------------------------------- */
 
 @media (min-width: 576px) {
+    /* The filter bar still steps earlier than the card grid: collapsing it to one
+       column on a wide phone wastes a whole screen of a page whose main content
+       is a list of cards. */
     .piie-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    /* From here up the button shrinks to its label; below this it stays full
+       width, which is the right target on a phone. */
+    .piie-filters__actions .piie-btn { align-self: flex-start; }
+}
+
+@media (min-width: 768px) {
     .piie-catalogue__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (min-width: 992px) {
     .piie-filters { grid-template-columns: 2fr 1fr 1fr; }
-    /* Three across, as the brief requires. */
-    .piie-catalogue__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    /* Four across, matching .piie-grid--4 on the homepage. */
+    .piie-catalogue__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @media (min-width: 1366px) {

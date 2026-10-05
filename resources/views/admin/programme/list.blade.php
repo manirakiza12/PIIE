@@ -102,27 +102,67 @@
                                         <table class="table eTable mb-0">
                                             <thead>
                                                 <tr>
-                                                    <th>#</th>
-                                                    <th>{{ get_phrase('Code') }}</th>
+                                                    {{-- Secondary columns collapse below md. The listing grew from
+                                                         9 to 11 columns with the catalogue work, and an
+                                                         11-column table inside a horizontal scroller puts the
+                                                         Actions column off-screen on a phone — which is where
+                                                         an administrator is least able to reach it. Level,
+                                                         Mode and Duration remain in the row's data and in the CSV
+                                                         export; only their cells are hidden on a phone. --}}
+                                                    <th class="d-none d-xl-table-cell">#</th>
+                                                    <th>{{ get_phrase('Cover') }}</th>
+                                                    <th class="d-none d-lg-table-cell">{{ get_phrase('Code') }}</th>
                                                     <th>{{ get_phrase('Name') }}</th>
-                                                    <th>{{ get_phrase('Level') }}</th>
-                                                    <th>{{ get_phrase('Mode') }}</th>
-                                                    <th>{{ get_phrase('Duration') }}</th>
-                                                    <th>{{ get_phrase('Tuition Fee') }}</th>
-                                                    <th>{{ get_phrase('Status') }}</th>
+                                                    <th class="d-none d-xl-table-cell">{{ get_phrase('Level') }}</th>
+                                                    <th class="d-none d-xl-table-cell">{{ get_phrase('Mode') }}</th>
+                                                    <th class="d-none d-xl-table-cell">{{ get_phrase('Duration') }}</th>
+                                                    <th style="min-width:150px;">{{ get_phrase('Tuition') }}<br><small class="text-muted fw-normal">{{ get_phrase('amount & basis') }}</small></th>
+                                                    <th>{{ get_phrase('Academic') }}</th>
+                                                    <th>{{ get_phrase('Website') }}</th>
                                                     <th>{{ get_phrase('Actions') }}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 @foreach($groupProgrammes as $i => $prog)
                                                 <tr>
-                                                    <td>{{ $i + 1 }}</td>
-                                                    <td><strong>{{ $prog->code }}</strong></td>
+                                                    <td class="d-none d-xl-table-cell">{{ $i + 1 }}</td>
+
+                                                    {{-- A cover thumbnail, or a plain neutral chip rather than a
+                                                         broken-image glyph. The catalogue falls back to a
+                                                         designed panel, so "no cover" is a normal state and
+                                                         must not look like a fault here either. --}}
+                                                    <td>
+                                                        @php
+                                                            $piieThumb = app(\App\Support\ProgrammeCatalogue\ProgrammeCoverImage::class)->url($prog);
+                                                        @endphp
+                                                        @if($piieThumb)
+                                                            <img src="{{ $piieThumb }}" alt=""
+                                                                 style="width:56px;height:32px;object-fit:cover;border-radius:4px;border:1px solid #e6e9ef;display:block;">
+                                                        @else
+                                                            <span class="text-muted" style="font-size:.7rem;">{{ get_phrase('none') }}</span>
+                                                        @endif
+                                                    </td>
+
+                                                    <td class="d-none d-lg-table-cell"><strong>{{ $prog->code }}</strong></td>
                                                     <td>{{ $prog->name }}</td>
-                                                    <td><span class="badge bg-primary">{{ $prog->level }}</span></td>
-                                                    <td>{{ $prog->mode }}</td>
-                                                    <td>{{ $prog->duration ?? '—' }}</td>
-                                                    <td>{{ number_format($prog->tuition_fee, 0) }}</td>
+                                                    <td class="d-none d-xl-table-cell"><span class="badge bg-primary">{{ $prog->level }}</span></td>
+                                                    <td class="d-none d-xl-table-cell">{{ $prog->mode }}</td>
+                                                    <td class="d-none d-xl-table-cell">{{ $prog->duration ?? '—' }}</td>
+
+                                                    {{-- The admin view of the price is deliberately more
+                                                         informative than the public one: it states when a
+                                                         figure is being WITHHELD and why, so the gap is
+                                                         visible where it can be fixed. --}}
+                                                    <td style="min-width:170px;font-size:.8125rem;">
+                                                        <div>{{ \App\Support\ProgrammeCatalogue\ProgrammePrice::adminSummary($prog) }}</div>
+                                                        @if(! \App\Support\ProgrammeCatalogue\ProgrammePrice::isPriced($prog)
+                                                            && \App\Support\ProgrammeCatalogue\ProgrammePrice::amount($prog) !== null)
+                                                            <span class="badge bg-warning text-dark mt-1" style="font-size:.65rem;">
+                                                                {{ get_phrase('not shown publicly') }}
+                                                            </span>
+                                                        @endif
+                                                    </td>
+
                                                     <td>
                                                         @if($prog->is_active)
                                                             <span class="badge bg-success">{{ get_phrase('Active') }}</span>
@@ -130,6 +170,22 @@
                                                             <span class="badge bg-secondary">{{ get_phrase('Inactive') }}</span>
                                                         @endif
                                                     </td>
+
+                                                    {{-- Publication state, kept visibly separate from the
+                                                         academic state above. Three states matter and they
+                                                         are not the same thing: published, drafted but
+                                                         held back, and blocked by deactivation. --}}
+                                                    <td>
+                                                        @if($prog->is_published)
+                                                            <span class="badge bg-success">{{ get_phrase('Published') }}</span>
+                                                            @unless($prog->is_active)
+                                                                <br><small class="text-muted" style="font-size:.7rem;">{{ get_phrase('hidden: deactivated') }}</small>
+                                                            @endunless
+                                                        @else
+                                                            <span class="badge bg-light text-dark border">{{ get_phrase('Not published') }}</span>
+                                                        @endif
+                                                    </td>
+
                                                     <td class="d-flex flex-wrap gap-1">
                                                         @if($canSeeProgrammes && auth()->user()->hasPermission('academic.curriculum.view'))
                                                             <a href="{{ route('admin.curricula.index', ['programme_id' => $prog->id]) }}" class="eBtn eBtn-sm eBtn-info" title="{{ get_phrase('Manage Programme Study Plans') }}">{{ get_phrase('Study Plans') }}</a>
@@ -138,6 +194,7 @@
                                                             <a href="{{ route('admin.course_offerings.index', ['programme_id' => $prog->id]) }}" class="eBtn eBtn-sm eBtn-info">{{ get_phrase('Offerings') }}</a>
                                                         @endif
                                                         <a href="javascript:;" class="eBtn eBtn-sm eBtn-primary" title="{{ get_phrase('Edit') }}" onclick="rightModal('{{ route('admin.programmes.open_modal', ['id' => $prog->id]) }}', '{{ get_phrase('Edit Programme') }}')"><i class="bi bi-pencil"></i></a>
+                                                        <a href="{{ route('admin.programmes.preview', $prog->id) }}" class="eBtn eBtn-sm eBtn-secondary" title="{{ get_phrase('Preview the public catalogue card') }}" target="_blank" rel="noopener"><i class="bi bi-eye"></i></a>
                                                         <a href="{{ route('admin.programmes.toggle', $prog->id) }}" class="eBtn eBtn-sm eBtn-warning" title="{{ $prog->is_active ? get_phrase('Deactivate') : get_phrase('Activate') }}"><i class="bi bi-toggle-on"></i></a>
                                                         <a href="{{ route('admin.programmes.destroy', $prog->id) }}" class="eBtn eBtn-sm eBtn-danger" title="{{ get_phrase('Delete') }}" onclick="return confirm('{{ get_phrase('Delete this programme? This only works if it has no applications or students linked to it.') }}')"><i class="bi bi-trash"></i></a>
                                                     </td>

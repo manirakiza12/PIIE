@@ -314,32 +314,50 @@ class PublicContentIntegrityTest extends TestCase
      * writable through the CMS controller, and is the correct home for per-item
      * metadata.
      */
-    public function test_a_featured_programme_becomes_eligible_for_the_homepage(): void
+    public function test_the_homepage_block_is_ordered_by_publication_order_not_the_cms_featured_flag(): void
     {
+        // STAGE 2 CHANGED THIS CONTRACT, and the change is deliberate.
+        //
+        // The homepage block used to be driven by a "Featured" checkbox stored in
+        // `website_items.meta_json`: flagged items first, then the rest to fill four
+        // places. That flag reordered CARDS, which is a weaker tool than the one an
+        // academic administrator now has.
+        //
+        // Decision 1 puts the homepage block in the order the academic record chose
+        // — `programmes.website_sort_order`, then name — and caps it at eight. The
+        // CMS flag is still stored (the CMS controller still accepts it, which the
+        // test below proves) but it no longer selects what appears on the homepage.
+        // A flag that reorders a marketing block while a separate, better control
+        // decides the real order is two competing truths about one question.
         $this->addProgramme('FIRST PROGRAMME ALPHA', sort: 1);
         $this->addProgramme('SECOND PROGRAMME BETA', sort: 2);
         $this->addProgramme('THIRD PROGRAMME GAMMA', sort: 3);
         $this->addProgramme('FOURTH PROGRAMME DELTA', sort: 4);
         $this->addProgramme('LATER PROGRAMME EPSILON', sort: 5);
 
-        $home = $this->get('/')->assertOk()->getContent();
-
-        $this->assertStringContainsString('FIRST PROGRAMME ALPHA', $home);
-
-        // Promote the LAST one. It was not in the visible block.
-        $this->assertStringNotContainsString('LATER PROGRAMME EPSILON', $home);
-
+        // Flagging the last one no longer promotes it: the block has room for
+        // everything published — five programmes against a cap of eight.
         DB::table('website_items')->where('title', 'LATER PROGRAMME EPSILON')
             ->update(['meta_json' => json_encode(['featured' => true])]);
 
-        $after = $this->get('/')->assertOk()->getContent();
+        $html = $this->get('/')->assertOk()->getContent();
 
-        $this->assertStringContainsString('LATER PROGRAMME EPSILON', $after,
-            'a programme flagged Featured must become eligible for the homepage');
+        $this->assertStringContainsString('LATER PROGRAMME EPSILON', $html);
+
+        // Every published programme appears exactly once, in catalogue order.
+        foreach (['FIRST PROGRAMME ALPHA', 'SECOND PROGRAMME BETA', 'THIRD PROGRAMME GAMMA',
+                  'FOURTH PROGRAMME DELTA', 'LATER PROGRAMME EPSILON'] as $title) {
+            $this->assertSame(1, substr_count($html, $title), "{$title} must appear exactly once");
+        }
+
+        $this->assertTrue(
+            strpos($html, 'FIRST PROGRAMME ALPHA') < strpos($html, 'SECOND PROGRAMME BETA'),
+            'the block must follow the catalogue sort order'
+        );
     }
 
-    /** Unflagging must remove it again. */
-    public function test_clearing_the_featured_flag_removes_it_from_the_homepage(): void
+    /** Unflagging must leave the card exactly where it was. */
+    public function test_clearing_the_featured_flag_does_not_remove_a_programme_from_the_homepage(): void
     {
         $this->addProgramme('PROGRAMME ONE', sort: 1, meta: ['featured' => true]);
         $this->addProgramme('PROGRAMME TWO', sort: 2);
@@ -353,12 +371,14 @@ class PublicContentIntegrityTest extends TestCase
 
         $after = $this->get('/')->assertOk()->getContent();
 
-        // Still a valid programme, still in the catalogue — just no longer featured.
+        // Since Stage 2 the flag does not gate the homepage at all, so clearing it
+        // changes nothing. The programme stays — which is the correct outcome: a
+        // marketing flag must never be able to remove a real qualification.
         $this->assertStringContainsString('PROGRAMME ONE', $after);
     }
 
-    /** The block must never be empty just because nobody has ticked the box. */
-    public function test_the_featured_block_falls_back_to_the_published_catalogue(): void
+    /** The block must never be empty just because nothing is flagged. */
+    public function test_the_homepage_block_falls_back_to_the_published_catalogue(): void
     {
         $this->addProgramme('A PUBLISHED PROGRAMME');
 
@@ -366,7 +386,7 @@ class PublicContentIntegrityTest extends TestCase
 
         $this->assertStringContainsString('A PUBLISHED PROGRAMME', $html,
             'with nothing flagged, published programmes must still fill the block');
-        $this->assertStringNotContainsString('No programmes have been published yet', $html);
+        $this->assertStringNotContainsString('Programme catalogue is being prepared', $html);
     }
 
     /**

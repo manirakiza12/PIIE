@@ -129,62 +129,43 @@
     $piieFaqs = $piieSectionItems('faqs');
     $piieNewsItems = $piieSectionItems('news_events');
 
-    /**
-     * Programme catalogue: the real, published programme records the CMS holds.
+    /*
+     * Programme catalogue.
      *
-     * Fetched from `website_items`, never hardcoded, so a programme Super Admin
-     * publishes appears here and on the catalogue page with no code change, and an
-     * edit to an existing one is reflected immediately.
+     * READ PATH CHANGED IN STAGE 2. This used to read `website_items`, which meant
+     * every published programme was typed twice: once into `programmes` for the
+     * academic side and once into the CMS for the marketing side. Two copies of one
+     * qualification cannot stay true, and the copy a candidate reads wins.
      *
-     * `status === 1` is the publication filter, so an unpublished, archived or test
-     * programme can never reach the public site.
+     * `PublicProgrammeCatalogue` now reads the published academic records, and keeps
+     * rendering hand-authored CMS cards only where no published Programme already
+     * represents them. Nothing is hidden and nothing is listed twice; the academic
+     * record is simply the primary source.
+     *
+     * The filtering (published, active, this tenant, titled) lives in that service
+     * rather than in this template, so a change to the markup cannot quietly drop a
+     * filter and put an unpublished programme on the public homepage.
+     *
+     * NOTE: no Blade comment syntax inside this block, and no literal "@" directive
+     * name either. Blade compiles the block to raw PHP until its closing
+     * directive, so a nested directive name in a comment silently restructures
+     * the template — which is why the explanation uses plain PHP comment syntax
+     * and avoids naming the directives.
      */
-    $piieProgrammes = collect()
-        ->merge($piieSectionItems('programme_catalog_graduate_school'))
-        ->merge($piieSectionItems('programme_catalog_business_management'))
-        ->merge($piieSectionItems('programme_catalog_humanities'))
-        ->merge($piieSectionItems('programme_catalog_education'))
-        ->filter(fn ($p) => (int) $p->status === 1)
-        ->values();
-
-    /**
-     * Is this programme flagged Featured by Super Admin?
-     *
-     * The flag lives in the existing `meta_json` column as {"featured": true}, set by
-     * the "Featured" checkbox in Website Management. No featured/flag column existed
-     * on `website_items` and none was added: `meta_json` already existed, was already
-     * writable through the CMS controller, and is the correct home for per-item
-     * metadata. See `WebsiteManagementController::applyFeaturedFlag()`.
-     *
-     * Decoded with error handling — `json_decode` returns null on malformed JSON and
-     * a null dereference here would take the whole homepage down.
-     */
-    $piieIsFeatured = function ($programme): bool {
-        $meta = json_decode((string) ($programme->meta_json ?? ''), true);
-
-        return is_array($meta) && ! empty($meta['featured']);
-    };
+    $piieProgrammes = app(\App\Support\ProgrammeCatalogue\PublicProgrammeCatalogue::class)->cards();
 
     /**
-     * Featured Programmes for the homepage.
+     * Featured Programmes for the homepage: a MAXIMUM of eight, in two rows of four.
      *
-     * A CMS-published flag drives the selection: items marked Featured come first, in
-     * the CMS's own sort order. Items not marked Featured fill the remaining places,
-     * so the block is never empty just because nobody has ticked the box yet — and it
-     * becomes fully CMS-controlled the moment they do, without a deploy.
+     * A maximum, never a target. Three published programmes render as three cards and
+     * the row ends short. Padding the block out to eight with invented or repeated
+     * cards would be a lie about what the institution offers, so the service caps the
+     * block at eight and the grid renders whatever genuinely exists.
+     *
+     * Ordering is the academic administrator's: `website_sort_order` first, then
+     * alphabetically for anything unpositioned, then the remaining legacy CMS cards.
      */
-    $piieFeaturedLimit = 4;
-
-    $piieFeaturedProgrammes = $piieProgrammes
-        ->filter($piieIsFeatured)
-        ->take($piieFeaturedLimit)
-        ->values();
-
-    if ($piieFeaturedProgrammes->count() < $piieFeaturedLimit) {
-        $piieFeaturedProgrammes = $piieFeaturedProgrammes
-            ->concat($piieProgrammes->reject($piieIsFeatured)->take($piieFeaturedLimit - $piieFeaturedProgrammes->count()))
-            ->values();
-    }
+    $piieFeaturedProgrammes = $piieProgrammes->take(8)->values();
 
     // Programme levels, from the CMS where seeded, with photographs from the
     // supplied media folder. These are ILLUSTRATIONS, not programme records -
@@ -393,83 +374,52 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 04 — FEATURED PROGRAMMES
-             Real records from `website_items`, status 1 only. An unpublished
-             programme cannot reach this page.
+             SECTION 04 — PUBLISHED PROGRAMMES
+
+             Read from the published academic Programme records via
+             PublicProgrammeCatalogue. A MAXIMUM of eight, laid out four across, so
+             two full rows. Fewer than eight renders fewer cards and the row simply
+             ends short — never padded with filler.
+
+             The cards use the SAME shared partial the catalogue page uses, so a
+             programme looks identical on the homepage and in the catalogue and the
+             two cannot drift apart.
         ===================================================================== --}}
         <section class="piie-section" aria-labelledby="piie-programmes-title">
             <div class="piie-wrap">
                 <div class="piie-head-center">
                     <span class="piie-eyebrow">The catalogue</span>
-                    <h2 id="piie-programmes-title">Featured Programmes</h2>
+                    <h2 id="piie-programmes-title">Programmes</h2>
                     <p class="piie-lede">Published programmes from the PIIE catalogue.</p>
                 </div>
 
                 @if($piieFeaturedProgrammes->isEmpty())
+                    {{-- A designed empty state, not a blank area. An institution with
+                         no published programmes is a normal, temporary state — the
+                         catalogue is filled by administrators, not by code — and the
+                         page must still look deliberate when it happens. --}}
                     <div class="piie-empty" style="margin-top:2rem;">
-                        No programmes have been published yet.
+                        <p class="piie-empty__title" style="font-weight:600;margin:0 0 .5rem;">Programme catalogue is being prepared</p>
+                        <p class="mb-3">No programmes have been published yet. Please check back shortly, or contact the admissions office for current offerings.</p>
+                        @if($piieAdmissionsUrl)
+                            <a class="piie-btn piie-btn--primary" href="{{ $piieAdmissionsUrl }}">How to apply</a>
+                        @endif
                     </div>
                 @else
                     <div class="piie-grid piie-grid--4" style="margin-top:2.5rem;">
                         @foreach($piieFeaturedProgrammes as $piieProgramme)
-                            @php
-                                $piieProgrammeImage = $piieImage($piieProgramme->image);
-
-                                // Same tone logic as the catalogue card, so a programme
-                                // looks identical wherever it appears. Derived from the
-                                // faculty key, which is stable.
-                                $piieProgrammeTones = ['a', 'b', 'c', 'd'];
-                                $piieProgrammeTone = $piieProgrammeTones[abs(crc32((string) ($piieProgramme->section_key ?? 'piie'))) % 4];
-                            @endphp
-                            <article class="piie-card piie-card--programme">
-                                <div class="piie-card__media">
-                                    @if($piieProgrammeImage)
-                                        <img src="{{ $piieProgrammeImage }}"
-                                             alt="{{ $piieProgramme->title ?: 'PIIE programme' }}"
-                                             loading="lazy" decoding="async">
-                                    @else
-                                        {{-- The DESIGNED category fallback, identical to the
-                                             catalogue card. This replaces a bare "Programme
-                                             image pending" caption floating in an empty
-                                             rectangle, which is what the brief called an
-                                             enormous empty image area. No invented
-                                             photography and no repeated graphic: the tone
-                                             varies by faculty and the faculty name is set in
-                                             type. --}}
-                                        <div class="piie-card__media--fallback piie-card__media--fb-{{ $piieProgrammeTone }}">
-                                            <span class="piie-card__fallback-mark" aria-hidden="true">
-                                                {{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr(
-                                                    \Illuminate\Support\Str::of((string) ($piieProgramme->section_key ?? 'piie'))
-                                                        ->replace('programme_catalog_', '')
-                                                        ->replace('_', ' '),
-                                                    0, 3
-                                                )) }}
-                                            </span>
-                                            <span class="piie-card__fallback-label">
-                                                {{ \Illuminate\Support\Str::of((string) ($piieProgramme->section_key ?? 'PIIE'))
-                                                    ->replace('programme_catalog_', '')
-                                                    ->replace('_', ' ')
-                                                    ->title() }}
-                                            </span>
-                                        </div>
-                                    @endif
-                                </div>
-                                <div class="piie-card__body">
-                                    @if($piieProgramme->subtitle)
-                                        <span class="piie-tag">{{ $piieProgramme->subtitle }}</span>
-                                    @endif
-                                    <h3 class="piie-card__title">{{ $piieProgramme->title }}</h3>
-
-                                    @if($piieProgramme->description)
-                                        <p class="piie-card__excerpt">{{ \Illuminate\Support\Str::limit(strip_tags($piieProgramme->description), 130) }}</p>
-                                    @endif
-
-                                    <div class="piie-card__foot">
-                                        <a class="piie-btn piie-btn--ghost"
-                                           href="{{ $piieProgramsUrl }}">{{ $piieProgramme->link ?: 'View Details' }}</a>
-                                    </div>
-                                </div>
-                            </article>
+                            @include('frontend.partials.blocks.card', [
+                                'variant'      => 'programme',
+                                'title'        => $piieProgramme['title'],
+                                'tag'          => $piieProgramme['level'],
+                                'image'        => $piieProgramme['image'],
+                                'alt'          => $piieProgramme['title'],
+                                'fallback'     => $piieProgramme['fallback'],
+                                'excerpt'      => $piieProgramme['excerpt'],
+                                'price'        => $piieProgramme['price'],
+                                'contactLabel' => $piieProgramme['contact_label'],
+                                'link'         => $piieProgramme['link'],
+                            ])
                         @endforeach
                     </div>
 

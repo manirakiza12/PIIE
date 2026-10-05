@@ -1576,6 +1576,19 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
     Route::post('admin/programmes/update/{id}',     'update')->name('admin.programmes.update');
     Route::get('admin/programmes/delete/{id}',      'destroy')->name('admin.programmes.destroy');
     Route::get('admin/programmes/toggle/{id}',      'toggleStatus')->name('admin.programmes.toggle');
+
+    // ── Programme catalogue: cover, price metadata, website publication ────
+    //
+    // These are POSTs because each one changes stored state. The publication
+    // toggle is deliberately NOT a GET: a link prefetch, a browser "preview this
+    // page" or a crawler following an href must never withdraw a live programme
+    // from the public catalogue, and the `toggle` route above being a GET is
+    // exactly the shape of mistake not to repeat here.
+    Route::post('admin/programmes/{id}/cover',        'storeCover')->whereNumber('id')->name('admin.programmes.cover.store');
+    Route::post('admin/programmes/{id}/cover/remove', 'removeCover')->whereNumber('id')->name('admin.programmes.cover.remove');
+    Route::post('admin/programmes/{id}/publish',      'publish')->whereNumber('id')->name('admin.programmes.publish');
+    Route::post('admin/programmes/{id}/unpublish',    'unpublish')->whereNumber('id')->name('admin.programmes.unpublish');
+    Route::get('admin/programmes/{id}/preview',       'preview')->whereNumber('id')->name('admin.programmes.preview');
 });
 
 // ── Governed Programme Curricula ────────────────────────────────

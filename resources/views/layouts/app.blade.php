@@ -129,6 +129,15 @@
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
+    {{--
+        Per-page stylesheets. The admin chrome loads none of the public design
+        system's CSS, so an admin screen that must render a PUBLIC component
+        faithfully — the programme catalogue preview does, using the real card
+        partial — has to pull those sheets in itself. Left as an empty stack so
+        the overwhelming majority of admin pages pay nothing for it.
+    --}}
+    @stack('public_design_styles')
+
     <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
 
     <style>
