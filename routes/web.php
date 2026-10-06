@@ -58,7 +58,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/health', function () {
     return response('PIIE-APP-OK', 200)
         ->header('Content-Type', 'text/plain');
-})->name('deployment.health');
+})
+    ->withoutMiddleware(\App\Http\Middleware\ResolveTenantLocale::class)
+    ->name('deployment.health');
 /*
 |--------------------------------------------------------------------------
 | Web Routes
