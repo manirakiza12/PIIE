@@ -18,6 +18,10 @@ KEEP_STORAGE_BACKUPS="${PIIE_KEEP_STORAGE_BACKUPS:-3}"
 
 log()  { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+# A condition the operator should know about that does NOT stop the deployment —
+# used where failing would be worse than continuing (e.g. a permissions adjustment
+# that could not be applied on an unprivileged host).
+warn() { printf '[%s] WARNING: %s\n' "$(date +%H:%M:%S)" "$*" >&2; }
 
 # Restore routing after an activated release fails its application health check.
 restore_after_failed_activation() {

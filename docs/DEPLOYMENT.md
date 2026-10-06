@@ -52,12 +52,45 @@ a restore discards student records written since the backup. If a migration must
 1. put the site in maintenance (`php83 artisan down` in `current`);
 2. `sha256sum -c backups/db-<id>.sql.gz.sha256`; restore into a scratch DB first and inspect;
 3. only then `zcat backups/db-<id>.sql.gz | mysql ...`; swap `current` back; `artisan up`.
-Storage: `tar -xzf backups/storage-<id>.tar.gz -C shared/storage`.
+Storage: `tar -xzf backups/storage-<id>.tar.gz -C shared`.
+
+That one archive covers **both** persistent trees — `shared/storage/app` (Laravel uploads) and
+`shared/public-uploads` (everything served from `public/assets/uploads`) — so a single restore puts
+both back. Note the archive layout changed: archives taken before 2026-10-06 contain `app/...` and
+restore with `-C shared/storage`; run `tar -tzf` on the archive to see which layout it has.
 
 ## Prerequisites still needed from you
 1. **Document root** (verified read-only 2026-10-04): the vhost serves `public_html` itself, a flat app root; it cannot be a symlink to a release. Convert it ONCE to a thin shell with `docroot.sh plan` then `apply`. Until then only `stage` works.
 2. **Seed `shared/`** once by hand: copy the live `.env` to `shared/.env` (chmod 600), copy live
    `storage/` (uploads) into `shared/storage/`. Confirm the `.env` has `APP_DEBUG=false`.
+3. **`shared/public-uploads` permissions — ONE-TIME, needs root.** This is the only step the
+   unprivileged deploy script cannot do for itself, so it is stated here rather than papered over.
+
+   The deployment user (`piie`) merges baseline artefacts; PHP-FPM (`www-data`) writes real user
+   uploads. For both to work the directory must be group-owned by `www-data` and **setgid**, so that
+   everything created later inherits the group and stays group-writable:
+
+   ```sh
+   mkdir -p /home/piie/deployments/piie/shared/public-uploads
+   chown -R piie:www-data /home/piie/deployments/piie/shared/public-uploads
+   chmod 2775 /home/piie/deployments/piie/shared/public-uploads
+   ```
+
+   Run it **once**, by hand, as root. Afterwards `deploy-release.sh` maintains the mode on the
+   top-level directory and on any directory it creates itself, and `preflight.sh` verifies group,
+   mode and the setgid bit on every run.
+
+   The deploy script never calls `sudo` and never issues `chmod 777`, and it does not recursively
+   change ownership or permissions of existing uploads — those may be live production files.
+
+   To verify runtime writability properly (also needs root, once):
+
+   ```sh
+   sudo -u www-data touch /home/piie/deployments/piie/shared/public-uploads/.probe && rm -f /home/piie/deployments/piie/shared/public-uploads/.probe
+   ```
+
+   `preflight.sh` runs that check automatically when `sudo -n` is available and reports
+   "unverified" rather than passing silently when it is not.
 3. **Host**: confirm `mysqldump`, PHP 8.3 extensions (`deploy/remote/preflight.sh` reports them),
    ≥2 GB free; ideally set DirectAdmin PHP selector to 8.3.
 4. **GitHub**: secrets `PIIE_SSH_HOST`, `PIIE_SSH_PORT`, `PIIE_SSH_USER`, `PIIE_SSH_KEY`,

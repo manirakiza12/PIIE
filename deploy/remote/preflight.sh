@@ -34,6 +34,96 @@ echo "Backups"
 LAST=$(ls -t "$BASE"/backups/db-*.sql.gz 2>/dev/null | head -1 || true)
 if [ -n "$LAST" ] && gzip -t "$LAST"; then ok "latest DB backup readable: $(basename "$LAST")"; else warn "no verified DB backup yet (a deploy takes one)"; fi
 
+echo "Persistent public uploads"
+# shared/public-uploads is the single real copy of everything served from
+# public/assets/uploads. It is created by deploy-release.sh during release
+# preparation, so its absence before the first release is NORMAL and is only a
+# warning here — preflight must not require a release to exist in order to run.
+PU="$BASE/shared/public-uploads"
+RUNTIME_GROUP="${PIIE_RUNTIME_GROUP:-www-data}"
+if [ -L "$PU" ]; then
+  no "shared/public-uploads is a symlink; it must be a real directory"
+elif [ -d "$PU" ]; then
+  ok "shared/public-uploads exists ($(find "$PU" -type f 2>/dev/null | wc -l) file(s))"
+
+  # (a) Can the DEPLOY user manage it? A different question from (b).
+  if [ -w "$PU" ]; then ok "deploy user can write shared/public-uploads"; else no "deploy user CANNOT write shared/public-uploads"; fi
+
+  # (b) Can the PHP-FPM RUNTIME write it? This is the one that silently breaks
+  # uploads in production, and `[ -w "$PU" ]` says nothing about it: it only proves
+  # the identity running THIS script can write.
+  PGROUP="$(stat -c %G "$PU" 2>/dev/null || echo '?')"
+  PMODE="$(stat -c %a "$PU" 2>/dev/null || echo '?')"
+  PGRP_OTHER="$(id -gn)"
+
+  if [ "$PGROUP" = "$RUNTIME_GROUP" ]; then
+    ok "owned by group $RUNTIME_GROUP (expected PHP-FPM group)"
+  else
+    no "group is '$PGROUP', expected '$RUNTIME_GROUP'. PHP-FPM will not be able to write."
+    no "  ONE-TIME FIX (needs root): chown -R piie:$RUNTIME_GROUP '$PU' && chmod 2775 '$PU'"
+  fi
+
+  # Group-write bit, and setgid so entries created later inherit that group.
+  #
+  # `stat -c %a` prints the MINIMUM number of digits: 755, 2775, 664 - not a fixed
+  # width. An earlier version matched fixed 5- and 6-character patterns, so every
+  # real mode fell through to "?" and a correctly configured 2775 directory was
+  # reported as not group-writable. The group digit is therefore read positionally
+  # from the right, which works for any width.
+  gwrite="${PMODE:$(( ${#PMODE} - 2 )):1}"
+  if [ "$gwrite" = 7 ] || [ "$gwrite" = 6 ] || [ "$gwrite" = 3 ] || [ "$gwrite" = 2 ]; then
+    ok "group-writable (mode $PMODE)"
+  else
+    no "not group-writable (mode $PMODE, group-write digit '$gwrite'); PHP-FPM cannot write uploads"
+    no "  ONE-TIME FIX (needs root): chmod 2775 '$PU'"
+  fi
+
+  case "${PMODE:0:1}" in
+    2) ok "setgid set (mode $PMODE): new files inherit group $RUNTIME_GROUP" ;;
+    *) no "setgid bit is NOT set (mode $PMODE); files created later will not inherit group $RUNTIME_GROUP"
+       no "  ONE-TIME FIX (needs root): chmod g+s '$PU'" ;;
+  esac
+
+  # Direct proof, but only when it can be obtained without assuming sudo. A CI
+  # runner is unprivileged, so `sudo -n` may simply not work; that is reported as
+  # unverified rather than silently passed.
+  if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    if sudo -n -u "$RUNTIME_GROUP" test -w "$PU" 2>/dev/null; then
+      ok "verified: runtime user $RUNTIME_GROUP can write"
+    else
+      no "verified: runtime user $RUNTIME_GROUP CANNOT write"
+    fi
+  else
+    warn "cannot verify runtime writability without root; the group/mode/setgid checks above are the evidence available"
+    warn "  verify once by hand: sudo -u $RUNTIME_GROUP touch '$PU/.probe' && rm -f '$PU/.probe'"
+  fi
+
+  # A default ACL is the belt-and-braces path when www-data is not the owning group.
+  if command -v getfacl >/dev/null 2>&1; then
+    if getfacl -p "$PU" 2>/dev/null | grep -q "user:$RUNTIME_GROUP"; then
+      ok "ACL grants $RUNTIME_GROUP access"
+    fi
+  fi
+else
+  warn "shared/public-uploads missing (created by the first release; nothing to persist yet)"
+fi
+
+# When a release IS active, its public/assets/uploads must resolve to that shared
+# directory. A release holding a real directory there instead would silently lose
+# every runtime upload on the next release switch — the exact bug this prevents.
+if [ -L "$BASE/current" ]; then
+  RL="$BASE/current/public/assets/uploads"
+  if [ ! -e "$RL" ]; then
+    no "current release has no public/assets/uploads"
+  elif [ ! -L "$RL" ]; then
+    no "current/public/assets/uploads is a real directory; runtime uploads would be lost on the next release"
+  elif [ "$(readlink -f "$RL")" != "$(readlink -f "$PU")" ]; then
+    no "current uploads symlink points at $(readlink -f "$RL"), expected $(readlink -f "$PU")"
+  else
+    ok "current uploads -> shared/public-uploads"
+  fi
+fi
+
 echo "Release routing"
 if [ -L "$BASE/current" ]; then
   ok "current -> $(readlink "$BASE/current")"

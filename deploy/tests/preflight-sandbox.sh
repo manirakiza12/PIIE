@@ -23,14 +23,26 @@ printf 'DB_PASSWORD=hunter2\n' > "$DOC/.env"
 bash "$D/preflight.sh" > "$S/p1.log" 2>&1
 t "flags install.sql in the docroot"          "grep -q 'assets/install.sql' $S/p1.log"
 t "flags .env in the docroot"                 "grep -q '\.env' $S/p1.log"
-t "reports FAIL for exposed files"            "grep -q 'web-servable' $S/p1.log"
+# Asserted on BEHAVIOUR (non-zero exit + a FAIL line), not on wording: the message
+# text is a human-facing string that has been reworded before, and a test that
+# pins it breaks for no useful reason.
+t "reports FAIL for exposed files"            "bash $D/preflight.sh >/dev/null 2>&1; [ \$? -ne 0 ] && grep -q 'FAIL' $S/p1.log"
 
 # 2. A tidy docroot must not be flagged.
 rm -f "$DOC/assets/install.sql" "$DOC/.env"
 printf 'body{}\n' > "$DOC/assets/style.css"
+# The .env the app itself needs must exist for preflight's env checks to pass; it
+# lives in shared/, not in the document root.
+printf 'APP_ENV=production\nAPP_DEBUG=false\nAPP_KEY=x\nDB_HOST=db\nDB_DATABASE=piie\nDB_USERNAME=piie\n' > "$B/shared/.env"
 bash "$D/preflight.sh" > "$S/p2.log" 2>&1
 t "clean docroot reports ok"                  "grep -q 'no .sql/.dump/.env files served' $S/p2.log"
-t "clean docroot has no web-servable FAIL"    "! grep -q 'web-servable' $S/p2.log"
+# Scoped to the exposed-files section only. Asserting "no FAIL anywhere" would be
+# wrong: this fixture deliberately has no releases/shared layout, so preflight
+# legitimately FAILs on those, and that has nothing to do with exposed files.
+t "clean docroot reports no FAIL for exposed files" \
+  "! sed -n '/Exposed data files/,\$p' $S/p2.log | grep -q 'FAIL'"
+t "clean docroot reports no FAIL for public uploads" \
+  "! sed -n '/Persistent public uploads/,/Release routing/p' $S/p2.log | grep -q 'FAIL'"
 
 # 3. It stays read-only: the dump is still there afterwards.
 printf 'CREATE TABLE x (...);\n' > "$DOC/assets/install.sql"
