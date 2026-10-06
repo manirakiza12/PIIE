@@ -3,7 +3,7 @@
 #   deploy-release.sh <release-id> <artefact.tar.gz> <sha256> [stage|activate]
 # `stage` (default) unpacks and prepares the release only: no backup, no
 # migration, no symlink change. `activate` additionally backs up, migrates and
-# swaps `current`, and refuses unless public_html is wired to current/public.
+# swaps `current`; Nginx serves the application from current/public.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 RID="${1:?release id}"; ART="${2:?artefact}"; SUM="${3:?sha256}"; MODE="${4:-stage}"
@@ -20,8 +20,8 @@ REL="$BASE/releases/$RID"
 [ ! -e "$REL" ] || die "release $RID already exists (releases are append-only)"
 
 if [ "$MODE" = activate ]; then
-  grep -q "PIIE-RELEASE-SHELL" "$DOCROOT_LINK/index.php" 2>/dev/null \
-    || die "public_html is not converted to the release shell yet (deploy/remote/docroot.sh); run in stage mode"
+  [ "$DOCROOT_LINK" = "$BASE/current/public" ] \
+    || die "production document root must be $BASE/current/public"
   bash "$(dirname "$0")/backup.sh" "$RID"
 fi
 

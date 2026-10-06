@@ -34,15 +34,13 @@ echo "Backups"
 LAST=$(ls -t "$BASE"/backups/db-*.sql.gz 2>/dev/null | head -1 || true)
 if [ -n "$LAST" ] && gzip -t "$LAST"; then ok "latest DB backup readable: $(basename "$LAST")"; else warn "no verified DB backup yet (a deploy takes one)"; fi
 
-echo "Document root"
-if grep -q PIIE-RELEASE-SHELL "$DOCROOT_LINK/index.php" 2>/dev/null; then
-  ok "public_html serves the release shell"
-elif [ -d "$DOCROOT_LINK" ] && [ ! -L "$DOCROOT_LINK" ]; then
-  warn "public_html is the legacy flat app root (expected before cutover): deploys can be STAGED only; run docroot.sh plan/apply (docs/DEPLOYMENT.md)"
+echo "Release routing"
+if [ -L "$BASE/current" ]; then
+  ok "current -> $(readlink "$BASE/current")"
+  [ -d "$BASE/current/public" ] && ok "current/public exists" || no "current/public missing"
 else
-  no "public_html must be a real directory"
+  warn "no current release yet (expected before first activation)"
 fi
-if [ -L "$BASE/current" ]; then ok "current -> $(readlink "$BASE/current")"; else warn "no current release yet"; fi
 
 # Database dumps and other secrets inside the document root are served verbatim.
 #
@@ -61,7 +59,7 @@ if [ -n "$EXPOSED" ]; then
   echo "$EXPOSED" | while read -r f; do
     printf '  %s (%s bytes)\n' "${f#$DOCROOT_LINK/}" "$(stat -c %s "$f" 2>/dev/null || echo '?')"
   done
-  no "data/secret files are web-servable from public_html — move them out of the docroot or deny them in .htaccess"
+  no "data/secret files are present inside the active public document root — remove them from the release before deployment"
 else
   ok "no .sql/.dump/.env files served from the document root"
 fi

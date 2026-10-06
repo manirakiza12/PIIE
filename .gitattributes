@@ -28,3 +28,6 @@
 /storage/app        export-ignore
 /storage/logs       export-ignore
 /storage/framework  export-ignore
+
+# Shell scripts execute on Linux production hosts; always keep LF endings.
+*.sh text eol=lf
