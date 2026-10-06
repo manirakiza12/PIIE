@@ -45,9 +45,9 @@
 # SECRETS (names only; values live in GitHub, scoped to the `production`
 # environment, and are never echoed):
 #   PIIE_SSH_HOST  PIIE_SSH_PORT  PIIE_SSH_USER  PIIE_SSH_KEY  PIIE_SSH_KNOWN_HOSTS
-# PIIE_SSH_KEY must be the v3 key (SHA256:6Hnrk+QwL5lsM2cyqscy1/QSIxx1/AZXpl82Z5nY44U);
+# PIIE_SSH_KEY must be the v3 key (SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM);
 # v1/v2 are revoked. The host key is pinned via PIIE_SSH_KNOWN_HOSTS (ED25519
-# SHA256:AJCXGAyIoflDFBnXb6kxSGAALqUI9kOE0Bo4SHsUbTE) - never ssh-keyscan at run time.
+# SHA256:fR4AOOMWFR17JIX9k8ed4O7+N6IaH30zEtefkbx/UEI) - never ssh-keyscan at run time.
 #
 # HOST FACTS (surveyed 2026-10-03): PHP 8.3.12 is /usr/local/php83/bin/php; bare
 # `php` is 8.2.27. No Node on the host (assets are committed; any build runs in CI).
@@ -179,7 +179,7 @@ jobs:
           printf '%s\n' "$PIIE_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/known_hosts ~/.ssh/deploy_key
           FP=$(ssh-keygen -lf ~/.ssh/deploy_key | awk '{print $2}')
-          [ "$FP" = "SHA256:6Hnrk+QwL5lsM2cyqscy1/QSIxx1/AZXpl82Z5nY44U" ] \
+          [ "$FP" = "SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM" ] \
             || { echo "::error::PIIE_SSH_KEY is not the authorised v3 key."; exit 1; }
           cat > ~/.ssh/config <<EOF
           Host piie-prod
