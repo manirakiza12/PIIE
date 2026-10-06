@@ -63,8 +63,8 @@ t "apply links static dirs into current"          "[ -L $DOC/css ] && [ -L $DOC/
 t "uploads stay a real directory with all files"  "[ ! -L $DOC/assets/uploads ] && [ -f $DOC/assets/uploads/student1.pdf ] && [ -f $DOC/assets/uploads/student2.pdf ]"
 t ".env and .htaccess untouched"                  "[ -f $DOC/.env ] && [ -f $DOC/.htaccess ]"
 t "old files kept in backup, not deleted"         "ls $B/backups/docroot-*/css/old.css >/dev/null 2>&1 && ls $B/backups/docroot-*/index.php >/dev/null 2>&1"
-bash "$D/deploy-release.sh" 20261004-120400-abcdef5 "$S/a.tar.gz" "$SUM" activate > "$S/act.log" 2>&1
-t "activate passes guard, then FAILS CLOSED at backup (no DB creds) without unpacking" "grep -q \"DB_DATABASE empty\" $S/act.log && [ ! -e $B/releases/20261004-120400-abcdef5 ]"
+PIIE_DOCROOT="$B/current/public" bash "$D/deploy-release.sh" 20261004-120400-abcdef5 "$S/a.tar.gz" "$SUM" activate > "$S/act.log" 2>&1
+t "Contabo activate passes current/public guard, then FAILS CLOSED at backup (no DB creds) without unpacking" "grep -q \"DB_DATABASE empty\" $S/act.log && [ ! -e $B/releases/20261004-120400-abcdef5 ]"
 TS="$(ls "$B/backups" | grep '^docroot-' | tail -1)"; TS="${TS#docroot-}"
 bash "$D/docroot.sh" revert "$TS" >/dev/null 2>&1
 t "revert restores index.php and real dirs"       "grep -q legacy $DOC/index.php && [ ! -L $DOC/css ] && [ -f $DOC/css/old.css ] && [ ! -L $DOC/assets/vendors ]"
