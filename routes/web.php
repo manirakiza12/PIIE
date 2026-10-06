@@ -46,6 +46,21 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
+| Deployment Health Check
+|--------------------------------------------------------------------------
+|
+| Lightweight application-level probe used by the production deployment
+| pipeline. Reaching this response proves that Nginx -> PHP-FPM -> Laravel
+| successfully booted. Keep this endpoint independent of the database,
+| authentication, sessions and external services.
+|
+*/
+Route::get('/health', function () {
+    return response('PIIE-APP-OK', 200)
+        ->header('Content-Type', 'text/plain');
+})->name('deployment.health');
+/*
+|--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
 |
@@ -70,7 +85,7 @@ Route::get('/clear-cache', function () {
     return 'Cache cleard';
 })->name('clear.cache');
 
-// MarzPay's server posts here directly — no login, no CSRF token (see
+// MarzPay's server posts here directly ΓÇö no login, no CSRF token (see
 // VerifyCsrfToken::$except). Shared across every payment flow; the payload's
 // metadata says which fee/subscription row it belongs to.
 Route::post('webhooks/marzpay', [\App\Http\Controllers\MarzPayWebhookController::class, 'handle'])->name('webhooks.marzpay');
@@ -98,7 +113,7 @@ Route::controller(HomeController::class)->group(function () {
     Route::get('website/{slug}', 'websitePage')->name('website.page');
     Route::get('download-brochure', 'downloadBrochure')->name('download.brochure');
 
-    // ── PUBLIC ENQUIRY SUBMISSION ────────────────────────────────────────────
+    // ΓöÇΓöÇ PUBLIC ENQUIRY SUBMISSION ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // The Contact page form. `throttle:6,1` is six submissions per IP per minute
     // and is applied by the framework BEFORE the controller runs, so a flood never
     // reaches validation or the database. `PublicEnquiryController` adds a
@@ -115,23 +130,23 @@ Route::controller(HomeController::class)->group(function () {
 
     Route::post('school/create', 'schoolCreate')->name('school.create');
     Route::get('web_redirect_to_pay_fee', 'webRedirectToPayFee')->name('webRedirectToPayFee');
-    // Mobile → web payment handoff: temporary signed URL + single-use key (no credential in the URL).
+    // Mobile ΓåÆ web payment handoff: temporary signed URL + single-use key (no credential in the URL).
     Route::get('web_pay_fee/{handoff}', 'webPayFeeHandoff')->middleware('signed')->name('webPayFeeHandoff');
 });
 
-// Public ID-card verification — reachable only via a signed URL embedded
+// Public ID-card verification ΓÇö reachable only via a signed URL embedded
 // in a card's QR code (see IdCardVerificationController's own docblock).
 Route::get('id-card/verify/{student}', [IdCardVerificationController::class, 'show'])
     ->name('id_card.verify')
     ->middleware('signed');
 
-// ── Public admissions / Applicant Portal ──────────────────────────────────
+// ΓöÇΓöÇ Public admissions / Applicant Portal ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // Independent of the authenticated HEI Admissions administration area, and on
-// its own "applicant" auth guard — none of the role middleware above applies
+// its own "applicant" auth guard ΓÇö none of the role middleware above applies
 // here and applicants are not `users`. No school selector: the institution
 // context is resolved automatically (see App\Support\PublicTenantResolver).
 
-// "Apply Now" landing page — the entry point linked from the public website.
+// "Apply Now" landing page ΓÇö the entry point linked from the public website.
 Route::controller(\App\Http\Controllers\PublicApplicationController::class)->group(function () {
     Route::get('apply', 'showForm')->name('apply.form');
 });
@@ -153,7 +168,7 @@ Route::controller(\App\Http\Controllers\Applicant\AuthController::class)->group(
 });
 
 // Applicant portal. Every route resolves the application from the signed-in
-// applicant — no application id is ever accepted from the request.
+// applicant ΓÇö no application id is ever accepted from the request.
 Route::middleware('applicant')->group(function () {
     Route::controller(\App\Http\Controllers\Applicant\PortalController::class)->group(function () {
         Route::get('applicant/dashboard', 'dashboard')->name('applicant.dashboard');
@@ -210,7 +225,7 @@ Route::controller(WebsiteManagementController::class)->middleware('auth', 'super
     Route::post('superadmin/website-management/seo/upsert', 'upsertSeo')->name('superadmin.website.seo.upsert');
 });
 
-// ── SUPER ADMIN ENQUIRY INBOX ─────────────────────────────────────────────────
+// ΓöÇΓöÇ SUPER ADMIN ENQUIRY INBOX ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // Inside this application's existing `auth` + `superAdmin` gate, which is what makes
 // it an *authorised* inbox. A student, lecturer, parent or ordinary school admin
 // cannot reach any of it: the School Admin website-management group below has no
@@ -247,7 +262,7 @@ Route::controller(WebsiteManagementController::class)->middleware('auth', 'admin
 // Each of these renders one role's "your account has been disabled" page.
 // They carry no role middleware (a disabled/wrong-role user can't pass one
 // to get here in the first place), so without a guard a logged-in user of
-// ANY role could land on — or be linked to — another role's page directly.
+// ANY role could land on ΓÇö or be linked to ΓÇö another role's page directly.
 // \App\Support\Permissions\RoleAccountDisableRoute::name() sends a
 // logged-in user whose own role doesn't match this route back to their own
 // disabled-account page instead of rendering the wrong one for them.
@@ -295,7 +310,7 @@ Route::get('student/account-disable', function () {
 })->name('student.account_disable');
 
 // Was referenced by WardenMiddleware's redirect but never actually
-// registered — any request that hit that branch threw a hard
+// registered ΓÇö any request that hit that branch threw a hard
 // RouteNotFoundException instead of showing a message.
 Route::get('warden/account-disable', function () {
     if (($redirect = \App\Support\Permissions\RoleAccountDisableRoute::redirectIfMismatched(auth()->user(), 'warden.account_disable'))) {
@@ -1082,7 +1097,7 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
     Route::get('student/id-card/pdf', 'idCardPdf')->name('student.id_card.pdf');
     Route::get('student/my-courses', 'myCourses')->name('student.my_courses');
 
-    // ── Course Assignments (student) ─────────────────────────────────────
+    // ΓöÇΓöÇ Course Assignments (student) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // Reads and submissions only. There is deliberately no student route that
     // can create, edit, publish, close or grade: authority over an assignment is
     // an allocation, and a registration must never imply it.
@@ -1189,7 +1204,7 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
             Route::get('/exams', [StudentCourseExamsController::class, 'index'])->name('exams');
         });
 
-    // ── Course Content (student reader) ───────────────────────────────────
+    // ΓöÇΓöÇ Course Content (student reader) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // Reads and progress only. There is deliberately no student route that can
     // create, edit, reorder or publish anything: authority for content changes
     // is an allocation, not a registration, and registration must never imply
@@ -1320,7 +1335,7 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
 });
 //Student routes end here
 
-// Self-service Exam Results / Transcript (TranscriptController — see its
+// Self-service Exam Results / Transcript (TranscriptController ΓÇö see its
 // studentShow()/studentDownloadPdf(), reusing the exact same
 // buildTranscriptViewData()/PDF template the admin-facing transcript uses).
 Route::controller(\App\Http\Controllers\TranscriptController::class)->middleware('student', 'auth')->group(function () {
@@ -1355,7 +1370,7 @@ Route::controller(CommonController::class)->middleware('auth')->group(function (
 });
 //Common routes end here
 
-// Notifications — a per-user inbox shared across every role (student,
+// Notifications ΓÇö a per-user inbox shared across every role (student,
 // teacher, parent, admin, ...), same "Common routes, middleware('auth')
 // only" pattern as the CommonController block just above. See
 // NotificationController's own docblock: nothing here is role-scoped,
@@ -1428,9 +1443,9 @@ Route::controller(AccountantController::class)->middleware('accountant', 'auth')
     Route::get('accountant/message/chat_empty', 'chat_empty')->name('accountant.message.chat_empty');
 });
 
-// ── Bursar ───────────────────────────────────────────────────
+// ΓöÇΓöÇ Bursar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // "Bursar" is this school's own name for the Accountant role (role_id 4,
-// see BursarMiddleware) — same person, same permissions, reachable under a
+// see BursarMiddleware) ΓÇö same person, same permissions, reachable under a
 // /bursar/... URL too rather than only /accountant/.... Only the finance
 // surface is mirrored here (dashboard, fee manager, offline payments); the
 // rest of that role's day-to-day work (expenses, messaging, profile) stays
@@ -1563,11 +1578,11 @@ Route::controller(InstallController::class)->middleware('is_installed')->group(f
 });
 //Installation routes end here
 
-// ═══════════════════════════════════════════════════════════════
-// HEI FEATURE ROUTES — Phase 1-4 Implementation
-// ═══════════════════════════════════════════════════════════════
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+// HEI FEATURE ROUTES ΓÇö Phase 1-4 Implementation
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
-// ── Programmes ────────────────────────────────────────────────
+// ΓöÇΓöÇ Programmes ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/programmes',                  'index')->name('admin.programmes.index');
     Route::get('admin/programmes/export',           'exportCsv')->name('admin.programmes.export');
@@ -1577,7 +1592,7 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
     Route::get('admin/programmes/delete/{id}',      'destroy')->name('admin.programmes.destroy');
     Route::get('admin/programmes/toggle/{id}',      'toggleStatus')->name('admin.programmes.toggle');
 
-    // ── Programme catalogue: cover, price metadata, website publication ────
+    // ΓöÇΓöÇ Programme catalogue: cover, price metadata, website publication ΓöÇΓöÇΓöÇΓöÇ
     //
     // These are POSTs because each one changes stored state. The publication
     // toggle is deliberately NOT a GET: a link prefetch, a browser "preview this
@@ -1591,7 +1606,7 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
     Route::get('admin/programmes/{id}/preview',       'preview')->whereNumber('id')->name('admin.programmes.preview');
 });
 
-// ── Governed Programme Curricula ────────────────────────────────
+// ΓöÇΓöÇ Governed Programme Curricula ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(\App\Http\Controllers\CurriculumController::class)->middleware('auth', 'admin', 'rbac')->prefix('admin/curricula')->name('admin.curricula.')->group(function () {
     Route::get('/', 'index')->name('index');
     Route::get('/create', 'create')->name('create');
@@ -1657,7 +1672,7 @@ Route::controller(LiveClassController::class)->middleware('auth', 'admin', 'rbac
         Route::post('/', 'storeForOffering')->whereNumber('courseOffering')->name('store');
     });
 
-// ── Admissions ────────────────────────────────────────────────
+// ΓöÇΓöÇ Admissions ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(AdmissionsController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     // Applications
     Route::get('admin/hei-admissions',                         'index')->name('admin.hei_admissions.index');
@@ -1667,7 +1682,7 @@ Route::controller(AdmissionsController::class)->middleware('auth', 'admin', 'rba
     Route::get('admin/hei-admissions/delete/{id}',             'destroy')->name('admin.hei_admissions.destroy');
     Route::get('admin/hei-admissions/offer-letter/{id}',       'printOfferLetter')->name('admin.hei_admissions.offer_letter');
     Route::get('admin/hei-admissions/export',                  'exportApplicationsCsv')->name('admin.hei_admissions.export');
-    // Review workspace — must stay below /export and /open_modal so those
+    // Review workspace ΓÇö must stay below /export and /open_modal so those
     // literal segments are not swallowed by the {id} wildcard.
     Route::get('admin/hei-admissions/review/{id}',             'review')->name('admin.hei_admissions.review');
     Route::post('admin/hei-admissions/review/{id}/correction', 'requestCorrection')->name('admin.hei_admissions.correction');
@@ -1699,11 +1714,11 @@ Route::controller(AdmissionsController::class)->middleware('auth', 'admin', 'rba
     Route::get('admin/admissions-agents/export',               'exportAgentsCsv')->name('admin.admissions_agents.export');
 });
 
-// ── Staff-entry Admission Wizard ──────────────────────────────
-// The admin-side counterpart of the Applicant Portal's 5-step wizard —
+// ΓöÇΓöÇ Staff-entry Admission Wizard ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// The admin-side counterpart of the Applicant Portal's 5-step wizard ΓÇö
 // same Admission model/workflow, reached from "New Student Admission"
 // instead of the public /apply flow. Academic assignment (Step 6) is not
-// here — it is the existing admin.hei_admissions.review screen, shared
+// here ΓÇö it is the existing admin.hei_admissions.review screen, shared
 // with online-application decisions.
 Route::controller(AdmissionWizardController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/hei-admissions/wizard/create',              'create')->name('admin.hei_admissions.wizard.create');
@@ -1716,7 +1731,7 @@ Route::controller(AdmissionWizardController::class)->middleware('auth', 'admin',
     Route::post('admin/hei-admissions/wizard/{id}/submit',        'submit')->name('admin.hei_admissions.wizard.submit');
 });
 
-// ── Fee Structures ────────────────────────────────────────────
+// ΓöÇΓöÇ Fee Structures ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(FeeStructureController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/fee-structures',              'index')->name('admin.fee_structures.index');
     Route::get('admin/fee-structures/open_modal',   'openModal')->name('admin.fee_structures.open_modal');
@@ -1725,7 +1740,7 @@ Route::controller(FeeStructureController::class)->middleware('auth', 'admin', 'r
     Route::get('admin/fee-structures/delete/{id}',  'destroy')->name('admin.fee_structures.destroy');
 });
 
-// ── Leave Management ──────────────────────────────────────────
+// ΓöÇΓöÇ Leave Management ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(LeaveController::class)->middleware('auth', 'hr_manager')->group(function () {
     Route::get('admin/leave',                    'index')->name('admin.leave.index');
     Route::post('admin/leave/approve/{id}',      'approve')->name('admin.leave.approve');
@@ -1739,18 +1754,18 @@ Route::controller(LeaveController::class)->middleware('auth', 'hr_manager')->gro
     Route::get('admin/leave-types/delete/{id}', 'destroyType')->name('admin.leave_types.destroy');
 });
 
-// ── Leave Management: Staff Self-Service ────────────────────────
+// ΓöÇΓöÇ Leave Management: Staff Self-Service ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(LeaveController::class)->middleware('auth', 'staff')->group(function () {
     Route::get('staff/leave',              'myIndex')->name('staff.leave.index');
     Route::get('staff/leave/open_modal',   'myOpenModal')->name('staff.leave.open_modal');
     Route::post('staff/leave/store',       'myStore')->name('staff.leave.store');
 });
 
-// ── Online Exams / CBT ────────────────────────────────────────
+// ΓöÇΓöÇ Online Exams / CBT ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(OnlineExamController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/online-exams',                         'index')->name('admin.online_exams.index');
     Route::get('admin/online-exams/create',                  'create')->name('admin.online_exams.create');
-    // Must stay above the admin.online_exams.show {id} route below — Laravel
+    // Must stay above the admin.online_exams.show {id} route below ΓÇö Laravel
     // matches routes in registration order, and a literal single-segment
     // path like this one is otherwise swallowed by {id} (id becomes the
     // literal string "open_modal", (int) casts to 0, the exam lookup 404s,
@@ -1820,7 +1835,7 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'admin', 'rba
     Route::get('admin/online-exams/{id}/question_modal',     'questionModal')->name('admin.online_exams.question_modal');
 });
 
-// ── Student CBT exam routes ────────────────────────────────────
+// ΓöÇΓöÇ Student CBT exam routes ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(OnlineExamController::class)->middleware('auth', 'student')->group(function () {
     Route::get('student/online-exams',              'studentExams')->name('student.online_exam.list');
     Route::get('student/online-exams/{id}/instructions', 'instructions')->name('student.online_exam.instructions');
@@ -1842,18 +1857,18 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'student')->g
     Route::get('student/online-exams/result/{id}',  'examResult')->name('student.online_exam.result');
 });
 
-// ── Teacher CBT exam routes ───────────────────────────────────
+// ΓöÇΓöÇ Teacher CBT exam routes ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(OnlineExamController::class)->middleware('auth', 'teacher')->group(function () {
     Route::get('teacher/online-exams', 'teacherIndex')->name('teacher.online_exams.index');
     Route::get('teacher/online-exams/create', 'teacherCreate')->name('teacher.online_exams.create');
     Route::post('teacher/online-exams', 'teacherStore')->name('teacher.online_exams.store');
-    // Must stay above the teacher.online_exams.show {exam} route below — Laravel
+    // Must stay above the teacher.online_exams.show {exam} route below ΓÇö Laravel
     // matches routes in declaration order, and {exam} would otherwise swallow
     // this literal path first and 404 on model binding.
     Route::get('teacher/online-exams/question-bank', 'teacherQuestionBank')->name('teacher.online_exams.question_bank');
     Route::post('teacher/online-exams/question-bank', 'teacherStoreBankQuestion')->name('teacher.online_exams.question_bank.store');
     Route::get('teacher/online-exams/marking/queue', 'teacherMarking')->name('teacher.online_exams.marking');
-    // Live Monitor — teacher-facing real-time view of who's taking an exam
+    // Live Monitor ΓÇö teacher-facing real-time view of who's taking an exam
     // right now; not present on the governed-workflow branch, so it must
     // stay explicit here rather than being assumed to survive a merge.
     Route::get('teacher/online-exams/live-monitor', 'teacherLiveMonitor')->name('teacher.online_exams.live_monitor');
@@ -1889,7 +1904,7 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'teacher')->g
 
     // Recording a marking decision keyed by (submission, question) rather than by
     // answer id, because a question the student left blank may have NO answer row at
-    // all — and that is exactly the case a lecturer must still be able to decide.
+    // all ΓÇö and that is exactly the case a lecturer must still be able to decide.
     // Without this, exam 17 submission 12's question 39 was visible as outstanding but
     // had nothing to act on, so "Submit Marks for Admin Review" could only ever 422.
     // Registered above the results/{submission} routes so it is never shadowed.
@@ -1903,7 +1918,7 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'teacher')->g
     Route::post('teacher/online-exams/results/{submission}/publish', 'publishResult')->name('teacher.online_exams.results.publish');
 });
 
-// ── Assignments (admin/teacher) ───────────────────────────────
+// ΓöÇΓöÇ Assignments (admin/teacher) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(AssignmentController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/assignments',                            'index')->name('admin.assignments.index');
     Route::get('admin/assignments/open_modal',                 'openModal')->name('admin.assignments.open_modal');
@@ -1914,14 +1929,14 @@ Route::controller(AssignmentController::class)->middleware('auth', 'admin', 'rba
     Route::post('admin/assignments/grade/{submission_id}',     'gradeSubmission')->name('admin.assignments.grade');
 });
 
-// ── Student Assignment routes ──────────────────────────────────
+// ΓöÇΓöÇ Student Assignment routes ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(AssignmentController::class)->middleware('auth', 'student')->group(function () {
     Route::get('student/assignments',                'studentList')->name('student.assignments.list');
     Route::get('student/assignments/{id}/modal',     'submitModal')->name('student.assignments.modal');
     Route::post('student/assignments/{id}/submit',   'studentSubmit')->name('student.assignments.submit');
 });
 
-// ── Live Classes ──────────────────────────────────────────────
+// ΓöÇΓöÇ Live Classes ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(LiveClassController::class)->middleware('auth')->group(function () {
     Route::get('live-classes/{liveClass}/materials/{material}/access', 'accessMaterial')->name('live_classes.materials.access');
     Route::get('live-classes/{liveClass}/recording/access', 'accessRecording')->name('live_classes.recording.access');
@@ -1932,7 +1947,7 @@ Route::controller(LiveClassController::class)->middleware('auth', 'admin', 'rbac
     Route::get('admin/live-classes/create',            'create')->name('admin.live_classes.create');
     Route::post('admin/live-classes',                  'store')->name('admin.live_classes.store');
     Route::post('admin/live-classes/meet-now',         'meetNow')->name('admin.live_classes.meet_now');
-    // Must stay above the admin.live_classes.show {liveClass} route below —
+    // Must stay above the admin.live_classes.show {liveClass} route below ΓÇö
     // Laravel matches routes in declaration order, and {liveClass} would
     // otherwise swallow this literal path first and 404 on model binding.
     Route::get('admin/live-classes/meet-guests',           'meetGuests')->name('admin.live_classes.meet_guests');
@@ -2012,7 +2027,7 @@ Route::controller(TeacherCourseOfferingController::class)->middleware('auth', 't
     Route::post('/{id}/cover-image', 'setCoverImage')->whereNumber('id')->name('cover.set');
     Route::post('/{id}/cover-image/remove', 'clearCoverImage')->whereNumber('id')->name('cover.clear');
 Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
-    // ── Course Offering Quizzes & Exams ─────────────────────────────────────
+    // ΓöÇΓöÇ Course Offering Quizzes & Exams ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     //
     // A CONTEXT BINDER, not an exam engine. `store()` creates an assessment bound
     // to this Offering and then redirects to the ENGINE's own question page
@@ -2031,7 +2046,7 @@ Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
             Route::post('/', 'store')->name('store');
         });
 
-    // ── Course Offering Assignments (lecturer author) ───────────────────
+    // ΓöÇΓöÇ Course Offering Assignments (lecturer author) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // Authoring is a full page, never a drawer: an assignment is a document.
     // See TeacherCourseOfferingAssignmentController for why every write
     // re-resolves the assignment inside the Offering in the URL.
@@ -2162,7 +2177,7 @@ Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
             ->name('assignments.resources.file');
     });
 
-    // ── Course Content (lecturer author) ─────────────────────────────────
+    // ΓöÇΓöÇ Course Content (lecturer author) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // Full-page authoring, never a drawer or modal. Content lives inside a
     // module, which lives inside this Offering - the Offering is the only
     // delivery container, so there is no second Course and no second content
@@ -2273,14 +2288,14 @@ Route::controller(TeacherCourseOfferingAttendanceController::class)->middleware(
 });
 
 /*
-| ── Google OAuth ───────────────────────────────────────────────────────────
+| ΓöÇΓöÇ Google OAuth ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 |
 | The callback path `/auth/google/callback` is the URI registered in the Google
 | Cloud console and MUST NOT be changed without changing the registration too.
 | Google compares it exactly; a mismatch is `redirect_uri_mismatch` at the token
 | exchange, which reads like a credentials problem and is not one.
 |
-| `auth` only — no role middleware. The flow itself authorises nothing: it
+| `auth` only ΓÇö no role middleware. The flow itself authorises nothing: it
 | connects a Google account to whoever is signed in. What that account may then
 | be used FOR is decided per-request by the lecturer's own allocation
 | (LiveClassAccessService), not here. Putting a role gate on the OAuth handshake
@@ -2326,7 +2341,7 @@ Route::post('teacher/live-classes/{liveClass}/recording', 'attachRecording')->na
     Route::get('teacher/live-classes/delete/{liveClass}',   'destroy')->name('teacher.live_classes.destroy_legacy');
 });
 
-// ── Academic Calendar ─────────────────────────────────────────
+// ΓöÇΓöÇ Academic Calendar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(AcademicCalendarController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/academic-calendar',              'index')->name('admin.academic_calendar.index');
     Route::get('admin/academic-calendar/open_modal',   'openModal')->name('admin.academic_calendar.open_modal');
@@ -2339,7 +2354,7 @@ Route::controller(AcademicCalendarController::class)->middleware('auth', 'admin'
 Route::get('calendar/events.json', [AcademicCalendarController::class, 'eventsJson'])
     ->middleware('auth')->name('calendar.events_json');
 
-// ── Payroll ───────────────────────────────────────────────────
+// ΓöÇΓöÇ Payroll ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(PayrollController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/payroll',                      'index')->name('admin.payroll.index');
     Route::post('admin/payroll/generate',            'generate')->name('admin.payroll.generate');
@@ -2356,7 +2371,7 @@ Route::controller(PayrollController::class)->middleware('auth', 'teacher')->grou
     Route::get('teacher/payslips', 'staffPayslips')->name('teacher.payroll.index');
 });
 
-// ── Graduation ────────────────────────────────────────────────
+// ΓöÇΓöÇ Graduation ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(GraduationController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/graduation',               'index')->name('admin.graduation.index');
     Route::get('admin/graduation/open_modal',    'openApplyModal')->name('admin.graduation.open_modal');
@@ -2371,7 +2386,7 @@ Route::controller(GraduationController::class)->middleware('auth', 'student')->g
     Route::post('student/graduation/submit', 'studentStore')->name('student.graduation.store');
 });
 
-// ── Assets ────────────────────────────────────────────────────
+// ΓöÇΓöÇ Assets ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(AssetController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/assets',                        'index')->name('admin.assets.index');
     Route::get('admin/assets/open_modal',             'openModal')->name('admin.assets.open_modal');
@@ -2385,7 +2400,7 @@ Route::controller(AssetController::class)->middleware('auth', 'admin', 'rbac')->
     Route::get('admin/asset-categories/delete/{id}',  'destroyCategory')->name('admin.asset_categories.destroy');
 });
 
-// ── Procurement ───────────────────────────────────────────────
+// ΓöÇΓöÇ Procurement ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(ProcurementController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/procurement',                'index')->name('admin.procurement.index');
     Route::get('admin/procurement/open_modal',     'openModal')->name('admin.procurement.open_modal');
@@ -2395,7 +2410,7 @@ Route::controller(ProcurementController::class)->middleware('auth', 'admin', 'rb
     Route::get('admin/procurement/export',         'exportCsv')->name('admin.procurement.export');
 });
 
-// ── Audit Log ─────────────────────────────────────────────────
+// ΓöÇΓöÇ Audit Log ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::controller(AuditLogController::class)->middleware('auth')->group(function () {
     Route::get('admin/audit-log', 'index')->name('admin.audit_log.index')->middleware('admin', 'rbac');
     Route::get('admin/audit-log/{id}', 'show')->name('admin.audit_log.show')->middleware('admin', 'rbac');
@@ -2403,7 +2418,7 @@ Route::controller(AuditLogController::class)->middleware('auth')->group(function
     Route::get('superadmin/audit-log/{id}', 'show')->name('superadmin.audit_log.show')->middleware('superAdmin');
 });
 
-// ── Transcripts ───────────────────────────────────────────────
+// ΓöÇΓöÇ Transcripts ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\TranscriptController::class)->group(function () {
     Route::get('admin/transcripts',              'index')->name('admin.transcripts.index');
     Route::get('admin/transcripts/search',       'search')->name('admin.transcripts.search');
@@ -2411,13 +2426,13 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\T
     Route::get('admin/transcripts/{id}/pdf',     'downloadPdf')->name('admin.transcripts.pdf');
 });
 
-// ── Student Affairs (requests review) ──────────────────────────
+// ΓöÇΓöÇ Student Affairs (requests review) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\StudentRequestController::class)->group(function () {
     Route::get('admin/student-requests',          'index')->name('admin.student_requests.index');
     Route::post('admin/student-requests/{id}',    'update')->name('admin.student_requests.update');
 });
 
-// ── Elections / Voting ──────────────────────────────────────────
+// ΓöÇΓöÇ Elections / Voting ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\ElectionController::class)->group(function () {
     Route::get('admin/elections',                       'index')->name('admin.elections.index');
     Route::get('admin/elections/create',                'create')->name('admin.elections.create');
@@ -2428,7 +2443,7 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\E
     Route::post('admin/elections/{id}/publish-results', 'publishResults')->name('admin.elections.publish_results');
 });
 
-// ── Reports & Analytics ───────────────────────────────────────
+// ΓöÇΓöÇ Reports & Analytics ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\ReportsController::class)->group(function () {
     Route::get('admin/reports',                  'index')->name('admin.reports.index');
     Route::get('admin/reports/students',         'studentsReport')->name('admin.reports.students');
@@ -2438,7 +2453,7 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\R
     Route::get('admin/reports/export/{type}',    'export')->name('admin.reports.export');
 });
 
-// ── Enhanced Settings ─────────────────────────────────────────
+// ΓöÇΓöÇ Enhanced Settings ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\EnhancedSettingsController::class)->group(function () {
     Route::get('admin/settings/academic',        'academic')->name('admin.settings.academic');
     Route::post('admin/settings/academic/save',  'saveAcademic')->name('admin.settings.academic.save');
@@ -2452,7 +2467,7 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\E
     Route::post('admin/settings/api/regenerate', 'regenerateKey')->name('admin.settings.api.regenerate');
 });
 
-// RBAC Phase 3B — Administration → Roles & Permissions (School Admin only: every route below is
+// RBAC Phase 3B ΓÇö Administration ΓåÆ Roles & Permissions (School Admin only: every route below is
 // mapped to a non-delegable RBAC permission in app/Support/Permissions/registry.php). State
 // changes use POST/PUT/DELETE; school scope always comes from the signed-in administrator.
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\Admin\RolePermissionController::class)->group(function () {
@@ -2482,8 +2497,8 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\A
 //
 // Deliberately NOT under the admin.rbac.staff.* prefix, which is access
 // governance (users.assign_roles). These are HR profile routes and are gated by
-// staff.view / staff.edit instead, so correcting a designation never requires —
-// and never implies — the right to change somebody's permissions.
+// staff.view / staff.edit instead, so correcting a designation never requires ΓÇö
+// and never implies ΓÇö the right to change somebody's permissions.
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\Admin\StaffProfileController::class)->group(function () {
     Route::get('admin/staff/{id}/profile', 'show')->name('admin.staff.profile.show');
     Route::get('admin/staff/{id}/profile/edit', 'edit')->name('admin.staff.profile.edit');
@@ -2493,7 +2508,7 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\A
 
 // Staff account access: the EXISTING governed setup workflow
 // (GenericStaffAccountAccessController), reachable for every staff base role.
-// Gated by staff.accounts — the platform's own "Staff account access" permission —
+// Gated by staff.accounts ΓÇö the platform's own "Staff account access" permission ΓÇö
 // and NOT by users.assign_roles, because issuing a password setup link is an
 // account concern, not the Roles & Permissions surface. Same controller, same
 // broker, same mail, same audit action as the other-staff entry points below.
@@ -2502,7 +2517,7 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\A
     Route::post('admin/staff/{id}/account-access/setup-link', 'sendSetupLink')->name('admin.staff.account-access.send');
 });
 
-// Staff → Add Staff: a launcher into the existing per-role create workflows (no creation logic of
+// Staff ΓåÆ Add Staff: a launcher into the existing per-role create workflows (no creation logic of
 // its own). Same 'school_admin:hr' guard as the create routes it opens.
 Route::middleware(['auth', 'admin', 'rbac', 'school_admin:hr'])->group(function () {
     Route::get('admin/staff/add', [\App\Http\Controllers\Admin\StaffLauncherController::class, 'index'])->name('admin.staff.add');

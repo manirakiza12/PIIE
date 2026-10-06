@@ -65,15 +65,18 @@ log "current -> $RID (previous: ${PREV:-none})"
 
 ok=0
 for i in 1 2 3 4 5 6; do
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$HEALTH_URL" || echo 000)
-  log "health attempt $i: HTTP $code"
-  if [ "$code" = 200 ]; then ok=1; break; fi
+  if app_health_check; then
+    log "application health attempt $i: HTTP $APP_HEALTH_LAST_CODE, expected body confirmed"
+    ok=1
+    break
+  fi
+
+  log "application health attempt $i: HTTP ${APP_HEALTH_LAST_CODE:-000}, health response rejected"
   sleep 5
 done
 if [ "$ok" != 1 ]; then
-  log "HEALTH CHECK FAILED - restoring previous release"
-  if [ -n "$PREV" ]; then ln -sfn "$PREV" "$BASE/current.new" && mv -Tf "$BASE/current.new" "$BASE/current"; fi
-  log "Code rolled back. Database NOT restored automatically (see docs/DEPLOYMENT.md)."
+  restore_after_failed_activation "$PREV"
+  log "Failed activation routing reverted. Database NOT restored automatically (see docs/DEPLOYMENT.md)."
   exit 1
 fi
 

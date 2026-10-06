@@ -10,4 +10,16 @@ TARGET="${1:-$(ls -1t "$BASE/releases" | grep -vx "$CUR" | head -1)}"
 ln -sfn "$BASE/releases/$TARGET" "$BASE/current.new" && mv -Tf "$BASE/current.new" "$BASE/current"
 "$PHP" "$BASE/current/artisan" config:cache >/dev/null
 log "current -> $TARGET (was $CUR). Database untouched."
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$HEALTH_URL" || echo 000); log "health: HTTP $code"
+if app_health_check; then
+  log "application health: HTTP $APP_HEALTH_LAST_CODE, expected body confirmed"
+else
+  log "ROLLBACK HEALTH CHECK FAILED: HTTP ${APP_HEALTH_LAST_CODE:-000}, restoring $CUR"
+
+  ln -sfn "$BASE/releases/$CUR" "$BASE/current.new" \
+    && mv -Tf "$BASE/current.new" "$BASE/current"
+
+  "$PHP" "$BASE/current/artisan" config:cache >/dev/null
+
+  log "Rollback attempt reverted; current -> $CUR. Database untouched."
+  exit 1
+fi

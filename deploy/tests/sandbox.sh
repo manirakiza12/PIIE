@@ -17,10 +17,49 @@ echo '<?php // legacy' > "$DOC/index.php"
 cp "$ROOT/deploy/docroot/index.php" "$B/bin/docroot-index.php"
 tar -czf "$S/a.tar.gz" -C "$S/art" .; SUM="$(sha256sum "$S/a.tar.gz" | cut -d' ' -f1)"
 
-printf '#!/bin/sh\necho "stub php $*"\n'       > "$S/bin/php";   printf '#!/bin/sh\necho ${CURL_CODE:-200}\n' > "$S/bin/curl"
+printf '#!/bin/sh\necho "stub php $*"\n'       > "$S/bin/php"
+cat > "$S/bin/curl" <<'STUB'
+#!/bin/sh
+
+# Legacy docroot health checks use -o /dev/null and expect only HTTP status.
+case " $* " in
+  *" -o /dev/null "*)
+    printf '%s\n' "${CURL_CODE:-200}"
+    ;;
+  *)
+    # Contabo application health expects response body followed by HTTP status.
+    printf '%s\n%s\n' "${CURL_BODY:-PIIE-APP-OK}" "${CURL_CODE:-200}"
+    ;;
+esac
+STUB
 printf '#!/bin/sh\nexit 0\n'                    > "$S/bin/flock"; chmod +x "$S/bin/"*
 export PATH="$S/bin:$PATH" PIIE_BASE="$B" PIIE_PHP="$S/bin/php" PIIE_DOCROOT="$DOC" PIIE_HEALTH_URL="http://sandbox/"
 D="$ROOT/deploy/remote"
+
+echo "application health"
+. "$D/lib.sh"
+t "application health accepts expected body + HTTP 200" \
+  "CURL_BODY=PIIE-APP-OK CURL_CODE=200 app_health_check"
+t "application health rejects wrong body even with HTTP 200" \
+  "! CURL_BODY=WRONG-APPLICATION CURL_CODE=200 app_health_check"
+t "application health rejects non-200 even with expected body" \
+  "! CURL_BODY=PIIE-APP-OK CURL_CODE=500 app_health_check"
+
+echo "failed activation recovery"
+
+RECOVERY_OLD="$B/releases/20261004-115900-aaaaaaa"
+RECOVERY_BAD="$B/releases/20261004-115901-bbbbbbb"
+mkdir -p "$RECOVERY_OLD" "$RECOVERY_BAD"
+
+ln -sfn "$RECOVERY_BAD" "$B/current"
+restore_after_failed_activation "$RECOVERY_OLD"
+t "failed activation restores previous release" \
+  "[ \"\$(readlink -f $B/current)\" = \"\$(readlink -f $RECOVERY_OLD)\" ]"
+
+ln -sfn "$RECOVERY_BAD" "$B/current"
+restore_after_failed_activation ""
+t "failed first activation removes current symlink" \
+  "[ ! -e $B/current ] && [ ! -L $B/current ]"
 
 echo "deploy-release.sh"
 RID=20261004-120000-abcdef1
@@ -73,6 +112,18 @@ t "revert keeps uploads"                          "[ -f $DOC/assets/uploads/stud
 echo "rollback.sh"
 ln -s "$B/releases/$RID" "$B/c2" 2>/dev/null; mkdir -p "$B/releases/20261003-100000-0000000"
 t "rollback moves current to previous release"    "bash $D/rollback.sh 20261003-100000-0000000 >/dev/null 2>&1 && [ \"\$(basename \$(readlink $B/current))\" = 20261003-100000-0000000 ]"
+
+# A rollback target that fails application health must not remain active.
+# Start from the older release, attempt to switch back to RID with a wrong
+# application response, and verify rollback.sh restores the original current.
+CURL_BODY=WRONG-APPLICATION bash "$D/rollback.sh" "$RID" > "$S/rollback-health.log" 2>&1
+rc=$?
+t "unhealthy rollback target exits non-zero" \
+  "[ $rc -ne 0 ]"
+t "unhealthy rollback target restores original current" \
+  "[ \"\$(basename \$(readlink $B/current))\" = 20261003-100000-0000000 ]"
+t "unhealthy rollback logs transactional restoration" \
+  "grep -q 'Rollback attempt reverted' $S/rollback-health.log"
 
 echo; [ $fails -eq 0 ] && echo "ALL SANDBOX CHECKS PASSED" || echo "$fails SANDBOX CHECK(S) FAILED"
 exit $((fails>0))
