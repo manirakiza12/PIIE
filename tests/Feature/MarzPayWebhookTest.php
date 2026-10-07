@@ -41,24 +41,24 @@ class MarzPayWebhookTest extends TestCase
         ]);
     }
 
-    private function fakeVerifiedTransaction(string $status = 'successful'): void
+    private function fakeVerifiedTransaction(string $status = 'successful', string $reference = 'ref-1', string $uuid = 'txn-1'): void
     {
         Http::fake([
             'wallet.wearemarz.com/api/v1/collect-money/*' => Http::response([
                 'status' => 'success',
                 'data'   => [
-                    'transaction' => ['uuid' => 'txn-1', 'status' => $status],
-                    'collection'  => ['amount' => ['raw' => 5000]],
+                    'transaction' => ['uuid' => $uuid, 'reference' => $reference, 'status' => $status],
+                    'collection'  => ['amount' => ['raw' => 5000, 'currency' => 'UGX']],
                 ],
             ], 200),
         ]);
     }
 
-    private function postWebhook(string $context, int $contextId, string $eventType = 'collection.completed'): void
+    private function postWebhook(string $context, int $contextId, string $eventType = 'collection.completed', string $uuid = 'txn-1'): void
     {
         $this->postJson(route('webhooks.marzpay'), [
             'event_type'  => $eventType,
-            'transaction' => ['uuid' => 'txn-1', 'reference' => 'ref-1', 'status' => 'completed'],
+            'transaction' => ['uuid' => $uuid, 'reference' => 'ref-1', 'status' => 'completed'],
             'collection'  => ['amount' => ['raw' => 5000]],
             'metadata'    => [['context' => $context], ['context_id' => $contextId]],
         ])->assertOk();
@@ -108,6 +108,7 @@ class MarzPayWebhookTest extends TestCase
         $payment = ApplicationPayment::create([
             'school_id' => $this->schoolId, 'admission_id' => $admission, 'method' => 'marzpay',
             'status' => ApplicationPayment::STATUS_PENDING, 'amount' => 5000, 'reference' => 'ref-1',
+            'currency' => 'UGX',
             'gateway_txn_id' => 'txn-1',
         ]);
 
@@ -143,8 +144,8 @@ class MarzPayWebhookTest extends TestCase
 
     /**
      * MarzPay redelivers on anything but a 200 — this proves the redelivery
-     * itself is harmless: applyApplication() bails on
-     * `$payment->isSettled()` before writing anything a second time.
+     * itself is harmless: the settlement boundary validates the evidence and
+     * returns already_settled without writing or notifying a second time.
      */
     public function test_a_duplicate_application_payment_webhook_does_not_double_apply(): void
     {
@@ -153,16 +154,17 @@ class MarzPayWebhookTest extends TestCase
         $payment = ApplicationPayment::create([
             'school_id' => $this->schoolId, 'admission_id' => $admission, 'method' => 'marzpay',
             'status' => ApplicationPayment::STATUS_PENDING, 'amount' => 5000, 'reference' => 'ref-dup',
+            'currency' => 'UGX',
             'gateway_txn_id' => 'txn-dup',
         ]);
 
-        $this->fakeVerifiedTransaction('successful');
+        $this->fakeVerifiedTransaction('successful', 'ref-dup', 'txn-dup');
 
-        $this->postWebhook('application', $payment->id);
+        $this->postWebhook('application', $payment->id, 'collection.completed', 'txn-dup');
         $firstPaidAt = $payment->refresh()->paid_at;
 
         // Simulate MarzPay redelivering the same event a second time.
-        $this->postWebhook('application', $payment->id);
+        $this->postWebhook('application', $payment->id, 'collection.completed', 'txn-dup');
 
         $this->assertSame(1, ApplicationPayment::where('admission_id', $admission)->count(), 'A duplicate webhook must never create a second payment row.');
         $this->assertSame(ApplicationPayment::STATUS_PAID, $payment->fresh()->status);
@@ -170,10 +172,9 @@ class MarzPayWebhookTest extends TestCase
     }
 
     /**
-     * Confirms the webhook can never settle the wrong application: routing
-     * is by our own ApplicationPayment primary key (from metadata.context_id,
-     * set only when we ourselves created the row), never by any
-     * client-suppliable reference string.
+     * Forged context_id metadata must not settle another application, even
+     * when historical records share a gateway ID. The server-verified merchant
+     * reference must identify the target payment as well.
      */
     public function test_a_webhook_for_one_payment_never_settles_a_different_admissions_payment(): void
     {
@@ -183,17 +184,20 @@ class MarzPayWebhookTest extends TestCase
         $paymentA = ApplicationPayment::create([
             'school_id' => $this->schoolId, 'admission_id' => $admissionA, 'method' => 'marzpay',
             'status' => ApplicationPayment::STATUS_PENDING, 'amount' => 5000, 'reference' => 'ref-a',
+            'currency' => 'UGX',
             'gateway_txn_id' => 'txn-1',
         ]);
         $paymentB = ApplicationPayment::create([
             'school_id' => $this->schoolId, 'admission_id' => $admissionB, 'method' => 'marzpay',
             'status' => ApplicationPayment::STATUS_PENDING, 'amount' => 5000, 'reference' => 'ref-b',
+            'currency' => 'UGX',
             'gateway_txn_id' => 'txn-1',
         ]);
 
-        $this->fakeVerifiedTransaction('successful');
+        $this->fakeVerifiedTransaction('successful', 'ref-a');
 
         $this->postWebhook('application', $paymentA->id);
+        $this->postWebhook('application', $paymentB->id);
 
         $this->assertSame(ApplicationPayment::STATUS_PAID, $paymentA->fresh()->status);
         $this->assertSame(ApplicationPayment::STATUS_PENDING, $paymentB->fresh()->status, 'Only the payment identified by context_id may be settled, regardless of a shared gateway reference.');

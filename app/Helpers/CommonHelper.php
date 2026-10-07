@@ -675,14 +675,10 @@ if (!function_exists('academic_education_level')) {
      */
     function academic_education_level(?int $schoolId = null): string
     {
-        static $levels = [];
         $schoolId = $schoolId ?: (int) (auth()->user()->school_id ?? 0);
-        if (isset($levels[$schoolId])) {
-            return $levels[$schoolId];
-        }
 
         if (!$schoolId || !\Illuminate\Support\Facades\Schema::hasTable('schools')) {
-            return $levels[$schoolId] = 'secondary';
+            return 'secondary';
         }
 
         $columns = ['id'];
@@ -702,7 +698,7 @@ if (!function_exists('academic_education_level')) {
             };
         }
 
-        return $levels[$schoolId] = $level;
+        return $level;
     }
 }
 

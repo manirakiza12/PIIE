@@ -557,7 +557,7 @@ class AccountantController extends Controller
             StudentFeeManager::where('id',$id)->update([
                 'status' => 'unpaid',
                 'updated_at'=>date("Y-m-d H:i:s"),
-                'paid_amount' =>$amount,
+                'paid_amount' => 0,
                 'payment_method' => 'offline']);
 
                 StatusChangeAudit::feePayment($feeBefore, 'declined');

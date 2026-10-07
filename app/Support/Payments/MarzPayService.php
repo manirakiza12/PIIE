@@ -3,6 +3,7 @@
 namespace App\Support\Payments;
 
 use App\Models\PaymentMethods;
+use App\Models\ApplicationPayment;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -204,7 +205,41 @@ class MarzPayService
             return null;
         }
 
-        return $response->json('data');
+        $data = $response->json('data');
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * Fetch the stored transaction using this school's credentials. Documented
+     * GET /collect-money/{uuid} fields: transaction.uuid/reference/status and
+     * collection.amount.raw/currency. Never substitute webhook claims, the
+     * invoice amount, or the merchant reference for missing provider fields.
+     */
+    public static function verifyApplicationPayment(ApplicationPayment $payment): ?VerifiedApplicationPayment
+    {
+        if ($payment->method !== 'marzpay' || blank($payment->gateway_txn_id)) {
+            return null;
+        }
+        $data = self::getCollectionStatus($payment->gateway_txn_id, (int) $payment->school_id);
+        $transaction = $data['transaction'] ?? [];
+        $amount = $data['collection']['amount'] ?? [];
+        if (! is_array($transaction) || ! is_array($amount)
+            || ! is_string($transaction['uuid'] ?? null) || blank($transaction['uuid'])
+            || ! is_string($transaction['reference'] ?? null) || blank($transaction['reference'])
+            || ! is_string($amount['currency'] ?? null) || blank($amount['currency'])
+            || DecimalAmount::minorUnits($amount['raw'] ?? null) === null) {
+            return null;
+        }
+        $status = match ($transaction['status'] ?? null) {
+            'successful', 'completed' => 'paid',
+            'failed', 'cancelled' => 'failed',
+            default => 'pending',
+        };
+        return new VerifiedApplicationPayment(
+            (int) $payment->id, (int) $payment->school_id, 'marzpay',
+            $transaction['reference'], $transaction['uuid'], (string) $amount['raw'],
+            $amount['currency'], $status, $data,
+        );
     }
 
     /**
