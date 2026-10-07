@@ -23,7 +23,13 @@
 /populate_*.php                 export-ignore
 /update_*.php                   export-ignore
 /database/*.sql                 export-ignore
-/public/assets/install.sql      export-ignore
+# The 139 KB database dump used to live at /public/assets/install.sql, where the web
+# server served it verbatim at /assets/install.sql. It has been MOVED to
+# /database/legacy-install.sql and is no longer shipped at all: a production
+# database is built by the migrations, and the install routes that consume the dump
+# are unreachable once `is_installed` sees a configured database name. Keeping a full
+# schema dump out of the release artefact is deliberate, not an oversight.
+/database/legacy-install.sql      export-ignore
 # storage/ is a shared, persistent directory on the server; never ship it.
 /storage/app        export-ignore
 /storage/logs       export-ignore

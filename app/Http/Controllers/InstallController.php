@@ -208,8 +208,23 @@ class InstallController extends Controller
         // Set line to collect lines that wrap
         $templine = '';
         // Read in entire file
-        // $lines = file('./public/assets/install.sql');
-        $lines = file(base_path('public/assets/install.sql'));
+        //
+        // The dump used to live at public/assets/install.sql. It has been MOVED to
+        // database/legacy-install.sql because a 139 KB file inside the web root was
+        // being served verbatim to anyone who asked for /assets/install.sql: it holds
+        // the complete database schema, and public/.htaccess denies nothing.
+        //
+        // Nothing else reads that path. The install routes that use this method are
+        // behind the `is_installed` middleware, which redirects to the landing page
+        // as soon as the database name is not the literal placeholder `db_name` — so
+        // on a configured production database this method is unreachable, and the
+        // file is not needed at runtime at all. Only a genuine first-time install on
+        // a fresh database reaches it, and that now reads the non-public copy.
+        $dump = base_path('database/legacy-install.sql');
+        if (! is_file($dump)) {
+            throw new RuntimeException("install dump missing at {$dump}");
+        }
+        $lines = file($dump);
         // Loop through each line
         foreach ($lines as $line) {
         // Skip it if it's a comment
