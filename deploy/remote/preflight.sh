@@ -15,7 +15,38 @@ echo "Layout"
 for d in releases shared shared/storage backups; do [ -d "$BASE/$d" ] && ok "$d" || no "$BASE/$d missing"; done
 if [ -f "$BASE/shared/.env" ]; then
   ok "shared/.env present (contents not printed)"
-  [ "$(stat -c %a "$BASE/shared/.env")" -le 640 ] && ok ".env perms" || warn ".env perms should be 600/640"
+
+  # Mode 600 exactly, and FAIL rather than warn.
+  #
+  # This file holds DB_PASSWORD, APP_KEY and every API credential. It was 644 —
+  # world-readable — which means every other account on the host could read the
+  # application's entire credential set. There is no safe middle ground here, so
+  # "close enough" is not accepted: 640 still grants group read, and 604 would
+  # as well.
+  #
+  # Checking the numeric mode rather than testing access from this user is
+  # deliberate: a preflight running as root would see a readable file even at 600.
+  # `stat -c %a` reports the stored mode, which is what other accounts get.
+  ENV_MODE="$(stat -c %a "$BASE/shared/.env" 2>/dev/null || echo '?')"
+  if [ "$ENV_MODE" = "600" ]; then
+    ok ".env mode is 600"
+  else
+    no ".env mode is $ENV_MODE, must be 600 (world/group-readable credential file)"
+    no "  FIX (as the deploy user): chmod 600 '$BASE/shared/.env'"
+  fi
+
+  # A .env inside the document root is a credential file being served over HTTP.
+  # Checked independently of the .sql scan below because it is the single worst
+  # thing that can sit in a web root.
+  for d in "$DOCROOT_LINK" "$BASE/shared/public-uploads"; do
+    [ -d "$d" ] || continue
+    ENVLEAK="$(find "$d" -maxdepth 3 -name '.env*' -type f 2>/dev/null | head -5)"
+    if [ -n "$ENVLEAK" ]; then
+      echo "$ENVLEAK" | while read -r f; do echo "  found: ${f#$d/}"; done
+      no "a .env file is present under ${d} and would be web-served"
+    fi
+  done
+
   for k in APP_KEY DB_HOST DB_DATABASE DB_USERNAME; do [ -n "$(env_get $k)" ] && ok "env $k set" || no "env $k empty"; done
   [ "$(env_get APP_ENV)" = production ] && ok "APP_ENV=production" || warn "APP_ENV is not production"
   [ "$(env_get APP_DEBUG)" = false ] && ok "APP_DEBUG=false" || no "APP_DEBUG must be false"
