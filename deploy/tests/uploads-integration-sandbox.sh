@@ -30,6 +30,18 @@ archive_has() {
   return $rc
 }
 
+# Conservative source guard, not a shell parser. Administrator advice describes
+# the recursive option in prose so it cannot be mistaken for an executed command.
+# Materialize the scan before grep: a negated grep -q pipeline can PASS after an
+# upstream SIGPIPE even when a forbidden command was found. Read errors fail closed.
+no_recursive_chown() {
+  local scan="$S/chown-scan" rc
+  awk '!/^[[:space:]]*#/' "$@" > "$scan" || return 1
+  grep -qE '(^|[^[:alnum:]_])chown[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-[^[:space:]]*R|--recursive)([[:space:]]|$)' "$scan"
+  rc=$?
+  [ "$rc" -eq 1 ]
+}
+
 B="$S/dep"
 setup() {
   rm -rf "$B" "$S/bin"
@@ -147,7 +159,24 @@ echo "no chmod 777 anywhere in the deploy scripts"
 t "no executed chmod 777" \
   "! cat $D/*.sh | grep -v '^[[:space:]]*#' | grep -qE 'chmod[^\\n]*777'"
 t "no recursive chown of existing uploads" \
-  "! cat $D/*.sh | grep -v '^[[:space:]]*#' | grep -qE 'chown[[:space:]]+-R'"
+  "no_recursive_chown $D/*.sh"
+
+echo
+echo "recursive ownership guard regression controls (scanned, never executed)"
+cat > "$S/chown-advice.sh" <<'ADVICE'
+# chown -R owner:group /existing/uploads
+warn "Use chown with option -R to set owner/group owner:group on '/existing/uploads'"
+no "Use chown with option -R; then chmod 2775 '/existing/uploads'"
+ADVICE
+t "comment and administrator guidance do not trigger the guard" \
+  "no_recursive_chown $S/chown-advice.sh"
+for recursive_flag in -R --recursive -vR '-v -R'; do
+  printf 'chown %s owner:group /existing/uploads\n' "$recursive_flag" > "$S/chown-command.sh"
+  t "executable chown $recursive_flag is rejected" "! no_recursive_chown $S/chown-command.sh"
+done
+printf 'sudo chown -R owner:group /existing/uploads\n' > "$S/chown-command.sh"
+t "sudo-wrapped recursive chown is rejected" "! no_recursive_chown $S/chown-command.sh"
+t "missing scan input fails closed" "! no_recursive_chown $S/nonexistent-chown-input.sh"
 
 echo
 echo "runtime group is configurable, not hard-coded"

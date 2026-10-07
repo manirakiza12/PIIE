@@ -123,7 +123,7 @@ prepare_public_uploads() {
         || warn "chgrp $RUNTIME_GROUP failed on $SHARED_UPLOADS"
     else
       warn "deploy user is not a member of '$RUNTIME_GROUP'; leaving group ownership alone."
-      warn "  ONE-TIME VPS PREREQUISITE: chown -R piie:$RUNTIME_GROUP $SHARED_UPLOADS && chmod 2775 $SHARED_UPLOADS"
+      warn "  ONE-TIME VPS PREREQUISITE: use chown with option -R to set owner/group piie:$RUNTIME_GROUP on '$SHARED_UPLOADS'; then chmod 2775 '$SHARED_UPLOADS'"
     fi
   fi
 

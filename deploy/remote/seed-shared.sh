@@ -123,7 +123,7 @@ for d in "$BASE/shared/storage" "$BASE/shared/storage/app" "$BASE/shared/storage
 
   if [ "$grp" != "$RUNTIME_GROUP" ]; then
     warn "$rel group is '$grp', expected '$RUNTIME_GROUP'"
-    warn "  ONE-TIME FIX (needs root): chown -R $(id -un):$RUNTIME_GROUP '$d'"
+    warn "  ONE-TIME FIX (needs root): use chown with option -R to set owner/group $(id -un):$RUNTIME_GROUP on '$d'"
   fi
 done
 

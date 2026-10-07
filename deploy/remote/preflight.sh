@@ -91,7 +91,7 @@ elif [ -d "$PU" ]; then
     ok "owned by group $RUNTIME_GROUP (expected PHP-FPM group)"
   else
     no "group is '$PGROUP', expected '$RUNTIME_GROUP'. PHP-FPM will not be able to write."
-    no "  ONE-TIME FIX (needs root): chown -R piie:$RUNTIME_GROUP '$PU' && chmod 2775 '$PU'"
+    no "  ONE-TIME FIX (needs root): use chown with option -R to set owner/group piie:$RUNTIME_GROUP on '$PU'; then chmod 2775 '$PU'"
   fi
 
   # Group-write bit, and setgid so entries created later inherit that group.
