@@ -308,15 +308,12 @@ jobs:
         run: node --test tests/online-exam-revisions.test.cjs
 
   # ---------------------------------------------------------------------------
-  # Composer security advisories — reported, not enforced
+  # Composer security advisories — enforced
   # ---------------------------------------------------------------------------
   security-audit:
     name: Composer security audit
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    # Advisory counts must not block every push while the remediation plan is
-    # still being agreed. Flip to `true` once the plan is in progress.
-    continue-on-error: true
 
     steps:
       - name: Check out the repository
@@ -335,20 +332,18 @@ jobs:
       - name: Audit against the security advisory database
         run: |
           set +e
-          composer audit --format=plain
+          composer audit --format=json > composer-audit.json
           STATUS=$?
           set -e
           echo "composer audit exit status: $STATUS (non-zero means advisories were found)"
-          echo "Known advisory set on this branch: 14 advisories across"
-          echo "dompdf/dompdf, firebase/php-jwt, laravel/framework, league/commonmark."
-          echo "Remediation is planned separately; this job reports rather than blocks."
+          exit "$STATUS"
 
       - name: Publish the audit output
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: composer-audit
-          path: composer.lock
+          path: composer-audit.json
           retention-days: 14
 
   # ---------------------------------------------------------------------------
@@ -358,11 +353,13 @@ jobs:
     name: Build and verify release artefact
     runs-on: ubuntu-22.04
     timeout-minutes: 20
-    needs: [php-tests, js-tests]
+    needs: [php-tests, js-tests, security-audit]
 
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -382,18 +379,14 @@ jobs:
       - name: Build the artefact (tracked files only, production dependencies)
         run: PIIE_REQUIRE_CLEAN=1 bash deploy/build-release.sh dist
 
-      - name: Scan migrations added since main for destructive operations (report)
-        continue-on-error: true
+      - name: Scan migrations added since main for destructive operations
         run: |
-          # exit 2 = the base ref is missing (no main branch yet), which is not a
-          # destructive migration. Report it distinctly instead of pretending the
-          # scan passed.
-          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main" || true
-          if git rev-parse --verify -q origin/main >/dev/null; then
-            bash deploy/check-migrations.sh origin/main
-          else
-            echo "::warning::origin/main does not exist; the migration scan was skipped, not passed."
-          fi
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          git merge-base origin/main HEAD >/dev/null || {
+            echo "::error::Cannot compare migrations: origin/main and HEAD have no valid merge base."
+            exit 2
+          }
+          bash deploy/check-migrations.sh origin/main
 
       - name: Publish the artefact
         uses: actions/upload-artifact@v4

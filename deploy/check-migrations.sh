@@ -5,7 +5,11 @@
 set -euo pipefail
 BASE="${1:-origin/main}"
 git rev-parse --verify -q "$BASE" >/dev/null || { echo "base ref $BASE not found"; exit 2; }
-FILES=$(git diff --name-only --diff-filter=AM "$BASE"...HEAD -- database/migrations || true)
+git merge-base "$BASE" HEAD >/dev/null || { echo "no valid merge base between $BASE and HEAD"; exit 2; }
+FILES=$(git diff --name-only --diff-filter=AM "$BASE"...HEAD -- database/migrations) || {
+  echo "migration comparison failed for $BASE...HEAD"
+  exit 2
+}
 [ -z "$FILES" ] && { echo "No new migrations since $BASE."; exit 0; }
 PATTERN='dropColumn|dropIfExists|Schema::drop|->drop\(|dropForeign|dropIndex|dropUnique|truncate\(|DROP +(TABLE|COLUMN|DATABASE)|TRUNCATE|DELETE +FROM|DB::table\([^)]*\)->(delete|truncate)|->renameColumn|rename\('
 status=0
