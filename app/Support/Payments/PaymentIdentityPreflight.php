@@ -13,13 +13,16 @@ final class PaymentIdentityPreflight
             ->select(['id', 'school_id', 'admission_id', 'method', 'status', 'gateway_txn_id'])
             ->orderBy('id')->get();
         $eligible = []; $variants = []; $missing = []; $excluded = []; $providerVariants = [];
-        $counts = []; $schools = [];
+        $counts = []; $schools = []; $newlyEligible = []; $ambiguousNames = []; $identitiesAcrossProviders = [];
         foreach ($rows as $row) {
             $provider = strtolower(trim((string) $row->method, ' '));
-            $online = in_array($provider, SettledPaymentIdentity::PROVIDERS, true);
+            $online = in_array($provider, SettledPaymentIdentityV2::PROVIDERS, true);
             $paid = strtolower(trim((string) $row->status, ' ')) === 'paid';
             $identity = (string) $row->gateway_txn_id;
             $hasIdentity = trim(str_replace(["\t", "\n", "\r"], '', $identity), ' ') !== '';
+            if (! $online && str_contains(preg_replace('/[^a-z0-9]/', '', $provider), 'pesapal')) {
+                $ambiguousNames[] = (int) $row->id;
+            }
             $counts[$provider] = ($counts[$provider] ?? 0) + 1;
             if ($online) { $schools[$provider][(int) $row->school_id] = true; }
             if ($online && ($row->method !== $provider || $identity !== trim($identity))) {
@@ -32,6 +35,8 @@ final class PaymentIdentityPreflight
             }
             // Base64 preserves opaque UTF-8 bytes and avoids PHP numeric key coercion.
             $key = $provider . ':' . base64_encode($identity);
+            if ($provider === 'pesapal') { $newlyEligible[] = (int) $row->id; }
+            $identitiesAcrossProviders[base64_encode($identity)][$provider][] = (int) $row->id;
             $eligible[$key][] = (int) $row->id;
             $variantKey = $provider . ':' . base64_encode(strtolower(trim($identity)));
             $variants[$variantKey][$key] = array_merge($variants[$variantKey][$key] ?? [], [(int) $row->id]);
@@ -47,6 +52,12 @@ final class PaymentIdentityPreflight
         return ['rows' => $rows->count(), 'provider_counts' => $counts,
             'duplicate_eligible_row_ids' => $duplicates, 'paid_online_missing_identity_row_ids' => $missing,
             'case_whitespace_variant_row_groups' => $variantGroups, 'noncanonical_identity_row_ids' => $providerVariants,
-            'excluded_rows' => $excluded, 'provider_namespace_review' => $ambiguity];
+            'excluded_rows' => $excluded, 'provider_namespace_review' => $ambiguity,
+            'newly_eligible_pesapal_row_ids' => $newlyEligible,
+            'ambiguous_pesapal_provider_row_ids' => $ambiguousNames,
+            // Reuse across providers is permitted by the composite key; report
+            // it for review without treating it as an unsafe same-provider duplicate.
+            'cross_provider_identity_row_groups' => array_values(array_map(fn ($group) => array_merge(...array_values($group)),
+                array_filter($identitiesAcrossProviders, fn ($group) => count($group) > 1)))];
     }
 }
