@@ -7,9 +7,10 @@
     "require": {
         "php": "^7.3|^8.0",
         "anandsiddharth/laravel-paytm-wallet": "^2.0",
-        "barryvdh/laravel-dompdf": "^2.0",
+        "barryvdh/laravel-dompdf": "^3.0",
         "clue/stream-filter": "1.6",
-        "firebase/php-jwt": "^6.2",
+        "dompdf/dompdf": "^3.1.6",
+        "firebase/php-jwt": "^7.2.1",
         "fruitcake/laravel-cors": "^2.0",
         "guzzlehttp/guzzle": "^7.0.1",
         "laravel/framework": "^9.0",

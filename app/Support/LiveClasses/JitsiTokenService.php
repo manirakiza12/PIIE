@@ -37,11 +37,20 @@ class JitsiTokenService
         }
 
         if (self::algorithm() === 'HS256') {
-            return (string) config('services.jitsi.app_secret') !== '';
+            // JWT 7 requires at least 256 bits for HS256. Weak credentials
+            // must not advertise moderator support or reach the signer.
+            return strlen((string) config('services.jitsi.app_secret')) >= 32;
         }
 
-        return (string) config('services.jitsi.kid') !== ''
-            && (string) config('services.jitsi.private_key') !== '';
+        if ((string) config('services.jitsi.kid') === '') {
+            return false;
+        }
+        $key = @openssl_pkey_get_private(self::normalizedPrivateKey((string) config('services.jitsi.private_key')));
+        if ($key === false) {
+            return false;
+        }
+        $details = openssl_pkey_get_details($key);
+        return is_array($details) && $details['type'] === OPENSSL_KEYTYPE_RSA && $details['bits'] >= 2048;
     }
 
     /**

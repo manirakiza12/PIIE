@@ -105,7 +105,7 @@ PEM;
         config([
             'services.jitsi.algorithm' => 'HS256',
             'services.jitsi.app_id' => 'my_app_id',
-            'services.jitsi.app_secret' => 'super-secret-shared-key',
+            'services.jitsi.app_secret' => str_repeat('s', 32),
         ]);
 
         $liveClass = new LiveClass(['meeting_url' => 'https://meet.example.test/my-class-room-xyz']);
@@ -120,8 +120,8 @@ PEM;
         $this->assertNotNull($hostToken);
         $this->assertNotNull($studentToken);
 
-        $hostPayload = (array) JWT::decode($hostToken, new Key('super-secret-shared-key', 'HS256'));
-        $studentPayload = (array) JWT::decode($studentToken, new Key('super-secret-shared-key', 'HS256'));
+        $hostPayload = (array) JWT::decode($hostToken, new Key(str_repeat('s', 32), 'HS256'));
+        $studentPayload = (array) JWT::decode($studentToken, new Key(str_repeat('s', 32), 'HS256'));
 
         $this->assertTrue($hostPayload['context']->user->moderator);
         $this->assertFalse($studentPayload['context']->user->moderator);
@@ -129,6 +129,13 @@ PEM;
         // Jitsi matches this against the room being joined.
         $this->assertSame('my-class-room-xyz', $hostPayload['room']);
         $this->assertSame('my_app_id', $hostPayload['iss']);
+        $this->assertSame('jitsi', $hostPayload['aud']);
+        $this->assertSame('*', $hostPayload['sub']);
+        $this->assertSame('Host Teacher', $hostPayload['context']->user->name);
+        $this->assertSame('host@example.test', $hostPayload['context']->user->email);
+        $this->assertSame(14410, $hostPayload['exp'] - $hostPayload['nbf']);
+        $this->assertTrue($hostPayload['context']->features->recording);
+        $this->assertFalse($studentPayload['context']->features->recording);
     }
 
     public function test_rs256_token_for_jaas_uses_the_app_id_as_subject_and_kid_header(): void
@@ -155,6 +162,50 @@ PEM;
         $this->assertSame('some-room-slug', $payload['room']);
         $this->assertSame('vpaas-magic-cookie-abc123', $payload['sub']);
         $this->assertSame('vpaas-magic-cookie-abc123', $payload['iss']);
+        $header = json_decode(JWT::urlsafeB64Decode(explode('.', $token)[0]), true);
+        $this->assertSame('RS256', $header['alg']);
+        $this->assertSame('vpaas-magic-cookie-abc123/my-key-id', $header['kid']);
+    }
+
+    public function test_undersized_hs256_credentials_fail_safely(): void
+    {
+        config(['services.jitsi.algorithm' => 'HS256', 'services.jitsi.app_id' => 'test-app',
+            'services.jitsi.app_secret' => str_repeat('s', 31)]);
+        $this->assertFalse(JitsiTokenService::isConfigured());
+        $this->assertNull(JitsiTokenService::generate(
+            new LiveClass(['meeting_url' => 'https://meet.example.test/room']), new User(), true
+        ));
+    }
+
+    public function test_malformed_rs256_credentials_fail_safely(): void
+    {
+        config(['services.jitsi.algorithm' => 'RS256', 'services.jitsi.app_id' => 'test-app',
+            'services.jitsi.kid' => 'test-key', 'services.jitsi.private_key' => 'not a private key']);
+        $this->assertFalse(JitsiTokenService::isConfigured());
+        $this->assertNull(JitsiTokenService::generate(
+            new LiveClass(['meeting_url' => 'https://meet.example.test/room']), new User(), true
+        ));
+    }
+
+    public function test_undersized_rsa_credentials_fail_safely(): void
+    {
+        // An explicit temporary OpenSSL configuration also works on Windows.
+        $configuration = tempnam(sys_get_temp_dir(), 'jitsi-test-');
+        try {
+            file_put_contents($configuration, "[req]\ndistinguished_name = dn\n[dn]\n");
+            $key = openssl_pkey_new(['private_key_bits' => 1024,
+                'private_key_type' => OPENSSL_KEYTYPE_RSA, 'config' => $configuration]);
+            $this->assertNotFalse($key);
+            $this->assertTrue(openssl_pkey_export($key, $pem, null, ['config' => $configuration]));
+            config(['services.jitsi.algorithm' => 'RS256', 'services.jitsi.app_id' => 'test-app',
+                'services.jitsi.kid' => 'test-key', 'services.jitsi.private_key' => $pem]);
+            $this->assertFalse(JitsiTokenService::isConfigured());
+            $this->assertNull(JitsiTokenService::generate(
+                new LiveClass(['meeting_url' => 'https://meet.example.test/room']), new User(), true
+            ));
+        } finally {
+            unlink($configuration);
+        }
     }
 
     public function test_it_returns_null_when_the_class_has_no_usable_meeting_url(): void
@@ -162,7 +213,7 @@ PEM;
         config([
             'services.jitsi.algorithm' => 'HS256',
             'services.jitsi.app_id' => 'my_app_id',
-            'services.jitsi.app_secret' => 'super-secret-shared-key',
+            'services.jitsi.app_secret' => str_repeat('s', 32),
         ]);
 
         $liveClass = new LiveClass(['meeting_url' => null]);

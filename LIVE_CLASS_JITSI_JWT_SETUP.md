@@ -45,6 +45,9 @@ option instead (`jitsi-meet-tokens` prosody plugin).
    automatically. If your `.env` editor supports real multi-line values,
    that also works unchanged.
 
+   JWT 7 requires an RSA private key of at least 2048 bits for RS256.
+   Malformed, non-RSA, or undersized keys are treated as not configured.
+
 3. In Settings → Academic, set **Jitsi Base URL** to
    `https://8x8.vc/{your App ID}` (same App ID as above). The app already
    builds meeting URLs as `{base}/{room-slug}`, so this alone produces the
@@ -66,6 +69,10 @@ option instead (`jitsi-meet-tokens` prosody plugin).
    JITSI_APP_ID=your_app_id
    JITSI_APP_SECRET=your_app_secret
    ```
+
+   Use a randomly generated secret of at least 32 bytes, with the same
+   value configured in Prosody. JWT 7 rejects shorter HS256 keys; the app
+   treats them as not configured and does not issue a moderator token.
 
 3. In Settings → Academic, set **Jitsi Base URL** to your own server's
    domain (e.g. `https://meet.yourschool.org`).
