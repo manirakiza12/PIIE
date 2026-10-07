@@ -8,6 +8,10 @@ use App\Models\AuditLog;
 use App\Support\Admissions\ApplicantNotifier;
 use App\Support\Admissions\ApplicationFee;
 use App\Support\Admissions\ApplicationProgress;
+use App\Support\Payments\ApplicationPaymentSettlement;
+use App\Support\Payments\DecimalAmount;
+use App\Support\Payments\MarzPayService;
+use App\Support\Payments\VerifiedApplicationPayment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -120,6 +124,10 @@ class PaymentController extends BaseApplicantController
     public function startGateway(Request $request, string $gateway)
     {
         $admission = $this->currentApplication();
+        if (in_array($admission->status, [Admission::STATUS_DRAFT, Admission::STATUS_NEEDS_CORRECTION], true)
+            || blank($admission->submitted_at)) {
+            return back()->with('error', get_phrase('Submit your application before starting an online application fee payment.'));
+        }
         $amount    = ApplicationFee::amountFor($admission);
 
         if ($amount <= 0 || $admission->isFeeSettled()) {
@@ -191,7 +199,13 @@ class PaymentController extends BaseApplicantController
             return back()->with('error', $result['error'] ?: get_phrase('We could not start the MarzPay payment. Please try again or pay by bank deposit.'));
         }
 
-        $payment->update(['gateway_txn_id' => $result['transaction_uuid'] ?: $reference]);
+        if (blank($result['transaction_uuid'])) {
+            $payment->update(['status' => ApplicationPayment::STATUS_FAILED]);
+            ApplicationFee::refreshStatus($admission);
+            return back()->with('error', get_phrase('The provider did not return a transaction identity. Please contact finance before retrying.'));
+        }
+        $payment->update(['gateway_txn_id' => $result['transaction_uuid']]);
+        ApplicationFee::refreshStatus($admission);
 
         return view('applicant.payment_marzpay_pending', ['admission' => $admission, 'payment' => $payment]);
     }
@@ -200,9 +214,10 @@ class PaymentController extends BaseApplicantController
     public function checkMarzPayStatus(int $paymentId)
     {
         $admission = $this->currentApplication();
-        $payment = ApplicationPayment::where('admission_id', $admission->id)->find($paymentId);
+        $payment = ApplicationPayment::where('admission_id', $admission->id)
+            ->where('school_id', $admission->school_id)->find($paymentId);
 
-        if (! $payment) {
+        if (! $payment || $payment->method !== 'marzpay') {
             return response()->json(['status' => 'not_found']);
         }
 
@@ -210,27 +225,19 @@ class PaymentController extends BaseApplicantController
             return response()->json(['status' => 'paid']);
         }
 
-        $verified = \App\Support\Payments\MarzPayService::getCollectionStatus($payment->gateway_txn_id, (int) $payment->school_id);
-        $verifiedStatus = $verified['transaction']['status'] ?? null;
-
-        if (in_array($verifiedStatus, ['successful', 'completed'], true)) {
-            $payment->update([
-                'status'          => ApplicationPayment::STATUS_PAID,
-                'paid_at'         => now(),
-                'gateway_payload' => $verified,
-            ]);
-
-            ApplicationFee::refreshStatus($admission);
-            ApplicantNotifier::paymentReceived($admission, $payment);
-
+        $verified = MarzPayService::verifyApplicationPayment($payment);
+        if ($verified === null) {
+            return response()->json(['status' => 'verification_unavailable'], 503);
+        }
+        $result = ApplicationPaymentSettlement::apply($verified);
+        if (in_array($result, [ApplicationPaymentSettlement::SETTLED, ApplicationPaymentSettlement::ALREADY_SETTLED], true)) {
             return response()->json(['status' => 'paid']);
         }
-
-        if (in_array($verifiedStatus, ['failed', 'cancelled'], true)) {
-            $payment->update(['status' => ApplicationPayment::STATUS_FAILED]);
-            ApplicationFee::refreshStatus($admission);
-
+        if ($result === ApplicationPaymentSettlement::FAILED) {
             return response()->json(['status' => 'failed']);
+        }
+        if ($result === ApplicationPaymentSettlement::REJECTED) {
+            return response()->json(['status' => 'verification_rejected'], 422);
         }
 
         return response()->json(['status' => 'processing']);
@@ -345,9 +352,10 @@ class PaymentController extends BaseApplicantController
     {
         $admission = $this->currentApplication();
 
-        $payment = ApplicationPayment::where('admission_id', $admission->id)->find($paymentId);
+        $payment = ApplicationPayment::where('admission_id', $admission->id)
+            ->where('school_id', $admission->school_id)->find($paymentId);
 
-        if (! $payment || ! in_array($gateway, ['stripe', 'flutterwave'], true)) {
+        if (! $payment || $payment->method !== $gateway || ! in_array($gateway, ['stripe', 'flutterwave'], true)) {
             return redirect()->route('applicant.payment')->with('error', get_phrase('We could not match that payment.'));
         }
 
@@ -364,43 +372,23 @@ class PaymentController extends BaseApplicantController
                 ->with('error', get_phrase('We could not confirm your payment with the provider. If you were charged, contact the finance office with your reference: ') . $payment->reference);
         }
 
-        [$isPaid, $gatewayTxnId, $gatewayPayload] = $result;
-
-        if (! $isPaid) {
-            $payment->update([
-                'status'          => ApplicationPayment::STATUS_FAILED,
-                'gateway_payload' => $gatewayPayload,
-            ]);
-
-            ApplicationFee::refreshStatus($admission);
-
+        $settlement = ApplicationPaymentSettlement::apply($result);
+        if (! in_array($settlement, [ApplicationPaymentSettlement::SETTLED, ApplicationPaymentSettlement::ALREADY_SETTLED], true)) {
+            // Preserve the dormant hosted gateways' failed-return behavior.
+            // A concurrent successful settlement must never be overwritten.
+            if ($settlement === ApplicationPaymentSettlement::REJECTED) {
+                ApplicationPayment::whereKey($payment->id)->where('status', ApplicationPayment::STATUS_PENDING)
+                    ->update(['status' => ApplicationPayment::STATUS_FAILED]);
+                ApplicationFee::refreshStatus($admission);
+            }
             return redirect()->route('applicant.payment')
                 ->with('error', get_phrase('Your payment was not completed. You can try again or pay by bank deposit.'));
         }
-
-        $payment->update([
-            'status'          => ApplicationPayment::STATUS_PAID,
-            'gateway_txn_id'  => $gatewayTxnId,
-            'paid_at'         => now(),
-            'gateway_payload' => $gatewayPayload,
-        ]);
-
-        ApplicationFee::refreshStatus($admission);
-
-        AuditLog::record('create', 'Admissions', "Application fee paid online for {$admission->app_number} (ref {$payment->reference}).", [
-            'event_type'  => 'DATA',
-            'record_type' => ApplicationPayment::class,
-            'record_id'   => $payment->id,
-            'school_id'   => $admission->school_id,
-        ]);
-
-        ApplicantNotifier::paymentReceived($admission, $payment);
 
         return redirect()->route('applicant.application.step', ApplicationProgress::STEP_REVIEW)
             ->with('success', get_phrase('Payment received. Your application fee is settled.'));
     }
 
-    /** @return array{0: bool, 1: ?string, 2: array}|null [isPaid, gatewayTxnId, gatewayPayload], or null if the provider could not be reached at all. */
     /**
      * Verifies the checkout session startStripe() created for THIS payment
      * (gateway_txn_id), not whichever session id the browser was redirected
@@ -408,7 +396,7 @@ class PaymentController extends BaseApplicantController
      * another payment must never settle this one (Security Phase 2I). The
      * reference, amount and currency are re-checked, as confirmFlutterwave() does.
      */
-    private function confirmStripe(Request $request, ApplicationPayment $payment): ?array
+    private function confirmStripe(Request $request, ApplicationPayment $payment): ?VerifiedApplicationPayment
     {
         $secretKey = get_payment_keys('stripe', 'test_secret_key') ?: get_payment_keys('stripe', 'secret_live_key');
         $sessionId = (string) $payment->gateway_txn_id;
@@ -427,16 +415,17 @@ class PaymentController extends BaseApplicantController
             return null;
         }
 
-        $isPaid = ($session->payment_status ?? null) === 'paid'
-            && ($session->client_reference_id ?? null) === $payment->reference
-            && (int) ($session->amount_total ?? 0) >= (int) round((float) $payment->amount * 100)
-            && strtolower((string) ($session->currency ?? '')) === strtolower((string) $payment->currency);
-
-        return [
-            $isPaid,
-            $session->id,
+        $minor = $session->amount_total ?? null;
+        if (! is_int($minor) || $minor <= 0) {
+            return null;
+        }
+        return new VerifiedApplicationPayment(
+            (int) $payment->id, (int) $payment->school_id, 'stripe',
+            (string) ($session->client_reference_id ?? ''), (string) ($session->id ?? ''),
+            DecimalAmount::decimal($minor), (string) ($session->currency ?? ''),
+            ($session->payment_status ?? null) === 'paid' ? 'paid' : 'failed',
             ['payment_intent' => $session->payment_intent ?? null, 'payment_status' => $session->payment_status ?? null],
-        ];
+        );
     }
 
     /**
@@ -446,7 +435,7 @@ class PaymentController extends BaseApplicantController
      * re-checked too, so a tampered redirect can't settle the fee for less
      * than what was actually charged.
      */
-    private function confirmFlutterwave(Request $request, ApplicationPayment $payment): ?array
+    private function confirmFlutterwave(Request $request, ApplicationPayment $payment): ?VerifiedApplicationPayment
     {
         $secretKey = ApplicationFee::flutterwaveSecretKey();
         $transactionId = $request->query('transaction_id');
@@ -471,22 +460,27 @@ class PaymentController extends BaseApplicantController
 
         $data = $response->json('data') ?? [];
 
-        $isPaid = ($data['status'] ?? null) === 'successful'
-            && ($data['tx_ref'] ?? null) === $payment->reference
-            && (float) ($data['amount'] ?? 0) >= (float) $payment->amount
-            && strtoupper((string) ($data['currency'] ?? '')) === strtoupper((string) $payment->currency);
-
-        return [$isPaid, (string) ($data['id'] ?? $transactionId), $data];
+        if (! is_array($data) || ! isset($data['id']) || (string) $data['id'] !== (string) $transactionId
+            || DecimalAmount::minorUnits($data['amount'] ?? null) === null) {
+            return null;
+        }
+        return new VerifiedApplicationPayment(
+            (int) $payment->id, (int) $payment->school_id, 'flutterwave',
+            (string) ($data['tx_ref'] ?? ''), (string) $data['id'], (string) $data['amount'],
+            (string) ($data['currency'] ?? ''), ($data['status'] ?? null) === 'successful' ? 'paid' : 'failed', $data, true,
+        );
     }
 
     public function gatewayCancel(string $gateway, int $paymentId)
     {
         $admission = $this->currentApplication();
 
-        $payment = ApplicationPayment::where('admission_id', $admission->id)->find($paymentId);
+        $payment = ApplicationPayment::where('admission_id', $admission->id)
+            ->where('school_id', $admission->school_id)->find($paymentId);
 
         if ($payment && $payment->status === ApplicationPayment::STATUS_PENDING) {
-            $payment->update(['status' => ApplicationPayment::STATUS_FAILED, 'note' => get_phrase('Cancelled at the payment page.')]);
+            ApplicationPayment::whereKey($payment->id)->where('status', ApplicationPayment::STATUS_PENDING)
+                ->update(['status' => ApplicationPayment::STATUS_FAILED, 'note' => get_phrase('Cancelled at the payment page.')]);
             ApplicationFee::refreshStatus($admission);
         }
 

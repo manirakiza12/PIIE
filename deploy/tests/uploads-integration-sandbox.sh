@@ -182,7 +182,14 @@ done
 t "the piped form IS unreliable (demonstrates the bug)"  "[ $piped_ok -lt 10 ]"
 t "the file form IS reliable (10/10)"                    "[ $file_ok -eq 10 ]"
 t "backup.sh does NOT use the piped form"                "! grep -qE 'tar -tzf[^|]*\| *grep -q' $D/backup.sh"
-t "the archive_has helper does NOT pipe tar into grep"   "! grep -A6 'archive_has()' $D/sandbox.sh | grep -q 'tar -tzf.*|.*grep'"
+# The helper lives in deploy/tests/sandbox.sh, not next to the remote scripts.
+# This assertion used to grep "$D/sandbox.sh" (deploy/remote/sandbox.sh), which
+# does not exist: grep printed to stderr, matched nothing, and the leading `!`
+# turned "file absent" into a PASS. Guard the file first, so a wrong path fails
+# loudly instead of passing vacuously.
+HELPER="$ROOT/deploy/tests/sandbox.sh"
+t "the archive_has helper file exists"                   "[ -f $HELPER ]"
+t "the archive_has helper does NOT pipe tar into grep"   "[ -f $HELPER ] && ! grep -A6 'archive_has()' $HELPER | grep -q 'tar -tzf.*|.*grep'"
 rm -rf /tmp/sp
 
 echo

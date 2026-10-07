@@ -196,6 +196,7 @@ class ApplicantNotifier
     public static function paymentReceived(Admission $admission, ApplicationPayment $payment): bool
     {
         $confirmed = $payment->status === ApplicationPayment::STATUS_PAID;
+        $settled = ApplicationFee::isSettled($admission);
 
         return self::send($admission->email, [
             'subject'  => ($confirmed ? get_phrase('Application fee received') : get_phrase('Application fee awaiting confirmation')) . ' — ' . $admission->app_number,
@@ -203,7 +204,9 @@ class ApplicantNotifier
             'greeting' => get_phrase('Dear') . ' ' . $admission->full_name . ',',
             'paragraphs' => [
                 $confirmed
-                    ? get_phrase('Your application fee has been confirmed. This step of your application is now complete.')
+                    ? ($settled
+                        ? get_phrase('Your application fee has been confirmed. This step of your application is now complete.')
+                        : get_phrase('Your payment has been confirmed. Your application fee is not yet fully paid; please pay the remaining balance.'))
                     : get_phrase('We have received your payment details and they are being verified by the finance office. This usually takes one to two working days.'),
             ],
             'details' => array_filter([

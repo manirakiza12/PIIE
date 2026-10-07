@@ -61,9 +61,19 @@ restore with `-C shared/storage`; run `tar -tzf` on the archive to see which lay
 
 ## Prerequisites still needed from you
 1. **Document root** (verified read-only 2026-10-04): the vhost serves `public_html` itself, a flat app root; it cannot be a symlink to a release. Convert it ONCE to a thin shell with `docroot.sh plan` then `apply`. Until then only `stage` works.
-2. **Seed `shared/`** once by hand: copy the live `.env` to `shared/.env` (chmod 600), copy live
-   `storage/` (uploads) into `shared/storage/`. Confirm the `.env` has `APP_DEBUG=false`.
-3. **`shared/public-uploads` permissions — ONE-TIME, needs root.** This is the only step the
+2. **Seed `shared/`.** Use the script rather than a hand-typed list — it reads the same path
+   names the deploy scripts use, so it cannot drift from the code:
+
+   ```sh
+   bash deploy/remote/seed-shared.sh check     # read-only; reports what is missing/mis-mode
+   bash deploy/remote/seed-shared.sh apply     # creates what is missing, sets modes
+   ```
+
+   It never deletes anything and never overwrites existing content. It will **not** create
+   `shared/.env` — that must be created once by hand from the live `.env` (generating one
+   could rotate `APP_KEY` and invalidate every session and encrypted column), then
+   `chmod 600`. `apply` also tightens it to 600 if it already exists.
+3. **`shared/` group ownership — ONE-TIME, needs root.** This is the only step the
    unprivileged deploy script cannot do for itself, so it is stated here rather than papered over.
 
    The deployment user (`piie`) merges baseline artefacts; PHP-FPM (`www-data`) writes real user
@@ -71,14 +81,29 @@ restore with `-C shared/storage`; run `tar -tzf` on the archive to see which lay
    everything created later inherits the group and stays group-writable:
 
    ```sh
-   mkdir -p /home/piie/deployments/piie/shared/public-uploads
-   chown -R piie:www-data /home/piie/deployments/piie/shared/public-uploads
-   chmod 2775 /home/piie/deployments/piie/shared/public-uploads
+   mkdir -p /home/piie/deployments/piie/shared/storage/app/public \
+            /home/piie/deployments/piie/shared/storage/framework/{cache/data,sessions,views} \
+            /home/piie/deployments/piie/shared/storage/logs \
+            /home/piie/deployments/piie/shared/public-uploads
+   chown -R piie:www-data /home/piie/deployments/piie/shared
+   chmod 2775 /home/piie/deployments/piie/shared/storage /home/piie/deployments/piie/shared/storage/* \
+            /home/piie/deployments/piie/shared/storage/framework/* \
+            /home/piie/deployments/piie/shared/storage/framework/cache/* \
+            /home/piie/deployments/piie/shared/storage/framework/sessions \
+            /home/piie/deployments/piie/shared/storage/framework/views \
+            /home/piie/deployments/piie/shared/storage/logs \
+            /home/piie/deployments/piie/shared/public-uploads
    ```
 
-   Run it **once**, by hand, as root. Afterwards `deploy-release.sh` maintains the mode on the
-   top-level directory and on any directory it creates itself, and `preflight.sh` verifies group,
-   mode and the setgid bit on every run.
+   Run it **once**, by hand, as root. Afterwards `seed-shared.sh apply` maintains the mode on
+   every runtime directory, `deploy-release.sh` maintains it on `public-uploads` during
+   activation, and `preflight.sh` verifies group, mode and the setgid bit on every run.
+
+   **The target is `2775`, and the distinction matters.** `stat -c %a` returns a
+   variable-width string, so a naive check can mistake `2755` for `2775`. But `2755` is
+   setgid with group `r-x` — **not** group-writable — and PHP-FPM then cannot write
+   sessions, logs, compiled views or uploads. The site deploys cleanly and then 500s.
+   Check the group digit explicitly, or just run `seed-shared.sh check`.
 
    The deploy script never calls `sudo` and never issues `chmod 777`, and it does not recursively
    change ownership or permissions of existing uploads — those may be live production files.

@@ -1,13 +1,73 @@
-<IfModule mod_rewrite.c>
-    <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
-    </IfModule>
+# ==========================================================================
+# DENY SENSITIVE FILE TYPES — defence in depth
+# --------------------------------------------------------------------------
+# These must never be reachable over HTTP, whatever ends up in the document
+# root. This is a BACKSTOP, not the primary control: the primary control is that
+# such files do not live under public/ at all.
+#
+# It exists because the front-controller rewrite below sends a request to
+# index.php only when the target does NOT exist on disk (`!-f`). A real file is
+# therefore served as a plain download with no authorisation check whatsoever.
+# That is exactly how a tracked 139 KB `public/assets/install.sql` was readable at
+# /assets/install.sql — the dump has since been moved to database/, but the same
+# would happen to any future *.sql, *.dump, .env or private key that landed here.
+#
+# Placed BEFORE the front-controller rules so it can never be reordered after them.
+# ==========================================================================
 
+# Deny by extension. These types have no legitimate reason to be web-readable.
+# `sql\.gz` and friends are matched explicitly because the pattern is anchored on
+# the whole extension: a plain `\.gz$` would also block legitimate .gz assets.
+<FilesMatch "(?i)\.(sql|sql\.gz|sql\.bz2|sql\.xz|dump|dump\.gz|dmp|bak|old|orig|save|swp|log|ini|conf|env|key|pem|p12|pfx|jks|keystore)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Dotfiles: .env, .env.production, .git*, .htpasswd, .ssh/... and so on.
+# Denied regardless of extension, because an extension check cannot match a file
+# whose NAME is the secret.
+<FilesMatch "(?i)^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Private keys and SSH material by name, in case they are not dotfiles or lack a
+# known extension.
+<FilesMatch "(?i)(id_rsa|id_dsa|id_ecdsa|id_ed25519|authorized_keys|known_hosts)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # A second, rewrite-level guard. mod_rewrite is enabled on more configurations
+    # than mod_authz_core, so where <FilesMatch> above silently does nothing this
+    # still stops the request. Returns 403 rather than rewriting to index.php: a
+    # 200-shaped application response would still confirm the request was handled,
+    # whereas 403 states plainly that the file is not for you.
+    RewriteRule "(?i)\.(sql|sql\.gz|sql\.bz2|sql\.xz|dump|dump\.gz|dmp|bak|old|orig|save|swp|log|ini|conf|env|key|pem|p12|pfx|jks|keystore)$" - [F,L]
+    RewriteRule "(?i)(^|/)\." - [F,L]
+    RewriteRule "(?i)(id_rsa|id_dsa|id_ecdsa|id_ed25519|authorized_keys|known_hosts)$" - [F,L]
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
-    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP_AUTHORIZATION}]
 
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d

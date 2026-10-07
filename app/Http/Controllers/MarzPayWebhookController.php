@@ -6,8 +6,7 @@ use App\Models\ApplicationPayment;
 use App\Models\AuditLog;
 use App\Models\HostelFee;
 use App\Models\StudentFeeManager;
-use App\Support\Admissions\ApplicantNotifier;
-use App\Support\Admissions\ApplicationFee;
+use App\Support\Payments\ApplicationPaymentSettlement;
 use App\Support\Payments\MarzPayService;
 use App\Support\Subscriptions\SubscriptionActivator;
 use Illuminate\Http\Request;
@@ -33,19 +32,40 @@ class MarzPayWebhookController extends Controller
         // Dashboard-registered webhooks wrap the payload under `data`;
         // direct callback_url posts (what this app sends) don't.
         $body = $request->input('data') ?: $request->all();
+        if (! is_array($body)) {
+            return response()->json(['status' => 'ignored'], 200);
+        }
 
         $eventType = $body['event_type'] ?? null;
         $transactionUuid = $body['transaction']['uuid'] ?? null;
-        $metadata = $this->flattenMetadata($body['metadata'] ?? []);
+        $metadata = $this->flattenMetadata(is_array($body['metadata'] ?? null) ? $body['metadata'] : []);
 
         $context = $metadata['context'] ?? null;
         $contextId = $metadata['context_id'] ?? null;
-        $schoolId = $this->resolveSchoolId($context, $contextId);
-
-        if (! $eventType || ! $transactionUuid || ! $context || ! $contextId || ! $schoolId) {
-            Log::warning('MarzPay webhook missing required fields', ['body' => $body]);
-
+        if (! is_string($eventType) || blank($eventType) || ! is_string($transactionUuid) || blank($transactionUuid)
+            || ! is_string($context) || (! is_int($contextId) && ! is_string($contextId))
+            || ! ctype_digit((string) $contextId) || (int) $contextId <= 0) {
+            Log::warning('MarzPay webhook missing required fields');
             return response()->json(['status' => 'ignored'], 200);
+        }
+        $schoolId = $this->resolveSchoolId($context, $contextId);
+        if (! $schoolId) {
+            return response()->json(['status' => 'ignored'], 200);
+        }
+
+        if ($context === 'application') {
+            $payment = ApplicationPayment::where('school_id', $schoolId)->find($contextId);
+            if (! $payment || $payment->method !== 'marzpay'
+                || blank($payment->gateway_txn_id) || $payment->gateway_txn_id !== $transactionUuid) {
+                return response()->json(['status' => 'ignored'], 200);
+            }
+            $evidence = MarzPayService::verifyApplicationPayment($payment);
+            if ($evidence === null) {
+                // Retryable: do not acknowledge an unverifiable payment as processed.
+                return response()->json(['status' => 'verification_unavailable'], 503);
+            }
+            $result = ApplicationPaymentSettlement::apply($evidence);
+            return response()->json(['status' => $result === ApplicationPaymentSettlement::REJECTED ? 'ignored' : 'ok'], 200);
         }
 
         // Re-verify against MarzPay directly rather than trusting the
@@ -55,12 +75,12 @@ class MarzPayWebhookController extends Controller
 
         if ($verifiedStatus === 'successful' || $verifiedStatus === 'completed') {
             $this->applySuccess($context, (int) $contextId, $verified);
-        } elseif (in_array($eventType, ['collection.failed', 'collection.cancelled'], true) || in_array($verifiedStatus, ['failed', 'cancelled'], true)) {
+        } elseif (in_array($verifiedStatus, ['failed', 'cancelled'], true)) {
             $this->applyFailure($context, (int) $contextId);
         }
 
-        // Always 200 — MarzPay redelivers on non-2xx, and we've already
-        // logged/ignored anything we can't act on.
+        // Legacy non-application contexts acknowledge ignored events. Application
+        // verification above returns 503 when the provider cannot be verified.
         return response()->json(['status' => 'ok'], 200);
     }
 
@@ -100,7 +120,6 @@ class MarzPayWebhookController extends Controller
         match ($context) {
             'tuition'      => $this->applyTuition($contextId, $verified),
             'hostel'       => $this->applyHostel($contextId, $verified),
-            'application'  => $this->applyApplication($contextId, $verified),
             'subscription' => $this->applySubscription($contextId),
             default        => null,
         };
@@ -113,9 +132,6 @@ class MarzPayWebhookController extends Controller
             // hostel_fees.status is an int column (0=unpaid, 1=paid, 2=rejected/failed)
             // — see acceptOfflinePaymentHostel/rejectOfflinePaymentHostel.
             'hostel'  => HostelFee::where('id', $contextId)->where('status', 0)->update(['status' => 2]),
-            'application' => ApplicationPayment::where('id', $contextId)
-                ->where('status', ApplicationPayment::STATUS_PENDING)
-                ->update(['status' => ApplicationPayment::STATUS_FAILED]),
             default => null,
         };
     }
@@ -162,33 +178,6 @@ class MarzPayWebhookController extends Controller
 
         AuditLog::record('update', 'Hostel', "Hostel fee #{$fee->id} paid via MarzPay.", [
             'event_type' => 'DATA', 'record_type' => HostelFee::class, 'record_id' => $fee->id, 'school_id' => $fee->school_id,
-        ]);
-    }
-
-    private function applyApplication(int $paymentId, array $verified): void
-    {
-        $payment = ApplicationPayment::find($paymentId);
-
-        if (! $payment || $payment->isSettled()) {
-            return;
-        }
-
-        $admission = $payment->admission;
-
-        $payment->update([
-            'status'          => ApplicationPayment::STATUS_PAID,
-            'gateway_txn_id'  => $verified['transaction']['uuid'] ?? $payment->gateway_txn_id,
-            'paid_at'         => now(),
-            'gateway_payload' => $verified,
-        ]);
-
-        if ($admission) {
-            ApplicationFee::refreshStatus($admission);
-            ApplicantNotifier::paymentReceived($admission, $payment);
-        }
-
-        AuditLog::record('create', 'Admissions', "Application fee paid via MarzPay (ref {$payment->reference}).", [
-            'event_type' => 'DATA', 'record_type' => ApplicationPayment::class, 'record_id' => $payment->id, 'school_id' => $payment->school_id,
         ]);
     }
 

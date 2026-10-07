@@ -5,19 +5,37 @@ set -euo pipefail
 TS="${1:-$(date +%Y%m%d-%H%M%S)}"
 B="$BASE/backups"; mkdir -p "$B"; chmod 700 "$B"
 
-CNF="$(mktemp)"; trap 'rm -f "$CNF"' EXIT; chmod 600 "$CNF"
+# The trap removes the credentials file AND any half-written archive.
+#
+# Without the `.part` cleanup, every rejected dump (truncated, empty, no marker)
+# left a stale `db-<ts>.sql.gz.part` behind in backups/. Those files are never
+# pruned by retention -- the globs are `db-*.sql.gz`, which does not match
+# `db-*.sql.gz.part` -- so a host with flaky credentials accumulates them
+# indefinitely. They are worthless, and a stale one sitting next to a good
+# archive is actively confusing during an incident.
+PARTIAL=""
+cleanup() { rm -f -- "$CNF" ${PARTIAL:+"$PARTIAL"}; }
+trap cleanup EXIT
+CNF="$(mktemp)"; chmod 600 "$CNF"
 { echo "[client]"; echo "host=$(env_get DB_HOST)"; echo "port=$(env_get DB_PORT)"
   echo "user=$(env_get DB_USERNAME)"; echo "password=\"$(env_get DB_PASSWORD)\""; } > "$CNF"
 DB="$(env_get DB_DATABASE)"; [ -n "$DB" ] || die "DB_DATABASE empty"
 
 OUT="$B/db-$TS.sql.gz"
 log "Dumping database (credentials stay on the server)"
+# Registered with the trap BEFORE the dump runs, so a mid-dump failure (a killed
+# mysqldump, a full disk) is cleaned up on the way out.
+PARTIAL="$OUT.part"
 mysqldump --defaults-extra-file="$CNF" --single-transaction --quick --routines --triggers --no-tablespaces "$DB" | gzip > "$OUT.part"
 gzip -t "$OUT.part" || die "dump is not a valid gzip"
 [ "$(stat -c %s "$OUT.part")" -gt 2048 ] || die "dump suspiciously small"
 zcat "$OUT.part" | tail -5 | grep -q "Dump completed" || die "dump has no completion marker (truncated?)"
-mv "$OUT.part" "$OUT"; chmod 600 "$OUT"
-sha256sum "$OUT" > "$OUT.sha256"
+mv "$OUT.part" "$OUT"; PARTIAL=""; chmod 600 "$OUT"
+# The sidecar is created by the shell redirect, which honours umask rather than
+# an explicit mode, so it lands at 644 while the archive it describes is 600.
+# Set it explicitly: the filename it records, and the fact that a dump exists at
+# all, are not things an unrelated account on the host needs to learn.
+sha256sum "$OUT" > "$OUT.sha256"; chmod 600 "$OUT.sha256"
 log "DB backup verified: $(basename "$OUT") ($(stat -c %s "$OUT") bytes)"
 
 # ── ONE verified archive covering BOTH persistent trees ──────────────────────
@@ -76,6 +94,7 @@ else
 fi
 
 log "Archiving shared persistent data: ${MEMBERS[*]}"
+PARTIAL="$SOUT.part"
 tar -czf "$SOUT.part" -C "$BASE/shared" "${MEMBERS[@]}"
 tar -tzf "$SOUT.part" >/dev/null || die "storage archive unreadable"
 
@@ -97,7 +116,7 @@ done
 ENTRY_COUNT="$(wc -l < "$LIST" | tr -d ' ')"
 rm -f "$LIST"
 
-mv "$SOUT.part" "$SOUT"; chmod 600 "$SOUT"
+mv "$SOUT.part" "$SOUT"; PARTIAL=""; chmod 600 "$SOUT"
 log "Storage backup verified: $(basename "$SOUT") ($ENTRY_COUNT entries, covering ${MEMBERS[*]})"
 
 # Retention: prune only our own, well-named, OLD files; never the newest.

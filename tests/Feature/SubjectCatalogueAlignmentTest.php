@@ -49,6 +49,32 @@ class SubjectCatalogueAlignmentTest extends TestCase
         DB::table('schools')->where('id', 2)->update(['running_session' => 40]);
     }
 
+    public function test_school_classification_does_not_survive_a_replaced_database(): void
+    {
+        // Reproduce an earlier test rendering navigation with school 1 as K-12.
+        DB::table('schools')->where('id', 1)->update(['education_level' => 'secondary', 'school_type' => 'k12']);
+        $this->assertSame('Subjects', academic_term('subjects', 1));
+
+        // A later test/application sees the same ID in a fresh tenant database.
+        DB::purge('sqlite');
+        DB::reconnect('sqlite');
+        $this->createSchema();
+        $this->school(1, 'higher_ed', 'tertiary');
+        $this->assertSame('tertiary', academic_education_level(1));
+        $this->assertSame('Course Units', academic_term('subjects', 1));
+    }
+
+    public function test_school_classification_reflects_current_explicit_level_and_legacy_fallback(): void
+    {
+        $this->assertSame('tertiary', academic_education_level(1));
+        DB::table('schools')->where('id', 1)->update(['education_level' => 'vocational']);
+        $this->assertSame('Instructor', academic_term('teacher', 1));
+        DB::table('schools')->where('id', 1)->update(['education_level' => null]);
+        $this->assertSame('tertiary', academic_education_level(1));
+        DB::table('schools')->where('id', 1)->update(['school_type' => 'k12']);
+        $this->assertSame('Subjects', academic_term('subjects', 1));
+    }
+
     public function test_higher_education_catalogue_uses_course_unit_terms_and_tenant_programme_filter(): void
     {
         $this->assertSame('Course Units', academic_term('subjects', 1));

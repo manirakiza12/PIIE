@@ -28,6 +28,8 @@ class ApplicantPortalTest extends TestCase
         $this->bootAdmissionsTestSchema();
 
         $this->schoolId = $this->makeSchool(['title' => 'Prime International Institute of Excellence']);
+        // Payment fixtures below are denominated in UGX, as is this intake fee.
+        DB::table('global_settings')->insert(['key' => 'system_currency', 'value' => 'UGX']);
 
         DB::table('global_settings')->insert([
             'key'        => 'primary_school_id',
@@ -537,6 +539,8 @@ class ApplicantPortalTest extends TestCase
         $this->get(route('applicant.dashboard'));
 
         Admission::first()->update([
+            'status' => Admission::STATUS_SUBMITTED,
+            'submitted_at' => now(),
             'intake_session_id' => $this->makeIntakeSession($this->schoolId, ['application_fee' => 50000]),
         ]);
 
