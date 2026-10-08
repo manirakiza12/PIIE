@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Support\StaffModuleTestHelper;
+use Tests\Feature\Support\FrameworkCompatibility;
 use Tests\TestCase;
 
 /**
@@ -47,7 +48,7 @@ class DocumentAndParentTenantSecurityTest extends TestCase
 
         $this->publicDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'piie-phase2c-' . uniqid();
         File::ensureDirectoryExists($this->publicDir);
-        $this->app->instance('path.public', $this->publicDir);
+        FrameworkCompatibility::useTemporaryPublicPath($this->app, $this->publicDir);
 
         $this->schoolA = $this->makeSchool(['title' => 'School A']);
         $this->schoolB = $this->makeSchool(['title' => 'School B']);

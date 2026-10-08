@@ -10,6 +10,7 @@ use App\Support\Payments\PaymentIdentityPreflight;
 use App\Support\Payments\SettledPaymentIdentity;
 use App\Support\Payments\VerifiedApplicationPayment;
 use Illuminate\Database\QueryException;
+use Tests\Feature\Support\FrameworkCompatibility;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -190,7 +191,7 @@ class PaymentTransactionUniquenessTest extends TestCase
             if (! $inject) { return; }
             $pdo = new \PDOException('Duplicate entry for key ' . SettledPaymentIdentity::INDEX, 23000);
             $pdo->errorInfo = ['23000', 1062, 'Duplicate entry for key ' . SettledPaymentIdentity::INDEX];
-            throw new QueryException('UPDATE admissions', [], $pdo);
+            throw FrameworkCompatibility::queryException('UPDATE admissions', [], $pdo, DB::getDefaultConnection());
         });
         $this->postJson(route('webhooks.marzpay'), ['event_type' => 'collection.completed',
             'transaction' => ['uuid' => $p->gateway_txn_id],
@@ -224,7 +225,7 @@ class PaymentTransactionUniquenessTest extends TestCase
         ApplicationPayment::updating(function () {
             $pdo = new \PDOException('Duplicate entry for key unrelated_unique', 23000);
             $pdo->errorInfo = ['23000', 1062, 'Duplicate entry for key unrelated_unique'];
-            throw new QueryException('UPDATE application_payments', [], $pdo);
+            throw FrameworkCompatibility::queryException('UPDATE application_payments', [], $pdo, DB::getDefaultConnection());
         });
         $this->expectException(QueryException::class);
         ApplicationPaymentSettlement::apply($this->evidence($p));

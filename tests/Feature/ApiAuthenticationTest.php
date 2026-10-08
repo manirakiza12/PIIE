@@ -37,6 +37,7 @@ class ApiAuthenticationTest extends TestCase
         parent::setUp();
         $this->bootStaffModuleTestSchema();
         (require base_path('database/migrations/2019_12_14_000001_create_personal_access_tokens_table.php'))->up();
+        (require base_path('database/migrations/2026_10_08_000001_add_expires_at_to_personal_access_tokens.php'))->up();
         $this->school = $this->makeSchool(['title' => 'API School', 'status' => 1]);
     }
 
@@ -99,13 +100,14 @@ class ApiAuthenticationTest extends TestCase
         $this->withHeader('Authorization', "Bearer {$token}")->postJson('/api/user_details')->assertStatus(401);
     }
 
-    public function test_current_token_schema_and_storage_do_not_require_expires_at(): void
+    public function test_current_token_creation_leaves_additive_expires_at_null(): void
     {
         $student = $this->student();
         $issued = $student->createToken('l1-baseline', ['profile:read']);
         [$id, $secret] = explode('|', $issued->plainTextToken, 2);
         $row = DB::table('personal_access_tokens')->where('id', $id)->first();
-        $this->assertFalse(Schema::hasColumn('personal_access_tokens', 'expires_at'));
+        $this->assertTrue(Schema::hasColumn('personal_access_tokens', 'expires_at'));
+        $this->assertNull(DB::table('personal_access_tokens')->where('id', $id)->value('expires_at'));
         $this->assertSame(hash('sha256', $secret), $row->token);
         $this->assertSame($student->id, (int) $row->tokenable_id);
         $this->assertSame(User::class, $row->tokenable_type);
@@ -113,7 +115,7 @@ class ApiAuthenticationTest extends TestCase
         $this->assertArrayNotHasKey('token', $issued->accessToken->toArray());
     }
 
-    public function test_historical_token_without_expires_at_authenticates_its_owner(): void
+    public function test_historical_token_with_null_expiry_authenticates_its_owner(): void
     {
         config(['sanctum.expiration' => null]);
         $student = $this->student();
@@ -127,7 +129,8 @@ class ApiAuthenticationTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$id.'|'.$secret)->getJson('/api/user')
             ->assertOk()->assertJson(['id' => $student->id, 'school_id' => $this->school]);
         $this->assertNotNull(DB::table('personal_access_tokens')->where('id', $id)->value('last_used_at'));
-        $this->assertFalse(Schema::hasColumn('personal_access_tokens', 'expires_at'));
+        $this->assertTrue(Schema::hasColumn('personal_access_tokens', 'expires_at'));
+        $this->assertNull(DB::table('personal_access_tokens')->where('id', $id)->value('expires_at'));
     }
 
     public function test_global_token_expiration_still_rejects_old_tokens(): void

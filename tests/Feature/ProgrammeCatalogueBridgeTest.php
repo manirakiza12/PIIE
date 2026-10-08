@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Support\AdmissionsTestHelper;
+use Tests\Feature\Support\FrameworkCompatibility;
 use Tests\TestCase;
 
 /**
@@ -78,7 +79,7 @@ class ProgrammeCatalogueBridgeTest extends TestCase
         // rather than on a private disk. Redirect the public path at a scratch
         // directory so the suite writes nothing into the real public/ tree — the
         // same technique ProgrammeCoverImageTest uses for the CMS uploads.
-        $this->app->instance('path.public', $this->publicDir);
+        FrameworkCompatibility::useTemporaryPublicPath($this->app, $this->publicDir);
     }
 
     protected function tearDown(): void

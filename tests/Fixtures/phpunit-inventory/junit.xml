@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites><testsuite name="Fixture" tests="4" assertions="10" errors="0" failures="0" skipped="0">
+  <testcase class="Fixture\ExampleTest" name="testPlain" assertions="1"/>
+  <testcase class="Fixture\ExampleTest" name="testData with data set #0" assertions="2"/>
+  <testcase class="Fixture\ExampleTest" name="testData with data set &quot;named # &amp; case&quot;" assertions="3"/>
+  <testcase class="Fixture\ExampleTest" name="testData with data set &quot;00&quot;" assertions="4"/>
+</testsuite></testsuites>

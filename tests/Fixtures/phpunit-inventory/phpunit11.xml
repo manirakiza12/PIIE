@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testSuite xmlns="https://xml.phpunit.de/testSuite">
+  <tests>
+    <testClass name="Fixture\ExampleTest" file="/fixture/ExampleTest.php">
+      <testMethod id="Fixture\ExampleTest::testPlain" name="testPlain"/>
+      <testMethod id="Fixture\ExampleTest::testData#0" name="testData"/>
+      <testMethod id="Fixture\ExampleTest::testData#named # &amp; case" name="testData"/>
+      <testMethod id="Fixture\ExampleTest::testData#00" name="testData"/>
+    </testClass>
+  </tests>
+  <groups><group name="default"><test id="Fixture\ExampleTest::testPlain"/></group></groups>
+</testSuite>

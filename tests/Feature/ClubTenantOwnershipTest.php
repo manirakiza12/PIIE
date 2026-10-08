@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Support\StaffModuleTestHelper;
+use Tests\Feature\Support\FrameworkCompatibility;
 use Tests\TestCase;
 
 /**
@@ -39,7 +40,7 @@ class ClubTenantOwnershipTest extends TestCase
         $this->bootStaffModuleTestSchema();
         $this->publicDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'piie-phase2h-' . uniqid();
         File::ensureDirectoryExists($this->publicDir . '/assets/uploads/club');
-        $this->app->instance('path.public', $this->publicDir);
+        FrameworkCompatibility::useTemporaryPublicPath($this->app, $this->publicDir);
 
         $this->migration(self::CREATE_CLUBS)->up();
         $this->migration(self::ADD_SCHOOL_ID)->up();

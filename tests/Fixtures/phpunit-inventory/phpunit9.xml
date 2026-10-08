@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tests>
+  <testCaseClass name="Fixture\ExampleTest">
+    <testCaseMethod name="testPlain" groups="default"/>
+    <testCaseMethod name="testData" groups="default" dataSet="#0"/>
+    <testCaseMethod name="testData" groups="default" dataSet="&quot;named # &amp; case&quot;"/>
+    <testCaseMethod name="testData" groups="default" dataSet="&quot;00&quot;"/>
+  </testCaseClass>
+</tests>

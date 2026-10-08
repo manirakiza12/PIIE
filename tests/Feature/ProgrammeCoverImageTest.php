@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Support\StaffModuleTestHelper;
+use Tests\Feature\Support\FrameworkCompatibility;
 use Tests\TestCase;
 
 /**
@@ -68,7 +69,7 @@ class ProgrammeCoverImageTest extends TestCase
 
         $this->publicDir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'piie-programme-img-public-'.uniqid();
         File::ensureDirectoryExists($this->publicDir.'/assets/uploads/website');
-        $this->app->instance('path.public', $this->publicDir);
+        FrameworkCompatibility::useTemporaryPublicPath($this->app, $this->publicDir);
 
         $this->scratch = sys_get_temp_dir().DIRECTORY_SEPARATOR.'piie-programme-img-scratch-'.uniqid();
         File::ensureDirectoryExists($this->scratch);

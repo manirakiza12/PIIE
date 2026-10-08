@@ -22,6 +22,7 @@ class CorsCompatibilityTest extends TestCase
         parent::setUp();
         $this->bootStaffModuleTestSchema();
         (require base_path('database/migrations/2019_12_14_000001_create_personal_access_tokens_table.php'))->up();
+        (require base_path('database/migrations/2026_10_08_000001_add_expires_at_to_personal_access_tokens.php'))->up();
         $this->school = $this->makeSchool(['status' => 1]);
         // Keep browser-session classification separate from bearer-token CORS.
         config(['sanctum.stateful' => []]);

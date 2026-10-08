@@ -6,6 +6,7 @@ use App\Models\LiveClassMaterial;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 use Tests\Feature\Support\LiveClassTestHelper;
+use Tests\Feature\Support\FrameworkCompatibility;
 use Tests\TestCase;
 
 /**
@@ -31,7 +32,7 @@ class LiveClassMaterialRealUploadTest extends TestCase
         $this->bootLiveClassTestSchema();
         $this->publicDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'piie-precleanup-lc-' . uniqid();
         File::ensureDirectoryExists($this->publicDir);
-        $this->app->instance('path.public', $this->publicDir);
+        FrameworkCompatibility::useTemporaryPublicPath($this->app, $this->publicDir);
     }
 
     protected function tearDown(): void
