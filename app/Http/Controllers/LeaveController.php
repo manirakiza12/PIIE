@@ -98,7 +98,7 @@ class LeaveController extends Controller
 
         $from = \Carbon\Carbon::parse($validated['from_date']);
         $to   = \Carbon\Carbon::parse($validated['to_date']);
-        $days = $from->diffInDays($to) + 1;
+        $days = \App\Support\Compatibility\WholeDateIntervals::days($from, $to) + 1;
 
         $lt = !empty($validated['leave_type_id']) ? LeaveType::where('school_id', $this->school_id)->find($validated['leave_type_id']) : null;
 

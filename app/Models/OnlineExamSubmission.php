@@ -306,7 +306,7 @@ public function remainingSeconds(?Carbon $at = null): int
 
     $seconds = $deadline->diffInSeconds($at, false);
 
-    return max(0, -$seconds);
+    return (int) max(0, -$seconds);
 }
 
 /**

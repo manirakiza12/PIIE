@@ -216,7 +216,7 @@ class AuthController extends Controller
 
         if (! $record
             || ! Hash::check($validated['token'], $record->token)
-            || now()->diffInMinutes($record->created_at) > config('auth.passwords.applicants.expire', 60)) {
+            || \App\Support\Compatibility\WholeDateIntervals::minutes(now(), \Carbon\Carbon::parse($record->created_at)) > config('auth.passwords.applicants.expire', 60)) {
             return back()
                 ->withInput($request->only('email'))
                 ->with('error', get_phrase('This password reset link is invalid or has expired.'));

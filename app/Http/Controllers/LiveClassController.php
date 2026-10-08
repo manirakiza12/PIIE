@@ -1121,7 +1121,7 @@ class LiveClassController extends Controller
             $leftAt = now();
             $attendance->update([
                 'left_at' => $leftAt,
-                'duration_seconds' => max(0, $attendance->joined_at->diffInSeconds($leftAt)),
+                'duration_seconds' => max(0, \App\Support\Compatibility\WholeDateIntervals::seconds($attendance->joined_at, $leftAt)),
             ]);
         }
 
@@ -2448,7 +2448,7 @@ class LiveClassController extends Controller
             return null;
         }
 
-        $duration = max(1, $scheduledAt->diffInMinutes($endsAt));
+        $duration = max(1, \App\Support\Compatibility\WholeDateIntervals::minutes($scheduledAt, $endsAt));
         $meetingResponse = Http::withToken($accessToken)->connectTimeout(10)->timeout(20)
             ->acceptJson()
             ->post('https://api.zoom.us/v2/users/me/meetings', [

@@ -552,7 +552,7 @@ class LiveClass extends Model
             return null;
         }
 
-        return max(0, $this->scheduled_at->diffInMinutes($this->ends_at));
+        return max(0, \App\Support\Compatibility\WholeDateIntervals::minutes($this->scheduled_at, $this->ends_at));
     }
 
     /**
