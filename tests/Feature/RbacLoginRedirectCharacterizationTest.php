@@ -79,7 +79,7 @@ class RbacLoginRedirectCharacterizationTest extends TestCase
         ];
     }
 
-    /** @dataProvider postLoginRedirects */
+    #[\PHPUnit\Framework\Attributes\DataProvider('postLoginRedirects')]
     public function test_post_login_redirect_per_role(int $roleId, string $expectedRoute): void
     {
         $response = $this->loginAs($roleId);
@@ -169,7 +169,7 @@ class RbacLoginRedirectCharacterizationTest extends TestCase
         ];
     }
 
-    /** @dataProvider alreadyAuthenticatedRedirects */
+    #[\PHPUnit\Framework\Attributes\DataProvider('alreadyAuthenticatedRedirects')]
     public function test_already_authenticated_redirect_per_role(int $roleId, string $expectedPath): void
     {
         $this->actingAs(User::factory()->make(['role_id' => $roleId]));

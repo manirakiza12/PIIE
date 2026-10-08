@@ -609,8 +609,9 @@ class CourseOfferingModuleLifecycleTest extends TestCase
      * The cases the brief names, and the one that caused the bad row in the
      * database: a heading and a typeface wrapping U+FEFF.
      *
-     * @dataProvider meaningfulTextCases
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('meaningfulTextCases')]
     public function test_the_canonical_RICH_TEXT_completeness_check(string $html, bool $expected): void
     {
         $this->assertSame(

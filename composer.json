@@ -2,23 +2,24 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The Laravel Framework.",
-    "keywords": ["framework", "laravel"],
+    "keywords": [
+        "framework",
+        "laravel"
+    ],
     "license": "MIT",
     "require": {
-        "php": "^7.3|^8.0",
+        "php": "^8.3",
         "anandsiddharth/laravel-paytm-wallet": "^2.0",
         "barryvdh/laravel-dompdf": "^3.0",
         "clue/stream-filter": "1.6",
         "dompdf/dompdf": "^3.1.6",
         "firebase/php-jwt": "^7.2.1",
-        "fruitcake/laravel-cors": "^2.0",
         "guzzlehttp/guzzle": "^7.0.1",
-        "laravel/framework": "^9.0",
-        "laravel/sanctum": "^2.11",
+        "laravel/framework": "^12.69.3",
+        "laravel/sanctum": "^4.3.3",
         "laravel/tinker": "^2.5",
-        "laravel/ui": "^3.4",
+        "laravel/ui": "^4.6.3",
         "league/omnipay": "^3.2",
-        "omnipay/omnipay": "^3.2",
         "omnipay/paypal": "^3.0",
         "phpoffice/phpspreadsheet": "^1.29",
         "razorpay/razorpay": "^2.8",
@@ -27,12 +28,12 @@
         "twilio/sdk": "^7.5"
     },
     "require-dev": {
-        "spatie/laravel-ignition": "^1.0",
+        "spatie/laravel-ignition": "^2.12",
         "fakerphp/faker": "^1.9.1",
         "laravel/sail": "^1.0.1",
         "mockery/mockery": "^1.4.4",
-        "nunomaduro/collision": "^6.1",
-        "phpunit/phpunit": "^9.5.10"
+        "nunomaduro/collision": "^8.9.5",
+        "phpunit/phpunit": "^11.5.57"
     },
     "autoload": {
         "psr-4": {

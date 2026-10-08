@@ -2173,9 +2173,14 @@ class LiveClassController extends Controller
         $errno = 0;
         $curlError = '';
 
-        if ($e instanceof \Illuminate\Http\Client\RequestException) {
-            // Laravel wraps Guzzle; the original exception carries the transport detail.
-            $e = $e->getPrevious() instanceof \Throwable ? $e->getPrevious() : $e;
+        // Laravel 12 also wraps response-less Guzzle failures in ConnectionException.
+        // Follow only known HTTP wrappers, with a bound; never inspect messages or URLs.
+        for ($depth = 0; $depth < 8; $depth++) {
+            if (! $e instanceof \Illuminate\Http\Client\RequestException
+                && ! $e instanceof \Illuminate\Http\Client\ConnectionException) { break; }
+            $previous = $e->getPrevious();
+            if (! $previous instanceof \Throwable) { break; }
+            $e = $previous;
         }
 
         if (method_exists($e, 'getHandlerContext')) {

@@ -662,9 +662,7 @@ class CourseContentTest extends TestCase
     // RTE SECURITY
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * @dataProvider dangerousPayloads
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('dangerousPayloads')]
     public function test_the_sanitizer_removes_every_dangerous_construct(string $label, string $payload, array $mustNotContain): void
     {
         $sanitizer = app(HtmlSanitizer::class);

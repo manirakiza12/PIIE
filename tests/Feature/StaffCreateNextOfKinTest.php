@@ -51,7 +51,7 @@ class StaffCreateNextOfKinTest extends TestCase
 
     // ============================================ Next of Kin for every role
 
-    /** @dataProvider everyStaffType */
+    #[\PHPUnit\Framework\Attributes\DataProvider('everyStaffType')]
     public function test_every_staff_type_is_created_with_a_next_of_kin(string $type, int $roleId): void
     {
         Mail::fake();
@@ -118,7 +118,7 @@ class StaffCreateNextOfKinTest extends TestCase
 
     // =================================================== validation & rules
 
-    /** @dataProvider requiredNextOfKinField */
+    #[\PHPUnit\Framework\Attributes\DataProvider('requiredNextOfKinField')]
     public function test_next_of_kin_required_fields_are_enforced(string $field): void
     {
         $payload = $this->lecturerPayload();
@@ -272,8 +272,9 @@ class StaffCreateNextOfKinTest extends TestCase
      * pre-filled-today defect is fixed there too rather than only on the new
      * full-page form.
      *
-     * @dataProvider legacyStaffCreateForm
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('legacyStaffCreateForm')]
     public function test_no_staff_form_prefills_todays_date_as_a_date_of_birth(string $form): void
     {
         $html = $this->actingAs($this->admin)

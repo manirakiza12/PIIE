@@ -63,7 +63,7 @@ class AuthenticationCompatibilityTest extends TestCase
         ]);
     }
 
-    /** @dataProvider roles */
+    #[\PHPUnit\Framework\Attributes\DataProvider('roles')]
     public function test_valid_login_retains_role_redirect_identity_and_school(int $role, string $home): void
     {
         $user = $this->user($role);
@@ -78,7 +78,7 @@ class AuthenticationCompatibilityTest extends TestCase
         ]);
     }
 
-    /** @dataProvider roles */
+    #[\PHPUnit\Framework\Attributes\DataProvider('roles')]
     public function test_invalid_credentials_do_not_authenticate(int $role): void
     {
         $user = $this->user($role);
@@ -88,7 +88,7 @@ class AuthenticationCompatibilityTest extends TestCase
         $this->getJson('/l1-auth-role/'.$role)->assertUnauthorized();
     }
 
-    /** @dataProvider roles */
+    #[\PHPUnit\Framework\Attributes\DataProvider('roles')]
     public function test_logout_revokes_session_access_to_the_role_surface(int $role): void
     {
         $user = $this->user($role);
@@ -99,7 +99,7 @@ class AuthenticationCompatibilityTest extends TestCase
         $this->getJson('/l1-auth-role/'.$role)->assertUnauthorized();
     }
 
-    /** @dataProvider roles */
+    #[\PHPUnit\Framework\Attributes\DataProvider('roles')]
     public function test_disabled_legacy_account_authenticates_but_role_middleware_denies_access(int $role, string $home, string $middleware, string $disabled): void
     {
         // Existing RbacLoginRedirectCharacterizationTest pins this split:
@@ -110,7 +110,7 @@ class AuthenticationCompatibilityTest extends TestCase
         $this->getJson('/l1-auth-role/'.$role)->assertRedirect(route($disabled));
     }
 
-    /** @dataProvider roles */
+    #[\PHPUnit\Framework\Attributes\DataProvider('roles')]
     public function test_password_reset_notification_and_valid_token_restore_only_the_owner(int $role): void
     {
         $user = $this->user($role);
@@ -145,7 +145,7 @@ class AuthenticationCompatibilityTest extends TestCase
         return $cases;
     }
 
-    /** @dataProvider rejectedResetCases */
+    #[\PHPUnit\Framework\Attributes\DataProvider('rejectedResetCases')]
     public function test_rejected_password_reset_leaves_credentials_and_authentication_unchanged(int $role, string $reason): void
     {
         $user = $this->user($role);
@@ -197,7 +197,7 @@ class AuthenticationCompatibilityTest extends TestCase
         return ['wrong password' => ['password'], 'inactive' => ['inactive'], 'foreign school' => ['foreign'], 'web account' => ['web']];
     }
 
-    /** @dataProvider rejectedApplicantLogins */
+    #[\PHPUnit\Framework\Attributes\DataProvider('rejectedApplicantLogins')]
     public function test_applicant_login_rejects_invalid_inactive_foreign_or_web_credentials(string $reason): void
     {
         $applicant = $this->makeApplicant($reason === 'foreign' ? $this->makeSchool(['status' => 1]) : $this->school,
@@ -243,7 +243,7 @@ class AuthenticationCompatibilityTest extends TestCase
         return ['valid' => ['valid'], 'wrong token' => ['incorrect'], 'expired' => ['expired'], 'foreign school' => ['foreign']];
     }
 
-    /** @dataProvider applicantResetCases */
+    #[\PHPUnit\Framework\Attributes\DataProvider('applicantResetCases')]
     public function test_applicant_reset_preserves_current_expiry_and_school_boundary(string $reason): void
     {
         $applicant = $this->makeApplicant($reason === 'foreign' ? $this->makeSchool(['status' => 1]) : $this->school);

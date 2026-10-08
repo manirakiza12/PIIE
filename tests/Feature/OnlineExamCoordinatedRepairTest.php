@@ -119,7 +119,7 @@ class OnlineExamCoordinatedRepairTest extends TestCase
      * reported zero pending, the question never appeared as outstanding, and the
      * lecturer's "What the student wrote" column rendered an apparently empty cell.
      */
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function test_an_EMPTY_rich_text_document_is_NOT_an_answer(): void
     {
         $submission = $this->attemptAndSubmit([
@@ -150,7 +150,7 @@ class OnlineExamCoordinatedRepairTest extends TestCase
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function REAL_written_content_is_still_treated_as_an_answer(): void
     {
         $submission = $this->attemptAndSubmit([
@@ -185,7 +185,7 @@ class OnlineExamCoordinatedRepairTest extends TestCase
      * frozen when the attempt was opened — while the exam still carried a duration of
      * about 225 minutes — and never reconsidered after the duration was corrected.
      */
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_timer_uses_the_EARLIER_of_duration_and_closing_time(): void
     {
         $submission = $this->openAttempt();
@@ -258,7 +258,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
     );
 }
 
-/** @test */
+#[\PHPUnit\Framework\Attributes\Test]
     public function a_NEW_attempt_is_CAPPED_by_a_closing_time_sooner_than_the_duration(): void
 {
     DB::table('online_exams')->where('id', $this->exam->id)->update([
@@ -283,7 +283,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
     );
 }
 
-/** @test */
+#[\PHPUnit\Framework\Attributes\Test]
     public function the_timer_also_respects_a_CLOSING_time_earlier_than_the_duration(): void
     {
         DB::table('online_exams')->where('id', $this->exam->id)->update([
@@ -300,7 +300,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function a_refresh_or_second_tab_cannot_EXTEND_the_deadline(): void
     {
         $submission = $this->openAttempt();
@@ -326,7 +326,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function a_SHORTENED_deadline_is_PERSISTED_so_the_browser_agrees_with_the_server(): void
     {
         $submission = $this->openAttempt();
@@ -349,7 +349,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_handover_is_REFUSED_while_a_written_question_is_undecided(): void
     {
         $submission = $this->attemptAndSubmit([
@@ -372,7 +372,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
             ->assertDontSee('action-submit-for-review');
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function an_UNANSWERED_question_can_be_settled_with_an_attributed_ZERO_and_then_handed_over(): void
     {
         $submission = $this->attemptAndSubmit([
@@ -434,7 +434,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
         $this->assertSame('pending_review', $submission->result_review_state);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function a_lecturer_can_NEVER_finalize_another_students_attempt_by_id(): void
     {
         $mine = $this->attemptAndSubmit([
@@ -468,7 +468,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function INCIDENTS_are_recorded_against_the_students_OWN_attempt(): void
     {
         $submission = $this->openAttempt();
@@ -494,7 +494,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function ONE_focus_loss_is_NOT_counted_as_two(): void
     {
         $submission = $this->openAttempt();
@@ -527,7 +527,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function a_student_cannot_report_an_incident_against_ANOTHER_students_attempt(): void
     {
         $mine = $this->openAttempt();
@@ -554,7 +554,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function an_UNKNOWN_incident_type_is_rejected(): void
     {
         $submission = $this->openAttempt();
@@ -578,7 +578,7 @@ public function a_NEW_attempt_gets_the_DURATION_and_not_the_remaining_window(): 
  * So the stored value is shown verbatim alongside an explicit diagnosis, and a mark
  * already awarded against that empty answer is called out so it can be corrected.
  */
-/** @test */
+#[\PHPUnit\Framework\Attributes\Test]
 public function the_lecturer_is_SHOWN_that_a_stored_answer_was_empty(): void
 {
     $submission = $this->attemptAndSubmit([

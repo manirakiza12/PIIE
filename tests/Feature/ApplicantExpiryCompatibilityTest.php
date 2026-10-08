@@ -34,7 +34,7 @@ class ApplicantExpiryCompatibilityTest extends TestCase
             'future fresh' => [-60, true], 'future exact expiry' => [-3600, true], 'future expired' => [-3660, false]];
     }
 
-    /** @dataProvider ages */
+    #[\PHPUnit\Framework\Attributes\DataProvider('ages')]
     public function test_reset_expiry_preserves_whole_absolute_minute_policy(int $age, bool $valid): void
     {
         $school = (int) DB::table('global_settings')->where('key', 'primary_school_id')->value('value');

@@ -117,7 +117,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
 
     // ── 1. THE OFFERING IS REAL AND THE LECTURER IS ENTITLED TO IT ─────────────
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function course_offering_five_exists_and_is_the_business_mathematics_offering(): void
     {
         $offering = DB::table('course_offerings')->where('id', self::OFFERING_ID)->first();
@@ -131,7 +131,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
         $this->assertNotNull($subject, 'the offering must resolve to a subject');
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_lecturer_is_allocated_and_permitted_to_teach_offering_five(): void
     {
         $lecturer = User::find(self::LECTURER_ID);
@@ -177,7 +177,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
 
     // ── 2. THE DRAFT PAPER ────────────────────────────────────────────────────
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_disposable_draft_paper_exists_on_offering_five_with_four_questions(): void
     {
         $examId = $this->ensurePaperExists();
@@ -221,7 +221,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
 
     // ── 3. HISTORICAL RECORDS ARE UNTOUCHED ───────────────────────────────────
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_historical_records_are_unchanged(): void
     {
         // Read-only assertions on the four records the brief protects.
@@ -276,8 +276,9 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
      * route so the same validation and mutators apply. Idempotent, and harmless on a
      * disposable paper the lecturer can still edit.
      *
-     * @test
+     *
      */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_paper_window_is_open_for_verification(): void
     {
         // The query builder has no firstOrFail(); only Eloquent does.

@@ -1,0 +1,119 @@
+{
+    "wildcard actual": [
+        200,
+        "l1-next",
+        {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": null,
+            "Access-Control-Allow-Methods": null,
+            "Access-Control-Allow-Headers": null,
+            "Access-Control-Expose-Headers": null,
+            "Access-Control-Max-Age": null,
+            "Vary": null
+        }
+    ],
+    "wildcard no origin": [
+        200,
+        "l1-next",
+        {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": null,
+            "Access-Control-Allow-Methods": null,
+            "Access-Control-Allow-Headers": null,
+            "Access-Control-Expose-Headers": null,
+            "Access-Control-Max-Age": null,
+            "Vary": null
+        }
+    ],
+    "allowlist allowed": [
+        200,
+        "l1-next",
+        {
+            "Access-Control-Allow-Origin": "https://portal.example.test",
+            "Access-Control-Allow-Credentials": null,
+            "Access-Control-Allow-Methods": null,
+            "Access-Control-Allow-Headers": null,
+            "Access-Control-Expose-Headers": null,
+            "Access-Control-Max-Age": null,
+            "Vary": "Origin"
+        }
+    ],
+    "allowlist denied": [
+        200,
+        "l1-next",
+        {
+            "Access-Control-Allow-Origin": null,
+            "Access-Control-Allow-Credentials": null,
+            "Access-Control-Allow-Methods": null,
+            "Access-Control-Allow-Headers": null,
+            "Access-Control-Expose-Headers": null,
+            "Access-Control-Max-Age": null,
+            "Vary": "Origin"
+        }
+    ],
+    "single origin denied browser": [
+        200,
+        "l1-next",
+        {
+            "Access-Control-Allow-Origin": "https://portal.example.test",
+            "Access-Control-Allow-Credentials": null,
+            "Access-Control-Allow-Methods": null,
+            "Access-Control-Allow-Headers": null,
+            "Access-Control-Expose-Headers": null,
+            "Access-Control-Max-Age": null,
+            "Vary": null
+        }
+    ],
+    "preflight allowed": [
+        204,
+        "",
+        {
+            "Access-Control-Allow-Origin": "https://portal.example.test",
+            "Access-Control-Allow-Credentials": null,
+            "Access-Control-Allow-Methods": "POST",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Expose-Headers": null,
+            "Access-Control-Max-Age": "0",
+            "Vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+        }
+    ],
+    "preflight denied": [
+        204,
+        "",
+        {
+            "Access-Control-Allow-Origin": null,
+            "Access-Control-Allow-Credentials": null,
+            "Access-Control-Allow-Methods": null,
+            "Access-Control-Allow-Headers": null,
+            "Access-Control-Expose-Headers": null,
+            "Access-Control-Max-Age": null,
+            "Vary": "Origin, Access-Control-Request-Method"
+        }
+    ],
+    "credentialed actual": [
+        200,
+        "l1-next",
+        {
+            "Access-Control-Allow-Origin": "https://portal.example.test",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": null,
+            "Access-Control-Allow-Headers": null,
+            "Access-Control-Expose-Headers": "X-School",
+            "Access-Control-Max-Age": null,
+            "Vary": "Origin"
+        }
+    ],
+    "excluded path": [
+        200,
+        "l1-next",
+        {
+            "Access-Control-Allow-Origin": null,
+            "Access-Control-Allow-Credentials": null,
+            "Access-Control-Allow-Methods": null,
+            "Access-Control-Allow-Headers": null,
+            "Access-Control-Expose-Headers": null,
+            "Access-Control-Max-Age": null,
+            "Vary": null
+        }
+    ]
+}

@@ -57,7 +57,7 @@ class MissingParameterSafetyTest extends TestCase
         ];
     }
 
-    /** @dataProvider endpoints */
+    #[\PHPUnit\Framework\Attributes\DataProvider('endpoints')]
     public function test_missing_parameters_give_a_controlled_response(int $role, string $route): void
     {
         $user = $this->persona($role);

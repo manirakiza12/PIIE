@@ -160,7 +160,7 @@ class OnlineExamAnswerPersistenceTest extends TestCase
 
     // ── 1. Question authoring refuses an empty rich-text document ─────────────
 
-    /** @dataProvider emptyPromptProvider */
+    #[\PHPUnit\Framework\Attributes\DataProvider('emptyPromptProvider')]
     public function test_empty_rich_text_document_is_not_accepted_as_a_question(string $emptyDocument): void
     {
         $draftExamId = $this->makeAuthoringExam();

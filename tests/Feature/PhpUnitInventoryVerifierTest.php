@@ -15,7 +15,7 @@ class PhpUnitInventoryVerifierTest extends TestCase
         return file_get_contents(dirname(__DIR__).'/Fixtures/phpunit-inventory/'.$name.'.xml');
     }
 
-    private function result(?string $report = null, array $codes = []): array
+    private function inventoryFixtureResult(?string $report = null, array $codes = []): array
     {
         return PhpUnitInventory::reconcile(PhpUnitInventory::discovery($this->fixture('phpunit9')), [$report ?? $this->fixture('junit')], $codes);
     }
@@ -50,7 +50,7 @@ class PhpUnitInventoryVerifierTest extends TestCase
         ];
     }
 
-    /** @dataProvider invalidDiscoveries */
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidDiscoveries')]
     public function test_invalid_discovery_fails_closed(string $xml): void
     {
         $this->expectException(RuntimeException::class);
@@ -70,11 +70,11 @@ class PhpUnitInventoryVerifierTest extends TestCase
         ];
     }
 
-    /** @dataProvider invalidExecutions */
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidExecutions')]
     public function test_invalid_execution_fails_closed(string $xml): void
     {
         $this->expectException(RuntimeException::class);
-        $this->result($xml);
+        $this->inventoryFixtureResult($xml);
     }
 
     public function test_duplicate_execution_fails(): void
@@ -86,14 +86,14 @@ class PhpUnitInventoryVerifierTest extends TestCase
 
     public function test_missing_execution_fails(): void
     {
-        $result = $this->result(str_replace('<testcase class="Fixture\\ExampleTest" name="testPlain" assertions="1"/>', '', $this->fixture('junit')));
+        $result = $this->inventoryFixtureResult(str_replace('<testcase class="Fixture\\ExampleTest" name="testPlain" assertions="1"/>', '', $this->fixture('junit')));
         $this->assertFalse($result['successful']);
         $this->assertSame(['Fixture\\ExampleTest::testPlain'], $result['missing']);
     }
 
     public function test_unexpected_execution_fails(): void
     {
-        $result = $this->result(str_replace('name="testPlain"', 'name="testUnexpected"', $this->fixture('junit')));
+        $result = $this->inventoryFixtureResult(str_replace('name="testPlain"', 'name="testUnexpected"', $this->fixture('junit')));
         $this->assertFalse($result['successful']);
         $this->assertSame(['Fixture\\ExampleTest::testUnexpected'], $result['unexpected']);
     }
@@ -103,11 +103,11 @@ class PhpUnitInventoryVerifierTest extends TestCase
         return ['failure' => ['failure', 'failed', false], 'error' => ['error', 'errors', false], 'skip' => ['skipped', 'skipped', true], 'warning' => ['warning', 'warnings', false]];
     }
 
-    /** @dataProvider outcomes */
+    #[\PHPUnit\Framework\Attributes\DataProvider('outcomes')]
     public function test_outcomes_are_preserved(string $tag, string $field, bool $success): void
     {
         $xml = str_replace('name="testPlain" assertions="1"/>', 'name="testPlain" assertions="1"><'.$tag.' message="reason">detail</'.$tag.'></testcase>', $this->fixture('junit'));
-        $result = $this->result($xml);
+        $result = $this->inventoryFixtureResult($xml);
         $this->assertSame(1, $result[$field]);
         $this->assertSame(3, $result['passed']);
         $this->assertSame($success, $result['successful']);
@@ -116,7 +116,7 @@ class PhpUnitInventoryVerifierTest extends TestCase
 
     public function test_nonzero_process_exit_cannot_be_masked_by_passing_xml(): void
     {
-        $this->assertFalse($this->result(null, [1])['successful']);
+        $this->assertFalse($this->inventoryFixtureResult(null, [1])['successful']);
     }
 
     public function test_empty_named_dataset_is_a_distinct_valid_case(): void
@@ -136,7 +136,7 @@ class PhpUnitInventoryVerifierTest extends TestCase
 
     public function test_valid_complete_inventory_passes(): void
     {
-        $result = $this->result();
+        $result = $this->inventoryFixtureResult();
         $this->assertTrue($result['successful']);
         $this->assertSame($result['discovered'], $result['executed']);
         foreach (['failed', 'errors', 'warnings', 'skipped'] as $field) { $this->assertSame(0, $result[$field]); }

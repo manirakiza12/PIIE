@@ -62,7 +62,7 @@ class StaffCreationCharacterizationTest extends TestCase
         return User::where('email', 'new.staff@example.com')->first();
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_records_role_school_names_hr_fields_status_and_staff_code(string $route, int $roleId, string $message): void
     {
         Mail::fake();
@@ -102,7 +102,7 @@ class StaffCreationCharacterizationTest extends TestCase
         $this->assertSame($expectedInfo, json_decode($user->user_information, true));
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_optional_hr_fields_default_to_null(string $route, int $roleId): void
     {
         Mail::fake();
@@ -114,7 +114,7 @@ class StaffCreationCharacterizationTest extends TestCase
         $this->assertNull($user->employment_type);
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_duplicate_email_is_refused_without_creating_anyone(string $route): void
     {
         Mail::fake();
@@ -128,7 +128,7 @@ class StaffCreationCharacterizationTest extends TestCase
         Mail::assertNothingSent();
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_auto_password_forces_change_and_emails_the_temporary_password(string $route): void
     {
         Mail::fake();
@@ -148,7 +148,7 @@ class StaffCreationCharacterizationTest extends TestCase
         $this->assertTrue(Hash::check($sent, $user->password));
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_default_password_mode_is_auto(string $route): void
     {
         Mail::fake();
@@ -156,7 +156,7 @@ class StaffCreationCharacterizationTest extends TestCase
         $this->assertTrue((bool) $this->created()->force_password_change);
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_manual_password_is_hashed_does_not_force_change_and_is_emailed(string $route): void
     {
         Mail::fake();
@@ -170,7 +170,7 @@ class StaffCreationCharacterizationTest extends TestCase
         Mail::assertSent(NewUserEmail::class, fn ($mail) => $mail->data['password'] === 'Chosen-Pass-123');
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_manual_mode_without_a_password_falls_back_to_auto(string $route): void
     {
         Mail::fake();
@@ -178,7 +178,7 @@ class StaffCreationCharacterizationTest extends TestCase
         $this->assertTrue((bool) $this->created()->force_password_change);
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_no_email_is_sent_without_smtp_settings(string $route): void
     {
         Mail::fake();
@@ -187,7 +187,7 @@ class StaffCreationCharacterizationTest extends TestCase
         Mail::assertNothingSent();
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_profile_photo_is_stored_and_recorded(string $route): void
     {
         Mail::fake();
@@ -200,7 +200,7 @@ class StaffCreationCharacterizationTest extends TestCase
         @unlink($path);
     }
 
-    /** @dataProvider flows */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flows')]
     public function test_an_invalid_profile_photo_is_refused_before_anything_is_created(string $route): void
     {
         Mail::fake();

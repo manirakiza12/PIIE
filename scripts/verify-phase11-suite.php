@@ -41,12 +41,20 @@ foreach ($shards as $index => $names) {
     $number = $index + 1;
     $filter = '/^(?:' . implode('|', array_map(fn ($name) => preg_quote($name, '/'), $names)) . ')::/';
     echo 'Running shard ' . $number . '/' . count($shards) . "\n";
-    $codes[$number] = $run(['--order-by=default', '--filter', $filter, '--log-junit', $out . '/shard-' . $number . '.xml'], $out . '/shard-' . $number . '.log');
+    $codes[$number] = $run(['--fail-on-risky', '--order-by=default', '--filter', $filter, '--log-junit', $out . '/shard-' . $number . '.xml'], $out . '/shard-' . $number . '.log');
     if (!is_file($out . '/shard-' . $number . '.xml')) { throw new RuntimeException('Shard did not complete: ' . $number); }
     $reports[] = file_get_contents($out . '/shard-' . $number . '.xml');
     echo 'Completed shard ' . $number . ', exit ' . $codes[$number] . "\n";
 }
 $summary = PhpUnitInventory::reconcile($inventory, $reports, $codes);
+$summary['risky'] = 0;
+foreach (array_keys($codes) as $number) {
+    $log = file_get_contents($out . '/shard-' . $number . '.log');
+    if (preg_match('/Tests: [^\r\n]*Risky: (\d+)/', $log, $match)) {
+        $summary['risky'] += (int) $match[1];
+    }
+}
+$summary['successful'] = $summary['successful'] && $summary['risky'] === 0;
 file_put_contents($out . '/summary.json', json_encode($summary, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 echo json_encode(array_diff_key($summary, array_flip(['failures', 'error_details', 'warning_details', 'skips'])), JSON_PRETTY_PRINT) . "\n";
 exit($summary['successful'] ? 0 : 1);

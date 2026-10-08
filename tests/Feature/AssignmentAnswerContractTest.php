@@ -845,8 +845,9 @@ class AssignmentAnswerContractTest extends TestCase
     /**
      * Markup that LOOKS like an answer but carries no text is not one.
      *
-     * @dataProvider emptyRichText
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('emptyRichText')]
     public function test_markup_with_no_visible_text_does_not_answer_a_question(string $markup): void
     {
         $k = self::K;
@@ -887,8 +888,9 @@ class AssignmentAnswerContractTest extends TestCase
      * pinned here because the rule is "meaningful text", and each failure mode is a
      * different way of getting that wrong.
      *
-     * @dataProvider richTextAnswers
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('richTextAnswers')]
     public function test_a_formatted_answer_is_a_real_answer_and_survives_sanitised(string $markup, string $expected): void
     {
         $k = self::K;

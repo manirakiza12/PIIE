@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class DeploymentHealthTest extends TestCase
 {
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function deployment_health_endpoint_boots_the_application(): void
     {
         $response = $this->get('/health');

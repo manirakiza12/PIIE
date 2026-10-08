@@ -33,7 +33,7 @@ class ErrorPagesTest extends TestCase
         ];
     }
 
-    /** @dataProvider pages */
+    #[\PHPUnit\Framework\Attributes\DataProvider('pages')]
     public function test_branded_page_keeps_the_status_and_offers_a_next_step(int $code, string $heading, string $action): void
     {
         $this->get("/_errors/{$code}")->assertStatus($code)->assertSee($heading)->assertSee($action)

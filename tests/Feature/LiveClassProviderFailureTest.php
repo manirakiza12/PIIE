@@ -60,7 +60,7 @@ class LiveClassProviderFailureTest extends TestCase
         return ['google meet' => ['google_meet', 'Google Meet'], 'zoom' => ['zoom', 'Zoom']];
     }
 
-    /** @dataProvider providers */
+    #[\PHPUnit\Framework\Attributes\DataProvider('providers')]
     public function test_an_unreachable_provider_is_a_validation_error_not_a_500(string $platform, string $label): void
     {
         Http::fake(fn () => throw new ConnectionException('cURL error 60: SSL certificate problem: unable to get local issuer certificate'));
@@ -111,6 +111,38 @@ class LiveClassProviderFailureTest extends TestCase
     // classified in the log, and the lecturer is told it is a configuration fault
     // rather than being sent into a retry loop against a provider that was never
     // contacted.
+    public function test_laravel_connection_wrapper_preserves_tls_classification_without_secret_logging(): void
+    {
+        $raw = new \GuzzleHttp\Exception\RequestException('fixture-url-secret',
+            new \GuzzleHttp\Psr7\Request('POST', 'https://oauth2.googleapis.com/token?client_secret=fixture-url-secret', ['Authorization' => 'Bearer fixture-bearer-secret']),
+            null, null, ['errno' => 60, 'error' => 'SSL certificate problem: unable to get local issuer certificate']);
+        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('fixture-message-secret', 0, $raw));
+        Log::spy();
+        $this->schedule('google_meet')->assertSessionHasErrors('meeting_url');
+        $this->assertStringContainsString('configuration fault', session('errors')->first('meeting_url'));
+        Log::shouldHaveReceived('warning')->once()->withArgs(function (string $line, array $context): bool {
+            $logged = $line.json_encode($context);
+            return ($context['failure_kind'] ?? '') === 'tls_trust_failure' && ($context['curl_errno'] ?? 0) === 60
+                && !str_contains($logged, 'fixture-url-secret') && !str_contains($logged, 'fixture-bearer-secret')
+                && !str_contains($logged, 'fixture-message-secret');
+        });
+        $this->assertSame(0, DB::table('live_classes')->count());
+    }
+
+    public function test_nested_http_wrappers_preserve_network_error_context(): void
+    {
+        $raw = new \GuzzleHttp\Exception\RequestException('unused fixture message', new \GuzzleHttp\Psr7\Request('POST', 'https://example.test'),
+            null, null, ['errno' => 28, 'error' => 'Connection timed out']);
+        $wrapped = new \Illuminate\Http\Client\ConnectionException('unused outer message', 0,
+            new \Illuminate\Http\Client\ConnectionException('unused inner message', 0, $raw));
+        $method = new \ReflectionMethod(\App\Http\Controllers\LiveClassController::class, 'describeTransportFailure');
+        $method->setAccessible(true);
+        $result = $method->invoke(app(\App\Http\Controllers\LiveClassController::class), $wrapped);
+        $this->assertSame('network_unreachable', $result['kind']);
+        $this->assertSame(28, $result['errno']);
+        $this->assertSame('Connection timed out', $result['message']);
+    }
+
     public function test_a_real_tls_trust_failure_is_classified_and_not_reported_as_a_provider_outage(): void
     {
         Http::fake(fn () => throw new \GuzzleHttp\Exception\RequestException(
@@ -180,7 +212,7 @@ class LiveClassProviderFailureTest extends TestCase
         ];
     }
 
-    /** @dataProvider providerResponses */
+    #[\PHPUnit\Framework\Attributes\DataProvider('providerResponses')]
     public function test_a_configured_provider_that_fails_gives_a_controlled_message(string $platform, array $responses): void
     {
         Http::fake(array_map(fn ($r) => Http::response($r[0], $r[1]), $responses) + ['*' => Http::response([], 500)]);

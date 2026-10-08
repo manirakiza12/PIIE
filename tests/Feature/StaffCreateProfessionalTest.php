@@ -179,7 +179,7 @@ class StaffCreateProfessionalTest extends TestCase
         }
     }
 
-    /** @dataProvider requiredAcademicField */
+    #[\PHPUnit\Framework\Attributes\DataProvider('requiredAcademicField')]
     public function test_the_lecturer_academic_required_fields_are_enforced(string $field): void
     {
         $payload = $this->lecturerPayload();
@@ -522,7 +522,7 @@ class StaffCreateProfessionalTest extends TestCase
 
     // ================================================= role-aware form
 
-    /** @dataProvider nonAcademicType */
+    #[\PHPUnit\Framework\Attributes\DataProvider('nonAcademicType')]
     public function test_a_non_lecturer_form_keeps_the_common_fields_and_omits_the_academic_ones(string $type): void
     {
         $html = $this->actingAs($this->admin)->get(route('admin.staff.create', $type))->assertOk()->getContent();
@@ -546,7 +546,7 @@ class StaffCreateProfessionalTest extends TestCase
         ];
     }
 
-    /** @dataProvider nonAcademicType */
+    #[\PHPUnit\Framework\Attributes\DataProvider('nonAcademicType')]
     public function test_a_non_lecturer_is_still_created_without_any_academic_data(string $type): void
     {
         Mail::fake();

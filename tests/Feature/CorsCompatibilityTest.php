@@ -57,7 +57,7 @@ class CorsCompatibilityTest extends TestCase
     public static function legacyParityCases(): array
     {
         $allowlist = ['cors.allowed_origins' => [self::ORIGIN, 'https://second.example.test']];
-        return [
+        $cases = [
             'wildcard actual' => ['GET', self::ORIGIN, [], '/api/l1-cors-public'],
             'wildcard no origin' => ['GET', null, [], '/api/l1-cors-public'],
             'allowlist allowed' => ['GET', self::ORIGIN, $allowlist, '/api/l1-cors-public'],
@@ -68,10 +68,16 @@ class CorsCompatibilityTest extends TestCase
             'credentialed actual' => ['GET', self::ORIGIN, $allowlist + ['cors.supports_credentials' => true, 'cors.exposed_headers' => ['X-School']], '/api/l1-cors-public'],
             'excluded path' => ['GET', self::ORIGIN, [], '/l1-not-cors'],
         ];
+        // Exact status/body/seven-header tuples recorded on Laravel 9 + Fruitcake.
+        $legacy = json_decode(file_get_contents(dirname(__DIR__).'/Fixtures/cors/laravel9-responses.json'), true, 512, JSON_THROW_ON_ERROR);
+        if (array_keys($cases) !== array_keys($legacy)) { throw new \LogicException('CORS baseline cases do not match.'); }
+        foreach ($cases as $name => &$case) { $case[] = $legacy[$name]; }
+        unset($case);
+        return $cases;
     }
 
-    /** @dataProvider legacyParityCases */
-    public function test_builtin_middleware_preserves_legacy_cors_responses(string $method, ?string $origin, array $settings, string $path): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('legacyParityCases')]
+    public function test_builtin_middleware_preserves_legacy_cors_responses(string $method, ?string $origin, array $settings, string $path, array $expected): void
     {
         config($settings);
         $server = $origin === null ? [] : ['HTTP_ORIGIN' => $origin];
@@ -79,18 +85,14 @@ class CorsCompatibilityTest extends TestCase
             $server['HTTP_ACCESS_CONTROL_REQUEST_METHOD'] = 'POST';
             $server['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'] = 'Authorization, Content-Type';
         }
-        $responses = [];
-        foreach ([\Fruitcake\Cors\HandleCors::class, \Illuminate\Http\Middleware\HandleCors::class] as $middleware) {
-            $request = Request::create('http://localhost'.$path, $method, [], [], [], $server);
-            $response = $this->app->make($middleware)->handle($request, fn () => response('l1-next', 200));
-            $headers = [];
-            foreach (['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials', 'Access-Control-Allow-Methods',
-                'Access-Control-Allow-Headers', 'Access-Control-Expose-Headers', 'Access-Control-Max-Age', 'Vary'] as $header) {
-                $headers[$header] = $response->headers->get($header);
-            }
-            $responses[] = [$response->getStatusCode(), $response->getContent(), $headers];
+        $request = Request::create('http://localhost'.$path, $method, [], [], [], $server);
+        $response = $this->app->make(\Illuminate\Http\Middleware\HandleCors::class)->handle($request, fn () => response('l1-next', 200));
+        $headers = [];
+        foreach (['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials', 'Access-Control-Allow-Methods',
+            'Access-Control-Allow-Headers', 'Access-Control-Expose-Headers', 'Access-Control-Max-Age', 'Vary'] as $header) {
+            $headers[$header] = $response->headers->get($header);
         }
-        $this->assertSame($responses[0], $responses[1]);
+        $this->assertSame($expected, [$response->getStatusCode(), $response->getContent(), $headers]);
     }
 
     public function test_default_allowed_request_uses_wildcard_without_credentials(): void

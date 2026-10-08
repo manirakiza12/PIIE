@@ -268,9 +268,7 @@ class PublicProgrammeCatalogueTest extends TestCase
         $this->assertSame(12, $this->catalogue()->cards()->count());
     }
 
-    /**
-     * @dataProvider partialCounts
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('partialCounts')]
     public function test_fewer_than_eight_programmes_render_exactly_those_and_no_filler(int $count): void
     {
         for ($i = 1; $i <= $count; $i++) {

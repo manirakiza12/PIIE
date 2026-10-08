@@ -102,7 +102,7 @@ class OnlineExamQuestionRenderingTest extends TestCase
         ];
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function each_question_gets_EXACTLY_ONE_editor_shell_and_source_field(): void
     {
         $html = $this->renderTakePage();
@@ -161,7 +161,7 @@ class OnlineExamQuestionRenderingTest extends TestCase
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function every_written_editor_carries_the_question_id_the_autosave_looks_for(): void
     {
         $html = $this->renderTakePage();
@@ -203,7 +203,7 @@ class OnlineExamQuestionRenderingTest extends TestCase
         $this->assertSame($expected, $seen, 'the autosave question ids must match the written questions exactly');
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function each_written_editor_is_rendered_INSIDE_its_own_question_block(): void
     {
         $html = $this->renderTakePage();
@@ -253,7 +253,7 @@ class OnlineExamQuestionRenderingTest extends TestCase
         }
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function objective_questions_render_real_input_controls_not_editors(): void
     {
         $html = $this->renderTakePage();
@@ -305,7 +305,7 @@ class OnlineExamQuestionRenderingTest extends TestCase
         }
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_page_carries_the_restricted_interaction_mode_and_focus_monitoring(): void
     {
         $html = $this->renderTakePage();

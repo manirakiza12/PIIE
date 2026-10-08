@@ -24,7 +24,7 @@ class CarbonIntervalCompatibilityTest extends TestCase
         ];
     }
 
-    /** @dataProvider intervals */
+    #[\PHPUnit\Framework\Attributes\DataProvider('intervals')]
     public function test_native_whole_intervals_preserve_carbon_2_policy(string $start, string $end, string $tz1, string $tz2, int $seconds, int $minutes, int $days): void
     {
         $a = Carbon::parse($start, $tz1); $b = Carbon::parse($end, $tz2);

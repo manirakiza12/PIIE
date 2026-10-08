@@ -208,7 +208,7 @@ class OnlineExamIntegrityControlsTest extends TestCase
 
     // ── 3. Every event the script can send is one the server accepts ──────────
 
-    /** @dataProvider integrityEventProvider */
+    #[\PHPUnit\Framework\Attributes\DataProvider('integrityEventProvider')]
     public function test_an_integrity_event_is_recorded_against_the_students_own_attempt(string $eventType): void
     {
         $this->actingAs(\App\Models\User::find($this->studentId))
@@ -278,8 +278,9 @@ class OnlineExamIntegrityControlsTest extends TestCase
      * system notification identically, and a proctoring log that does that is the exact
      * failure a proctoring log exists to avoid.
      *
-     * @dataProvider noConsequenceEventProvider
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('noConsequenceEventProvider')]
     public function test_recording_an_integrity_event_never_punishes_the_student(string $eventType): void
     {
         $before = \App\Models\OnlineExamSubmission::find($this->submissionId);

@@ -201,13 +201,20 @@ class ApiAuthenticationTest extends TestCase
         config(['sanctum.stateful' => ['portal.example.test']]);
         // Laravel normally skips CSRF in PHPUnit. Disable only that test bypass,
         // preserving the application's real exclusions and token comparison.
-        $this->app->bind(\App\Http\Middleware\VerifyCsrfToken::class, fn ($app) => new class($app, $app['encrypter']) extends \App\Http\Middleware\VerifyCsrfToken {
-            protected function runningUnitTests() { return false; }
-        });
+        $csrf = config('sanctum.middleware.validate_csrf_token', config('sanctum.middleware.verify_csrf_token', \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class));
+        $this->assertTrue(is_a($csrf, \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class, true));
+        $middleware = $this->getMockBuilder($csrf)->setConstructorArgs([$this->app, $this->app['encrypter']])
+            ->onlyMethods(['runningUnitTests'])->getMock();
+        $middleware->method('runningUnitTests')->willReturn(false);
+        $this->app->instance($csrf, $middleware);
         $student = $this->student();
         $this->withHeader('Origin', 'https://portal.example.test')->postJson('/api/login', [
             'email' => $student->email, 'password' => 'secret-pass',
         ])->assertStatus(419);
+        $this->assertSame(0, DB::table('personal_access_tokens')->count());
+        $this->assertTrue(request()->attributes->get('sanctum'));
+        $this->withSession(['_token' => 'l1-csrf-fixture'])->withHeader('X-CSRF-TOKEN', 'invalid-csrf-fixture')
+            ->postJson('/api/login', ['email' => $student->email, 'password' => 'secret-pass'])->assertStatus(419);
         $this->assertSame(0, DB::table('personal_access_tokens')->count());
         $this->withSession(['_token' => 'l1-csrf-fixture'])->withHeader('X-CSRF-TOKEN', 'l1-csrf-fixture')
             ->postJson('/api/login', ['email' => $student->email, 'password' => 'secret-pass'])->assertStatus(201);

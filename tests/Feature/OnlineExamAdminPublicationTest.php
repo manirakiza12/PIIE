@@ -117,7 +117,7 @@ class OnlineExamAdminPublicationTest extends TestCase
 
     // ── 1. SUCCESSFUL PUBLICATION ──────────────────────────────────────────
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function an_ADMIN_can_publish_a_COMPLETE_result_and_it_is_recorded(): void
     {
         $submission = $this->handedOver();
@@ -152,7 +152,7 @@ class OnlineExamAdminPublicationTest extends TestCase
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_student_sees_the_OFFICIAL_result_only_AFTER_publication(): void
     {
         $submission = $this->handedOver();
@@ -177,7 +177,7 @@ class OnlineExamAdminPublicationTest extends TestCase
 
     // ── 2. INCOMPLETE MARKING ─────────────────────────────────────────────
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function publication_is_REFUSED_while_a_written_question_is_undecided(): void
     {
         $submission = $this->handedOver();
@@ -227,7 +227,7 @@ class OnlineExamAdminPublicationTest extends TestCase
      * presentation changes. A `after_exam_end` paper whose closing time is still ahead
      * must refuse publication AND say so in words.
      */
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_AFTER_EXAM_END_window_REFUSES_with_an_explanation_not_a_422(): void
     {
         $submission = $this->handedOver();
@@ -288,7 +288,7 @@ class OnlineExamAdminPublicationTest extends TestCase
      * So the status is asserted as "not a successful release" and the thing that
      * actually matters — the state — is asserted exactly.
      */
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function a_LECTURER_can_NEVER_publish_a_result(): void
     {
         $submission = $this->handedOver();
@@ -338,7 +338,7 @@ class OnlineExamAdminPublicationTest extends TestCase
 
     // ── 4. DUPLICATE PUBLICATION ──────────────────────────────────────────
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function publishing_TWICE_does_not_duplicate_the_release_or_the_notification(): void
     {
         $submission = $this->handedOver();
@@ -377,7 +377,7 @@ class OnlineExamAdminPublicationTest extends TestCase
 
     // ── 5. THE SCREEN AND THE ACTION AGREE ────────────────────────────────
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_admin_SCREEN_states_the_blocker_BEFORE_anyone_clicks(): void
     {
         $submission = $this->handedOver();
@@ -423,7 +423,7 @@ class OnlineExamAdminPublicationTest extends TestCase
      * anomalous `finalized` + `not_ready` state must not become publishable simply
      * because the other guards happen to pass.
      */
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function a_submission_NEVER_handed_over_cannot_be_published(): void
     {
         $submission = $this->handedOver();

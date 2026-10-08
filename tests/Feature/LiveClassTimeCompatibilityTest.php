@@ -27,7 +27,7 @@ class LiveClassTimeCompatibilityTest extends TestCase
             'cross zone duration' => ['2026-10-08 10:00:00+00:00', '2026-10-08 14:00:00+03:00', 60]];
     }
 
-    /** @dataProvider durations */
+    #[\PHPUnit\Framework\Attributes\DataProvider('durations')]
     public function test_model_duration_remains_absolute_whole_minutes(string $start, string $end, int $minutes): void
     {
         $class = new LiveClass(['scheduled_at' => Carbon::parse($start)->utc(), 'ends_at' => Carbon::parse($end)->utc()]);
@@ -41,7 +41,7 @@ class LiveClassTimeCompatibilityTest extends TestCase
         $this->assertNull((new LiveClass(['ends_at' => now()]))->duration_minutes);
     }
 
-    /** @dataProvider durations */
+    #[\PHPUnit\Framework\Attributes\DataProvider('durations')]
     public function test_zoom_payload_retains_integer_minutes_minimum_one_and_utc_start(string $start, string $end, int $minutes): void
     {
         config(['services.zoom.account_id' => 'fixture-account', 'services.zoom.client_id' => 'fixture-client', 'services.zoom.client_secret' => 'fixture-secret']);
@@ -61,7 +61,7 @@ class LiveClassTimeCompatibilityTest extends TestCase
         return ['exact' => [600, 600], 'fractional minute' => [659, 659], 'reversed legacy absolute' => [-600, 600]];
     }
 
-    /** @dataProvider attendanceDurations */
+    #[\PHPUnit\Framework\Attributes\DataProvider('attendanceDurations')]
     public function test_attendance_beacon_preserves_whole_absolute_seconds(int $elapsed, int $expected): void
     {
         Carbon::setTestNow(Carbon::parse('2026-10-08 12:00:00', 'UTC'));

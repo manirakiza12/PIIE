@@ -57,8 +57,9 @@ class AcademicRichTextSanitizerTest extends TestCase
     /**
      * Every capability the editor's toolbar offers must survive the round trip.
      *
-     * @dataProvider academicFormatting
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('academicFormatting')]
     public function test_academic_formatting_survives_sanitisation(string $label, string $html, string $expected): void
     {
         $clean = $this->clean($html);
@@ -169,9 +170,7 @@ class AcademicRichTextSanitizerTest extends TestCase
     // 2. THE DANGEROUS, REFUSED
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * @dataProvider attacks
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('attacks')]
     public function test_dangerous_markup_is_refused(string $label, string $html, array $mustNotContain): void
     {
         $clean = $this->clean($html);
@@ -213,8 +212,9 @@ class AcademicRichTextSanitizerTest extends TestCase
      * CSS is the one place where a filter usually gets clever and usually gets it
      * wrong, so the dangerous PROPERTIES are pinned individually.
      *
-     * @dataProvider dangerousStyles
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('dangerousStyles')]
     public function test_dangerous_css_is_refused(string $label, string $style): void
     {
         $clean = $this->clean('<p style="'.$style.'">Visible words</p>');
@@ -309,8 +309,9 @@ class AcademicRichTextSanitizerTest extends TestCase
      * The browser tidies a paste; the SERVER still has to cope with whatever
      * arrives, because the tidying is a courtesy and a client can send anything.
      *
-     * @dataProvider wordAndDocsPastes
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('wordAndDocsPastes')]
     public function test_a_paste_from_a_word_processor_survives_without_its_junk(string $label, string $html, string $expected, array $mustNotContain): void
     {
         $clean = $this->clean($html);
@@ -446,8 +447,9 @@ class AcademicRichTextSanitizerTest extends TestCase
      * The completeness check that decides whether a student's answer counts reads
      * TEXT, and it is why markup that looks like an answer is not one.
      *
-     * @dataProvider emptyMarkup
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('emptyMarkup')]
     public function test_markup_with_no_visible_text_reads_as_empty(string $markup): void
     {
         $this->assertSame('', $this->sanitizer->toText($markup), var_export($markup, true).' should read as empty');
@@ -471,9 +473,7 @@ class AcademicRichTextSanitizerTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider realAnswers
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('realAnswers')]
     public function test_a_genuine_formatted_answer_reads_as_text(string $markup, string $expected): void
     {
         $this->assertSame($expected, $this->sanitizer->toText($markup));

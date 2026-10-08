@@ -6,21 +6,15 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\TenantConfiguration;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Contracts\Console\Kernel;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class TenantConfigurationFoundationTest extends TestCase
 {
     private TenantConfiguration $configuration;
 
-    public static function setUpBeforeClass(): void
-    {
-        $app = require __DIR__.'/../../bootstrap/app.php';
-        $app->make(Kernel::class)->bootstrap();
-    }
-
     protected function setUp(): void
     {
+        parent::setUp();
         $this->configuration = new TenantConfiguration();
     }
 

@@ -196,9 +196,7 @@ class RichTextRenderingTest extends TestCase
     // 2. LEGITIMATE WORD FORMATTING SURVIVES
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * @dataProvider legitimateFormatting
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('legitimateFormatting')]
     public function test_WORD_formattaging_SURVIVES_the_round_trip(string $label, string $html, string $expected): void
     {
         $question = $this->question(['prompt' => $html]);
@@ -258,9 +256,7 @@ class RichTextRenderingTest extends TestCase
     // 3. HOSTILE INPUT IS STILL FILTERED ON THE WAY OUT
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * @dataProvider hostileInput
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('hostileInput')]
     public function test_HOSTILE_html_is_FILTERED_on_the_READ(string $label, string $html): void
     {
         $rendered = $this->question(['prompt' => $html])->prosePrompt();
@@ -448,8 +444,9 @@ class RichTextRenderingTest extends TestCase
      *
      * The exact strings are read out of `assignment_questions` rows 1-4.
      *
-     * @dataProvider plainTextQuestions
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('plainTextQuestions')]
     public function test_PLAIN_TEXT_questions_display_CORRECTLY(string $prompt): void
     {
         $question = $this->question(['prompt' => $prompt]);
@@ -513,8 +510,9 @@ class RichTextRenderingTest extends TestCase
      * The Word-like toolbar the brief lists, checked against the ONE editor that
      * exists rather than against a second one that might be installed.
      *
-     * @dataProvider editorCapabilities
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('editorCapabilities')]
     public function test_the_EXISTING_editor_provides(string $capability, string $needle): void
     {
         $js = (string) file_get_contents(public_path('js/academic-editor.js'));

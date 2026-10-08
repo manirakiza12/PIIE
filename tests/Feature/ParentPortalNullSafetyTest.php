@@ -43,7 +43,7 @@ class ParentPortalNullSafetyTest extends TestCase
         ];
     }
 
-    /** @dataProvider childPages */
+    #[\PHPUnit\Framework\Attributes\DataProvider('childPages')]
     public function test_pages_render_for_a_child_without_enrollment(string $route): void
     {
         $this->assertFalse(DB::table('enrollment')->where('user_id', $this->child->id)->exists());

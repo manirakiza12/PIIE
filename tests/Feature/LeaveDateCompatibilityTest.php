@@ -19,7 +19,7 @@ class LeaveDateCompatibilityTest extends TestCase
             'fractional day' => ['2026-10-08 12:00:00', '2026-10-09 11:59:59', 1]];
     }
 
-    /** @dataProvider dates */
+    #[\PHPUnit\Framework\Attributes\DataProvider('dates')]
     public function test_leave_days_remain_inclusive_whole_calendar_days(string $from, string $to, int $expected): void
     {
         $user = $this->makeUser(3, 1);

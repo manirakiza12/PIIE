@@ -102,7 +102,7 @@ class ApplicationPaymentFoundationTest extends TestCase
         $this->assertSame(0, ApplicationPayment::count());
     }
 
-    /** @dataProvider unsubmittedStates */
+    #[\PHPUnit\Framework\Attributes\DataProvider('unsubmittedStates')]
     public function test_unsubmitted_application_cannot_start_a_new_online_payment(string $status): void
     {
         $this->applicantApplication($status);
@@ -133,7 +133,7 @@ class ApplicationPaymentFoundationTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    /** @dataProvider feeTotals */
+    #[\PHPUnit\Framework\Attributes\DataProvider('feeTotals')]
     public function test_fee_status_uses_exact_cumulative_paid_amounts(string $required, array $amounts, string $expected): void
     {
         $admission = $this->admission($required);
@@ -165,7 +165,7 @@ class ApplicationPaymentFoundationTest extends TestCase
         $this->assertSame(Admission::FEE_WAIVED, ApplicationFee::refreshStatus($admission));
     }
 
-    /** @dataProvider excludedStates */
+    #[\PHPUnit\Framework\Attributes\DataProvider('excludedStates')]
     public function test_failed_and_rejected_payments_never_contribute_to_the_fee(string $status): void
     {
         $admission = $this->admission();
@@ -230,7 +230,7 @@ class ApplicationPaymentFoundationTest extends TestCase
         $this->assertSame(Admission::FEE_UNPAID, $secondAdmission->fresh()->fee_status);
     }
 
-    /** @dataProvider mismatches */
+    #[\PHPUnit\Framework\Attributes\DataProvider('mismatches')]
     public function test_mismatched_verified_evidence_cannot_settle(array $override): void
     {
         $admission = $this->admission();
@@ -290,7 +290,7 @@ class ApplicationPaymentFoundationTest extends TestCase
         $this->assertSame(1, ApplicationPayment::count());
     }
 
-    /** @dataProvider marzpayMismatches */
+    #[\PHPUnit\Framework\Attributes\DataProvider('marzpayMismatches')]
     public function test_marzpay_requires_provider_supplied_identity_amount_and_currency(array $override): void
     {
         $admission = $this->applicantApplication(Admission::STATUS_SUBMITTED);

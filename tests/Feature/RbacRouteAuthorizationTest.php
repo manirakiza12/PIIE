@@ -101,19 +101,19 @@ class RbacRouteAuthorizationTest extends TestCase
             'payment_method' => 'offline', 'paid_amount' => 0, 'status' => 'unpaid', 'school_id' => $this->schoolB]);
     }
 
-    private function status(User $user, string $routeName, array $params = []): int
+    private function routeStatusFixture(User $user, string $routeName, array $params = []): int
     {
         return $this->actingAs($user)->get(route($routeName, $params))->getStatusCode();
     }
 
     private function assertAllowed(User $user, string $module): void
     {
-        $this->assertNotSame(403, $this->status($user, self::MODULE_ROUTES[$module]), "role {$user->role_id} should reach {$module}");
+        $this->assertNotSame(403, $this->routeStatusFixture($user, self::MODULE_ROUTES[$module]), "role {$user->role_id} should reach {$module}");
     }
 
     private function assertDenied(User $user, string $module): void
     {
-        $this->assertSame(403, $this->status($user, self::MODULE_ROUTES[$module]), "role {$user->role_id} must not reach {$module}");
+        $this->assertSame(403, $this->routeStatusFixture($user, self::MODULE_ROUTES[$module]), "role {$user->role_id} must not reach {$module}");
     }
 
     // ── Base roles ───────────────────────────────────────────────────────────
@@ -136,8 +136,8 @@ class RbacRouteAuthorizationTest extends TestCase
 
         $foreignBook = $this->foreignBook();
         $foreignHostel = DB::table('hostels')->insertGetId(['name' => 'B hostel', 'school_id' => $this->schoolB]);
-        $this->assertSame(404, $this->status($this->adminA, 'admin.edit.book', ['id' => $foreignBook]));
-        $this->assertSame(404, $this->status($this->adminA, 'admin.hostel.edit_hostel', ['id' => $foreignHostel]));
+        $this->assertSame(404, $this->routeStatusFixture($this->adminA, 'admin.edit.book', ['id' => $foreignBook]));
+        $this->assertSame(404, $this->routeStatusFixture($this->adminA, 'admin.hostel.edit_hostel', ['id' => $foreignHostel]));
     }
 
     public function test_teacher_keeps_teaching_access_and_gains_no_unrelated_administration(): void
@@ -145,7 +145,7 @@ class RbacRouteAuthorizationTest extends TestCase
         $teacher = $this->user(3);
 
         foreach (['admin.daily_attendance', 'admin.gradebook', 'admin.assignments.index', 'admin.noticeboard.list', 'admin.student'] as $route) {
-            $this->assertNotSame(403, $this->status($teacher, $route), "teacher should still reach {$route}");
+            $this->assertNotSame(403, $this->routeStatusFixture($teacher, $route), "teacher should still reach {$route}");
         }
         foreach (array_keys(self::MODULE_ROUTES) as $module) {
             $this->assertDenied($teacher, $module);
@@ -161,9 +161,9 @@ class RbacRouteAuthorizationTest extends TestCase
         }
         // AJAX and exports are protected the same way, not only pages.
         $this->assertSame(403, $this->actingAs($storeKeeper)->getJson(route('admin.fee_manager.list'))->getStatusCode());
-        $this->assertSame(403, $this->status($storeKeeper, 'admin.fee_manager.export', ['date_from' => '2026-01-01', 'date_to' => '2026-12-31', 'selected_class' => 'all', 'selected_status' => 'all']));
+        $this->assertSame(403, $this->routeStatusFixture($storeKeeper, 'admin.fee_manager.export', ['date_from' => '2026-01-01', 'date_to' => '2026-12-31', 'selected_class' => 'all', 'selected_status' => 'all']));
         // …while their own base-role module stays open.
-        $this->assertNotSame(403, $this->status($storeKeeper, 'admin.assets.index'));
+        $this->assertNotSame(403, $this->routeStatusFixture($storeKeeper, 'admin.assets.index'));
     }
 
     // ── Delegates ────────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ class RbacRouteAuthorizationTest extends TestCase
         $this->assertFalse($delegate->hasPermission('online_exams.view'));
 
         $foreignInvoice = $this->foreignInvoice($this->user(7, $this->schoolB)->id);
-        $this->assertSame(404, $this->status($delegate, 'admin.edit.fee_manager', ['id' => $foreignInvoice]));
+        $this->assertSame(404, $this->routeStatusFixture($delegate, 'admin.edit.fee_manager', ['id' => $foreignInvoice]));
     }
 
     public function test_admissions_delegate_reviews_applications_but_not_payments_or_settings_or_another_school(): void
@@ -223,7 +223,7 @@ class RbacRouteAuthorizationTest extends TestCase
         $this->assertSame(403, $this->actingAs($delegate)->post(route('admin.hei_admissions.payment.record', $own), ['amount' => 1])->getStatusCode(), 'reviewing does not include application payments');
 
         $foreign = $this->makeAdmission($this->schoolB);
-        $this->assertContains($this->status($delegate, 'admin.hei_admissions.review', ['id' => $foreign]), [403, 404], 'another school\'s application');
+        $this->assertContains($this->routeStatusFixture($delegate, 'admin.hei_admissions.review', ['id' => $foreign]), [403, 404], 'another school\'s application');
     }
 
     public function test_library_delegate_gets_the_library_but_not_finance(): void
@@ -233,7 +233,7 @@ class RbacRouteAuthorizationTest extends TestCase
         $this->assertAllowed($delegate, 'library');
         $this->assertDenied($delegate, 'finance');
         $foreignBook = $this->foreignBook();
-        $this->assertSame(404, $this->status($delegate, 'admin.edit.book', ['id' => $foreignBook]));
+        $this->assertSame(404, $this->routeStatusFixture($delegate, 'admin.edit.book', ['id' => $foreignBook]));
     }
 
     public function test_hostel_delegate_gets_the_hostel_but_not_another_schools_hostel(): void
@@ -243,7 +243,7 @@ class RbacRouteAuthorizationTest extends TestCase
         $this->assertAllowed($delegate, 'hostel');
         $this->assertDenied($delegate, 'library');
         $foreignHostel = DB::table('hostels')->insertGetId(['name' => 'B hostel', 'school_id' => $this->schoolB]);
-        $this->assertSame(404, $this->status($delegate, 'admin.hostel.edit_hostel', ['id' => $foreignHostel]));
+        $this->assertSame(404, $this->routeStatusFixture($delegate, 'admin.hostel.edit_hostel', ['id' => $foreignHostel]));
     }
 
     public function test_hr_manager_gets_hr_but_never_permission_administration(): void
@@ -264,7 +264,7 @@ class RbacRouteAuthorizationTest extends TestCase
     {
         $teacher = $this->grant($this->user(3), ['online_exams.view', 'online_exams.mark', 'live_classes.view']);
 
-        $this->assertNotSame(403, $this->status($teacher, 'admin.daily_attendance'), 'normal teacher functions remain');
+        $this->assertNotSame(403, $this->routeStatusFixture($teacher, 'admin.daily_attendance'), 'normal teacher functions remain');
         $this->assertTrue($teacher->hasPermission('online_exams.view'));
         $this->assertTrue($teacher->hasPermission('online_exams.mark'));
         $this->assertTrue($teacher->hasPermission('live_classes.view'));
@@ -295,10 +295,10 @@ class RbacRouteAuthorizationTest extends TestCase
         $foreignBook = $this->foreignBook();
         $foreignPage = DB::table('website_pages')->insertGetId(['school_id' => $this->schoolB, 'page_key' => 'about', 'slug' => 'about', 'title' => 'B About', 'status' => 1]);
 
-        $this->assertSame(404, $this->status($staff, 'admin.student_edit_modal', ['id' => $foreignStudent->id]), 'students');
-        $this->assertSame(404, $this->status($staff, 'admin.edit.fee_manager', ['id' => $foreignInvoice]), 'finance');
-        $this->assertSame(404, $this->status($staff, 'admin.hostel.edit_hostel', ['id' => $foreignHostel]), 'hostel');
-        $this->assertSame(404, $this->status($staff, 'admin.edit.book', ['id' => $foreignBook]), 'library');
+        $this->assertSame(404, $this->routeStatusFixture($staff, 'admin.student_edit_modal', ['id' => $foreignStudent->id]), 'students');
+        $this->assertSame(404, $this->routeStatusFixture($staff, 'admin.edit.fee_manager', ['id' => $foreignInvoice]), 'finance');
+        $this->assertSame(404, $this->routeStatusFixture($staff, 'admin.hostel.edit_hostel', ['id' => $foreignHostel]), 'hostel');
+        $this->assertSame(404, $this->routeStatusFixture($staff, 'admin.edit.book', ['id' => $foreignBook]), 'library');
         $this->assertSame(404, $this->actingAs($staff)->post(route('admin.website.page.update', $foreignPage), ['page_key' => 'about', 'title' => 'HIJACK'])->getStatusCode(), 'cms');
         $this->assertSame('B About', DB::table('website_pages')->where('id', $foreignPage)->value('title'));
         $this->assertFalse(Gate::forUser($staff)->allows('view', (new OnlineExam())->forceFill(['school_id' => $this->schoolB])), 'exams');

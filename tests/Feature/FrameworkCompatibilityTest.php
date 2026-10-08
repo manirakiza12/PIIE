@@ -84,6 +84,37 @@ class FrameworkCompatibilityTest extends TestCase
         $this->assertSame(['mysql', 'SELECT ?', [1], $previous], $arguments);
     }
 
+    public function test_legacy_three_argument_constructor_remains_supported(): void
+    {
+        $previous = new \PDOException('fixture');
+        $this->assertSame(['SELECT ?', [1], $previous], FrameworkCompatibility::queryExceptionArguments(LegacyQueryExceptionFixture::class, 'SELECT ?', [1], $previous, 'sqlite'));
+    }
+
+    public function test_six_argument_constructor_uses_safe_optional_defaults(): void
+    {
+        $previous = new \PDOException('fixture');
+        $arguments = FrameworkCompatibility::queryExceptionArguments(SixArgumentQueryExceptionFixture::class, 'SELECT ?', [1], $previous, 'mysql');
+        $this->assertSame(['mysql', 'SELECT ?', [1], $previous], $arguments);
+    }
+
+    public function test_unknown_required_constructor_extension_fails_closed(): void
+    {
+        $this->expectException(RuntimeException::class);
+        FrameworkCompatibility::queryExceptionArguments(RequiredExtendedQueryExceptionFixture::class, 'SELECT 1', [], new \PDOException('fixture'), 'sqlite');
+    }
+
+    public function test_repository_below_system_temp_still_rejects_nested_storage(): void
+    {
+        $root = $this->temporary.'/repository'; mkdir($root); mkdir($root.'/storage');
+        $app = new class($root) {
+            public function __construct(private string $root) {}
+            public function basePath(string $path): string { return $this->root.'/'.$path; }
+        };
+        $this->expectException(RuntimeException::class);
+        try { FrameworkCompatibility::useTemporaryPublicPath($app, $root.'/storage'); }
+        finally { rmdir($root.'/storage'); rmdir($root); }
+    }
+
     public function test_unrecognized_query_exception_constructor_fails_closed(): void
     {
         $this->expectException(RuntimeException::class);
@@ -99,4 +130,19 @@ class FutureQueryExceptionFixture
 class UnknownQueryExceptionFixture
 {
     public function __construct($unknown) {}
+}
+
+class LegacyQueryExceptionFixture
+{
+    public function __construct($sql, array $bindings, \Throwable $previous) {}
+}
+
+class SixArgumentQueryExceptionFixture
+{
+    public function __construct($connectionName, $sql, array $bindings, \Throwable $previous, array $connectionDetails = [], $readWriteType = null) {}
+}
+
+class RequiredExtendedQueryExceptionFixture
+{
+    public function __construct($connectionName, $sql, array $bindings, \Throwable $previous, array $connectionDetails, $readWriteType) {}
 }

@@ -176,7 +176,7 @@ class OnlineExamRecordZeroButtonTest extends TestCase
         $this->fail("could not isolate a form around: {$needle}");
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_record_zero_button_submits_a_mark_of_zero_and_it_is_accepted(): void
     {
         $submission = $this->submittedWithABlankWrittenQuestion();
@@ -254,7 +254,7 @@ class OnlineExamRecordZeroButtonTest extends TestCase
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function the_marking_queue_link_is_a_real_working_link_for_the_exact_submission(): void
     {
         $submission = $this->submittedWithABlankWrittenQuestion();
@@ -294,7 +294,7 @@ class OnlineExamRecordZeroButtonTest extends TestCase
             ->assertOk();
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function after_recording_zero_the_handover_button_is_offered_and_works(): void
     {
         $submission = $this->submittedWithABlankWrittenQuestion();

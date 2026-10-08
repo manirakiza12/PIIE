@@ -69,7 +69,7 @@ class UploadStabilityTest extends TestCase
         };
     }
 
-    /** @dataProvider badFiles */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badFiles')]
     public function test_create_school_rejects_a_bad_logo_before_creating_anything(string $kind): void
     {
         $schoolsBefore = DB::table('schools')->count();
@@ -87,7 +87,7 @@ class UploadStabilityTest extends TestCase
         $this->assertSame($logosBefore, $this->publicFilesIn('assets/uploads/school_logo'), 'nothing written under public/');
     }
 
-    /** @dataProvider badFiles */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badFiles')]
     public function test_system_logo_update_rejects_a_bad_file(string $kind): void
     {
         DB::table('global_settings')->insert(['key' => 'dark_logo', 'value' => 'original.png']);
@@ -99,7 +99,7 @@ class UploadStabilityTest extends TestCase
         $this->assertSame('original.png', DB::table('global_settings')->where('key', 'dark_logo')->value('value'));
     }
 
-    /** @dataProvider badFiles */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badFiles')]
     public function test_system_settings_update_rejects_a_bad_file_before_saving_settings(string $kind): void
     {
         DB::table('global_settings')->insert(['key' => 'system_title', 'value' => 'Original Title']);

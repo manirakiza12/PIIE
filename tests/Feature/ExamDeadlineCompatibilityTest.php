@@ -14,7 +14,7 @@ class ExamDeadlineCompatibilityTest extends TestCase
             'fraction before' => ['11:59:59.900000', 0, false], 'fraction after' => ['12:00:00.100000', 0, true]];
     }
 
-    /** @dataProvider deadlines */
+    #[\PHPUnit\Framework\Attributes\DataProvider('deadlines')]
     public function test_signed_deadline_and_timeout_boundaries_are_preserved(string $at, int $remaining, bool $expired): void
     {
         $submission = new OnlineExamSubmission(['expires_at' => '2026-10-08 12:00:00']);

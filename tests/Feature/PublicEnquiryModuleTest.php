@@ -71,8 +71,9 @@ class PublicEnquiryModuleTest extends TestCase
      * optional. Each case removes exactly one field, so a rule that silently stopped
      * being required would fail here.
      *
-     * @dataProvider requiredFieldProvider
+     *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('requiredFieldProvider')]
     public function test_required_fields_are_enforced_server_side(string $field): void
     {
         $this->post($this->enquiryUrl, $this->payload([$field => '']))

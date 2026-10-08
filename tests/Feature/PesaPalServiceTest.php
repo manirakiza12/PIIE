@@ -66,7 +66,7 @@ class PesaPalServiceTest extends TestCase
             'redirect_url' => 'https://cybqa.pesapal.com/pesapaliframe/PesapalIframe3/Index/?OrderTrackingId=' . self::GUID,
             'status' => '200', 'error' => null];
     }
-    private function status(): array
+    private function pesapalStatusFixture(): array
     {
         return ['merchant_reference' => 'APP-1', 'amount' => 50000, 'currency' => 'UGX', 'status_code' => 1,
             'payment_status_description' => 'Completed', 'payment_method' => 'Visa', 'confirmation_code' => 'opaque-confirmation',
@@ -87,7 +87,7 @@ class PesaPalServiceTest extends TestCase
         }
     }
 
-    /** @dataProvider environments */
+    #[\PHPUnit\Framework\Attributes\DataProvider('environments')]
     public function test_authentication_endpoint_headers_and_payload(string $environment, string $base): void
     {
         Http::fake(['*' => Http::response($this->token())]);
@@ -104,7 +104,7 @@ class PesaPalServiceTest extends TestCase
         return [['sandbox', PesaPalService::SANDBOX_URL], ['live', PesaPalService::LIVE_URL]];
     }
 
-    /** @dataProvider badTokens */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badTokens')]
     public function test_malformed_expired_and_provider_error_tokens_fail_closed(array $changes): void
     {
         Http::fake(['*' => Http::response($this->token($changes))]);
@@ -125,7 +125,7 @@ class PesaPalServiceTest extends TestCase
         ];
     }
 
-    /** @dataProvider httpFailures */
+    #[\PHPUnit\Framework\Attributes\DataProvider('httpFailures')]
     public function test_http_errors_and_malformed_json_are_sanitized($body, int $status): void
     {
         Http::fake(['*' => Http::response($body, $status)]);
@@ -186,7 +186,7 @@ class PesaPalServiceTest extends TestCase
         $this->reject(fn () => PesaPalService::forSchool(1));
     }
 
-    /** @dataProvider invalidEnvironments */
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidEnvironments')]
     public function test_invalid_environment_configuration_is_rejected(string $environment): void
     {
         $this->reject(fn () => new PesaPalService($this->configuration(1, $environment)));
@@ -212,7 +212,7 @@ class PesaPalServiceTest extends TestCase
             && $r->method() === 'GET' && $r->hasHeader('Authorization', 'Bearer fixture-bearer'));
     }
 
-    /** @dataProvider badIpns */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badIpns')]
     public function test_registration_rejects_malformed_or_failed_response(array $changes): void
     {
         $this->fakeEndpoint('/api/URLSetup/RegisterIPN', array_merge($this->ipn(), $changes));
@@ -225,7 +225,7 @@ class PesaPalServiceTest extends TestCase
             [['error' => ['message' => 'fixture-secret']]], [['status' => '500']]];
     }
 
-    /** @dataProvider badLists */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badLists')]
     public function test_listing_fails_closed($data): void
     {
         $this->fakeEndpoint('/api/URLSetup/GetIpnList', $data);
@@ -253,12 +253,12 @@ class PesaPalServiceTest extends TestCase
         $this->assertSame($this->submitted()['redirect_url'], $result->redirectUrl);
         Http::assertSent(fn ($r) => $r->url() === PesaPalService::SANDBOX_URL . '/api/Transactions/SubmitOrderRequest'
             && $r->method() === 'POST' && $r->data() === $this->order() && $r->hasHeader('Authorization', 'Bearer fixture-bearer'));
-        $this->fakeEndpoint('/api/Transactions/GetTransactionStatus', $this->status());
+        $this->fakeEndpoint('/api/Transactions/GetTransactionStatus', $this->pesapalStatusFixture());
         $this->service()->getTransactionStatus(self::GUID);
         $this->assertSame($before, DB::table('application_payments')->get()->toJson());
     }
 
-    /** @dataProvider badOrders */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badOrders')]
     public function test_order_response_validation(array $changes): void
     {
         $this->fakeEndpoint('/api/Transactions/SubmitOrderRequest', array_merge($this->submitted(), $changes));
@@ -287,10 +287,10 @@ class PesaPalServiceTest extends TestCase
         $this->assertSame($response['redirect_url'], $result->redirectUrl);
     }
 
-    /** @dataProvider statuses */
+    #[\PHPUnit\Framework\Attributes\DataProvider('statuses')]
     public function test_status_is_normalized_without_settlement(int $code, string $description, string $classification): void
     {
-        $response = array_merge($this->status(), ['status_code' => $code, 'payment_status_description' => $description]);
+        $response = array_merge($this->pesapalStatusFixture(), ['status_code' => $code, 'payment_status_description' => $description]);
         $this->fakeEndpoint('/api/Transactions/GetTransactionStatus', $response);
         $result = $this->service()->getTransactionStatus(strtoupper(self::GUID));
         $this->assertSame(self::GUID, $result->orderTrackingId);
@@ -313,10 +313,10 @@ class PesaPalServiceTest extends TestCase
             [3, 'Reversed', 'REVERSED'], [0, 'Pending', 'UNKNOWN'], [99, 'Future status', 'UNKNOWN'], [2, 'Completed', 'UNKNOWN']];
     }
 
-    /** @dataProvider badStatuses */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badStatuses')]
     public function test_status_rejects_missing_or_malformed_evidence(array $changes): void
     {
-        $this->fakeEndpoint('/api/Transactions/GetTransactionStatus', array_merge($this->status(), $changes));
+        $this->fakeEndpoint('/api/Transactions/GetTransactionStatus', array_merge($this->pesapalStatusFixture(), $changes));
         $this->reject(fn () => $this->service()->getTransactionStatus(self::GUID));
     }
     public static function badStatuses(): array
@@ -344,7 +344,7 @@ class PesaPalServiceTest extends TestCase
                 $live = str_starts_with($request->url(), PesaPalService::LIVE_URL);
                 return Http::response($this->token(['token' => 'token-' . $request['consumer_key'] . ($live ? '-live' : '-sandbox')]));
             }
-            return Http::response($this->status());
+            return Http::response($this->pesapalStatusFixture());
         });
         foreach ([[1, 'sandbox'], [2, 'sandbox'], [1, 'live'], [1, 'sandbox']] as [$school, $environment]) {
             $config = new PesaPalConfiguration($school, $school, $environment, 'school-' . $school, 'fixture-secret');
