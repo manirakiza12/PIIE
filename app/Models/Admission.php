@@ -26,6 +26,12 @@ class Admission extends Model
     public const STATUS_REJECTED         = 'rejected';
     public const STATUS_ENROLLED         = 'enrolled';
     public const STATUS_WITHDRAWN        = 'withdrawn';
+    /**
+     * Closed automatically because the intake's application period ended while
+     * the fee was still outstanding. Distinct from 'withdrawn': the applicant
+     * did not withdraw, the period simply ran out.
+     */
+    public const STATUS_EXPIRED           = 'expired';
 
     public const STATUSES = [
         self::STATUS_DRAFT,
@@ -36,6 +42,19 @@ class Admission extends Model
         self::STATUS_REJECTED,
         self::STATUS_ENROLLED,
         self::STATUS_WITHDRAWN,
+        self::STATUS_EXPIRED,
+    ];
+
+    /**
+     * Statuses a reviewer may still act on. An expired application is terminal:
+     * staff can read it but cannot move it forward, and the applicant is not
+     * expected to return to it.
+     */
+    public const ACTIVE_REVIEW_STATUSES = [
+        self::STATUS_SUBMITTED,
+        self::STATUS_UNDER_REVIEW,
+        self::STATUS_NEEDS_CORRECTION,
+        self::STATUS_ACCEPTED,
     ];
 
     /** Statuses staff can set directly from the review screen. */
@@ -193,6 +212,7 @@ class Admission extends Model
             self::STATUS_REJECTED         => 'danger',
             self::STATUS_ENROLLED         => 'success',
             self::STATUS_WITHDRAWN        => 'dark',
+            self::STATUS_EXPIRED           => 'dark',
         ][$this->status] ?? 'secondary';
     }
 }

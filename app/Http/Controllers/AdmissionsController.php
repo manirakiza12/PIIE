@@ -675,7 +675,7 @@ class AdmissionsController extends Controller
         // The workflow writes the status, the applicant-visible timeline entry
         // and the audit record together, and sends the notification — see
         // App\Support\Admissions\ApplicationWorkflow for why that is one step.
-        abort_unless(ApplicationWorkflow::canTransition($admission, $request->status), 422, 'This admission transition is not eligible. Complete the application and settle its fee before acceptance or enrolment.');
+        abort_unless(ApplicationWorkflow::canTransition($admission, $request->status), 422, 'This admission transition is not eligible. Complete the application and settle its fee before review, acceptance or enrolment.');
 
         // If enrolled, convert the application into a student account.
         // Provision first within this transaction. Retrying an already-enrolled

@@ -28,10 +28,10 @@ class ApplicationWorkflow
             'under_review' => ['submitted', 'needs_correction', 'accepted', 'rejected', 'withdrawn'],
             'needs_correction' => ['withdrawn'],
             'accepted' => ['enrolled', 'withdrawn'],
-            'enrolled' => [], 'rejected' => [], 'withdrawn' => [],
+            'enrolled' => [], 'rejected' => [], 'withdrawn' => [], 'expired' => [],
         ];
         if ($admission->status !== $target && ! in_array($target, $allowed[$admission->status] ?? [], true)) { return false; }
-        if (in_array($target, ['accepted', 'enrolled'], true)) {
+        if (in_array($target, ['under_review', 'accepted', 'enrolled'], true)) {
             ApplicationFee::refreshStatus($admission);
             return filled($admission->submitted_at) && ApplicationProgress::canSubmit($admission) && ApplicationFee::isSettled($admission);
         }

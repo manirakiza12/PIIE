@@ -25,6 +25,13 @@ class Kernel extends ConsoleKernel
         $schedule->command('online-exams:send-start-reminders')->everyFiveMinutes();
         $schedule->command('applications:reconcile-pesapal')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('applications:retry-notifications')->everyFiveMinutes()->withoutOverlapping();
+
+        // Close applications left unpaid after their intake's application period
+        // ended. Daily shortly after midnight, and only once the intake is fully
+        // past its close_date (the command compares against end-of-day, so an
+        // intake closing today is not swept). Run it by hand with --dry-run first
+        // whenever an intake date is changed.
+        $schedule->command('admissions:expire-unpaid')->dailyAt('01:10')->withoutOverlapping();
     }
 
     /**
