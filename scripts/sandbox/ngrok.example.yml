@@ -1,0 +1,10 @@
+version: 3
+agent:
+  # Enter the ngrok token only in the ACL-protected private copy, never in this template.
+  authtoken: REPLACE_PRIVATELY
+  console_ui: false
+  inspect_db_size: -1
+  log: false
+  web_addr: false
+  remote_management: false
+  update_check: false

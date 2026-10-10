@@ -29,7 +29,17 @@ final class ControlledSandboxCheckoutGrantTest extends TestCase
     {
         $helper=$this->root.'/child.php';$library=realpath(__DIR__.'/../../scripts/sandbox/CheckoutGrant.php');
         file_put_contents($helper,'<?php require '.var_export($library,true).'; try {(new \\PiieSandbox\\CheckoutGrant($argv[1],"checkout-grant-visa"))->consume(9,fn()=>null); exit(0);} catch(Throwable $e){exit(3);}');
-        $children=[];for($i=0;$i<5;$i++)$children[]=proc_open([PHP_BINARY,$helper,$this->root],[0=>['file','NUL','r'],1=>['file','NUL','a'],2=>['file','NUL','a']],$pipes);
-        $codes=array_map(fn($p)=>proc_close($p),$children);sort($codes);$this->assertSame([0,3,3,3,3],$codes);
+        $null=PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $children=[];$codes=[];
+        try {
+            for($i=0;$i<5;$i++) {
+                $child=proc_open([PHP_BINARY,$helper,$this->root],[0=>['file',$null,'r'],1=>['file',$null,'a'],2=>['file',$null,'a']],$pipes);
+                $this->assertIsResource($child, 'Could not start concurrent grant consumer');
+                $children[]=$child;
+            }
+        } finally {
+            foreach($children as $child)$codes[]=proc_close($child);
+        }
+        sort($codes);$this->assertSame([0,3,3,3,3],$codes);
     }
 }

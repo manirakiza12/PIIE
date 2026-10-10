@@ -1,0 +1,12 @@
+# Exact synthetic applicant routes; payment POSTs and capture actions are excluded.
+on_http_request:
+  - expressions:
+      - "!(req.url.scheme == 'https' && ((req.method == 'GET' && req.url.raw_path in ['/apply', '/applicant/register', '/applicant/login', '/applicant/dashboard', '/applicant/application', '/applicant/application/personal', '/applicant/application/programme', '/applicant/application/education', '/applicant/application/documents', '/applicant/application/payment', '/applicant/application/review', '/applicant/documents', '/applicant/payment', '/css/piie-site.css', '/css/piie-blocks.css', '/js/piie-hero.js', '/frontend/assets/image/purple_gradient.png', '/frontend/assets/css/all.min.css', '/frontend/assets/css/bootstrap.min.css', '/frontend/assets/css/style.css', '/frontend/assets/css/responsive.css', '/frontend/assets/js/jquery-3.6.1.min.js', '/frontend/assets/js/bootstrap.bundle.min.js', '/frontend/assets/js/custom.js', '/frontend/assets/webfonts/fa-brands-400.woff2', '/frontend/assets/webfonts/fa-brands-400.ttf', '/frontend/assets/webfonts/fa-regular-400.woff2', '/frontend/assets/webfonts/fa-regular-400.ttf', '/frontend/assets/webfonts/fa-solid-900.woff2', '/frontend/assets/webfonts/fa-solid-900.ttf', '/assets/css/toastr.min.css', '/assets/js/toastr.min.js', '/assets/css/applicant-portal.css', '/assets/vendors/bootstrap-5.1.3/css/bootstrap.min.css', '/assets/vendors/bootstrap-5.1.3/js/bootstrap.bundle.min.js', '/assets/vendors/bootstrap-icons-1.8.1/bootstrap-icons.css', '/assets/vendors/bootstrap-icons-1.8.1/fonts/bootstrap-icons.woff2', '/assets/vendors/bootstrap-icons-1.8.1/fonts/bootstrap-icons.woff', '/assets/uploads/logo/logo.png', '/payments/application/1', '/payments/application/2', '/payments/pesapal/callback', '/payments/pesapal/ipn']) || (req.method == 'POST' && req.url.raw_path in ['/applicant/register', '/applicant/login', '/applicant/logout', '/applicant/application/personal', '/applicant/application/programme', '/applicant/application/education', '/applicant/application/submit', '/applicant/documents/upload'])))"
+    actions:
+      - type: custom-response
+        config:
+          status_code: 404
+          body: Request unavailable
+          headers:
+            content-type: text/plain
+            cache-control: no-store

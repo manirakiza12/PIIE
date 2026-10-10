@@ -73,14 +73,14 @@ class LocalAdminAccessRecoveryTest extends TestCase
                 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00']);
         }
         $this->baseline = $this->rows();
-        $this->directory = $root.'/local-reports/recovery-fixture-'.bin2hex(random_bytes(8));
+        $this->directory = sys_get_temp_dir().'/recovery-fixture-'.bin2hex(random_bytes(8));
         mkdir($this->directory, 0700);
         $this->source = file_get_contents($root.'/scripts/local-admin-access-recovery.php');
     }
 
     protected function tearDown(): void
     {
-        $root = realpath(dirname(__DIR__, 2).'/local-reports');
+        $root = realpath(sys_get_temp_dir());
         $path = realpath($this->directory);
         if (! $root || ! $path || dirname($path) !== $root || ! preg_match('/^recovery-fixture-[a-f0-9]{16}$/', basename($path))) {
             throw new \RuntimeException('Fixture cleanup boundary refused');
