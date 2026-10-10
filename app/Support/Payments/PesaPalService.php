@@ -101,17 +101,24 @@ final class PesaPalService
             || ($minor = DecimalAmount::minorUnits($order['amount'] ?? null)) === null || $minor <= 0
             || ! is_string($order['description'] ?? null) || trim($order['description']) === '' || mb_strlen($order['description']) > 100
             || ! is_string($order['notification_id'] ?? null) || ! self::isGuid($order['notification_id'])
-            || ! is_array($order['billing_address'] ?? null)) { throw new PesaPalException(); }
-        $this->httpsUrl($order['callback_url'] ?? null);
-        if (isset($order['cancellation_url'])) { $this->httpsUrl($order['cancellation_url']); }
-        if (isset($order['redirect_mode']) && ! in_array($order['redirect_mode'], ['', 'TOP_WINDOW', 'PARENT_WINDOW'], true)) { throw new PesaPalException(); }
+            || ! is_array($order['billing_address'] ?? null)) { throw new PesaPalNotDispatchedException(); }
+        // Everything below runs BEFORE the provider is contacted, so a failure
+        // here means no order exists and the caller may safely release any
+        // reservation it created.
+        try {
+            $this->httpsUrl($order['callback_url'] ?? null);
+            if (isset($order['cancellation_url'])) { $this->httpsUrl($order['cancellation_url']); }
+        } catch (PesaPalException $exception) {
+            throw new PesaPalNotDispatchedException();
+        }
+        if (isset($order['redirect_mode']) && ! in_array($order['redirect_mode'], ['', 'TOP_WINDOW', 'PARENT_WINDOW'], true)) { throw new PesaPalNotDispatchedException(); }
         $billing = $order['billing_address'];
         $billingFields = ['email_address', 'phone_number', 'country_code', 'first_name', 'middle_name', 'last_name',
             'line_1', 'line_2', 'city', 'state', 'postal_code', 'zip_code'];
         if (array_diff(array_keys($billing), $billingFields)
-            || (! $this->nonempty($billing['email_address'] ?? null) && ! $this->nonempty($billing['phone_number'] ?? null))) { throw new PesaPalException(); }
-        foreach ($billing as $value) { if (! is_string($value) && ! is_int($value)) { throw new PesaPalException(); } }
-        if (isset($order['branch']) && ! is_string($order['branch'])) { throw new PesaPalException(); }
+            || (! $this->nonempty($billing['email_address'] ?? null) && ! $this->nonempty($billing['phone_number'] ?? null))) { throw new PesaPalNotDispatchedException(); }
+        foreach ($billing as $value) { if (! is_string($value) && ! is_int($value)) { throw new PesaPalNotDispatchedException(); } }
+        if (isset($order['branch']) && ! is_string($order['branch'])) { throw new PesaPalNotDispatchedException(); }
         $data = $this->authorized('POST', '/api/Transactions/SubmitOrderRequest', $order);
         $this->envelope($data);
         if (! is_string($data['order_tracking_id'] ?? null) || ! self::isGuid($data['order_tracking_id'])
@@ -125,7 +132,18 @@ final class PesaPalService
         if (! self::isGuid($orderTrackingId)) { throw new PesaPalException(); }
         $id = strtolower($orderTrackingId);
         $data = $this->authorized('GET', '/api/Transactions/GetTransactionStatus', ['orderTrackingId' => $id]);
-        $this->envelope($data);
+        // An order the applicant has not paid yet is reported as an ERROR
+        // envelope (status 500, error.code "payment_details_not_found",
+        // message "Pending Payment") rather than a normal 200. Observed on the
+        // sandbox on 2026-10-10. Treating that as a hard failure made an
+        // abandoned checkout impossible to resume or re-check, so it is mapped
+        // back onto the ordinary observation shape. status_code 0 with an
+        // INVALID description is what PesaPal reports for it, and
+        // classification() maps that to 'pending', so this can never settle or
+        // fail a payment on its own. Every other check below still applies.
+        if (! $this->isPendingPaymentEnvelope($data)) {
+            $this->envelope($data);
+        }
         if (! $this->reference($data['merchant_reference'] ?? null)
             || ($minor = DecimalAmount::minorUnits($data['amount'] ?? null)) === null || $minor < 0
             || ! is_string($data['currency'] ?? null) || ! preg_match('/\A[A-Z]{3}\z/', $data['currency'])
@@ -184,7 +202,10 @@ final class PesaPalService
                     && $data['notification_type'] !== ($method === 'GET' ? 0 : 1))) { throw new PesaPalException(); }
             $this->envelope(['status' => 200, 'error' => $data['error'] ?? null]);
         } else {
-            $this->envelope($data);
+            // RegisterIPN's success body carries no "error" key at all, so pass a
+            // normalized envelope rather than the raw payload. Status and error
+            // are still checked exactly as before; only an absent key is tolerated.
+            $this->envelope(['status' => $data['status'] ?? null, 'error' => $data['error'] ?? null]);
         }
         if (! is_string($data['ipn_id'] ?? null) || ! self::isGuid($data['ipn_id']) || ! $this->nonempty($data['created_date'] ?? null)) { throw new PesaPalException(); }
         $this->utcDate($data['created_date']);
@@ -197,6 +218,30 @@ final class PesaPalService
             || ! $this->nonempty($data['ipn_status_description'] ?? $data['ipn_status_decription'] ?? null))) { throw new PesaPalException(); }
         return ['ipn_id' => strtolower($data['ipn_id']), 'url' => $data['url'], 'created_date' => $data['created_date'],
             'method' => $method, 'active' => $status === null ? null : $status === 1, 'error' => null, 'status' => 200];
+    }
+
+    /**
+     * Recognises PesaPal's "order exists but is not paid yet" response.
+     *
+     * Deliberately narrow: it must be an error envelope whose code is exactly
+     * 'payment_details_not_found', must report status_code 0 / INVALID, and
+     * must NOT carry a confirmation code (which only a settled payment has).
+     * Any other error, and any response that claims a completed payment inside
+     * an error envelope, still fails through envelope() as before.
+     */
+    private function isPendingPaymentEnvelope(array $data): bool
+    {
+        if (in_array($data['status'] ?? null, [200, '200'], true)) {
+            return false; // A normal envelope is validated the ordinary way.
+        }
+        $error = $data['error'] ?? null;
+        if (! is_array($error) || ($error['code'] ?? null) !== 'payment_details_not_found') {
+            return false;
+        }
+
+        return (string) ($data['status_code'] ?? '') === '0'
+            && ($data['payment_status_description'] ?? null) === 'INVALID'
+            && ! $this->nonempty($data['confirmation_code'] ?? null);
     }
 
     private function httpsUrl($url, ?string $host = null): void

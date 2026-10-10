@@ -91,11 +91,48 @@ final class ApplicantPesaPalPayment
                 $locked->update(['gateway_txn_id' => $order->orderTrackingId,
                     'gateway_payload' => array_merge($locked->gateway_payload ?? [], ['initiation' => 'submitted', 'checkout_url' => $order->redirectUrl])]);
             });
+        } catch (PesaPalNotDispatchedException $exception) {
+            // Nothing was ever sent to PesaPal, so no order exists and there is
+            // nothing to double-charge. Release the reservation instead of
+            // stranding the applicant on a row that can neither be completed
+            // (no checkout_url) nor cleared (no gateway_txn_id to reconcile).
+            self::releaseReservation($payment, 'Not submitted to PesaPal; nothing was charged.');
+            ApplicationFee::refreshStatus($admission);
+            self::reject('We could not start the payment. Nothing has been charged - please try again.');
         } catch (PesaPalException $exception) {
             // Keep the reservation and reference for recovery; never erase evidence.
             self::reject('Payment initiation could not be confirmed. Do not pay again; contact finance with your application reference.');
         }
         return $payment->fresh();
+    }
+
+    /**
+     * Marks a reservation that never reached the provider as failed.
+     *
+     * Strictly limited to a pending row with no gateway_txn_id AND explicitly
+     * flagged 'not-dispatched', i.e. one this process already knows it never
+     * sent. A plain pending row without a gateway_txn_id is NOT released here:
+     * that is exactly what an ambiguous transport timeout also looks like, and
+     * releasing it would allow a second order for a payment PesaPal may
+     * already hold. Those stay reserved for finance to reconcile.
+     */
+    private static function releaseReservation(ApplicationPayment $payment, string $reason): void
+    {
+        DB::transaction(function () use ($payment, $reason) {
+            $locked = ApplicationPayment::whereKey($payment->id)
+                ->where('status', ApplicationPayment::STATUS_PENDING)
+                ->whereNull('gateway_txn_id')
+                ->lockForUpdate()
+                ->first();
+            if (! $locked) {
+                return;
+            }
+            $locked->update([
+                'status' => ApplicationPayment::STATUS_FAILED,
+                'note' => $reason,
+                'gateway_payload' => array_merge($locked->gateway_payload ?? [], ['initiation' => 'not-dispatched']),
+            ]);
+        });
     }
 
     public static function outstanding(Admission $admission): string

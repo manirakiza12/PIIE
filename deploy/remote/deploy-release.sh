@@ -270,6 +270,20 @@ fi
 PREV="$(readlink "$BASE/current" 2>/dev/null || true)"
 log "Migrating (forward-only; never fresh/wipe)"
 "$PHP" artisan migrate --force || { log "migration failed; current NOT switched"; exit 1; }
+
+# /health is deliberately database-independent, so a release whose schema is
+# still behind the code passes the HTTP health check and then 500s on every real
+# page. Assert here that nothing is still pending, and fail the activation
+# BEFORE the symlink swap rather than publishing code the schema cannot run.
+PENDING_AFTER="$("$PHP" artisan migrate:status 2>/dev/null | grep -c 'Pending' || true)"
+if [ "${PENDING_AFTER:-0}" -ne 0 ]; then
+  log "ERROR: ${PENDING_AFTER} migration(s) still pending after migrate --force."
+  log "The database schema does not match this release. current NOT switched."
+  "$PHP" artisan migrate:status 2>/dev/null | grep 'Pending' | head -20 || true
+  exit 1
+fi
+log "Schema matches this release (0 pending migrations)."
+
 "$PHP" artisan config:cache; "$PHP" artisan view:clear
 
 ln -sfn "$REL" "$BASE/current.new"; mv -Tf "$BASE/current.new" "$BASE/current"

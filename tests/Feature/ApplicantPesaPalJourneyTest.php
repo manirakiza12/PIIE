@@ -271,6 +271,53 @@ class ApplicantPesaPalJourneyTest extends TestCase
         $this->assertSame('reversed', ApplicantPesaPalPayment::reconcile($payment->fresh()));
     }
 
+    /**
+     * A rejection that happens before anything is sent to PesaPal (here, a
+     * non-HTTPS callback URL) must not leave a reservation behind. Such a row
+     * has no checkout_url to resume and no gateway_txn_id to reconcile, so
+     * holding it pending locks the applicant out of paying permanently.
+     */
+    #[DataProvider('channels')]
+    public function test_pre_dispatch_rejection_releases_the_reservation_so_the_applicant_can_retry(string $source): void
+    {
+        $admission = $this->application($source);
+        URL::forceScheme('http');
+        URL::forceRootUrl('http://piie.example.test');
+
+        try { ApplicantPesaPalPayment::start($admission); $this->fail('Expected the http callback to be refused'); }
+        catch (ValidationException $exception) {
+            $this->assertStringContainsString('Nothing has been charged', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $this->orderRequests, 'nothing must reach PesaPal');
+
+        $payment = $admission->payments()->latest('id')->first();
+        $this->assertSame('failed', $payment->status);
+        $this->assertSame('not-dispatched', $payment->gateway_payload['initiation']);
+        $this->assertNull($payment->gateway_txn_id);
+        $this->assertSame('unpaid', $admission->fresh()->fee_status);
+
+        // The applicant can immediately start again and succeed.
+        URL::forceScheme('https');
+        URL::forceRootUrl('https://piie.example.test');
+        $retry = ApplicantPesaPalPayment::start($admission);
+        $this->assertSame('pending', $retry->status);
+        $this->assertSame(self::GUID, $retry->gateway_txn_id);
+        $this->assertSame(1, $this->orderRequests);
+    }
+
+    public function test_ambiguous_timeout_still_keeps_its_reservation_reserved(): void
+    {
+        $admission = $this->application();
+        $this->timeout = true;
+        try { ApplicantPesaPalPayment::start($admission); } catch (ValidationException $exception) {}
+
+        $payment = $admission->payments()->latest('id')->first();
+        $this->assertSame('pending', $payment->status, 'a timeout must stay reserved to prevent a double order');
+        $this->assertNull($payment->gateway_txn_id);
+        $this->assertSame('reserved', $payment->gateway_payload['initiation']);
+    }
+
     public function test_signed_invitation_is_application_specific_expiring_and_get_does_not_charge(): void
     {
         $admission = $this->application('staff_entry');

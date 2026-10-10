@@ -186,6 +186,50 @@ class PesaPalServiceTest extends TestCase
         $this->reject(fn () => PesaPalService::forSchool(1));
     }
 
+    /**
+     * Observed against the PesaPal sandbox on 2026-10-10: a successful
+     * RegisterIPN response carries no "error" key whatsoever (only the listing
+     * endpoint sends one). Requiring that key made every real registration fail
+     * with a bare PesaPalException while the mocked tests passed, because the
+     * fixture included 'error' => null.
+     */
+    public function test_registration_accepts_the_real_sandbox_response_that_omits_the_error_key(): void
+    {
+        $observed = ['url' => self::URL, 'created_date' => '2026-10-09T04:25:41.073',
+            'ipn_id' => 'f6ce2613-941f-4636-932c-d9cea607e6be', 'notification_type' => 0,
+            'ipn_notification_type_description' => 'GET', 'ipn_status' => 1,
+            'ipn_status_decription' => 'Active', 'status' => '200',
+            'message' => 'Request processed successfully'];
+        $this->assertArrayNotHasKey('error', $observed, 'fixture must mirror the real API');
+
+        $this->fakeEndpoint('/api/URLSetup/RegisterIPN', $observed);
+        $result = $this->service()->registerIpn(self::URL, 'GET');
+
+        $this->assertSame('f6ce2613-941f-4636-932c-d9cea607e6be', $result['ipn_id']);
+        $this->assertTrue($result['active']);
+        $this->assertSame('GET', $result['method']);
+        $this->assertNull($result['error']);
+    }
+
+    /** A non-200 status must still be refused even though 'error' is absent. */
+    public function test_registration_without_error_key_is_still_refused_when_status_is_not_200(): void
+    {
+        $this->fakeEndpoint('/api/URLSetup/RegisterIPN', [
+            'url' => self::URL, 'created_date' => '2026-10-09T04:25:41.073',
+            'ipn_id' => self::GUID, 'notification_type' => 0,
+            'ipn_notification_type_description' => 'GET', 'ipn_status' => 1,
+            'ipn_status_decription' => 'Active', 'status' => '500',
+        ]);
+        $this->reject(fn () => $this->service()->registerIpn(self::URL, 'GET'));
+    }
+
+    /** An error payload that is present and non-empty must still be refused. */
+    public function test_registration_with_a_populated_error_key_is_refused(): void
+    {
+        $this->fakeEndpoint('/api/URLSetup/RegisterIPN', array_merge($this->ipn(), ['error' => ['message' => 'bad url']]));
+        $this->reject(fn () => $this->service()->registerIpn(self::URL, 'GET'));
+    }
+
     #[\PHPUnit\Framework\Attributes\DataProvider('invalidEnvironments')]
     public function test_invalid_environment_configuration_is_rejected(string $environment): void
     {
