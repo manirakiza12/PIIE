@@ -2047,80 +2047,13 @@ class AdminController extends Controller
         ];
 
         $data['user_information'] = json_encode($info);
-        $duplicate_user_check     = User::get()->where('email', $data['email']);
 
-        if (count($duplicate_user_check) == 0) {
+        // Provisioning (user + profile + enrolment + fee invoice) is shared with
+        // the CSV bulk import so a student added by hand and one added from a
+        // spreadsheet end up with identical records.
+        $result = \App\Support\Students\StudentProvisioner::provision($data, auth()->user()->school_id, false);
+        \App\Support\Students\StudentProvisioner::sendWelcomeEmail($result['user'], $result['password']);
 
-            // Portal password: administrator either chooses a preferred
-            // password, or one is generated automatically. Never logged or
-            // exported — only ever used here to hash it and (optionally)
-            // email it once to the new student.
-            $passwordOption = $data['password_option'] ?? 'manual';
-            $plainPassword  = ($passwordOption === 'auto' || empty($data['password']))
-                ? Str::random(10)
-                : $data['password'];
-
-            $school_id = auth()->user()->school_id;
-
-            $student = User::create([
-                'name'             => $data['name'],
-                'email'            => $data['email'],
-                'password'         => Hash::make($plainPassword),
-                'code'             => student_code(),
-                'role_id'          => '7',
-                'school_id'        => $school_id,
-                'user_information' => $data['user_information'],
-                'status'           => 1,
-            ]);
-
-            StudentProfile::updateOrCreate(
-                ['user_id' => $student->id],
-                [
-                    'school_id'               => $school_id,
-                    'programme_id'            => $data['programme_id'] ?? null,
-                    'intake_session_id'       => $data['intake_session_id'] ?? null,
-                    'year_of_study'           => $data['year_of_study'] ?? null,
-                    'nationality'             => $data['nationality'] ?? null,
-                    'national_id_or_passport' => $data['national_id_or_passport'] ?? null,
-                    'next_of_kin_address'     => $data['next_of_kin_address'] ?? null,
-                    'next_of_kin_contact'     => $data['next_of_kin_contact'] ?? null,
-                    'additional_image'        => $additionalImageName ?: null,
-                    'status'                  => $data['status'] ?? 'active',
-                ]
-            );
-
-            if (! empty($data['programme_id'])) {
-                StudentFeeInvoiceGenerator::generateForStudent($student, (int) $data['programme_id'], $school_id);
-            }
-
-            $runningSession = $data['session_id'] ?? get_school_settings($school_id)->value('running_session')
-                ?: Session::where('school_id', $school_id)->where('status', 1)->value('id');
-            Enrollment::create([
-                'user_id' => $student->id,
-                'class_id' => (int) $data['class_id'],
-                'section_id' => (int) ($data['section_id'] ?? 0),
-                'school_id' => $school_id,
-                'department_id' => (int) ($data['department_id'] ?? 0),
-                'session_id' => (int) ($runningSession ?? 0),
-            ]);
-
-            // Defensive no-op here (class_id is validated as required above,
-            // so Enrollment::create() just ran with a real class) — kept for
-            // parity with every other student-creation path and because
-            // EnrollmentDefaults::ensureRow() never overwrites an existing
-            // row, real or sentinel (see EnrollmentDefaultsTest).
-            \App\Support\EnrollmentDefaults::ensureRow($student->id, $school_id);
-
-            if (! empty(get_settings('smtp_user')) && (get_settings('smtp_pass')) && (get_settings('smtp_host')) && (get_settings('smtp_port'))) {
-                \App\Support\Mail\SafeMail::send($data['email'], new NewUserEmail([
-                    'name'     => $data['name'],
-                    'email'    => $data['email'],
-                    'password' => $plainPassword,
-                ]));
-            }
-        } else {
-            return redirect()->back()->with('error', 'Email was already taken.');
-        }
         return redirect()->back()->with('message', 'You have successfully add student.');
     }
 

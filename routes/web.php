@@ -526,6 +526,12 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::get('admin/student/export', 'studentListExport')->name('admin.student.export')->middleware('admin_permission');
     Route::get('admin/student/create_modal', 'createStudentModal')->name('admin.student.open_modal');
     Route::post('admin/student', 'studentCreate')->name('admin.student.create');
+    // Bulk import for students who are already studying. They are provisioned as
+    // students and never enter the admissions fee flow.
+    Route::get('admin/student-import',          [\App\Http\Controllers\Admin\StudentImportController::class, 'index'])->name('admin.student.import.index');
+    Route::get('admin/student-import/template', [\App\Http\Controllers\Admin\StudentImportController::class, 'template'])->name('admin.student.import.template');
+    Route::post('admin/student-import/preview', [\App\Http\Controllers\Admin\StudentImportController::class, 'preview'])->name('admin.student.import.preview');
+    Route::post('admin/student-import/run',     [\App\Http\Controllers\Admin\StudentImportController::class, 'import'])->name('admin.student.import.run');
     Route::get('admin/student/id_card/{id}', 'studentIdCardGenerate')->name('admin.student.id_card');
     Route::get('admin/student/edit/{id}', 'studentEditModal')->name('admin.student_edit_modal');
     Route::post('admin/student/{id}', 'studentUpdate')->name('admin.student.update');
