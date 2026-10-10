@@ -78,6 +78,7 @@ final class ApplicationPaymentSettlement
             }
 
             $expected = DecimalAmount::minorUnits($payment->amount);
+            if (($payment->gateway_payload['classification'] ?? null) === 'REVERSED') { return self::REJECTED; }
             $actual = DecimalAmount::minorUnits($verified->amount);
             if ($expected === null || $expected <= 0 || $actual !== $expected
                 || blank($payment->currency) || blank($verified->currency)
@@ -121,7 +122,7 @@ final class ApplicationPaymentSettlement
 
             // Only the transaction that changed pending/failed -> paid notifies.
             // Keep mail outside locks, and never notify before the outer commit.
-            DB::afterCommit(fn () => ApplicantNotifier::paymentReceived($admission, $payment));
+            ApplicantNotifier::paymentReceived($admission, $payment);
             return self::SETTLED;
         }, 3);
     }

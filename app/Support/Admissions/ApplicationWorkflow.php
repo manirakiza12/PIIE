@@ -7,6 +7,7 @@ use App\Models\AdmissionStatusEvent;
 use App\Models\Applicant;
 use App\Models\AuditLog;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The one place an application changes status.
@@ -19,6 +20,34 @@ use App\Models\User;
  */
 class ApplicationWorkflow
 {
+    public static function canTransition(Admission $admission, string $target): bool
+    {
+        $allowed = [
+            'draft' => [],
+            'submitted' => ['under_review', 'needs_correction', 'accepted', 'rejected', 'withdrawn'],
+            'under_review' => ['submitted', 'needs_correction', 'accepted', 'rejected', 'withdrawn'],
+            'needs_correction' => ['withdrawn'],
+            'accepted' => ['enrolled', 'withdrawn'],
+            'enrolled' => [], 'rejected' => [], 'withdrawn' => [],
+        ];
+        if ($admission->status !== $target && ! in_array($target, $allowed[$admission->status] ?? [], true)) { return false; }
+        if (in_array($target, ['accepted', 'enrolled'], true)) {
+            ApplicationFee::refreshStatus($admission);
+            return filled($admission->submitted_at) && ApplicationProgress::canSubmit($admission) && ApplicationFee::isSettled($admission);
+        }
+        return true;
+    }
+
+    private static function atomic(Admission $admission, callable $operation): bool
+    {
+        return DB::transaction(function () use ($admission, $operation) {
+            $locked = Admission::whereKey($admission->id)->where('school_id', $admission->school_id)->lockForUpdate()->firstOrFail();
+            $result = $operation($locked);
+            $admission->refresh();
+            return $result;
+        });
+    }
+
     /**
      * Applicant submits (or resubmits after corrections).
      *
@@ -28,11 +57,18 @@ class ApplicationWorkflow
      */
     public static function submit(Admission $admission, Applicant $applicant): bool
     {
+        return self::atomic($admission, fn ($locked) => self::submitLocked($locked, $applicant));
+    }
+
+    private static function submitLocked(Admission $admission, Applicant $applicant): bool
+    {
+        if ((int) $admission->applicant_id !== (int) $applicant->id || (int) $admission->school_id !== (int) $applicant->school_id) { return false; }
         if (! $admission->isEditableByApplicant() || ! ApplicationProgress::canSubmit($admission)) {
             return false;
         }
 
         $wasCorrection = $admission->status === Admission::STATUS_NEEDS_CORRECTION;
+        ApplicationFee::freezeObligation($admission);
         $fromStatus    = $admission->status;
 
         $admission->fill([
@@ -84,11 +120,17 @@ class ApplicationWorkflow
      */
     public static function submitByStaff(Admission $admission, User $staff): bool
     {
-        if (! ApplicationProgress::canSubmit($admission)) {
+        return self::atomic($admission, fn ($locked) => self::submitByStaffLocked($locked, $staff));
+    }
+
+    private static function submitByStaffLocked(Admission $admission, User $staff): bool
+    {
+        if ((int) $admission->school_id !== (int) $staff->school_id || ! $admission->isEditableByApplicant() || ! ApplicationProgress::canSubmit($admission)) {
             return false;
         }
 
         $wasCorrection = $admission->status === Admission::STATUS_NEEDS_CORRECTION;
+        ApplicationFee::freezeObligation($admission);
         $fromStatus    = $admission->status;
 
         $admission->fill([
@@ -122,6 +164,9 @@ class ApplicationWorkflow
             'school_id'   => $admission->school_id,
         ]);
 
+        ApplicationFee::refreshStatus($admission);
+        ApplicantNotifier::submitted($admission);
+
         return true;
     }
 
@@ -133,7 +178,16 @@ class ApplicationWorkflow
      */
     public static function transitionByStaff(Admission $admission, string $newStatus, User $staff, ?string $note = null): bool
     {
-        if (! in_array($newStatus, Admission::STAFF_SETTABLE_STATUSES, true)) {
+        return self::atomic($admission, fn ($locked) => self::transitionLocked($locked, $newStatus, $staff, $note));
+    }
+
+    private static function transitionLocked(Admission $admission, string $newStatus, User $staff, ?string $note): bool
+    {
+        if ($newStatus === Admission::STATUS_NEEDS_CORRECTION) {
+            return self::correctionLocked($admission, $staff, (string) $note);
+        }
+        if ((int) $admission->school_id !== (int) $staff->school_id || ! in_array($newStatus, Admission::STAFF_SETTABLE_STATUSES, true)
+            || ! self::canTransition($admission, $newStatus)) {
             return false;
         }
 
@@ -191,6 +245,12 @@ class ApplicationWorkflow
      */
     public static function requestCorrection(Admission $admission, User $staff, string $note): bool
     {
+        return self::atomic($admission, fn ($locked) => self::correctionLocked($locked, $staff, $note));
+    }
+
+    private static function correctionLocked(Admission $admission, User $staff, string $note): bool
+    {
+        if ((int) $admission->school_id !== (int) $staff->school_id || blank($note) || ! self::canTransition($admission, Admission::STATUS_NEEDS_CORRECTION)) { return false; }
         $fromStatus = $admission->status;
 
         $admission->fill([

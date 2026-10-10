@@ -23,7 +23,12 @@ use Tests\TestCase;
  */
 class AdmissionPaymentTest extends TestCase
 {
-    use AdmissionsTestHelper;
+    use AdmissionsTestHelper { makeAdmission as private makeBasicAdmission; }
+
+    protected function makeAdmission(int $schoolId, array $overrides = []): int
+    {
+        return $this->makeBasicAdmission($schoolId, array_merge(['submitted_at' => now()], $overrides));
+    }
 
     protected function setUp(): void
     {
@@ -33,6 +38,9 @@ class AdmissionPaymentTest extends TestCase
 
     private function configurePrimarySchool(int $schoolId): void
     {
+        \App\Models\PaymentMethods::create(['school_id' => $schoolId, 'name' => 'pesapal', 'status' => 1,
+            'payment_keys' => json_encode(['environment' => 'sandbox', 'consumer_key' => 'fixture', 'consumer_secret' => 'fixture',
+                'notification_id' => '7e6b62d9-883e-440f-a63e-e1105bbfadc3'])]);
         DB::table('global_settings')->insert([
             'key' => 'primary_school_id',
             'value' => (string) $schoolId,
@@ -326,7 +334,8 @@ class AdmissionPaymentTest extends TestCase
                 && str_contains($mail->data['subject'], 'PIIE-2627-O-P5001')
                 && ($mail->data['details']['Application Number'] ?? null) === 'PIIE-2627-O-P5001'
                 && ($mail->data['details']['Payment Reference'] ?? null) === 'PIIE-2627-O-P5001'
-                && str_contains((string) $mail->data['cta_url'], '/applicant/reset-password/');
+                && str_contains((string) $mail->data['cta_url'], '/payments/application/')
+                && str_contains((string) $mail->data['access_url'], '/applicant/reset-password/');
         });
         Mail::assertSent(ApplicantNotificationEmail::class, 1);
     }

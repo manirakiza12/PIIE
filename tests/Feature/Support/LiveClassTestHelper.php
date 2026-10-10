@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Schema;
 
 trait LiveClassTestHelper
 {
+    use ActiveSchoolSubscriptionFixture;
     protected function bootLiveClassTestSchema(): void
     {
         Config::set('database.default', 'sqlite');
@@ -306,12 +307,14 @@ $table->timestamps();
 
     protected function makeSchool(array $overrides = []): int
     {
-        return (int) DB::table('schools')->insertGetId(array_merge([
+        $school = (int) DB::table('schools')->insertGetId(array_merge([
             'title' => 'Test School',
             'running_session' => 1,
             'created_at' => now(),
             'updated_at' => now(),
         ], $overrides));
+        $this->grantActiveFixtureSubscription($school);
+        return $school;
     }
 
     protected function makeStaffUser(int $schoolId, int $roleId = 2, array $overrides = []): User

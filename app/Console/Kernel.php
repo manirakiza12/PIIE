@@ -23,6 +23,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('live-classes:send-reminders')->everyFiveMinutes();
         $schedule->command('online-exams:send-result-emails')->everyFiveMinutes();
         $schedule->command('online-exams:send-start-reminders')->everyFiveMinutes();
+        $schedule->command('applications:reconcile-pesapal')->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command('applications:retry-notifications')->everyFiveMinutes()->withoutOverlapping();
     }
 
     /**

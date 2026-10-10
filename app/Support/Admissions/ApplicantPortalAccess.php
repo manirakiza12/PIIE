@@ -36,8 +36,10 @@ class ApplicantPortalAccess
      */
     public static function ensureLinked(Admission $admission): Applicant
     {
+        return DB::transaction(function () use ($admission) {
+        $admission = Admission::whereKey($admission->id)->where('school_id', $admission->school_id)->lockForUpdate()->firstOrFail();
         if ($admission->applicant_id) {
-            return $admission->applicant()->firstOrFail();
+            return $admission->applicant()->where('school_id', $admission->school_id)->where('email', $admission->email)->firstOrFail();
         }
 
         $applicant = Applicant::where('school_id', $admission->school_id)
@@ -62,6 +64,7 @@ class ApplicantPortalAccess
         $admission->forceFill(['applicant_id' => $applicant->id])->save();
 
         return $applicant;
+        });
     }
 
     /**

@@ -7,6 +7,10 @@ return [
     'name' => env('APP_NAME', 'Prime International Institute of Excellence'),
     'env' => env('APP_ENV', 'production'),
     'debug' => (bool) env('APP_DEBUG', false),
+    // Development-only: honoured solely when AdminController::subscriptionBypassPermitted()
+    // confirms APP_ENV=local AND the isolated dev database on port 3307. Off by default.
+    'enforce_school_subscriptions' => env('ENFORCE_SCHOOL_SUBSCRIPTIONS', false),
+    'bypass_subscription' => filter_var(env('BYPASS_SUBSCRIPTION', false), FILTER_VALIDATE_BOOLEAN),
     'url' => env('APP_URL', 'http://localhost'),
     'asset_url' => env('ASSET_URL'),
 

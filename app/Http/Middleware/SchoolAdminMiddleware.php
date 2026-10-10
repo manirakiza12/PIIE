@@ -50,7 +50,7 @@ class SchoolAdminMiddleware
         }
 
         if ($allowed) {
-            return $next($request);
+            return app(EnsureSchoolSubscription::class)->handle($request, $next);
         }
 
         return PortalAccessDenial::redirect($user, 'admin.account_disableview');

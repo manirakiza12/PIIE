@@ -686,6 +686,7 @@
             </li>
             @endif
 
+            @include('admin.admissions.partials.navigation')
             @if($isPrimarySchool)
             <!-- ============================================ -->
             <!-- ADMISSIONS SECTION HEADER                    -->

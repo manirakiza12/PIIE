@@ -22,6 +22,7 @@ class ApplicationFee
 {
     public static function amountFor(Admission $admission): float
     {
+        if ($admission->application_fee_amount !== null) { return (float) $admission->application_fee_amount; }
         $intake = $admission->relationLoaded('intakeSession')
             ? $admission->intakeSession
             : $admission->intakeSession()->first();
@@ -48,9 +49,23 @@ class ApplicationFee
         return get_active_currency();
     }
 
-    public static function format(float $amount): string
+    public static function currencyFor(Admission $admission): string
     {
-        return self::currency() . ' ' . number_format($amount, 2);
+        return $admission->application_fee_currency ?: self::currency();
+    }
+
+    /** Freeze new obligations on submission; existing rows are never mass-rewritten. */
+    public static function freezeObligation(Admission $admission): void
+    {
+        if ($admission->application_fee_amount === null) {
+            $admission->forceFill(['application_fee_amount' => self::amountFor($admission),
+                'application_fee_currency' => self::currency()])->save();
+        }
+    }
+
+    public static function format(float $amount, ?Admission $admission = null): string
+    {
+        return ($admission ? self::currencyFor($admission) : self::currency()) . ' ' . number_format($amount, 2);
     }
 
     /**
@@ -64,11 +79,11 @@ class ApplicationFee
     {
         return DB::transaction(function () use ($admission) {
             $locked = Admission::whereKey($admission->id)->lockForUpdate()->firstOrFail();
-            $required = DecimalAmount::minorUnits($locked->intakeSession()->value('application_fee') ?? '0');
+            $required = DecimalAmount::minorUnits(self::amountFor($locked));
             if ($required !== null && $required <= 0) {
                 $status = Admission::FEE_WAIVED;
             } else {
-                $currency = strtoupper(self::currency());
+                $currency = strtoupper(self::currencyFor($locked));
                 // Legacy rows without currency remain readable/countable. New
                 // online settlement always requires explicit matching currency.
                 $payments = $locked->payments()->where('school_id', $locked->school_id)->get()
@@ -77,7 +92,8 @@ class ApplicationFee
                 $seen = [];
                 foreach ($payments as $payment) {
                     $amount = DecimalAmount::minorUnits($payment->amount);
-                    if ($payment->status !== ApplicationPayment::STATUS_PAID || $amount === null || $amount <= 0) {
+                    if ($payment->status !== ApplicationPayment::STATUS_PAID || $amount === null || $amount <= 0
+                        || ($payment->gateway_payload['classification'] ?? null) === 'REVERSED') {
                         continue;
                     }
                     // Do not double-count historical online rows sharing a transaction.
@@ -127,6 +143,7 @@ class ApplicationFee
      * advertising one without the other is a dead button on a payment page.
      */
     public const SUPPORTED_GATEWAYS = [
+        'pesapal'     => ['label' => 'Card / Mobile Money (PesaPal)', 'icon' => 'bi-credit-card'],
         'marzpay'     => ['label' => 'Mobile Money / Card (MarzPay)', 'icon' => 'bi-phone'],
         'stripe'      => ['label' => 'Card Payment (Visa / Mastercard)', 'icon' => 'bi-credit-card'],
         'flutterwave' => ['label' => 'Card / Mobile Money (Flutterwave)', 'icon' => 'bi-phone'],
@@ -135,9 +152,10 @@ class ApplicationFee
     /**
      * Which of SUPPORTED_GATEWAYS are actually offered. Stripe/Flutterwave
      * stay fully wired below (dormant) rather than deleted, in case this
-     * institution ever wants them back — only MarzPay is offered today.
+     * institution ever wants them back. New applicant orders use PesaPal;
+     * historical MarzPay polling and settlement remain available.
      */
-    private const ENABLED_GATEWAYS = ['marzpay'];
+    private const ENABLED_GATEWAYS = ['pesapal'];
 
     public static function availableMethods(int $schoolId): array
     {
@@ -162,7 +180,7 @@ class ApplicationFee
             $methods[] = [
                 'key'         => $name,
                 'label'       => get_phrase($meta['label']),
-                'description' => get_phrase('Pay online now and have your application marked as paid immediately.'),
+                'description' => get_phrase('Continue to PesaPal. Your fee is settled only after provider verification.'),
                 'icon'        => $meta['icon'],
             ];
         }
@@ -172,6 +190,13 @@ class ApplicationFee
 
     public static function gatewayIsConfigured(string $gateway, int $schoolId): bool
     {
+        if ($gateway === 'pesapal') {
+            try {
+                return filled(\App\Support\Payments\PesaPalConfiguration::forSchool($schoolId)->notificationId);
+            } catch (\App\Support\Payments\PesaPalException $exception) {
+                return false;
+            }
+        }
         if (! array_key_exists($gateway, self::SUPPORTED_GATEWAYS)) {
             return false;
         }

@@ -35,6 +35,9 @@
                 </div>
             </div>
             <div class="export-btn-area d-flex gap-2 flex-wrap">
+                @if((int) auth()->user()->role_id === 2)
+                    <a href="{{ route('admin.hei_admissions.payment.pesapal.settings') }}" class="export_btn export_btn-outline">{{ get_phrase('Applicant PesaPal Settings') }}</a>
+                @endif
                 <a href="{{ route('admin.hei_admissions.index') }}" class="export_btn export_btn-outline">
                     <i class="bi bi-arrow-left"></i> {{ get_phrase('Back to Applications') }}
                 </a>
@@ -282,7 +285,7 @@
                 <div class="row g-3 mb-3">
                     <div class="col-6 col-md-3">
                         <small class="text-muted d-block">{{ get_phrase('Application Fee') }}</small>
-                        <strong>{{ ApplicationFee::format((float) $feeAmount) }}</strong>
+                        <strong>{{ ApplicationFee::format((float) $feeAmount, $admission) }}</strong>
                     </div>
                     <div class="col-6 col-md-3">
                         <small class="text-muted d-block">{{ get_phrase('Payment Reference') }}</small>
@@ -293,11 +296,11 @@
                     </div>
                     <div class="col-6 col-md-3">
                         <small class="text-muted d-block">{{ get_phrase('Amount Paid') }}</small>
-                        <strong>{{ ApplicationFee::format($feePaid) }}</strong>
+                        <strong>{{ ApplicationFee::format($feePaid, $admission) }}</strong>
                     </div>
                     <div class="col-6 col-md-3">
                         <small class="text-muted d-block">{{ get_phrase('Outstanding') }}</small>
-                        <strong class="{{ $feeOutstanding > 0 ? 'text-danger' : 'text-success' }}">{{ ApplicationFee::format($feeOutstanding) }}</strong>
+                        <strong class="{{ $feeOutstanding > 0 ? 'text-danger' : 'text-success' }}">{{ ApplicationFee::format($feeOutstanding, $admission) }}</strong>
                     </div>
                 </div>
             @else
@@ -308,7 +311,7 @@
                 <div class="p-3 mb-2" style="border:1px solid #e7e9ee; border-radius:8px;">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <div>
-                            <strong>{{ ApplicationFee::format((float) $payment->amount) }}</strong>
+                            <strong>{{ ApplicationFee::format((float) $payment->amount, $admission) }}</strong>
                             <span class="text-muted"> · {{ ucfirst($payment->method) }} · {{ $payment->reference ?: $blank }}</span>
                             <br><small class="text-muted">{{ $payment->created_at->format('d M Y, H:i') }}</small>
                             @if($payment->note)<br><small class="text-muted">{{ $payment->note }}</small>@endif
@@ -319,6 +322,13 @@
                                 $payTone = ['paid' => 'success', 'waived' => 'success', 'pending' => 'primary', 'failed' => 'danger', 'rejected' => 'danger'][$payment->status] ?? 'secondary';
                             @endphp
                             <span class="badge bg-{{ $payTone }}">{{ ucfirst($payment->status) }}</span>
+                            @if($payment->method === 'pesapal')
+                                <span>{{ $payment->gateway_payload['classification'] ?? 'Awaiting provider confirmation' }}</span>
+                                <form method="post" action="{{ route('admin.hei_admissions.payment.pesapal.check', $payment->id) }}">@csrf
+                                    @if(!$payment->gateway_txn_id)<label>Recover order tracking ID <input name="order_tracking_id" placeholder="PesaPal order GUID" required></label>@endif
+                                    <button class="eBtn eBtn-sm eBtn-primary">Verify with PesaPal</button>
+                                </form>
+                            @endif
 
                             @if($payment->proof_file)
                                 <a href="{{ $payment->proof_url }}" target="_blank" class="eBtn eBtn-sm eBtn-primary" title="{{ get_phrase('View proof') }}">
@@ -326,7 +336,7 @@
                                 </a>
                             @endif
 
-                            @if(! $payment->isSettled())
+                            @if($payment->method === 'offline' && $payment->status === 'pending')
                                 <form action="{{ route('admin.hei_admissions.payment.review', $payment->id) }}" method="POST">
                                     @csrf
                                     <input type="hidden" name="status" value="{{ ApplicationPayment::STATUS_PAID }}">

@@ -22,6 +22,13 @@ use Illuminate\Support\Facades\Mail;
  */
 class ApplicantNotifier
 {
+    public static function paymentReversed(Admission $admission, ApplicationPayment $payment): bool
+    {
+        return self::send($admission->email, ['subject' => 'Application payment reversed', 'heading' => 'Payment reversal verified',
+            'greeting' => 'Dear applicant,', 'paragraphs' => ['PesaPal reports a reversal of your application payment. Contact finance before making another payment.'],
+            'details' => ['Application Number' => $admission->app_number, 'Payment Reference' => $payment->reference],
+            'cta_url' => route('applicant.login'), 'cta_label' => 'Open applicant portal', 'school_id' => $admission->school_id]);
+    }
     public static function isConfigured(): bool
     {
         return ! empty(get_settings('smtp_user'))
@@ -32,6 +39,18 @@ class ApplicantNotifier
 
     private static function send(?string $to, array $data): bool
     {
+        if (filled($to) && \Illuminate\Support\Facades\Schema::hasTable('applicant_notification_deliveries')) {
+            $id = ApplicantNotificationDelivery::record($to, $data);
+            if (\Illuminate\Support\Facades\DB::transactionLevel() > 0) {
+                \Illuminate\Support\Facades\DB::afterCommit(fn () => ApplicantNotificationDelivery::deliver($id));
+                return true;
+            }
+            return ApplicantNotificationDelivery::deliver($id);
+        }
+        if (\Illuminate\Support\Facades\DB::transactionLevel() > 0) {
+            \Illuminate\Support\Facades\DB::afterCommit(fn () => self::send($to, $data));
+            return true;
+        }
         if (blank($to) || ! self::isConfigured()) {
             return false;
         }
@@ -41,7 +60,7 @@ class ApplicantNotifier
 
             return true;
         } catch (\Throwable $e) {
-            report($e);
+            \Illuminate\Support\Facades\Log::warning('Applicant notification failed; durable delivery migration is not installed.');
 
             return false;
         }
@@ -211,7 +230,7 @@ class ApplicantNotifier
             ],
             'details' => array_filter([
                 get_phrase('Application Number') => $admission->app_number,
-                get_phrase('Amount')             => ApplicationFee::format((float) $payment->amount),
+                get_phrase('Amount')             => ApplicationFee::format((float) $payment->amount, $admission),
                 get_phrase('Method')             => ucfirst($payment->method),
                 get_phrase('Reference')          => $payment->reference,
             ]),
@@ -233,7 +252,7 @@ class ApplicantNotifier
             ]),
             'details' => array_filter([
                 get_phrase('Application Number') => $admission->app_number,
-                get_phrase('Amount')             => ApplicationFee::format((float) $payment->amount),
+                get_phrase('Amount')             => ApplicationFee::format((float) $payment->amount, $admission),
                 get_phrase('Reference')          => $payment->reference,
             ]),
             'cta_label' => get_phrase('Resubmit Payment Details'),
@@ -254,7 +273,7 @@ class ApplicantNotifier
      * payment record or a second application (see
      * AdmissionsController::resendPaymentInstructions()).
      */
-    public static function staffEntryPaymentRequest(Admission $admission, string $portalUrl, bool $isReminder = false): bool
+    public static function staffEntryPaymentRequest(Admission $admission, string $portalUrl, bool $isReminder = false, ?string $accessUrl = null): bool
     {
         $amount = ApplicationFee::amountFor($admission);
 
@@ -268,19 +287,21 @@ class ApplicantNotifier
             'greeting' => get_phrase('Dear') . ' ' . $admission->full_name . ',',
             'paragraphs' => [
                 $isReminder
-                    ? get_phrase('This is a reminder that your application fee has not yet been received. Use the link below to sign in and complete payment.')
-                    : get_phrase('An application has been created for you at') . ' ' . (get_settings('system_title') ?: 'the institution') . '. ' . get_phrase('Use the link below to set up access to your applicant portal, where you can review your details and pay your application fee.'),
+                    ? get_phrase('Your application fee is outstanding. Use your secure link to pay through PesaPal or check an existing payment.')
+                    : get_phrase('An application has been created for you at') . ' ' . (get_settings('system_title') ?: 'the institution') . '. ' . get_phrase('Use your secure link to pay through PesaPal. Payment is verified with the provider.'),
             ],
             'details' => array_filter([
                 get_phrase('Application Number') => $admission->app_number,
                 get_phrase('Programme')          => optional($admission->programme)->name,
-                get_phrase('Application Fee')    => $amount > 0 ? ApplicationFee::format($amount) : get_phrase('None for this intake'),
+                get_phrase('Application Fee')    => $amount > 0 ? ApplicationFee::format($amount, $admission) : get_phrase('None for this intake'),
                 get_phrase('Payment Reference')  => $admission->app_number,
                 get_phrase('Payment Status')     => ucfirst($admission->fee_status),
             ]),
-            'cta_label'   => get_phrase('Set Up Access & Pay'),
+            'cta_label'   => get_phrase('Pay or Check PesaPal Payment'),
             'cta_url'     => $portalUrl,
-            'footer_note' => get_phrase('This link is personal to you and expires after use or after 60 minutes, whichever comes first. If you were not expecting this email, please contact the admissions office.'),
+            'access_url'  => $accessUrl,
+            'payment_invitation_admission_id' => $admission->id,
+            'footer_note' => get_phrase('Keep this personal payment link private. It expires after 60 minutes. If you were not expecting it, contact the admissions office.'),
             'school_id'   => $admission->school_id,
         ]);
     }

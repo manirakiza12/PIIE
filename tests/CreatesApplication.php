@@ -10,6 +10,20 @@ trait CreatesApplication
     {
         $app = require __DIR__ . '/../bootstrap/app.php';
 
+        // Isolate before provider boot: SMTP/settings providers may query the
+        // database during bootstrap, before individual tests arrange fixtures.
+        $app->beforeBootstrapping(\Illuminate\Foundation\Bootstrap\BootProviders::class, function ($app) {
+            if ($app->environment('testing')) {
+                $app['config']->set([
+                    'database.default'=>'sqlite',
+                    'database.connections.sqlite.database'=>':memory:',
+                    'database.connections.mysql.database'=>'__piie_phpunit_blocked__',
+                ]);
+                \Illuminate\Support\Facades\DB::purge('mysql');
+                \Illuminate\Support\Facades\DB::purge('sqlite');
+            }
+        });
+
         $app->make(Kernel::class)->bootstrap();
 
         // PHPUnit must never inherit the developer's live MySQL connection.

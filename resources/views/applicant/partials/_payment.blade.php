@@ -10,6 +10,9 @@
     $settled  = $admission->isFeeSettled();
     $pending  = $admission->fee_status === \App\Models\Admission::FEE_PENDING;
     $gateways = collect($methods)->where('key', '!=', 'offline');
+    $sandboxCheckoutBlocked = config('sandbox.connectivity') !== null
+        && !(class_exists(\PiieSandbox\ControlledCheckout::class)
+            && \PiieSandbox\ControlledCheckout::buttonEnabled($admission));
 @endphp
 
 <div class="ap-card">
@@ -27,7 +30,7 @@
         </div>
 
         <div class="text-end">
-            <div style="font-size:24px; font-weight:700;">{{ ApplicationFee::format((float) $amount) }}</div>
+            <div style="font-size:24px; font-weight:700;">{{ ApplicationFee::format((float) $amount, $admission) }}</div>
             <span class="ap-pill bg-{{ $settled ? 'success' : ($pending ? 'primary' : 'warning') }} bg-opacity-10 text-{{ $settled ? 'success' : ($pending ? 'primary' : 'warning') }}">
                 {{ get_phrase(ucfirst($admission->fee_status)) }}
             </span>
@@ -50,7 +53,7 @@
         <i class="bi bi-hourglass-split mt-1"></i>
         <div>
             <strong>{{ get_phrase('Your payment is being verified.') }}</strong><br>
-            {{ get_phrase('The finance office is confirming the details you submitted. You can continue with the rest of your application in the meantime.') }}
+            {{ get_phrase('Payment confirmation is outstanding. Online payments are verified with the provider; deposit proof is reviewed by finance.') }}
         </div>
     </div>
 @endif
@@ -65,7 +68,21 @@
                         <h2 class="ap-card-title"><i class="bi bi-lightning-charge"></i> {{ get_phrase('Pay Online') }}</h2>
                     </div>
 
-                    <p class="ap-hint mb-3">{{ get_phrase('Pay now and this step is completed immediately.') }}</p>
+                    <p class="ap-hint mb-2">Choose MTN Mobile Money, Airtel Money or a bank card on PesaPal's secure checkout. Available methods depend on your currency and merchant account.</p>
+                    <p class="ap-hint mb-3">Approve Mobile Money on your phone when prompted. Enter card details only on PesaPal's hosted page. A prompt or a return to PIIE does not confirm payment; PIIE checks the result with PesaPal.</p>
+                    @if($sandboxCheckoutBlocked)
+                        <div class="alert alert-info" role="status">
+                            @if($payments->isNotEmpty())
+                                The one-use sandbox checkout has already been used or closed. Do not start another payment. Your application fee is settled only after successful provider verification.
+                            @else
+                                Sandbox checkout is currently disabled. Your submitted application is saved; no payment attempt will be created. A separately approved, controlled PesaPal sandbox test is required before this button can be enabled.
+                            @endif
+                        </div>
+                    @elseif(config('sandbox.connectivity') !== null)
+                        <div class="alert alert-info" role="status">
+                            One controlled sandbox checkout is authorized for this application only. Complete the payment yourself on PesaPal. The fee is marked paid only after provider verification.
+                        </div>
+                    @endif
 
                     @foreach($gateways as $gateway)
                         <form action="{{ route('applicant.payment.gateway.start', $gateway['key']) }}" method="POST" class="mb-2">
@@ -74,8 +91,8 @@
                                 <label class="form-label" for="marzpay_phone_number">{{ get_phrase('Mobile Money Number') }}</label>
                                 <input type="tel" class="form-control mb-2" id="marzpay_phone_number" name="phone_number" placeholder="e.g. 0712345678" required>
                             @endif
-                            <button type="submit" class="ap-btn ap-btn-accent w-100">
-                                <i class="bi {{ $gateway['icon'] }}"></i> {{ $gateway['label'] }}
+                            <button type="submit" class="ap-btn ap-btn-accent w-100" @disabled($sandboxCheckoutBlocked || !\App\Support\Payments\ApplicantPesaPalPayment::eligible($admission))>
+                                <i class="bi {{ $gateway['icon'] }}"></i> {{ $gateway['key']==='pesapal' ? \App\Support\Payments\PesaPalPaymentExperience::checkoutLabel($payments) : $gateway['label'] }}
                             </button>
                         </form>
                     @endforeach
@@ -150,12 +167,19 @@
                             <td>{{ $payment->created_at->format('d M Y') }}</td>
                             <td>{{ ucfirst($payment->method) }}</td>
                             <td style="word-break:break-all;">{{ $payment->reference ?: '—' }}</td>
-                            <td>{{ ApplicationFee::format((float) $payment->amount) }}</td>
+                            <td>{{ ApplicationFee::format((float) $payment->amount, $admission) }}</td>
                             <td>
                                 @php
                                     $tone = ['paid' => 'success', 'waived' => 'success', 'pending' => 'primary', 'failed' => 'danger', 'rejected' => 'danger'][$payment->status] ?? 'secondary';
+                                    $experience=$payment->method==='pesapal'?\App\Support\Payments\PesaPalPaymentExperience::forPayment($payment):null;
                                 @endphp
-                                <span class="ap-pill bg-{{ $tone }} bg-opacity-10 text-{{ $tone }}">{{ get_phrase(ucfirst($payment->status)) }}</span>
+                                <span class="ap-pill bg-{{ $experience['tone'] ?? $tone }} bg-opacity-10 text-{{ $experience['tone'] ?? $tone }}">{{ $experience['label'] ?? get_phrase(ucfirst($payment->status)) }}</span>
+                                @if($payment->method === 'pesapal')
+                                    <p class="ap-hint mb-1">{{ $experience['message'] }}</p>
+                                    @if($experience['reason'])<p class="ap-hint mb-1">{{ $experience['reason'] }}</p>@endif
+                                    @if($payment->gateway_payload['last_checked_at'] ?? null)<div class="ap-hint mb-1">Last provider check: {{ \Carbon\Carbon::parse($payment->gateway_payload['last_checked_at'])->format('d M Y H:i T') }}</div>@endif
+                                    <form method="post" action="{{ route('applicant.payment.pesapal.status', $payment->id) }}">@csrf<button type="submit" class="ap-btn" @disabled(config('sandbox.connectivity') !== null && !config('sandbox.connectivity.transactions', false))>Check existing payment</button></form>
+                                @endif
                                 @if($payment->status === 'rejected' && $payment->note)
                                     <div class="ap-hint text-danger">{{ $payment->note }}</div>
                                 @endif

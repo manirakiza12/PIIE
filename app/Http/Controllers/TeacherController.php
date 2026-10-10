@@ -68,7 +68,11 @@ class TeacherController extends Controller
 
         foreach ($permissions  as  $key => $distinct_class) {
 
-            $class_details = Classes::where('id', $distinct_class['class_id'])->first()->toArray();
+            // A permission row can outlive its class; skip it rather than 500.
+            $class_details = Classes::where('id', $distinct_class['class_id'])->first()?->toArray();
+            if ($class_details === null) {
+                continue;
+            }
             $permitted_classes[$key] = $class_details;
         }
 
@@ -315,7 +319,11 @@ class TeacherController extends Controller
 
         foreach ($permissions  as  $key => $distinct_class) {
 
-            $class_details = Classes::where('id', $distinct_class['class_id'])->first()->toArray();
+            // A permission row can outlive its class; skip it rather than 500.
+            $class_details = Classes::where('id', $distinct_class['class_id'])->first()?->toArray();
+            if ($class_details === null) {
+                continue;
+            }
             $permitted_classes[$key] = $class_details;
         }
 
@@ -366,7 +374,11 @@ class TeacherController extends Controller
         $classes = array();
 
         foreach ($permissions  as  $key => $distinct_class) {
-            $class_details = Classes::where('id', $distinct_class['class_id'])->first()->toArray();
+            // A permission row can outlive its class; skip it rather than 500.
+            $class_details = Classes::where('id', $distinct_class['class_id'])->first()?->toArray();
+            if ($class_details === null) {
+                continue;
+            }
             $classes[$key] = $class_details;
         }
 
@@ -583,8 +595,12 @@ class TeacherController extends Controller
 
         foreach ($permissions  as  $key => $distinct_class) {
 
-            $class_details = Classes::where('id', $distinct_class['class_id'])->first()->toArray();
-            $classes[$key] = $class_details;
+            // A permission row can outlive its class; skip it rather than 500.
+            $class = Classes::where('id', $distinct_class['class_id'])->first();
+            if (! $class) {
+                continue;
+            }
+            $classes[$key] = $class->toArray();
         }
 
         $attendance_of_students = array();
@@ -621,7 +637,11 @@ class TeacherController extends Controller
 
         foreach ($permissions  as  $key => $distinct_class) {
 
-            $class_details = Classes::where('id', $distinct_class['class_id'])->first()->toArray();
+            // A permission row can outlive its class; skip it rather than 500.
+            $class_details = Classes::where('id', $distinct_class['class_id'])->first()?->toArray();
+            if ($class_details === null) {
+                continue;
+            }
             $classes[$key] = $class_details;
         }
 
@@ -635,7 +655,11 @@ class TeacherController extends Controller
 
         foreach ($permissions  as  $key => $distinct_class) {
 
-            $class_details = Classes::where('id', $distinct_class['class_id'])->first()->toArray();
+            // A permission row can outlive its class; skip it rather than 500.
+            $class_details = Classes::where('id', $distinct_class['class_id'])->first()?->toArray();
+            if ($class_details === null) {
+                continue;
+            }
             $classes[$key] = $class_details;
         }
 

@@ -7,6 +7,11 @@
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 RID="${1:?release id}"; ART="${2:?artefact}"; SUM="${3:?sha256}"; MODE="${4:-stage}"
+if [ "$MODE" = activate ] && [ -n "${EXPECTED_DEPLOYED_SHA:-}" ]; then
+  [[ "$EXPECTED_DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]] || die "invalid deployed baseline"
+  [ -f "$BASE/current/RELEASE_SHA" ] || die "current release identity is missing"
+  [ "$(cat "$BASE/current/RELEASE_SHA")" = "$EXPECTED_DEPLOYED_SHA" ] || die "deployed release changed since migration review"
+fi
 [[ "$RID" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{7,12}$ ]] || die "bad release id"
 [ "$MODE" = stage ] || [ "$MODE" = activate ] || die "mode must be stage|activate"
 
@@ -251,7 +256,7 @@ cd "$REL"
 "$PHP" artisan package:discover --ansi >/dev/null
 
 log "Pending migrations (pretend; nothing executed):"
-PRETEND="$("$PHP" artisan migrate --pretend --force 2>&1 || true)"
+PRETEND="$("$PHP" artisan migrate --pretend --force 2>&1)" || die "migration preflight failed; release will not activate"
 echo "$PRETEND" | head -60
 if echo "$PRETEND" | grep -qiE 'drop +(table|column|database)|truncate|delete +from'; then
   [ "${ALLOW_DESTRUCTIVE_MIGRATIONS:-}" = 1 ] || die "destructive SQL in pending migrations; review, then set ALLOW_DESTRUCTIVE_MIGRATIONS=1"

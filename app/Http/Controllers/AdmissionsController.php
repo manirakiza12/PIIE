@@ -256,15 +256,28 @@ class AdmissionsController extends Controller
      * recomputed from the payment rows by ApplicationFee::refreshStatus() so
      * the cached column can't disagree with the ledger it summarises.
      */
+    public function paymentProof($id)
+    {
+        $payment = ApplicationPayment::where('school_id', $this->school_id)->findOrFail($id);
+        abort_unless($payment->admission()->where('school_id', $this->school_id)->exists(), 404);
+        return \App\Support\Payments\ApplicationPaymentProof::download($payment);
+    }
+
     public function reviewPayment(Request $request, $id)
     {
         $payment = ApplicationPayment::where('school_id', $this->school_id)->findOrFail($id);
+        abort_unless($payment->method === 'offline', 422, 'Online payments require provider verification. Use the explicit fee waiver action for waivers.');
 
         $validated = $request->validate([
-            'status' => ['required', Rule::in([ApplicationPayment::STATUS_PAID, ApplicationPayment::STATUS_REJECTED, ApplicationPayment::STATUS_WAIVED])],
+            'status' => ['required', Rule::in([ApplicationPayment::STATUS_PAID, ApplicationPayment::STATUS_REJECTED])],
             'note'   => 'nullable|string|max:500',
         ]);
 
+        DB::transaction(function () use ($payment, $validated) {
+        $payment = ApplicationPayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
+        abort_unless($payment->status === ApplicationPayment::STATUS_PENDING, 422, 'Only a pending offline payment can be reviewed.');
+        $admission = Admission::whereKey($payment->admission_id)->lockForUpdate()->firstOrFail();
+        abort_if($admission->payments()->where('status', 'pending')->whereIn('method', ['pesapal', 'marzpay', 'stripe', 'flutterwave'])->exists(), 422, 'Resolve the outstanding online payment first.');
         $payment->update([
             'status'       => $validated['status'],
             'note'         => $validated['note'] ?? $payment->note,
@@ -287,6 +300,7 @@ class AdmissionsController extends Controller
         } else {
             ApplicantNotifier::paymentReceived($admission, $payment);
         }
+        });
 
         return back()->with('success', get_phrase('Payment updated.'));
     }
@@ -303,6 +317,10 @@ class AdmissionsController extends Controller
     public function sendPaymentRequest($id)
     {
         $admission = Admission::where('school_id', $this->school_id)->findOrFail($id);
+        if (! \App\Support\Payments\ApplicantPesaPalPayment::eligible($admission)
+            || ! ApplicationFee::gatewayIsConfigured('pesapal', $this->school_id)) {
+            return back()->with('error', 'Submit the application and configure PesaPal before sending a payment link.');
+        }
 
         if (! ApplicationFee::isRequired($admission)) {
             return back()->with('error', get_phrase('No application fee is payable for this intake.'));
@@ -335,9 +353,9 @@ class AdmissionsController extends Controller
         $isReminder = (bool) $admission->applicant_id;
 
         $applicant = ApplicantPortalAccess::ensureLinked($admission);
-        $portalUrl = ApplicantPortalAccess::paymentLinkFor($applicant);
+        $portalUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute('applicant.pesapal.invitation', now()->addHour(), ['admission' => $admission->id]);
 
-        $sent = ApplicantNotifier::staffEntryPaymentRequest($admission, $portalUrl, $isReminder);
+        $sent = ApplicantNotifier::staffEntryPaymentRequest($admission, $portalUrl, $isReminder, ApplicantPortalAccess::paymentLinkFor($applicant));
 
         RateLimiter::hit($throttleKey, 120); // 2 minutes
 
@@ -351,6 +369,18 @@ class AdmissionsController extends Controller
         return back()->with($sent ? 'success' : 'error', $sent
             ? get_phrase('Payment instructions sent to') . ' ' . $admission->email . '.'
             : get_phrase('Portal access was created, but the email could not be sent — check the mail configuration under Super Admin > Settings.'));
+    }
+
+    public function checkPesaPalPayment(Request $request, $id)
+    {
+        $payment = ApplicationPayment::where('school_id', $this->school_id)->where('method', 'pesapal')->findOrFail($id);
+        $request->validate(['order_tracking_id' => 'nullable|uuid']);
+        try {
+            $result = \App\Support\Payments\ApplicantPesaPalPayment::reconcile($payment, $request->input('order_tracking_id'));
+            return back()->with('success', 'PesaPal verification: ' . $result);
+        } catch (\App\Support\Payments\PesaPalException $exception) {
+            return back()->with('error', 'PesaPal verification is unavailable or the evidence did not match. No credit was assigned.');
+        }
     }
 
     /**
@@ -367,18 +397,23 @@ class AdmissionsController extends Controller
 
         $validated = $request->validate([
             'amount'                => 'required|numeric|min:0.01',
-            'method'                => 'required|string|max:30',
+            'method'                => ['required', Rule::in(['offline', 'cash', 'bank', 'bank_transfer', 'mobile_money', 'cheque', 'other'])],
             'external_reference'    => 'nullable|string|max:191',
             'paid_at'               => 'required|date',
             'note'                  => 'nullable|string|max:500',
         ]);
 
+        $payment = DB::transaction(function () use ($admission, $validated) {
+        $admission = Admission::whereKey($admission->id)->where('school_id', $this->school_id)->lockForUpdate()->firstOrFail();
+        ApplicationFee::refreshStatus($admission);
+        abort_if($admission->isFeeSettled(), 422, 'This fee is already settled.');
+        abort_if($admission->payments()->where('status', 'pending')->whereIn('method', ['pesapal', 'marzpay', 'stripe', 'flutterwave'])->exists(), 422, 'Resolve the outstanding online payment before recording an offline payment.');
         $payment = ApplicationPayment::create([
             'school_id'       => $this->school_id,
             'admission_id'    => $admission->id,
             'applicant_id'    => $admission->applicant_id,
             'amount'          => $validated['amount'],
-            'currency'        => ApplicationFee::currency(),
+            'currency'        => ApplicationFee::currencyFor($admission),
             'method'          => $validated['method'],
             'status'          => ApplicationPayment::STATUS_PAID,
             'reference'       => 'MANUAL-' . $admission->id . '-' . strtoupper(\Illuminate\Support\Str::random(6)),
@@ -387,7 +422,6 @@ class AdmissionsController extends Controller
             'confirmed_by'    => Auth::id(),
             'paid_at'         => $validated['paid_at'],
         ]);
-
         ApplicationFee::refreshStatus($admission);
 
         AuditLog::record('create', 'Admissions', "Manual application-fee payment recorded for {$admission->app_number} ({$validated['method']}, " . ApplicationFee::format((float) $validated['amount']) . ").", [
@@ -398,6 +432,8 @@ class AdmissionsController extends Controller
         ]);
 
         ApplicantNotifier::paymentReceived($admission, $payment);
+        return $payment;
+        });
 
         return back()->with('success', get_phrase('Payment recorded.'));
     }
@@ -429,13 +465,14 @@ class AdmissionsController extends Controller
             if ($admission->isFeeSettled()) {
                 return null;
             }
+            abort_if($admission->payments()->where('status', 'pending')->whereIn('method', ['pesapal', 'marzpay', 'stripe', 'flutterwave'])->exists(), 422, 'Resolve the outstanding online payment before waiving this fee.');
 
             $payment = ApplicationPayment::create([
                 'school_id'    => $this->school_id,
                 'admission_id' => $admission->id,
                 'applicant_id' => $admission->applicant_id,
                 'amount'       => ApplicationFee::amountFor($admission),
-                'currency'     => ApplicationFee::currency(),
+                'currency'     => ApplicationFee::currencyFor($admission),
                 'method'       => 'waived',
                 'status'       => ApplicationPayment::STATUS_WAIVED,
                 'reference'    => 'WAIVER-' . $admission->id . '-' . strtoupper(\Illuminate\Support\Str::random(6)),
@@ -582,22 +619,27 @@ class AdmissionsController extends Controller
             'last_name'          => 'required|max:100',
             'email'              => 'nullable|email|max:150',
             'phone'              => 'nullable|max:20',
-            'intake_session_id'  => 'nullable|exists:intake_sessions,id',
-            'programme_id'       => 'nullable|exists:programmes,id',
+            'intake_session_id'  => ['nullable', Rule::exists('intake_sessions', 'id')->where('school_id', $this->school_id)],
+            'programme_id'       => ['nullable', Rule::exists('programmes', 'id')->where('school_id', $this->school_id)],
             'gender'             => 'nullable|max:10',
             'dob'                => 'nullable|date',
             'nationality'        => 'nullable|max:80',
             'qualifications'     => 'nullable|string',
-            'agent_id'           => 'nullable|exists:admissions_agents,id',
+            'agent_id'           => ['nullable', Rule::exists('admissions_agents', 'id')->where('school_id', $this->school_id)],
         ]);
 
         $validated['school_id']    = $this->school_id;
         $validated['app_number']   = ApplicationReference::generate($this->school_id, 'staff_entry', $validated['intake_session_id'] ?? null);
-        $validated['status']       = Admission::STATUS_SUBMITTED;
+        $validated['status']       = Admission::STATUS_DRAFT;
         $validated['source']       = 'staff_entry';
-        $validated['submitted_at'] = now();
+        $validated['submitted_at'] = null;
 
-        $admission = Admission::create($validated);
+        $admission = DB::transaction(function () use ($validated) {
+            $admission = Admission::create($validated);
+            ApplicationFee::refreshStatus($admission);
+            ApplicationWorkflow::submitByStaff($admission, Auth::user());
+            return $admission;
+        });
         AuditLog::record('create', 'Admissions', "New application: {$admission->app_number} — {$admission->first_name} {$admission->last_name}");
         return response()->json(['status' => 'success', 'message' => get_phrase('Application created successfully')]);
     }
@@ -609,7 +651,7 @@ class AdmissionsController extends Controller
         $validated = $request->validate([
             'status' => ['required', Rule::in(Admission::STAFF_SETTABLE_STATUSES)],
             // Shown to the applicant alongside the new status.
-            'decision_note' => 'nullable|string|max:2000',
+            'decision_note' => 'nullable|required_if:status,needs_correction|string|max:2000',
             // Optional administrator-chosen portal password when enrolling —
             // if omitted, a password is generated automatically.
             'password' => 'nullable|string|min:6',
@@ -625,21 +667,20 @@ class AdmissionsController extends Controller
             'session_id'    => ['nullable', 'required_with:class_id,section_id', Rule::exists('sessions', 'id')->where(fn ($q) => $q->where('school_id', $this->school_id))],
         ]);
 
-        $oldStatus = $admission->status;
+        return DB::transaction(function () use ($admission, $request, $validated) {
+        $admission = Admission::whereKey($admission->id)->where('school_id', $this->school_id)->lockForUpdate()->firstOrFail();
 
         $admission->load(['programme', 'intakeSession']);
 
         // The workflow writes the status, the applicant-visible timeline entry
         // and the audit record together, and sends the notification — see
         // App\Support\Admissions\ApplicationWorkflow for why that is one step.
-        ApplicationWorkflow::transitionByStaff($admission, $request->status, Auth::user(), $request->decision_note);
+        abort_unless(ApplicationWorkflow::canTransition($admission, $request->status), 422, 'This admission transition is not eligible. Complete the application and settle its fee before acceptance or enrolment.');
 
         // If enrolled, convert the application into a student account.
-        // Gated on the status actually transitioning to 'enrolled' so a
-        // retried/duplicate request (old status already 'enrolled') never
-        // re-runs conversion — createStudentFromAdmission() is additionally
-        // idempotent on its own for safety (see its docblock).
-        if ($request->status === Admission::STATUS_ENROLLED && $oldStatus !== Admission::STATUS_ENROLLED) {
+        // Provision first within this transaction. Retrying an already-enrolled
+        // application repairs historical partial conversion idempotently.
+        if ($request->status === Admission::STATUS_ENROLLED) {
             $this->createStudentFromAdmission($admission, $request->password, [
                 'class_id'      => $validated['class_id'] ?? null,
                 'section_id'    => $validated['section_id'] ?? null,
@@ -650,8 +691,10 @@ class AdmissionsController extends Controller
                 'session_id'    => $validated['session_id'] ?? null,
             ]);
         }
+        ApplicationWorkflow::transitionByStaff($admission, $request->status, Auth::user(), $request->decision_note);
 
         return redirect()->back()->with('success', get_phrase('Status updated'));
+        });
     }
 
     public function destroy($id)
@@ -908,6 +951,10 @@ class AdmissionsController extends Controller
      */
     private function createStudentFromAdmission(Admission $admission, ?string $chosenPassword = null, array $academicAssignment = []): void
     {
+        $existing = User::where('email', $admission->email)->first();
+        if ($existing && (int) $existing->school_id !== (int) $this->school_id) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['email' => 'This email belongs to another school. Enrolment has not been completed.']);
+        }
         $result = StudentProvisioningService::provision([
             'school_id'         => $this->school_id,
             'first_name'        => $admission->first_name,
@@ -931,7 +978,7 @@ class AdmissionsController extends Controller
             // Do not touch the existing account automatically; leave for an
             // admin to resolve manually.
             AuditLog::record('error', 'Admissions', "Could not convert application {$admission->app_number} to a student — email {$admission->email} already belongs to a non-student account.");
-            return;
+            throw \Illuminate\Validation\ValidationException::withMessages(['email' => 'This email belongs to an incompatible account. Enrolment has not been completed.']);
         }
 
         $student = $result['student'];
@@ -959,10 +1006,10 @@ class AdmissionsController extends Controller
         \App\Support\EnrollmentDefaults::ensureRow($student->id, $this->school_id);
 
         if ($result['plain_password'] !== null) {
-            $sent = StudentPortalActivation::sendActivationEmail($student, $result['plain_password'], $admission->programme_id, $admission->intake_session_id);
+            $sent = StudentPortalActivation::sendActivationEmail($student, $result['plain_password'], $admission->programme_id, $admission->intake_session_id, true);
 
             if ($sent) {
-                AuditLog::record('update', 'Admissions', "Student portal activation email sent to {$student->email} (#{$student->id}).");
+                AuditLog::record('update', 'Admissions', "Student portal activation notification accepted for delivery (#{$student->id}).");
             }
         }
     }

@@ -118,19 +118,16 @@ class ApplicationPaymentFoundationTest extends TestCase
         return [[Admission::STATUS_DRAFT], [Admission::STATUS_NEEDS_CORRECTION]];
     }
 
-    public function test_submitted_unpaid_application_can_start_the_configured_marzpay_provider(): void
+    public function test_submitted_unpaid_application_cannot_start_new_legacy_marzpay_orders(): void
     {
         $admission = $this->applicantApplication(Admission::STATUS_SUBMITTED);
         Http::fake(['wallet.wearemarz.com/api/v1/collect-money' => Http::response([
             'data' => ['transaction' => ['uuid' => 'new-transaction', 'status' => 'processing']],
         ])]);
         $this->post(route('applicant.payment.gateway.start', 'marzpay'), ['phone_number' => '0700111222'])
-            ->assertOk();
-        $payment = $admission->payments()->firstOrFail();
-        $this->assertSame('new-transaction', $payment->gateway_txn_id);
-        $this->assertSame(ApplicationPayment::STATUS_PENDING, $payment->status);
-        $this->assertSame(Admission::FEE_PENDING, $admission->fresh()->fee_status);
-        Http::assertSentCount(1);
+            ->assertRedirect();
+        $this->assertSame(0, $admission->payments()->count());
+        Http::assertNothingSent();
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('feeTotals')]

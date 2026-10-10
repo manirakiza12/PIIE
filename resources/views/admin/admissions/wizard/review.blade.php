@@ -126,7 +126,7 @@
         <div class="row g-3 mb-2">
             <div class="col-6 col-md-3">
                 <small class="text-muted d-block">{{ get_phrase('Application Fee') }}</small>
-                <strong>{{ \App\Support\Admissions\ApplicationFee::format($feeAmount) }}</strong>
+                <strong>{{ \App\Support\Admissions\ApplicationFee::format($feeAmount, $admission) }}</strong>
             </div>
             <div class="col-6 col-md-3">
                 <small class="text-muted d-block">{{ get_phrase('Payment Reference') }}</small>
@@ -134,11 +134,11 @@
             </div>
             <div class="col-6 col-md-3">
                 <small class="text-muted d-block">{{ get_phrase('Amount Paid') }}</small>
-                <strong>{{ \App\Support\Admissions\ApplicationFee::format($feePaid) }}</strong>
+                <strong>{{ \App\Support\Admissions\ApplicationFee::format($feePaid, $admission) }}</strong>
             </div>
             <div class="col-6 col-md-3">
                 <small class="text-muted d-block">{{ get_phrase('Outstanding') }}</small>
-                <strong class="{{ $feeOutstanding > 0 ? 'text-danger' : 'text-success' }}">{{ \App\Support\Admissions\ApplicationFee::format($feeOutstanding) }}</strong>
+                <strong class="{{ $feeOutstanding > 0 ? 'text-danger' : 'text-success' }}">{{ \App\Support\Admissions\ApplicationFee::format($feeOutstanding, $admission) }}</strong>
             </div>
         </div>
         @unless($admission->isFeeSettled())

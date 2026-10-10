@@ -76,6 +76,7 @@ class Admission extends Model
     ];
 
     protected $casts = [
+        'application_fee_amount'   => 'decimal:2',
         'documents'               => 'array',
         'completed_steps'         => 'array',
         'has_disability'          => 'boolean',

@@ -92,6 +92,19 @@ Route::get('/clear-cache', function () {
 // metadata says which fee/subscription row it belongs to.
 Route::post('webhooks/marzpay', [\App\Http\Controllers\MarzPayWebhookController::class, 'handle'])->name('webhooks.marzpay');
 
+Route::get('payments/pesapal/callback', [\App\Http\Controllers\Applicant\PesaPalController::class, 'callback'])->middleware('throttle:60,1')->name('applicant.pesapal.callback');
+// Register GET notifications: no CSRF exemption or applicant session is needed.
+Route::get('payments/pesapal/ipn', [\App\Http\Controllers\Applicant\PesaPalController::class, 'ipn'])->middleware('throttle:120,1')->name('applicant.pesapal.ipn');
+Route::match(['get', 'post'], 'payments/application/{admission}', [\App\Http\Controllers\Applicant\PesaPalController::class, 'invitation'])
+    ->middleware(['signed', 'throttle:20,1'])->name('applicant.pesapal.invitation');
+
+Route::middleware(['auth', 'admin', 'rbac', 'school_admin'])->controller(\App\Http\Controllers\Admin\ApplicantPesaPalSettingsController::class)->group(function () {
+    Route::get('admin/applicant-pesapal-settings', 'index')->name('admin.hei_admissions.payment.pesapal.settings');
+    Route::post('admin/applicant-pesapal-settings', 'save')->name('admin.hei_admissions.payment.pesapal.settings.save');
+    Route::post('admin/applicant-pesapal-settings/register-ipn', 'register')->name('admin.hei_admissions.payment.pesapal.settings.register');
+    Route::post('admin/applicant-pesapal-settings/notifications/{delivery}/retry', 'retryNotification')->middleware('throttle:5,1')->name('admin.hei_admissions.payment.pesapal.notification.retry');
+});
+
 //Auth routes are here
 Auth::routes();
 
@@ -200,6 +213,7 @@ Route::middleware('applicant')->group(function () {
 
     Route::controller(\App\Http\Controllers\Applicant\PaymentController::class)->group(function () {
         Route::get('applicant/payment', 'index')->name('applicant.payment');
+        Route::post('applicant/payment/pesapal/{payment}/status', 'checkPesaPalStatus')->middleware('throttle:10,1')->name('applicant.payment.pesapal.status');
         Route::post('applicant/payment/offline', 'submitOffline')->name('applicant.payment.offline');
         Route::post('applicant/payment/{gateway}/start', 'startGateway')->name('applicant.payment.gateway.start');
         Route::get('applicant/payment/{gateway}/return/{payment}', 'gatewayReturn')->name('applicant.payment.gateway.return');
@@ -1690,8 +1704,10 @@ Route::controller(AdmissionsController::class)->middleware('auth', 'admin', 'rba
     Route::post('admin/hei-admissions/review/{id}/correction', 'requestCorrection')->name('admin.hei_admissions.correction');
     Route::post('admin/hei-admissions/review/{id}/notes',      'saveNotes')->name('admin.hei_admissions.notes');
     Route::post('admin/hei-admissions/document/{id}/review',   'reviewDocument')->name('admin.hei_admissions.document.review');
+    Route::get('admin/hei-admissions/payment/{id}/proof',     'paymentProof')->whereNumber('id')->name('admin.hei_admissions.payment.proof');
     Route::post('admin/hei-admissions/payment/{id}/review',    'reviewPayment')->name('admin.hei_admissions.payment.review');
     Route::post('admin/hei-admissions/payment/{id}/request',   'sendPaymentRequest')->name('admin.hei_admissions.payment.request');
+    Route::post('admin/hei-admissions/payment/{id}/pesapal/check', 'checkPesaPalPayment')->middleware('throttle:10,1')->name('admin.hei_admissions.payment.pesapal.check');
     Route::post('admin/hei-admissions/payment/{id}/record',    'recordPayment')->name('admin.hei_admissions.payment.record');
     Route::post('admin/hei-admissions/payment/{id}/waive',     'waiveFee')->name('admin.hei_admissions.payment.waive');
     // Document requirements
@@ -1743,7 +1759,7 @@ Route::controller(FeeStructureController::class)->middleware('auth', 'admin', 'r
 });
 
 // ΓöÇΓöÇ Leave Management ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-Route::controller(LeaveController::class)->middleware('auth', 'hr_manager')->group(function () {
+Route::controller(LeaveController::class)->middleware('auth', 'hr_manager', 'school_subscription')->group(function () {
     Route::get('admin/leave',                    'index')->name('admin.leave.index');
     Route::post('admin/leave/approve/{id}',      'approve')->name('admin.leave.approve');
     Route::post('admin/leave/return/{id}',       'returnLeave')->name('admin.leave.return');

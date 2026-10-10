@@ -17,8 +17,25 @@ use Illuminate\Support\Facades\Mail;
  */
 class StudentPortalActivation
 {
-    public static function sendActivationEmail(User $student, string $plainPassword, ?int $programmeId = null, ?int $intakeSessionId = null): bool
+    public static function sendActivationEmail(User $student, string $plainPassword, ?int $programmeId = null, ?int $intakeSessionId = null, bool $durable = false): bool
     {
+        if ($durable && \Illuminate\Support\Facades\Schema::hasTable('applicant_notification_deliveries')) {
+            $id = \App\Support\Admissions\ApplicantNotificationDelivery::record($student->email, [
+                'name' => $student->name, 'email' => $student->email, 'password' => $plainPassword, 'code' => $student->code,
+                'programme' => $programmeId ? Programme::where('school_id', $student->school_id)->find($programmeId)?->name : null,
+                'intake' => $intakeSessionId ? IntakeSession::where('school_id', $student->school_id)->find($intakeSessionId)?->name : null,
+                'school_id' => $student->school_id,
+            ], 'student_activation');
+            if (\Illuminate\Support\Facades\DB::transactionLevel() > 0) {
+                \Illuminate\Support\Facades\DB::afterCommit(fn () => \App\Support\Admissions\ApplicantNotificationDelivery::deliver($id));
+                return true;
+            }
+            return \App\Support\Admissions\ApplicantNotificationDelivery::deliver($id);
+        }
+        if ($durable && \Illuminate\Support\Facades\DB::transactionLevel() > 0) {
+            \Illuminate\Support\Facades\DB::afterCommit(fn () => self::sendActivationEmail($student, $plainPassword, $programmeId, $intakeSessionId));
+            return true;
+        }
         if (empty(get_settings('smtp_user')) || !get_settings('smtp_pass') || !get_settings('smtp_host') || !get_settings('smtp_port')) {
             return false;
         }

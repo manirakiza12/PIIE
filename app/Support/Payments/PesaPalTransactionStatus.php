@@ -16,6 +16,7 @@ final class PesaPalTransactionStatus
         public readonly ?string $confirmationCode,
         public readonly int $responseStatus,
         public readonly ?array $error = null,
+        public readonly ?string $description = null,
     ) {}
 
     public function classification(): string

@@ -63,7 +63,7 @@
                     <div class="ap-kv">
                         <dt>{{ get_phrase('Application Fee') }}</dt>
                         <dd>
-                            {{ $feeAmount > 0 ? ApplicationFee::format((float) $feeAmount) : get_phrase('Not applicable') }}
+                            {{ $feeAmount > 0 ? ApplicationFee::format((float) $feeAmount, $admission) : get_phrase('Not applicable') }}
                             <span class="ap-pill bg-{{ $admission->isFeeSettled() ? 'success' : 'warning' }} bg-opacity-10 text-{{ $admission->isFeeSettled() ? 'success' : 'warning' }} ms-1">
                                 {{ get_phrase(ucfirst($admission->fee_status)) }}
                             </span>

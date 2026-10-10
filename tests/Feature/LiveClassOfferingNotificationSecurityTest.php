@@ -53,6 +53,8 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
         DB::table('schools')->insert([
             ['id' => 1, 'title' => 'Tenant A'], ['id' => 2, 'title' => 'Tenant B'],
         ]);
+        $this->grantActiveFixtureSubscription(1);
+        $this->grantActiveFixtureSubscription(2);
         $this->subjectA = $this->subject(1, 'Shared Subject');
         $foreignSubject = $this->subject(2, 'Shared Subject');
         $this->offeringA = $this->offering(1, $this->subjectA);

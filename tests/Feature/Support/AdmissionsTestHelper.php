@@ -10,12 +10,27 @@ use Illuminate\Support\Facades\Schema;
 
 trait AdmissionsTestHelper
 {
-    protected function bootAdmissionsTestSchema(): void
+    use ActiveSchoolSubscriptionFixture;
+    protected function bootAdmissionsTestSchema(?string $isolatedMysqlDatabase = null): void
     {
+        if ($isolatedMysqlDatabase !== null) {
+            $connection = config('database.connections.mysql');
+            if (! preg_match('/\Apiie_module1_test_[a-f0-9]{16}\z/', $isolatedMysqlDatabase)
+                || ! app()->environment('testing') || ($connection['host'] ?? null) !== '127.0.0.1'
+                || (int) ($connection['port'] ?? 0) !== 3307) { throw new \RuntimeException('Unsafe test database connection refused.'); }
+            Config::set('database.default', 'mysql');
+            Config::set('database.connections.mysql.database', $isolatedMysqlDatabase);
+            DB::purge('mysql'); DB::reconnect('mysql');
+            $server = DB::selectOne('SELECT @@port AS p, @@datadir AS d');
+            if ((int) $server->p !== 3307 || ! str_contains(strtolower(str_replace('\\', '/', $server->d)), '/piie-dev-db/')) {
+                throw new \RuntimeException('Test server identity refused.');
+            }
+        } else {
         Config::set('database.default', 'sqlite');
         Config::set('database.connections.sqlite.database', ':memory:');
         DB::purge('sqlite');
         DB::reconnect('sqlite');
+        }
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();
@@ -104,6 +119,8 @@ trait AdmissionsTestHelper
         });
 
         Schema::create('admissions', function (Blueprint $table) {
+            $table->decimal('application_fee_amount', 12, 2)->nullable();
+            $table->string('application_fee_currency', 10)->nullable();
             $table->id();
             $table->unsignedBigInteger('school_id')->index();
             $table->unsignedBigInteger('applicant_id')->nullable()->index();
@@ -646,7 +663,7 @@ trait AdmissionsTestHelper
             $table->dateTime('read_at')->nullable();
             $table->string('event_key', 190)->nullable();
             $table->timestamps();
-            $table->unique(['school_id', 'user_id', 'event_key']);
+            $table->unique(['school_id', 'user_id', 'event_key'], 'exam_notification_event_unique');
         });
 
         Schema::create('noticeboard', function (Blueprint $table) {
@@ -712,6 +729,7 @@ trait AdmissionsTestHelper
             $table->integer('days')->nullable();
             $table->integer('status')->default(1);
             $table->string('description')->nullable();
+            $table->text('features')->default('[]');
             $table->timestamps();
         });
     }
@@ -727,12 +745,14 @@ trait AdmissionsTestHelper
 
     protected function makeSchool(array $overrides = []): int
     {
-        return (int) DB::table('schools')->insertGetId(array_merge([
+        $school = (int) DB::table('schools')->insertGetId(array_merge([
             'title' => 'Test School',
             'running_session' => 1,
             'created_at' => now(),
             'updated_at' => now(),
         ], $overrides));
+        $this->grantActiveFixtureSubscription($school);
+        return $school;
     }
 
     protected function makeAdminUser(int $schoolId): User
@@ -934,6 +954,28 @@ trait AdmissionsTestHelper
             'qualifications'   => 'UACE 2018',
         ], $overrides));
 
+        return $admission->fresh();
+    }
+
+    /** Valid submitted fixture for decision/conversion tests, including real document requirements. */
+    protected function completeAdmissionForDecision(\App\Models\Admission $admission): \App\Models\Admission
+    {
+        $existing = array_filter(array_intersect_key($admission->getAttributes(), array_flip([
+            'dob', 'gender', 'nationality', 'physical_address', 'nok_name', 'nok_relationship', 'nok_phone', 'qualifications',
+        ])), fn ($value) => filled($value));
+        $admission = $this->completeApplicationFields($admission, array_merge([
+            'submitted_at' => $admission->submitted_at ?: now(),
+            'programme_id' => $admission->programme_id ?: $this->makeProgramme($admission->school_id),
+            'intake_session_id' => $admission->intake_session_id ?: $this->makeIntakeSession($admission->school_id, ['application_fee' => 0]),
+        ], $existing));
+        foreach (\App\Support\Admissions\ApplicationDocuments::requirementsFor($admission) as $requirement) {
+            if (! $requirement->is_required) { continue; }
+            DB::table('admission_documents')->insert([
+                'school_id' => $admission->school_id, 'admission_id' => $admission->id,
+                'requirement_key' => $requirement->key, 'original_name' => 'isolated-fixture.pdf',
+                'stored_name' => 'isolated-fixture.pdf', 'status' => 'verified', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
         return $admission->fresh();
     }
 }

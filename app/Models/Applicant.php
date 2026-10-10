@@ -64,6 +64,7 @@ class Applicant extends Authenticatable implements CanResetPasswordContract
     public function currentAdmission(): ?Admission
     {
         return $this->admissions()
+            ->where('school_id', $this->school_id)
             ->orderByRaw("CASE WHEN status IN ('draft','needs_correction') THEN 0 ELSE 1 END")
             ->orderByDesc('id')
             ->first();

@@ -79,6 +79,12 @@ on:
         default: ''
         type: string
 
+      deployed_ref:
+        description: 'Verified currently deployed commit SHA (required for activation migration comparison)'
+        required: false
+        default: ''
+        type: string
+
 permissions:
   contents: read
   actions: read
@@ -123,12 +129,25 @@ jobs:
 
       - name: Resolve the base ref for the migration scan
         id: baseref
+        env:
+          DEPLOYED_REF: ${{ inputs.deployed_ref }}
+          MODE: ${{ inputs.mode }}
         run: |
           # check-migrations.sh exits 2 when the base ref is missing, and 1 when
           # it finds something destructive. Those mean different things, so they
           # must not be collapsed into one error message.
           BASE=origin/main
           git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main" || true
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "::error::Deployment commit is not on main."
+            exit 1
+          }
+          if [ "$MODE" = activate ]; then
+            [[ "$DEPLOYED_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Provide the verified deployed commit SHA before activation."; exit 1; }
+            git cat-file -e "$DEPLOYED_REF^{commit}" || exit 1
+            git merge-base --is-ancestor "$DEPLOYED_REF" HEAD || { echo "::error::Deployment requires forward migration history."; exit 1; }
+            BASE="$DEPLOYED_REF"
+          fi
           if git rev-parse --verify -q "$BASE" >/dev/null; then
             echo "ref=$BASE" >> "$GITHUB_OUTPUT"
           else
@@ -208,15 +227,16 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
           ALLOW_DESTRUCTIVE: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS }}
+          DEPLOYED_REF: ${{ inputs.deployed_ref }}
         run: |
           RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
           SUM=$(cut -d' ' -f1 dist/piie-release-${SHA:0:12}.tar.gz.sha256)
-          ssh piie-prod "ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/deploy-release.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
+          ssh piie-prod "EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/deploy-release.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
 
       - name: Public smoke check
         if: ${{ inputs.mode == 'activate' }}
         run: |
-          for u in / /login; do
+          for u in / /login /apply /applicant/login; do
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://piie.ac.ug$u")
             echo "$u -> $code"; [ "$code" = 200 ] || [ "$code" = 302 ] || exit 1
           done

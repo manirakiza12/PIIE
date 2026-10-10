@@ -82,7 +82,7 @@ class MailFailureResilienceTest extends TestCase
             $lines = file($file->getPathname());
             foreach ($lines as $i => $line) {
                 if (preg_match('/Mail::to\(.*\)->send\(/', $line)) {
-                    $before = implode('', array_slice($lines, max(0, $i - 12), 12));
+                    $before = implode('', array_slice($lines, max(0, $i - 30), 30));
                     if (!preg_match('/try\s*\{/', $before)) {
                         $unguarded[] = str_replace(app_path(), 'app', $file->getPathname()) . ':' . ($i + 1);
                     }

@@ -55,6 +55,7 @@
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    RewriteRule ^assets/uploads/application_payments(?:/|$) - [F,L,NC]
 
     # A second, rewrite-level guard. mod_rewrite is enabled on more configurations
     # than mod_authz_core, so where <FilesMatch> above silently does nothing this

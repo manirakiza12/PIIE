@@ -459,7 +459,10 @@ class ApplicantPortalTest extends TestCase
         $this->assertSame('50000.00', $payment->amount);
         $this->assertSame(Admission::FEE_PENDING, Admission::first()->fee_status);
 
-        @unlink(public_path(ApplicationPayment::PROOF_DIR . '/' . $payment->proof_file));
+        $privateProof = \App\Support\Payments\ApplicationPaymentProof::path($payment);
+        $this->assertFileExists($privateProof);
+        $this->assertFileDoesNotExist(public_path(ApplicationPayment::PROOF_DIR . '/' . $payment->proof_file));
+        @unlink($privateProof);
     }
 
     // ── Flutterwave ──────────────────────────────────────────────────────
@@ -501,7 +504,7 @@ class ApplicantPortalTest extends TestCase
         $this->assertNotContains('flutterwave', array_column($methods, 'key'));
     }
 
-    public function test_marzpay_appears_as_a_payment_option_once_configured(): void
+    public function test_marzpay_is_not_offered_for_new_application_payments_even_when_configured(): void
     {
         $this->signIn();
         $this->get(route('applicant.dashboard'));
@@ -514,7 +517,7 @@ class ApplicantPortalTest extends TestCase
 
         $methods = ApplicationFee::availableMethods($this->schoolId);
 
-        $this->assertContains('marzpay', array_column($methods, 'key'));
+        $this->assertNotContains('marzpay', array_column($methods, 'key'));
     }
 
     private function enableMarzpay(): void
@@ -533,7 +536,7 @@ class ApplicantPortalTest extends TestCase
         ]);
     }
 
-    public function test_starting_flutterwave_checkout_redirects_to_the_hosted_payment_link(): void
+    public function test_new_flutterwave_application_orders_are_retired(): void
     {
         $this->signIn();
         $this->get(route('applicant.dashboard'));
@@ -555,11 +558,9 @@ class ApplicantPortalTest extends TestCase
 
         $response = $this->post(route('applicant.payment.gateway.start', 'flutterwave'));
 
-        $response->assertRedirect('https://checkout.flutterwave.com/v3/hosted/pay/fake-session');
-
-        $payment = ApplicationPayment::first();
-        $this->assertSame('flutterwave', $payment->method);
-        $this->assertSame(ApplicationPayment::STATUS_PENDING, $payment->status);
+        $response->assertRedirect();
+        $this->assertSame(0, ApplicationPayment::count());
+        \Illuminate\Support\Facades\Http::assertNothingSent();
     }
 
     public function test_flutterwave_return_settles_the_fee_when_verification_confirms_payment(): void

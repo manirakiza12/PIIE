@@ -11,6 +11,9 @@
                 </ul>
             </div>
             <div class="export-btn-area d-flex gap-2">
+                @if((int) auth()->user()->role_id === 2)
+                    <a href="{{ route('admin.hei_admissions.payment.pesapal.settings') }}" class="export_btn export_btn-outline">{{ get_phrase('Applicant PesaPal Settings') }}</a>
+                @endif
                 <a href="{{ route('admin.hei_admissions.export', ['search' => $search, 'status' => $status, 'session_id' => $session_id, 'source' => $source]) }}" class="export_btn export_btn-outline"><i class="bi bi-download"></i> {{ get_phrase('Export CSV') }}</a>
                 <a href="{{ route('admin.intake_sessions.index') }}" class="export_btn export_btn-outline">{{ get_phrase('Intake Sessions') }}</a>
                 <a href="{{ route('admin.admissions_documents.index') }}" class="export_btn export_btn-outline">{{ get_phrase('Document Requirements') }}</a>
@@ -113,7 +116,7 @@
                     <td><small>{{ $app->created_at->format('d M Y') }}</small></td>
                     <td>
                         <div class="d-flex gap-1">
-                            <a href="{{ route('admin.hei_admissions.review', $app->id) }}" class="eBtn eBtn-sm eBtn-primary" title="{{ get_phrase('Review Application') }}"><i class="bi bi-eye"></i></a>
+                            <a href="{{ route('admin.hei_admissions.review', $app->id) }}" class="eBtn eBtn-sm eBtn-primary" title="{{ get_phrase('Review Application') }}"><i class="bi bi-eye" aria-hidden="true"></i> {{ get_phrase('Review') }}</a>
                             <a href="javascript:;" class="eBtn eBtn-sm eBtn-outline" onclick="rightModal('{{ route('admin.hei_admissions.open_modal', ['id' => $app->id]) }}', '{{ get_phrase('Edit Application') }}')"><i class="bi bi-pencil"></i></a>
                             @if($app->status === 'accepted')
                             <a href="{{ route('admin.hei_admissions.offer_letter', $app->id) }}" class="eBtn eBtn-sm eBtn-success" title="{{ get_phrase('Offer Letter') }}"><i class="bi bi-file-pdf"></i></a>

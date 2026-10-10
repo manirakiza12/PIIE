@@ -169,7 +169,7 @@
                 <div>
                     <p class="ap-quick-title">{{ get_phrase('Application Fee') }}</p>
                     <p class="ap-quick-sub">
-                        {{ \App\Support\Admissions\ApplicationFee::format($feeAmount) }} —
+                        {{ \App\Support\Admissions\ApplicationFee::format($feeAmount, $admission) }} —
                         {{ ucfirst($admission->fee_status) }}
                     </p>
                 </div>

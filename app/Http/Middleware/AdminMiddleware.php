@@ -26,7 +26,7 @@ class AdminMiddleware
             $route = $request->route();
             $permission = app(PermissionService::class)->routePermission($route?->getName());
             if ($permission !== null && app(PermissionService::class)->allows($user, $permission)) {
-                return $next($request);
+                return app(EnsureSchoolSubscription::class)->handle($request, $next);
             }
 
             return PortalAccessDenial::redirect($user);
@@ -38,7 +38,7 @@ class AdminMiddleware
         $staffRoles = [2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 
         if ($user && in_array($user->role_id, $staffRoles) && $user->account_status != 'disable' && !$user->isStaffPortalBlocked()) {
-            return $next($request);
+            return app(EnsureSchoolSubscription::class)->handle($request, $next);
         }
 
         return PortalAccessDenial::redirect($user, 'admin.account_disableview');

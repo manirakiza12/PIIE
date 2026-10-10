@@ -26,14 +26,30 @@ final class PesaPalConfiguration
         $rows = PaymentMethods::where('school_id', $schoolId)->where('name', 'pesapal')->where('status', 1)->get();
         if ($rows->count() !== 1) { throw new PesaPalException(); }
         $row = $rows->first();
+        return self::fromRow($row);
+    }
+
+    public static function forPayment(\App\Models\ApplicationPayment $payment): self
+    {
+        $id = $payment->gateway_payload['configuration_id'] ?? null;
+        if (! is_int($id)) { throw new PesaPalException(); }
+        $row = PaymentMethods::whereKey($id)->where('school_id', $payment->school_id)->where('name', 'pesapal')->first();
+        if (! $row) { throw new PesaPalException(); }
+        $configuration = self::fromRow($row);
+        if (($payment->gateway_payload['environment'] ?? null) !== $configuration->environment) { throw new PesaPalException(); }
+        return $configuration;
+    }
+
+    private static function fromRow(PaymentMethods $row): self
+    {
         if ($row->name !== 'pesapal') { throw new PesaPalException(); }
-        $keys = json_decode((string) $row->payment_keys, true);
+        $keys = PesaPalCredentialStorage::read((string) $row->payment_keys, (int) $row->school_id);
         if (! is_array($keys) || isset($keys['base_url']) || ! is_string($keys['environment'] ?? null)
             || ! is_string($keys['consumer_key'] ?? null) || ! is_string($keys['consumer_secret'] ?? null)
             || (isset($keys['notification_id']) && ! is_string($keys['notification_id']))) {
             throw new PesaPalException();
         }
-        return new self($schoolId, (int) $row->id, $keys['environment'], $keys['consumer_key'],
+        return new self((int) $row->school_id, (int) $row->id, $keys['environment'], $keys['consumer_key'],
             $keys['consumer_secret'], $keys['notification_id'] ?? null);
     }
 

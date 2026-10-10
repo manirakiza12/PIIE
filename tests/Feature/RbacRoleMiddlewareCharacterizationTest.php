@@ -20,10 +20,18 @@ use Tests\TestCase;
  * "10 = Registrar" comment, etc.). None of it is corrected here.
  *
  * Uses unsaved User models and calls each middleware directly — no
- * database, no HTTP — same approach as PortalAccessDenialTest.
+ * HTTP actions. Approved in-memory subscription fixtures exercise the real
+ * subscription guard alongside the existing role rules.
  */
 class RbacRoleMiddlewareCharacterizationTest extends TestCase
 {
+    use \Tests\Feature\Support\ActiveSchoolSubscriptionFixture;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->grantActiveFixtureSubscription(1);
+    }
     /**
      * middleware class => [role_ids that pass, checks staff_status?, checks account_status?]
      */
@@ -51,6 +59,7 @@ class RbacRoleMiddlewareCharacterizationTest extends TestCase
 
     private function passes(string $middlewareClass, User $user): bool
     {
+        $user->school_id=1;
         $this->actingAs($user);
         $response = (new $middlewareClass())->handle(Request::create('/probe'), fn () => new Response('reached'));
 

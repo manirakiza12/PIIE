@@ -66,6 +66,9 @@
                 @endif
 
                 @if(!empty($data['footer_note']))
+                @if(!empty($data['access_url']))
+                <tr><td style="padding-top:20px"><a href="{{ $data['access_url'] }}">Set up or reset applicant portal access</a></td></tr>
+                @endif
                 <tr>
                     <td style="padding-top: 24px;">
                         <p style="font-size: 13px; color: #98a2b3; line-height:1.6; margin:0;">{{ $data['footer_note'] }}</p>

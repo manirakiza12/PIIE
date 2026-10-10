@@ -241,6 +241,47 @@ class PesaPalServiceTest extends TestCase
         $this->reject(fn () => $this->service()->registerIpn(self::URL, 'PUT'));
     }
 
+    private function observedListingEntry(): array
+    {
+        $entry=$this->ipn(); $entry['status']='1'; unset($entry['error']);
+        return $entry;
+    }
+
+    public function test_observed_listing_flag_format_is_supported_without_weakening_registration(): void
+    {
+        $entry=$this->observedListingEntry();
+        $this->fakeEndpoint('/api/URLSetup/GetIpnList',[$entry]);
+        $result=$this->service()->getIpnList();
+        $this->assertSame(self::GUID,$result[0]['ipn_id']);
+        $this->assertSame('GET',$result[0]['method']);
+        $this->assertTrue($result[0]['active']);
+        $this->assertSame(200,$result[0]['status']);
+        $entry['status']='0'; $entry['ipn_status']=0;
+        $this->assertFalse($this->service()->normalizeIpnList([$entry])[0]['active']);
+        $this->fakeEndpoint('/api/URLSetup/RegisterIPN',$this->observedListingEntry());
+        $this->reject(fn () => $this->service()->registerIpn(self::URL,'GET'));
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('badObservedListings')]
+    public function test_observed_listing_format_rejects_malformed_or_inconsistent_records(array $changes): void
+    {
+        $entry=array_replace($this->observedListingEntry(),$changes);
+        $this->reject(fn () => $this->service()->normalizeIpnList([$entry]));
+        Http::assertNothingSent();
+    }
+
+    public static function badObservedListings(): array
+    {
+        return ['invalid-id'=>[['ipn_id'=>'invalid']], 'invalid-date'=>[['created_date'=>'2026-99-99T12:00:00Z']],
+            'http-url'=>[['url'=>'http://example.test/ipn']], 'credential-url'=>[['url'=>'https://secret@example.test/ipn']],
+            'missing-method'=>[['ipn_notification_type_description'=>null]], 'unexpected-method'=>[['ipn_notification_type_description'=>'PUT']],
+            'contradictory-method'=>[['ipn_notification_type_description'=>'POST']],
+            'contradictory-status'=>[['ipn_status'=>0]], 'missing-active'=>[['ipn_status'=>null]],
+            'string-active'=>[['ipn_status'=>'1']], 'unknown-flag'=>[['status'=>'Active']],
+            'wrong-notification-type'=>[['notification_type'=>1]], 'provider-error'=>[['error'=>['message'=>'fixture-secret']]],
+            'malformed-error'=>[['error'=>'fixture-secret']]];
+    }
+
     public function test_order_is_transmitted_and_no_payment_rows_are_written(): void
     {
         DB::table('application_payments')->insert(['school_id' => 1, 'admission_id' => 1, 'method' => 'pesapal',
@@ -312,6 +353,21 @@ class PesaPalServiceTest extends TestCase
         return [[1, 'Completed', 'COMPLETED'], [0, 'Invalid', 'INVALID'], [2, 'Failed', 'FAILED'],
             [3, 'Reversed', 'REVERSED'], [0, 'Pending', 'UNKNOWN'], [99, 'Future status', 'UNKNOWN'], [2, 'Completed', 'UNKNOWN']];
     }
+
+    public function test_optional_failure_description_is_retained(): void
+    {
+        $this->fakeEndpoint('/api/Transactions/GetTransactionStatus',array_merge($this->pesapalStatusFixture(),
+            ['status_code'=>2,'payment_status_description'=>'Failed','description'=>'Expired']));
+        $this->assertSame('Expired',$this->service()->getTransactionStatus(self::GUID)->description);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('malformedFailureDescriptions')]
+    public function test_malformed_failure_description_fails_closed($description): void
+    {
+        $this->fakeEndpoint('/api/Transactions/GetTransactionStatus',array_merge($this->pesapalStatusFixture(),['description'=>$description]));
+        $this->reject(fn()=>$this->service()->getTransactionStatus(self::GUID));
+    }
+    public static function malformedFailureDescriptions(): array { return [[[]],[str_repeat('x',1001)]]; }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('badStatuses')]
     public function test_status_rejects_missing_or_malformed_evidence(array $changes): void

@@ -15,7 +15,7 @@ class ApplicationPayment extends Model
     public const STATUS_WAIVED   = 'waived';
     public const STATUS_REJECTED = 'rejected';
 
-    /** Where bank-deposit proof files live, relative to public/. */
+    /** Historical public location, retained only for authenticated compatibility. */
     public const PROOF_DIR = 'assets/uploads/application_payments';
 
     protected $fillable = [
@@ -42,7 +42,7 @@ class ApplicationPayment extends Model
 
     public function getProofUrlAttribute(): ?string
     {
-        return $this->proof_file ? asset(self::PROOF_DIR . '/' . $this->proof_file) : null;
+        return $this->proof_file ? route('admin.hei_admissions.payment.proof', $this->id) : null;
     }
 
     public function isSettled(): bool

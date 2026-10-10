@@ -14,15 +14,14 @@ use App\Support\Payments\MarzPayService;
 use App\Support\Payments\VerifiedApplicationPayment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
 
 /**
- * The application fee: bank deposit with proof, or an online card payment.
+ * Application fees: shared PesaPal checkout and retained offline proof review.
  *
  * Nothing here ever marks a fee paid on the applicant's say-so. A deposit is
- * recorded as 'pending' for the finance office to confirm; a card payment is
- * only settled after Stripe is asked, server-side, whether the session
- * actually completed. The redirect back from a gateway is a hint that
+ * recorded as 'pending' for the finance office to confirm; online payments
+ * require server-side verification. Historical gateway verification remains
+ * available. The redirect back from a gateway is a hint that
  * something happened, not evidence of it.
  */
 class PaymentController extends BaseApplicantController
@@ -73,24 +72,14 @@ class PaymentController extends BaseApplicantController
             'proof.required'     => get_phrase('Please attach your deposit slip or transaction message.'),
         ]);
 
-        $destination = public_path(ApplicationPayment::PROOF_DIR);
-
-        if (! is_dir($destination)) {
-            mkdir($destination, 0755, true);
-        }
-
-        $file     = $request->file('proof');
-        // Security Phase 2F: the stored name keeps the client extension, so it must be one of the checked types.
-        abort_unless(in_array(strtolower($file->getClientOriginalExtension()), ['pdf', 'jpg', 'jpeg', 'png'], true), 422, 'Only PDF, JPG and PNG files are accepted.');
-        $storedAs = 'pay' . $admission->id . '_' . uniqid() . '.' . strtolower($file->getClientOriginalExtension());
-        $file->move($destination, $storedAs);
+        $storedAs = \App\Support\Payments\ApplicationPaymentProof::store($request->file('proof'), $admission->id);
 
         $payment = ApplicationPayment::create([
             'school_id'    => $admission->school_id,
             'admission_id' => $admission->id,
             'applicant_id' => $this->applicant()->id,
             'amount'       => $amount,
-            'currency'     => ApplicationFee::currency(),
+            'currency'     => ApplicationFee::currencyFor($admission),
             'method'       => 'offline',
             'status'       => ApplicationPayment::STATUS_PENDING,
             'reference'    => $validated['reference'],
@@ -124,90 +113,29 @@ class PaymentController extends BaseApplicantController
     public function startGateway(Request $request, string $gateway)
     {
         $admission = $this->currentApplication();
-        if (in_array($admission->status, [Admission::STATUS_DRAFT, Admission::STATUS_NEEDS_CORRECTION], true)
-            || blank($admission->submitted_at)) {
-            return back()->with('error', get_phrase('Submit your application before starting an online application fee payment.'));
+        if ($gateway === 'pesapal') {
+            try {
+                $payment = \App\Support\Payments\ApplicantPesaPalPayment::start($admission);
+                $url = $payment->gateway_payload['checkout_url'] ?? null;
+                return $url ? redirect()->away($url) : back()->with('error', 'An outstanding payment is awaiting verification. Do not pay again; contact finance.');
+            } catch (\App\Support\Payments\PesaPalException $exception) {
+                return back()->with('error', 'PesaPal is temporarily unavailable. Please check your payment status before retrying.');
+            }
         }
-        $amount    = ApplicationFee::amountFor($admission);
-
-        if ($amount <= 0 || $admission->isFeeSettled()) {
-            return redirect()->route('applicant.dashboard');
-        }
-
-        if (! in_array($gateway, ['stripe', 'flutterwave', 'marzpay'], true) || ! ApplicationFee::gatewayIsConfigured($gateway, $admission->school_id)) {
-            return back()->with('error', get_phrase('That payment method is not available right now. Please use bank deposit.'));
-        }
-
-        if ($gateway === 'marzpay') {
-            return $this->startMarzPay($request, $admission, $amount);
-        }
-
-        $reference = 'APPFEE-' . $admission->id . '-' . strtoupper(Str::random(8));
-
-        $payment = ApplicationPayment::create([
-            'school_id'    => $admission->school_id,
-            'admission_id' => $admission->id,
-            'applicant_id' => $this->applicant()->id,
-            'amount'       => $amount,
-            'currency'     => ApplicationFee::currency(),
-            'method'       => $gateway,
-            'status'       => ApplicationPayment::STATUS_PENDING,
-            'reference'    => $reference,
-        ]);
-
-        return $gateway === 'flutterwave'
-            ? $this->startFlutterwave($admission, $payment, $amount)
-            : $this->startStripe($admission, $payment, $amount);
+        // Retain legacy status/return processing; no new applicant legacy orders.
+        return back()->with('error', 'New online application payments use PesaPal.');
     }
 
-    /**
-     * MarzPay mobile money is a push flow (USSD prompt), not a redirect —
-     * so unlike Stripe/Flutterwave this needs a phone number up front and
-     * lands the applicant on a "check your phone" pending page instead of
-     * an external checkout page.
-     */
-    private function startMarzPay(Request $request, Admission $admission, float $amount)
+    public function checkPesaPalStatus(int $paymentId)
     {
-        $request->validate(['phone_number' => 'required|string|min:9|max:15']);
-
-        $reference = 'APPFEE-' . $admission->id . '-' . strtoupper(Str::random(8));
-
-        $payment = ApplicationPayment::create([
-            'school_id'    => $admission->school_id,
-            'admission_id' => $admission->id,
-            'applicant_id' => $this->applicant()->id,
-            'amount'       => $amount,
-            'currency'     => ApplicationFee::currency(),
-            'method'       => 'marzpay',
-            'status'       => ApplicationPayment::STATUS_PENDING,
-            'reference'    => $reference,
-        ]);
-
-        $result = \App\Support\Payments\MarzPayService::initiateMobileMoneyCollection(
-            (int) $admission->school_id,
-            $request->phone_number,
-            $amount,
-            $reference,
-            get_phrase('Application Fee') . ' — ' . $admission->app_number,
-            route('webhooks.marzpay'),
-            ['context' => 'application', 'context_id' => $payment->id]
-        );
-
-        if (! $result['ok']) {
-            $payment->delete();
-
-            return back()->with('error', $result['error'] ?: get_phrase('We could not start the MarzPay payment. Please try again or pay by bank deposit.'));
+        $admission = $this->currentApplication();
+        $payment = $admission->payments()->where('school_id', $admission->school_id)->where('method', 'pesapal')->findOrFail($paymentId);
+        try {
+            $result = \App\Support\Payments\ApplicantPesaPalPayment::reconcile($payment);
+            return back()->with('success', 'Payment status: ' . $result);
+        } catch (\App\Support\Payments\PesaPalException $exception) {
+            return back()->with('error', 'Payment verification is unavailable. Do not pay again; contact finance.');
         }
-
-        if (blank($result['transaction_uuid'])) {
-            $payment->update(['status' => ApplicationPayment::STATUS_FAILED]);
-            ApplicationFee::refreshStatus($admission);
-            return back()->with('error', get_phrase('The provider did not return a transaction identity. Please contact finance before retrying.'));
-        }
-        $payment->update(['gateway_txn_id' => $result['transaction_uuid']]);
-        ApplicationFee::refreshStatus($admission);
-
-        return view('applicant.payment_marzpay_pending', ['admission' => $admission, 'payment' => $payment]);
     }
 
     /** AJAX poll from the pending page. */
@@ -241,106 +169,6 @@ class PaymentController extends BaseApplicantController
         }
 
         return response()->json(['status' => 'processing']);
-    }
-
-    private function startStripe(Admission $admission, ApplicationPayment $payment, float $amount)
-    {
-        $secretKey = get_payment_keys('stripe', 'test_secret_key') ?: get_payment_keys('stripe', 'secret_live_key');
-
-        if (blank($secretKey)) {
-            $payment->delete();
-
-            return back()->with('error', get_phrase('Card payments are not fully configured. Please use bank deposit.'));
-        }
-
-        try {
-            \Stripe\Stripe::setApiKey($secretKey);
-
-            $session = \Stripe\Checkout\Session::create([
-                'payment_method_types' => ['card'],
-                'mode'                 => 'payment',
-                'client_reference_id'  => $payment->reference,
-                'customer_email'       => $admission->email,
-                'line_items' => [[
-                    'quantity'   => 1,
-                    'price_data' => [
-                        'currency'     => strtolower(ApplicationFee::currency()),
-                        'unit_amount'  => (int) round($amount * 100),
-                        'product_data' => [
-                            'name'        => get_phrase('Application Fee') . ' — ' . $admission->app_number,
-                            'description' => optional($admission->programme)->name,
-                        ],
-                    ],
-                ]],
-                'success_url' => route('applicant.payment.gateway.return', ['gateway' => 'stripe', 'payment' => $payment->id]) . '?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url'  => route('applicant.payment.gateway.cancel', ['gateway' => 'stripe', 'payment' => $payment->id]),
-            ]);
-        } catch (\Throwable $e) {
-            report($e);
-
-            $payment->update(['status' => ApplicationPayment::STATUS_FAILED, 'note' => 'Gateway session could not be created.']);
-
-            return back()->with('error', get_phrase('We could not start the card payment. Please try again or pay by bank deposit.'));
-        }
-
-        $payment->update(['gateway_txn_id' => $session->id]);
-
-        ApplicationFee::refreshStatus($admission);
-
-        return redirect()->away($session->url);
-    }
-
-    /**
-     * Starts Flutterwave's hosted Standard Checkout — one page that offers
-     * card and mobile money (MTN, Airtel, etc.) without this app needing to
-     * integrate each payment channel separately.
-     */
-    private function startFlutterwave(Admission $admission, ApplicationPayment $payment, float $amount)
-    {
-        $secretKey = ApplicationFee::flutterwaveSecretKey();
-
-        if (blank($secretKey)) {
-            $payment->delete();
-
-            return back()->with('error', get_phrase('Card/mobile money payment is not fully configured. Please use bank deposit.'));
-        }
-
-        try {
-            $response = Http::withToken($secretKey)
-                ->acceptJson()
-                ->post('https://api.flutterwave.com/v3/payments', [
-                    'tx_ref'       => $payment->reference,
-                    'amount'       => (string) $amount,
-                    'currency'     => ApplicationFee::currency(),
-                    'redirect_url' => route('applicant.payment.gateway.return', ['gateway' => 'flutterwave', 'payment' => $payment->id]),
-                    'customer'     => [
-                        'email'       => $admission->email,
-                        'name'        => trim($admission->first_name . ' ' . $admission->last_name),
-                        'phonenumber' => $admission->phone,
-                    ],
-                    'customizations' => [
-                        'title'       => get_phrase('Application Fee'),
-                        'description' => get_phrase('Application Fee') . ' — ' . $admission->app_number,
-                    ],
-                ]);
-        } catch (\Throwable $e) {
-            report($e);
-            $response = null;
-        }
-
-        $link = $response && $response->successful() ? $response->json('data.link') : null;
-
-        if (blank($link)) {
-            report(new \RuntimeException('Flutterwave payment init failed: ' . ($response?->body() ?? 'no response')));
-
-            $payment->update(['status' => ApplicationPayment::STATUS_FAILED, 'note' => 'Gateway session could not be created.']);
-
-            return back()->with('error', get_phrase('We could not start the payment. Please try again or pay by bank deposit.'));
-        }
-
-        ApplicationFee::refreshStatus($admission);
-
-        return redirect()->away($link);
     }
 
     /**

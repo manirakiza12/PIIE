@@ -80,6 +80,12 @@ final class PesaPalService
     public function getIpnList(): array
     {
         $data = $this->authorized('GET', '/api/URLSetup/GetIpnList');
+        return $this->normalizeIpnList($data);
+    }
+
+    /** Reuse the listing validator for an already authenticated, saved HTTP response. No I/O. */
+    public function normalizeIpnList(array $data): array
+    {
         if (! array_is_list($data)) { throw new PesaPalException(); }
         return array_map(fn ($entry) => is_array($entry) ? $this->ipnEntry($entry, false) : throw new PesaPalException(), $data);
     }
@@ -131,9 +137,10 @@ final class PesaPalService
         foreach (['payment_method', 'confirmation_code'] as $field) {
             if (isset($data[$field]) && ! is_string($data[$field])) { throw new PesaPalException(); }
         }
+        if(isset($data['description']) && (!is_string($data['description']) || strlen($data['description'])>1000)) { throw new PesaPalException(); }
         return new PesaPalTransactionStatus($id, $data['merchant_reference'], DecimalAmount::decimal($minor),
             $data['currency'], (int) $data['status_code'], strtoupper(trim($data['payment_status_description'])),
-            $data['payment_method'] ?? null, $data['confirmation_code'] ?? null, 200);
+            $data['payment_method'] ?? null, $data['confirmation_code'] ?? null, 200, null, $data['description'] ?? null);
     }
 
     private function authorized(string $method, string $path, array $data = []): array
@@ -167,7 +174,18 @@ final class PesaPalService
 
     private function ipnEntry(array $data, bool $registration): array
     {
-        $this->envelope($data);
+        if (!$registration && in_array($data['status'] ?? null, ['0', '1'], true)) {
+            // Sandbox listing records use a registration flag, not an API envelope.
+            // Require independent fields to agree; RegisterIPN never enters this branch.
+            $method = $data['ipn_notification_type_description'] ?? null;
+            if (($data['ipn_status'] ?? null) !== (int) $data['status']
+                || !in_array($method, ['GET', 'POST'], true)
+                || (array_key_exists('notification_type', $data)
+                    && $data['notification_type'] !== ($method === 'GET' ? 0 : 1))) { throw new PesaPalException(); }
+            $this->envelope(['status' => 200, 'error' => $data['error'] ?? null]);
+        } else {
+            $this->envelope($data);
+        }
         if (! is_string($data['ipn_id'] ?? null) || ! self::isGuid($data['ipn_id']) || ! $this->nonempty($data['created_date'] ?? null)) { throw new PesaPalException(); }
         $this->utcDate($data['created_date']);
         $this->httpsUrl($data['url'] ?? null);

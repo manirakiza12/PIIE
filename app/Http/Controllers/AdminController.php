@@ -100,7 +100,9 @@ class AdminController extends Controller
 
             // Super admin and unauthenticated requests should not be blocked by subscription checks.
             if ($this->user && (int) $this->user->role_id !== 1) {
-                $this->check_subscription_status($this->user->school_id);
+                if ($denial = $this->check_subscription_status($this->user->school_id)) {
+                    return $denial;
+                }
             }
 
             $this->insert_gateways();
@@ -108,62 +110,20 @@ class AdminController extends Controller
         });
     }
 
+    /**
+     * Development-only subscription bypass. Fails closed: every condition must hold.
+     * Flag on, APP_ENV explicitly "local", default connection is MySQL/MariaDB on a
+     * loopback host at port 3307, and the live server confirms port 3307 and a
+     * datadir inside piie-dev-db (the isolated development instance).
+     */
+    public function subscriptionBypassPermitted(): bool
+    {
+        return \App\Support\Subscriptions\SchoolSubscriptionAccess::bypassPermitted();
+    }
+
     public function check_subscription_status($school_id = "")
     {
-        // Skip subscription enforcement when bypass flag is set or in local environment
-        if (config('app.bypass_subscription', false) || app()->environment('local')) {
-            return;
-        }
-
-        if (empty($school_id) || !Schema::hasTable('subscriptions')) {
-            return;
-        }
-
-        $current_route       = Route::currentRouteName();
-
-        $hasSubscriptionQuery = Subscription::where('school_id', $school_id);
-        if (Schema::hasColumn('subscriptions', 'status')) {
-            $hasSubscriptionQuery->where('status', 1);
-        }
-        $has_subscription = $hasSubscriptionQuery->count();
-
-        $activeSubscriptionQuery = Subscription::where('school_id', $school_id);
-        if (Schema::hasColumn('subscriptions', 'active')) {
-            $activeSubscriptionQuery->where('active', 1);
-        }
-        $active_subscription = $activeSubscriptionQuery->latest('id')->first();
-
-        $today      = date("Y-m-d");
-        $today_time = strtotime($today);
-
-        if ($has_subscription != 0) {
-            if (!$active_subscription) {
-                $expiry_status = true;
-            } elseif (!Schema::hasColumn('subscriptions', 'expire_date') || $active_subscription['expire_date'] == '0') {
-                $expiry_status = '0';
-            } else {
-                $expiry_status = (int) $active_subscription['expire_date'] < $today_time;
-            }
-
-            if (
-                ($current_route != 'admin.subscription' && $expiry_status) &&
-                ($current_route != 'admin.subscription.purchase' && $expiry_status) &&
-                ($current_route != 'admin.subscription.payment' && $expiry_status) &&
-                ($current_route != 'admin.subscription.offline_payment' && $expiry_status)
-            ) {
-                redirect()->route('admin.subscription')->send();
-            }
-        } else {
-
-            if (
-                ($current_route != 'admin.subscription' && $has_subscription == 0) &&
-                ($current_route != 'admin.subscription.purchase' && $has_subscription == 0) &&
-                ($current_route != 'admin.subscription.payment' && $has_subscription == 0) &&
-                ($current_route != 'admin.subscription.offline_payment' && $has_subscription == 0)
-            ) {
-                redirect()->route('admin.subscription')->send();
-            }
-        }
+        return \App\Support\Subscriptions\SchoolSubscriptionAccess::denial($school_id, Route::currentRouteName());
     }
 
     /**

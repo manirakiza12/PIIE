@@ -12,7 +12,14 @@ use Tests\TestCase;
 
 class AdmissionConversionTest extends TestCase
 {
-    use AdmissionsTestHelper;
+    use AdmissionsTestHelper { makeAdmission as private makeBasicAdmission; }
+
+    protected function makeAdmission(int $schoolId, array $overrides = []): int
+    {
+        $id = $this->makeBasicAdmission($schoolId, $overrides);
+        $this->completeAdmissionForDecision(\App\Models\Admission::findOrFail($id));
+        return $id;
+    }
 
     protected function setUp(): void
     {

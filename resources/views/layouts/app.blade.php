@@ -2,12 +2,24 @@
     use App\Models\User;
     use App\Support\Permissions\OnlineExamPermissionService;
 
-    $user = Auth()->user();
-    $isPrimarySchool = is_primary_school($user->school_id);
+    // Guest-safe user handle. `/register`, `/verify` and `/passwords/confirm`
+    // render this layout as a guest, where Auth()->user() is null and every
+    // `$user->...` below became "Attempt to read property on null" -> HTTP 500.
+    // $user is therefore always a User instance: the real one when signed in,
+    // an empty non-persisted model otherwise. For an authenticated request
+    // `$user` IS the authenticated model, so authenticated behaviour is
+    // byte-for-byte unchanged. $authUser stays null for guests so callers that
+    // must distinguish "signed in" from "signed out" can.
+    $authUser = Auth()->user();
+    $user = $authUser ?? new User();
+
+    $isPrimarySchool = $authUser ? is_primary_school($authUser->school_id) : false;
     // Classes (legacy K-12 class/section structure) don't apply to a
     // purely higher_ed school — those use Programmes/Courses instead.
     // 'k12' and 'mixed' schools (and the 'k12' column default) see it.
     $schoolType = \Illuminate\Support\Facades\DB::table('schools')->where('id', $user->school_id)->value('school_type') ?? 'k12';
+    // Guests get no menu of their own: an empty $menu_permission with no role
+    // grants means the nav below renders no section links for them.
     $canSeeClasses = true;
     // Symmetric to $canSeeClasses: Programmes/Courses don't apply to a
     // purely k12 school. 'higher_ed' and 'mixed' schools see them.
@@ -31,6 +43,8 @@
             ? []
             : json_decode($user->menu_permission, true);
 
+    // Guests resolve to role 0, which get_role_nav_permissions() maps to [].
+    // Sign-in behaviour is unchanged: this is still the caller's own role.
     $roleNavPerms = function_exists('get_role_nav_permissions')
         ? get_role_nav_permissions((int) $user->role_id)
         : ['all'];
@@ -603,6 +617,7 @@
             </li>
             @endif
 
+            @include('admin.admissions.partials.navigation')
             @if($isPrimarySchool)
             <!-- ============================================ -->
             <!-- ADMISSIONS SECTION HEADER                    -->
@@ -897,15 +912,15 @@
                         <div class="header_notification d-flex align-items-center">
                             <div class="notification_icon">
                                 @php
-                                    $school_data = App\Models\School::where('id', auth()->user()->school_id)->first();
+                                    $school_data = App\Models\School::where('id', $user->school_id)->first();
                                 @endphp
                                 @if (!empty($school_data->school_logo))
-                                    <img class="" src="{{ asset('assets/uploads/school_logo/' .DB::table('schools')->where('id', auth()->user()->school_id)->value('school_logo')) }}" width="30px" height="30px" style="border-radius: 50%;">
+                                    <img class="" src="{{ asset('assets/uploads/school_logo/' .DB::table('schools')->where('id', $user->school_id)->value('school_logo')) }}" width="30px" height="30px" style="border-radius: 50%;">
                                 @else
                                     <img class="" src="{{ asset('assets') }}/images/id_logo.png" width="30px" height="30px">
                                 @endif
                             </div>
-                            <p>{{ DB::table('schools')->where('id', auth()->user()->school_id)->value('title') }}</p>
+                            <p>{{ DB::table('schools')->where('id', $user->school_id)->value('title') }}</p>
                         </div>
                     </div>
 
@@ -913,8 +928,11 @@
                         <!-- Language Dropdown -->
                         @php
                             $all_languages = get_all_language();
-                            $usersinfo = DB::table('users')->where('id', auth()->user()->id)->first();
-                            $userlanguage = $usersinfo->language;
+                            // Guests have no users row; fall back to the site's
+                            // configured language, which is what the @else branch
+                            // below already renders.
+                            $usersinfo = DB::table('users')->where('id', $user->id)->first();
+                            $userlanguage = $usersinfo->language ?? null;
                         @endphp
 
                         <div class="adminTable-action" style="margin-right: 20px; margin-top: 14px;">
@@ -948,10 +966,10 @@
                                     <div class="btn-group">
                                         <button class="btn btn-secondary dropdown-toggle" type="button" id="defaultDropdown" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false">
                                             <div class="">
-                                                <img src="{{ get_user_image(auth()->user()->id) }}" height="42px" />
+                                                <img src="{{ get_user_image($user->id) }}" height="42px" />
                                             </div>
                                             <div class="px-2 text-start">
-                                                <span class="user-name">{{ auth()->user()->name }}</span>
+                                                <span class="user-name">{{ $user->name }}</span>
                                                 <span class="user-title">{{ get_phrase('Admin') }}</span>
                                             </div>
                                         </button>
@@ -959,10 +977,10 @@
                                             <li class="user-profile user-profile-inner">
                                                 <button class="btn w-100 d-flex align-items-center" type="button">
                                                     <div class="">
-                                                        <img class="radious-5px" src="{{ get_user_image(auth()->user()->id) }}" height="42px" />
+                                                        <img class="radious-5px" src="{{ get_user_image($user->id) }}" height="42px" />
                                                     </div>
                                                     <div class="px-2 text-start">
-                                                        <span class="user-name">{{ auth()->user()->name }}</span>
+                                                        <span class="user-name">{{ $user->name }}</span>
                                                         <span class="user-title">{{ get_phrase('Admin') }}</span>
                                                     </div>
                                                 </button>

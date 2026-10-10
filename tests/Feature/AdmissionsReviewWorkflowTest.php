@@ -83,6 +83,7 @@ class AdmissionsReviewWorkflowTest extends TestCase
     public function test_review_screen_shows_read_only_summary_once_already_enrolled(): void
     {
         $admission = $this->makeSubmittedAdmission(['status' => Admission::STATUS_ACCEPTED]);
+        $this->completeAdmissionForDecision($admission);
         $admin     = $this->makeAdminUser($this->schoolId);
         $classId   = $this->makeClass($this->schoolId, ['name' => 'Year One']);
         $sectionId = $this->makeSection($classId, ['name' => 'Stream A']);
@@ -124,6 +125,7 @@ class AdmissionsReviewWorkflowTest extends TestCase
     public function test_a_status_change_records_a_timeline_entry_and_the_decision_note(): void
     {
         $admission = $this->makeSubmittedAdmission();
+        $this->completeAdmissionForDecision($admission);
         $admin     = $this->makeAdminUser($this->schoolId);
 
         $this->actingAs($admin)->post(route('admin.hei_admissions.status', $admission->id), [
@@ -311,6 +313,7 @@ class AdmissionsReviewWorkflowTest extends TestCase
             'programme_id' => $this->makeProgramme($this->schoolId),
         ]);
 
+        $this->completeAdmissionForDecision(Admission::findOrFail($id));
         $admin = $this->makeAdminUser($this->schoolId);
 
         $this->actingAs($admin)->post(route('admin.hei_admissions.status', $id), [

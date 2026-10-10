@@ -25,6 +25,8 @@ class Handler extends ExceptionHandler
         'current_password',
         'password',
         'password_confirmation',
+        'consumer_key',
+        'consumer_secret',
         // Staff NIN: never re-displayed from the session after a failed form.
         'nin',
     ];
