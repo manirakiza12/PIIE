@@ -74,6 +74,15 @@ trait AssignmentFixture
                 $t->dateTime('released_at')->nullable();
                 $t->dateTime('closes_at')->nullable();
                 $t->unsignedSmallInteger('allowed_attempts')->nullable();
+                // Pass mark and recovery. Mirrors
+                // 2026_10_11_090000_add_pass_mark_and_recovery_to_assignments - the
+                // fixture builds its own schema rather than migrating, so a column
+                // added by a migration has to be added here too or the tests
+                // exercise a schema that does not exist in production.
+                $t->decimal('pass_mark', 8, 2)->nullable();
+                $t->string('retry_policy', 20)->default('approval');
+                $t->unsignedSmallInteger('attempts_cycle')->default(1);
+                $t->dateTime('locked_until')->nullable();
                 $t->string('late_policy', 20)->default('allow');
                 $t->unsignedBigInteger('created_by')->nullable();
                 $t->unsignedBigInteger('updated_by')->nullable();
@@ -114,6 +123,7 @@ trait AssignmentFixture
                 // ── Course Offering shape ──
                 $t->unsignedBigInteger('course_offering_id')->nullable()->index('asub_offering_idx');
                 $t->unsignedSmallInteger('attempt_no')->default(1);
+                $t->unsignedSmallInteger('attempt_cycle')->default(1);
                 $t->boolean('is_draft')->default(false);
                 $t->string('file_name', 191)->nullable();
                 $t->unsignedBigInteger('file_size')->nullable();

@@ -22,13 +22,13 @@
      * with a stale copy would be its own kind of data loss.
      *
      * THE EDITOR
-     * Summernote Lite, which PIIE already ships in every portal layout. Adding a
-     * second editor library alongside one already downloaded on every page would
-     * cost PIIE's low-bandwidth students bandwidth to save a lecturer a
-     * dependency. Tables and superscript/subscript are not in Summernote's own
-     * toolbar, so they are added as buttons that go through Summernote's DOM
-     * API and `document.execCommand` - using the editor, not building a parallel
-     * HTML editor beside it.
+     * `x-academic-editor` - the single rich-text surface in PIIE. This view used
+     * to carry its own copy of the Summernote bootstrap, and stopped working when
+     * the layout stopped loading Summernote globally: the local bootstrap found
+     * `$.fn.summernote` undefined and replaced the authoring surface with a
+     * failure notice, so a lecturer could not write a lesson at all. The shared
+     * component loads the vendor bundle itself, so there is nothing to bootstrap
+     * here and no second copy of the toolbar to drift.
      */
     $unitName = $offering->subject?->name ?? $offering->reference;
     $isEdit = $mode === 'edit';
@@ -113,20 +113,31 @@
                  links, tables, images, quotations, sub/superscript, undo/redo
                  and Word-paste handling. --}}
             <div class="mb-2">
-                {{-- The label names the EDITOR, not the hidden source field.
-                     `for` still points at the textarea so the markup stays
-                     honest about what carries the value, and the editor region
-                     is given the same accessible name in JS once Summernote has
-                     built it. --}}
-                <label for="cc-body" id="cc-body-label" class="form-label">Lesson content</label>
-                <div class="cc-editor-shell">
-                    <textarea id="cc-body" name="body" data-cc-dirty>{{ old('body', $lesson->body) }}</textarea>
-                </div>
-                <div class="form-text" id="cc-body-help">
-                    Use the toolbar for headings, bold, lists, tables, images and quotations.
-                    <strong>Save Draft</strong> keeps it private. <strong>Preview</strong> shows it exactly as a student will read it.
-                    <strong>Publish</strong> makes it visible to confirmed students.
-                </div>
+                {{-- THE SHARED EDITOR, NOT A HAND-ROLLED ONE.
+
+                     This view used to carry its own copy of the Summernote
+                     bootstrap, toolbar, table plugin and sub/superscript pair.
+                     That stopped working when the layout stopped loading
+                     Summernote globally - see the long note in
+                     `layouts/app.blade.php` about double-registering
+                     `$.fn.summernote`. With the vendor bundle no longer on the
+                     page, the local bootstrap found `$.fn.summernote` undefined
+                     and replaced the authoring surface with the red "the lesson
+                     editor could not be loaded" panel.
+
+                     So the lecturer could not write a lesson at all, and the only
+                     visible symptom was a failure notice in the one field the
+                     whole screen exists for. The fix is not to re-add a local
+                     bootstrap: it is to use `x-academic-editor`, which is the one
+                     editor in PIIE and loads the vendor bundle itself. --}}
+                <x-academic-editor
+                    name="body"
+                    id="cc-body"
+                    label="Lesson content"
+                    :value="old('body', $lesson->body)"
+                    help="Use the toolbar for headings, bold, lists, tables, images and quotations. Save Draft keeps it private. Preview shows it exactly as a student will read it. Publish makes it visible to confirmed students."
+                    :height="420"
+                    testid="cc-body-editor" />
             </div>
 
             <div class="d-flex flex-wrap gap-2 mb-4">
@@ -327,157 +338,15 @@
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    if (typeof jQuery === 'undefined' || typeof jQuery.fn.summernote === 'undefined') {
-        // The editor is the primary authoring surface, so if it did not load the
-        // page says so rather than leaving an unsaveable-looking plain box.
-        var shell = document.querySelector('.cc-editor-shell');
-        if (shell) {
-            shell.innerHTML = '<div class="alert alert-danger m-3" role="alert">' +
-                '<strong>The lesson editor could not be loaded.</strong> ' +
-                'Your lesson has not been lost, but please reload this page before writing.</div>';
-        }
-        return;
-    }
-
-    jQuery(function ($) {
-        // ══ Toolbar ══════════════════════════════════════════════════════
-        // Every capability the authoring brief asks for, mapped to what
-        // Summernote already does well, plus three that its own toolbar omits.
-        var toolbar = [
-            ['style', ['style']],
-            ['font', ['bold', 'underline', 'clear']],
-            ['fontname', ['fontname']],
-            ['color', ['color']],
-            ['para', ['ul', 'ol', 'paragraph']],
-            ['table', ['table']],                 // custom, registered below
-            ['insert', ['link', 'picture', 'fileLink', 'video', 'superscript', 'subscript', 'equation']],
-            ['alignment', ['left', 'center', 'right', 'justify']],
-            ['height', ['height']],
-            ['quote', ['blockquote']],
-            ['list', ['outdent', 'indent']],
-            ['undo', ['undo']],
-            ['redo', ['redo']],
-            ['fullscreen', ['fullscreen']]
-        ];
-
-        // The source textarea is hidden, so the label's `for` no longer points at
-        // anything a person can reach. Hand the SAME name to the editable region
-        // Summernote has just built, so the editor keeps its accessible name
-        // instead of becoming an anonymous text box.
-        var nameTheEditor = function () {
-            var editable = document.querySelector('.cc-editor-shell .note-editable');
-            if (editable) { editable.setAttribute('aria-labelledby', 'cc-body-label'); }
-        };
-
-        $('#cc-body').summernote({
-            height: 460,
-            placeholder: 'Write the lesson here. Use the toolbar for headings, lists, tables, images and quotations.',
-            // Word/Google Docs paste: keep the text and the formatting a lecturer
-            // expects, drop the rest. Summernote handles the paste itself; the
-            // sanitizer on the server is the boundary that actually matters.
-            disableDragAndDrop: true,
-            toolbar: toolbar,
-            popover: { image: [], link: [] },
-            callbacks: {
-                onInit: function () { nameTheEditor(); window.ccEditorReady = true; }
-            }
-        });
-
-        // ══ Table ═════════════════════════════════════════════════════════
-        // Summernote has no table dialog of its own. This builds the table with
-        // the DOM API and hands it to Summernote's own insertNode, so the editor
-        // still owns the document. It is a toolbar control, not a second editor.
-        $.summernote.plugins.table = function (context) {
-            var ui = $.summernote.ui;
-            context.addButton('table', 'table', {
-                tooltip: 'Insert a table',
-                icon: '<i class="fa fa-table"></i>',
-                click: function () {
-                    var html = '<p>' + ui.dialog({
-                        title: 'Insert table',
-                        callback: function (dialogHtml) {
-                            var $d = $(dialogHtml);
-                            var rows = parseInt($d.find('input.cc-rows').val(), 10) || 2;
-                            var cols = parseInt($d.find('input.cc-cols').val(), 10) || 2;
-                            var out = '<table><thead><tr>';
-                            for (var c = 0; c < cols; c++) out += '<th scope="col">Heading ' + (c + 1) + '</th>';
-                            out += '</tr></thead><tbody>';
-                            for (var r = 0; r < rows; r++) {
-                                out += '<tr>';
-                                for (var k = 0; k < cols; k++) out += '<td>Cell</td>';
-                                out += '</tr>';
-                            }
-                            return out + '</tbody></table>';
-                        }
-                    });
-                    if (html) context.invoke('insertNode', $.parseHTML(html)[0]);
-                }
-            });
-        };
-
-        // ══ Superscript / Subscript ════════════════════════════════════════
-        // Both are real content in a unit like Business Mathematics. Summernote
-        // does not ship them, but its editable is a contenteditable, so the
-        // browser's own command is the correct tool - it participates in the
-        // editor's undo history instead of rewriting the DOM behind its back.
-        var subSuper = function (command) {
-            return function (context) {
-                context.addButton(command, command, {
-                    tooltip: command === 'superscript' ? 'Superscript' : 'Subscript',
-                    icon: command === 'superscript'
-                        ? '<i class="fa fa-superscript"></i>'
-                        : '<i class="fa fa-subscript"></i>',
-                    click: function () {
-                        document.execCommand(command, false, null);
-                    }
-                });
-            };
-        };
-        $.summernote.plugins.superscript = subSuper('superscript');
-        $.summernote.plugins.subscript = subSuper('subscript');
-
-        // ══ Equation (RESERVED) ════════════════════════════════════════════
-        // This stores notation and does not render or execute it. That is the
-        // whole of it: PIIE has no maths engine, so claiming to typeset LaTeX
-        // would be a false promise, and building one is a separate piece of work
-        // with its own sanitising requirement. What exists now is that a lecturer
-        // can write an expression in a lesson and it survives a save intact.
-        $.summernote.plugins.equation = function (context) {
-            context.addButton('equation', 'equation', {
-                tooltip: 'Insert an equation (stored as notation)',
-                icon: '<i class="fa fa-superscript" style="font-weight:700"></i>&Sigma;',
-                click: function () {
-                    var latex = window.prompt(
-                        'Equation notation (LaTeX, e.g. x^2 + y^2 = z^2).\n' +
-                        'PIIE stores this and will render it when a maths engine is added; it is shown as text for now.'
-                    );
-                    if (!latex) return;
-                    var span = document.createElement('span');
-                    span.className = 'cc-equation';
-                    span.setAttribute('data-latex', latex);
-                    span.textContent = latex;
-                    context.invoke('insertNode', span);
-                }
-            });
-        };
-
-        // The editor was constructed with the toolbar already, so Summernote has
-        // not seen the three custom buttons. Re-init once they are registered -
-        // destroying and re-creating is Summernote's own documented way to
-        // rebuild the toolbar, and it keeps the body content because Summernote
-        // syncs it into the underlying textarea on destroy.
-        var $body = $('#cc-body');
-        $body.summernote('destroy');
-        $body.summernote({
-            height: 460,
-            placeholder: 'Write the lesson here. Use the toolbar for headings, lists, tables, images and quotations.',
-            disableDragAndDrop: true,
-            toolbar: toolbar,
-            popover: { image: [], link: [] },
-            callbacks: { onInit: function () { nameTheEditor(); window.ccEditorReady = true; } }
-        });
-
+// The Summernote bootstrap that used to live here was removed when this view
+// moved to the shared `x-academic-editor` component. It could not work: the
+// layout stopped loading Summernote globally, so the local bootstrap found
+// `$.fn.summernote` undefined and replaced the authoring surface with a
+// failure notice. The component loads the vendor bundle itself, which is why
+// nothing is needed here to make an editor appear.
+//
+// What remains is the behaviour that is about THIS form rather than about
+// rich text: unsaved-work protection and the preview hand-off.
         // ══ Dirty-form protection ═════════════════════════════════════════
         // Three independent layers, because each covers a case the others miss.
         var form = document.getElementById('cc-lesson-form');

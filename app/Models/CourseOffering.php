@@ -28,7 +28,23 @@ class CourseOffering extends Model
         'subject_id' => 'integer',
         'academic_year_id' => 'integer',
         'academic_period_id' => 'integer',
+        // Whether a student must finish one topic before opening the next.
+        // Cast only: the model is `$guarded = ['*']` and refuses direct updates,
+        // so this is written through CourseOfferingService like every other field.
+        'gate_progression' => 'boolean',
     ];
+
+    /**
+     * Does this Offering restrict a student's progression?
+     *
+     * False by default, deliberately. Gating a live student population without
+     * warning would lock people out of content they are part-way through, so an
+     * Offering opts in rather than out.
+     */
+    public function gatesProgression(): bool
+    {
+        return (bool) $this->gate_progression;
+    }
 
     protected static function booted(): void
     {

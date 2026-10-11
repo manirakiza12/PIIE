@@ -110,6 +110,14 @@ class AssignmentService
         $assignment->instructions = $this->sanitizer->sanitize($attributes['instructions'] ?? null);
         $assignment->learning_objectives = $this->plainText($attributes['learning_objectives'] ?? null);
         $assignment->max_marks = max(0, (int) ($attributes['max_marks'] ?? 100));
+        $assignment->pass_mark = $this->normalisePassMark(
+            $attributes['pass_mark'] ?? null,
+            $assignment->max_marks
+        );
+        $assignment->retry_policy = $this->normaliseRetryPolicy(
+            $attributes['retry_policy'] ?? null,
+            $assignment->hasPassMark()
+        );
         $assignment->submission_type = $this->normaliseSubmissionType($attributes['submission_type'] ?? null);
         $assignment->late_policy = $this->normaliseLatePolicy($attributes['late_policy'] ?? null);
         $assignment->allowed_attempts = $this->normaliseAttempts($attributes['allowed_attempts'] ?? null);
@@ -492,6 +500,63 @@ class AssignmentService
         return in_array($role, Assignment::REQUIREMENT_ROLES, true)
             ? $role
             : Assignment::ROLE_OPTIONAL;
+    }
+
+    /**
+     * The pass mark, or NULL when the lecturer has not set one.
+     *
+     * NULL IS THE MEANINGFUL CASE, not a failure to read a field. An assignment
+     * with no threshold is satisfied by any returned mark, which is how every
+     * assignment that predates this column behaves. Inventing a default threshold
+     * would retroactively un-complete work students have already had returned.
+     *
+     * A threshold ABOVE the maximum is refused rather than clamped. Clamping would
+     * store a number the lecturer never asked for and would quietly make an
+     * impossible assessment possible; refusing it says the real problem, which is
+     * that the two numbers do not describe the same assessment.
+     */
+    private function normalisePassMark($passMark, int $maxMarks): ?float
+    {
+        // An empty string is what an untouched HTML number input posts. It means
+        // "not set", not "zero" - a zero pass mark has to be typed deliberately.
+        if ($passMark === null || $passMark === '' || ! is_numeric($passMark)) {
+            return null;
+        }
+
+        $value = round((float) $passMark, 2);
+
+        if ($value < 0) {
+            return null;
+        }
+
+        if ($value > $maxMarks) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'pass_mark' => 'The pass mark cannot be higher than the maximum mark. '
+                    .'This assessment is out of '.$maxMarks.', so a pass mark of '.$value.' could never be reached.',
+            ]);
+        }
+
+        return $value;
+    }
+
+    /**
+     * `approval` unless the lecturer deliberately chose otherwise.
+     *
+     * The default is chosen by what the lecturer has just configured. Setting a
+     * pass mark means asking to be told when a student fell short; defaulting
+     * them to unlimited silent retries would make that request hollow. An
+     * assignment with no pass mark is not being policed, so it keeps automatic
+     * retries and the attempt limit behaves the way it always has.
+     */
+    private function normaliseRetryPolicy($policy, bool $hasPassMark): string
+    {
+        $requested = is_string($policy) && $policy !== '' ? $policy : null;
+
+        if ($requested !== null && in_array($requested, Assignment::RETRY_POLICIES, true)) {
+            return $requested;
+        }
+
+        return $hasPassMark ? Assignment::RETRY_APPROVAL : Assignment::RETRY_AUTOMATIC;
     }
 
     /**

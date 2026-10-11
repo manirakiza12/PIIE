@@ -237,6 +237,37 @@
                     <div class="form-text">1 means a single hand-in. More than 1 lets a student resubmit, and each attempt is kept.</div>
                 </div>
 
+                <div class="mb-3">
+                    <label for="as-pass" class="form-label">Pass mark</label>
+                    <input type="number" class="form-control @error('pass_mark') is-invalid @enderror"
+                           id="as-pass" name="pass_mark" min="0" max="100000" step="0.01"
+                           value="{{ old('pass_mark', $assignment->pass_mark) }}"
+                           placeholder="No pass mark">
+                    @error('pass_mark')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <div class="form-text">
+                        Leave empty and any returned mark counts. Set a mark and the student has to reach it
+                        before this is treated as passed &mdash; leave it blank and a returned mark of zero
+                        passes, exactly as it does today.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="as-retry" class="form-label">After every attempt is used</label>
+                    <select class="form-select" id="as-retry" name="retry_policy">
+                        <option value="approval" @selected(old('retry_policy', $assignment->retry_policy ?? \App\Models\Assignment::RETRY_APPROVAL) === 'approval')>
+                            Pause, and ask me to authorise another attempt
+                        </option>
+                        <option value="automatic" @selected(old('retry_policy', $assignment->retry_policy ?? \App\Models\Assignment::RETRY_APPROVAL) === 'automatic')>
+                            Let the student try again automatically
+                        </option>
+                    </select>
+                    <div class="form-text">
+                        Applies once the student's attempts in this cycle are spent.
+                        &ldquo;Ask me&rdquo; is the safer default: it stops the attempt limit being
+                        worked around by waiting.
+                    </div>
+                </div>
+
                 <div class="mb-0">
                     <label for="as-late" class="form-label">After the due date</label>
                     <select class="form-select" id="as-late" name="late_policy">

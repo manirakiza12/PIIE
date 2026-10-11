@@ -780,6 +780,13 @@ class TeacherCourseOfferingAssignmentController extends Controller
             // PIIE cannot keep.
             'submission_type' => ['required', Rule::in(Assignment::HEI_SUBMISSION_TYPES)],
             'allowed_attempts' => ['nullable', 'integer', 'min:1', 'max:99'],
+            // The threshold a returned mark must reach for this assessment to
+            // count as passed. Nullable is the meaningful case: not set means no
+            // threshold, which is how every assignment predating this behaved.
+            // The upper bound is checked against THIS submission's max_marks by
+            // the service, which is the only layer that knows both numbers.
+            'pass_mark' => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'retry_policy' => ['nullable', Rule::in(Assignment::RETRY_POLICIES)],
             'late_policy' => ['required', Rule::in(Assignment::LATE_POLICIES)],
             'due_date' => ['nullable', 'date'],
             'released_at' => ['nullable', 'date'],
@@ -872,6 +879,8 @@ class TeacherCourseOfferingAssignmentController extends Controller
             'submission_type' => $validated['submission_type'],
             'late_policy' => $validated['late_policy'],
             'allowed_attempts' => $validated['allowed_attempts'] ?? null,
+            'pass_mark' => $validated['pass_mark'] ?? null,
+            'retry_policy' => $validated['retry_policy'] ?? null,
             'due_date' => $validated['due_date'] ?? null,
             'released_at' => $validated['released_at'] ?? null,
             'closes_at' => $validated['closes_at'] ?? null,

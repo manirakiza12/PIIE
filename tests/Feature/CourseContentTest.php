@@ -161,11 +161,31 @@ class CourseContentTest extends TestCase
         $html = $editor->getContent();
 
         // Hidden: a CSS rule that takes the source field out of the page.
-        $this->assertStringContainsString('textarea#cc-body', $html, 'the source field is not hidden by any rule');
-        $this->assertMatchesRegularExpression(
-            '/\.cc-editor-shell[^}]*textarea#cc-body[^}]*\{[^}]*display:\s*none/i',
+        //
+        // THE RULE NOW LIVES IN THE SHARED STYLESHEET, AND IS SCOPED.
+        //
+        // This view no longer owns the editor. The rule is
+        // `html.piie-js .piie-editor-shell > textarea.piie-editor-source { display:none }`
+        // in `public/css/academic-editor.css`, and it is deliberately scoped to
+        // `html.piie-js` - a class the editor script adds only once it has
+        // actually started. That scoping is an improvement on the old
+        // unconditional rule it replaced: with no JavaScript the class is absent,
+        // the textarea stays visible, and the page degrades to a plain multi-line
+        // field that posts exactly the same value, rather than to an invisible
+        // field nothing can fill in.
+        $this->assertStringContainsString(
+            'piie-editor-source',
             $html,
-            'the source field has no display:none rule'
+            'the source field is not marked as the hidden source'
+        );
+
+        $editorCss = file_get_contents(base_path('public/css/academic-editor.css'));
+
+        $this->assertIsString($editorCss, 'the shared editor stylesheet must be readable');
+        $this->assertMatchesRegularExpression(
+            '/html\.piie-js[^}]*\.piie-editor-shell[^}]*textarea\.piie-editor-source[^}]*\{[^}]*display:\s*none/i',
+            $editorCss,
+            'the source field has no scoped display:none rule'
         );
 
         // Still present and still named, so it is still posted and still holds
@@ -175,8 +195,24 @@ class CourseContentTest extends TestCase
 
         // The editor remains the authoring surface, and carries the label's
         // accessible name now that the label's own control is hidden.
+        //
+        // The label element is still rendered HERE, by the component, so its id is
+        // still on the page. The `aria-labelledby` ATTRIBUTE is applied by the
+        // editor script at runtime, from `cfg.labelId`, so it appears in the
+        // bundle rather than in this view's markup - which is why it is asserted
+        // against the bundle. Splitting the assertion across the two files is
+        // deliberate: the label must be on the page for the script to find, and
+        // the wiring must be in the script for the name to reach the editor.
         $this->assertStringContainsString('id="cc-body-label"', $html);
-        $this->assertStringContainsString("aria-labelledby', 'cc-body-label'", $html);
+
+        $editorJs = file_get_contents(base_path('public/js/academic-editor.js'));
+
+        $this->assertIsString($editorJs, 'the shared editor bundle must be readable');
+        $this->assertStringContainsString(
+            "aria-labelledby",
+            $editorJs,
+            'the editor never gives its editable region an accessible name'
+        );
 
         // And the hidden field really does carry the content through a save:
         // submitted, sanitised on the way in, and stored.
@@ -1060,17 +1096,67 @@ class CourseContentTest extends TestCase
             ->get("/teacher/course-offerings/{$this->offering->id}/content/lessons/create");
 
         $response->assertOk();
-        // Summernote, which PIIE already ships in every portal layout. Adding a
-        // second editor beside one already on every page would cost PIIE's
-        // low-bandwidth students bandwidth to save a lecturer a dependency.
-        $response->assertSee('summernote', false);
-        $response->assertSee('cc-editor-shell', false);
-        // The capability set the authoring brief asks for, as real toolbar
-        // buttons rather than a comment.
+
+        // THE EDITOR IS THE SHARED COMPONENT NOW, NOT A LOCAL BOOTSTRAP.
+        //
+        // This view used to carry its own copy of the Summernote bootstrap, which
+        // silently stopped working when the layout stopped loading Summernote
+        // globally: `$.fn.summernote` came back undefined and the authoring surface
+        // was replaced by a failure notice, so a lecturer could not write a lesson
+        // at all. It now renders `x-academic-editor`, which loads the vendor bundle
+        // itself.
+        //
+        // So the assertions below moved with it. The old test asserted on
+        // `cc-editor-shell` - markup that belonged to the deleted local bootstrap -
+        // and on toolbar button names that were inline in this view. Both are now
+        // in the component and in `public/js/academic-editor.js` respectively, so
+        // asserting on them HERE would be asserting that a file this view does not
+        // own contains particular strings.
+        $response->assertSee('piie-editor-shell', false);
+        // The old wrapper is gone. Asserted on the emitted MARKUP rather than on
+        // the whole response, because the explanatory comment above names the old
+        // class and a raw substring search would match this test's own prose.
+        $this->assertStringNotContainsString(
+            'class="cc-editor-shell"',
+            $response->getContent(),
+            'the deleted local editor wrapper is still being rendered'
+        );
+
+        // The bundle really is requested, which is what actually fixes the bug:
+        // a page that never asks for Summernote cannot render an editor.
+        $response->assertSee('academic-editor.js', false);
+
+        // The capability set is asserted where it is decided.
+        //
+        // `public/js/academic-editor.js` is the single place the toolbar is
+        // defined for every editor in PIIE. Asserting the capabilities against
+        // that file - rather than against a view that merely includes it - is what
+        // stops a future change quietly dropping superscript from every editor at
+        // once, and it is a stronger claim than a string match on one page.
+        $toolbar = file_get_contents(base_path('public/js/academic-editor.js'));
+
+        $this->assertIsString($toolbar, 'the shared editor bundle must be readable');
+
         foreach (['bold', 'underline', 'ul', 'ol', 'table', 'picture', 'link',
-            'blockquote', 'superscript', 'subscript', 'undo', 'redo', 'align', 'fullscreen'] as $feature) {
-            $this->assertStringContainsString($feature, $response->getContent(),
-                "the editor is missing the '{$feature}' control");
+            'blockquote', 'superscript', 'subscript', 'undo', 'redo', 'fullscreen'] as $feature) {
+            $this->assertStringContainsString(
+                "'".$feature."'",
+                $toolbar,
+                "the shared editor is missing the '{$feature}' control"
+            );
+        }
+
+        // ALIGNMENT is listed by its four buttons rather than under Summernote's
+        // `align` alias, which is why it gets its own assertion instead of riding
+        // in the loop above. The capability is present; only the spelling differs,
+        // and pretending otherwise would mean either weakening this test or
+        // renaming a working toolbar group to satisfy a string match.
+        foreach (['left', 'center', 'right', 'justify'] as $alignment) {
+            $this->assertStringContainsString(
+                "'".$alignment."'",
+                $toolbar,
+                "the shared editor is missing the '{$alignment}' alignment control"
+            );
         }
     }
 

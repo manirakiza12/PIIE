@@ -9,6 +9,7 @@ use App\Models\CourseOfferingLessonProgress;
 use App\Models\CourseOfferingModule;
 use App\Models\User;
 use App\Support\Assignments\AssignmentLifecycle;
+use App\Support\Assignments\AssignmentOutcome;
 use Illuminate\Support\Carbon;
 
 /**
@@ -300,10 +301,21 @@ class ModuleCompletion
             default => 'submitted',
         };
 
+        // The outcome is asked of ONE place. `AssignmentOutcome` owns the whole
+        // question "has this student passed?", including the fact that it is the
+        // BEST released attempt rather than the latest one, and that a returned
+        // mark is only a failure once a pass mark has been set. Re-deriving any of
+        // that here would be how the progression engine and this report came to
+        // disagree about the same student.
+        $outcome = AssignmentOutcome::for($task, $student, $at);
+
         // Each task's OWN rule decides satisfaction. Never a global assumption.
         $satisfied = match ($task->completion_rule) {
             Assignment::RULE_SUBMISSION => $state !== 'not_submitted',
-            Assignment::RULE_RELEASED_MARK => $state === 'returned',
+            // Returned AND above the threshold. Before pass marks existed this
+            // branch read only `$state === 'returned'`, which meant a released 0
+            // out of 100 completed a REQUIRED task - a zero mark passing a module.
+            Assignment::RULE_RELEASED_MARK => $outcome->passed(),
             // A rule PIIE cannot evaluate is never satisfied - but it is also never
             // allowed to gate, which is what the `evaluable` flag carries.
             default => false,
@@ -321,6 +333,13 @@ class ModuleCompletion
             'state' => $state,
             'state_label' => $this->stateLabel($state, $latest),
             'satisfied' => $satisfied,
+            // The shared outcome vocabulary, so this report, the progression
+            // engine and the student's own screens cannot disagree.
+            'outcome' => $outcome->outcome,
+            'outcome_label' => $outcome->studentLabel(),
+            'marks_awarded' => $outcome->marksAwarded,
+            'pass_mark' => $outcome->passMark,
+            'congratulation' => $outcome->congratulation(),
             'attempts' => $attempts->count(),
             'max_marks' => (int) $task->max_marks,
             'due_date' => $task->due_date,

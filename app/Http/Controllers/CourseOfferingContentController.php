@@ -9,6 +9,7 @@ use App\Support\CourseContent\CourseContentAccess;
 use App\Support\CourseContent\CourseContentService;
 use App\Support\CourseContent\CourseOfferingModuleLifecycle;
 use App\Support\CourseContent\HtmlSanitizer;
+use App\Support\CourseContent\ModulePublicationCheck;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -168,6 +169,14 @@ class CourseOfferingContentController extends Controller
         ]);
 
         $before = CourseOfferingModuleLifecycle::labelFor($target);
+
+        // A module with nothing in it must not reach a student. Checked here, at
+        // the one place a module becomes visible, rather than inside the
+        // lifecycle: that class answers "is this move legal", and folding content
+        // opinions into it would make it a second source of truth about status.
+        if ($to === CourseOfferingModule::STATUS_PUBLISHED) {
+            $this->guarded(fn () => app(ModulePublicationCheck::class)->assertPublishable($target));
+        }
 
         $updated = $this->guarded(fn () => CourseOfferingModuleLifecycle::apply(
             $target,
