@@ -28,15 +28,19 @@ final class PesaPalPaymentExperience
             $classification==='COMPLETED'&&$payment->status==='paid'=>'successful',
             $classification==='FAILED'&&$payment->status==='failed'&&($p['verified_failure_reason']??null)==='EXPIRED'=>'expired',
             $classification==='FAILED'&&$payment->status==='failed'=>'failed',
-            in_array($classification,['INVALID','UNKNOWN'],true)=>'unknown',
+            // PesaPal reports INVALID/UNKNOWN for an order that simply has no
+            // payment details yet. For a pending row that means the applicant has
+            // not paid yet - not an anomaly - so it must read as awaiting payment
+            // rather than "Status unknown".
             $payment->status==='pending'=>'pending',
+            in_array($classification,['INVALID','UNKNOWN'],true)=>'unknown',
             default=>'unknown',
         };
         [$label,$tone,$message]=match($state) {
             'successful'=>['Successful','success','PesaPal verified this payment as completed. Your fee balance reflects the verified payment.'],
             'expired'=>['Expired','warning','PesaPal verified that this payment expired. Your fee remains unpaid unless another approved payment settles it. Check the existing payment before trying again.'],
             'failed'=>['Failed','danger','PesaPal verified that this payment failed. Your fee remains unpaid unless another approved payment settles it.'],
-            'pending'=>['Pending verification','primary','This payment has not been confirmed successful. Check this payment or resume the same checkout; do not start another order while it is unresolved.'],
+            'pending'=>['Awaiting payment','primary','This order has not been paid yet. Complete it on the PesaPal checkout, then check this payment again. Do not start a second order.'],
             'reversed'=>['Reversed','danger','PesaPal reported a reversal. This payment no longer contributes to your fee balance. Contact finance.'],
             default=>['Status unknown','secondary','PesaPal has not confirmed a successful payment. Do not pay again while the existing order is unresolved; check its status or contact finance.'],
         };

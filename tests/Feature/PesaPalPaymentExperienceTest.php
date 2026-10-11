@@ -9,10 +9,14 @@ class PesaPalPaymentExperienceTest extends TestCase
 {
     public function test_verified_states_and_local_status_must_agree(): void
     {
+        // PesaPal reports INVALID/UNKNOWN for an order with no payment details
+        // yet. On a pending row that is simply an unpaid order, so it must read
+        // as awaiting payment - telling an applicant "status unknown, do not pay"
+        // for an order they never completed is actively harmful.
         foreach ([['COMPLETED','paid',null,'successful'],['COMPLETED','pending',null,'pending'],
             ['FAILED','failed',null,'failed'],['FAILED','failed','EXPIRED','expired'],
-            ['FAILED','pending','EXPIRED','pending'],['INVALID','pending',null,'unknown'],
-            ['UNKNOWN','pending',null,'unknown'],['REVERSED','reversed',null,'reversed'],
+            ['FAILED','pending','EXPIRED','pending'],['INVALID','pending',null,'pending'],
+            ['UNKNOWN','pending',null,'pending'],['REVERSED','reversed',null,'reversed'],
             [null,'paid',null,'unknown'],[null,'pending',null,'pending']] as [$classification,$status,$reason,$expected]) {
             $payment=new ApplicationPayment();
             $payment->status=$status;

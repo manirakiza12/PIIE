@@ -25,8 +25,8 @@ class PesaPalApplicantPaymentUiTest extends TestCase
         $admission=Admission::findOrFail($this->makeAdmission($school,['status'=>'submitted','submitted_at'=>now(),
             'intake_session_id'=>$this->makeIntakeSession($school,['application_fee'=>'50000.00'])]));
         foreach ([['FAILED','failed','EXPIRED','Expired'],['FAILED','failed',null,'Failed'],
-            ['COMPLETED','paid',null,'Successful'],['UNKNOWN','pending',null,'Status unknown'],
-            [null,'pending',null,'Pending verification']] as [$classification,$status,$reason,$label]) {
+            ['COMPLETED','paid',null,'Successful'],['UNKNOWN','pending',null,'Awaiting payment'],
+            [null,'pending',null,'Awaiting payment']] as [$classification,$status,$reason,$label]) {
             $payment=new ApplicationPayment(['method'=>'pesapal','status'=>$status,'amount'=>'50000','reference'=>'TEST-ONLY',
                 'gateway_payload'=>['classification'=>$classification,'verified_failure_reason'=>$reason]]);
             $payment->id=123;$payment->created_at=now();
