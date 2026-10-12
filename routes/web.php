@@ -2179,6 +2179,16 @@ Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
 
             // Lecturer handouts
             Route::post('/{assignment}/resources', 'storeResource')->whereNumber('assignment')->name('resources.store');
+
+        // Attaching a handout to an assignment that does not exist yet.
+        //
+        // Not every assignment is a written brief: a dataset, a case study or a
+        // worksheet is a complete assignment on its own. Without this, handouts
+        // were only offered on the edit screen, so such a lecturer had to invent a
+        // brief purely to unlock the upload button. The handler creates the draft
+        // and attaches in one request, and forces the status to draft so no
+        // request can publish an assessment by attaching a file to it.
+        Route::post('/assignments/handouts', 'storeResourceForNewAssignment')->name('resources.store_new');
         });
 
     // Handout bytes. RELATIVE paths, because the enclosing group already applies

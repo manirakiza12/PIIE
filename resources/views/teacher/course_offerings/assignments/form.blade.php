@@ -323,17 +323,41 @@
                 </div>
             </div>
 
-            @if($isEdit)
-                <div class="border rounded p-3">
-                    <h6 class="mb-2">Resources</h6>
-                    <p class="small text-muted">
+            {{-- THE PANEL IS ALWAYS SHOWN.
+
+                 Only the EXISTING-HANDOUT LIST is edit-only, because a new
+                 assignment has no handouts to list yet - but it can still be GIVEN
+                 one immediately. That distinction is the whole point: the upload
+                 controls used to sit inside the same `@if ($isEdit)` as the list,
+                 so an assignment whose material is a dataset or a case study
+                 could not be started at all without first writing filler
+                 instructions to unlock the button. --}}
+            <div class="border rounded p-3">
+                <h6 class="mb-2">Resources</h6>
+                <p class="small text-muted">
+                    @if($isEdit)
                         Files are stored outside the public web folder and are only reachable by students
                         registered for this Course Offering.
-                    </p>
+                    @else
+                        An assignment can be <strong>only files</strong> &mdash; a dataset, a case study,
+                        a worksheet. Uploading here saves a draft with your title and brief so far, then
+                        attaches the handout. Nothing is published until you say so.
+                    @endif
+                </p>
 
-                    @if($assignment->resources->isNotEmpty())
-                        <ul class="list-group list-group-flush mb-3">
-                            @foreach($assignment->resources as $resource)
+                @php $resourceErrors = $errors->getBag(\App\Http\Controllers\TeacherCourseOfferingAssignmentController::RESOURCE_ERROR_BAG); @endphp
+                @if($resourceErrors->any())
+                    <div class="alert alert-danger" role="alert">
+                        <strong>The handout was not added:</strong>
+                        <ul class="mb-0 mt-1">
+                            @foreach($resourceErrors->all() as $message)<li>{{ $message }}</li>@endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                @if($isEdit && $assignment->resources->isNotEmpty())
+                    <ul class="list-group list-group-flush mb-3">
+                        @foreach($assignment->resources as $resource)
                                 <li class="list-group-item px-0 d-flex justify-content-between align-items-start gap-2">
                                     <div style="min-width:0">
                                         <div class="small fw-semibold text-truncate">{{ $resource->displayName() }}</div>
@@ -357,18 +381,6 @@
                                 </li>
                             @endforeach
                         </ul>
-                    @else
-                        <p class="small text-muted">No resources yet.</p>
-                    @endif
-
-                    @php $resourceErrors = $errors->getBag(\App\Http\Controllers\TeacherCourseOfferingAssignmentController::RESOURCE_ERROR_BAG); @endphp
-                    @if($resourceErrors->any())
-                        <div class="alert alert-danger" role="alert">
-                            <strong>The attachment was not added:</strong>
-                            <ul class="mb-0 mt-1">
-                                @foreach($resourceErrors->all() as $message)<li>{{ $message }}</li>@endforeach
-                            </ul>
-                        </div>
                     @endif
 
                     <div class="border-top pt-3">
@@ -393,25 +405,39 @@
                         </button>
                     </div>
                 </div>
-            @else
-                <div class="border rounded p-3">
-                    <h6 class="mb-2">Resources</h6>
-                    <p class="small text-muted mb-0">
-                        Save the assignment first, then add links and files. That way a handout is always
-                        attached to an assignment that exists.
-                    </p>
-                </div>
-            @endif
         </div>
     </div>
 </form>
 
+{{-- A separate form, because HTML forbids nesting a form inside another. The
+     action depends on whether the assignment exists yet: a new one posts to the
+     handler that creates a DRAFT and attaches in a single request. --}}
+<form id="as-resource-form" method="POST" enctype="multipart/form-data" class="d-none"
+      action="{{ $isEdit
+          ? route('teacher.course_offerings.assignments.resources.store', [$offering->id, $assignment->id])
+          : route('teacher.course_offerings.assignments.resources.store_new', [$offering->id]) }}">
+    @csrf
+    @unless($isEdit)
+        {{-- The draft carries what has been typed so far, so uploading a handout
+             never costs the lecturer the assignment they were writing. All
+             optional: a file-only assignment simply leaves them blank. --}}
+        <input type="hidden" name="title" value="{{ old('title', $assignment->title ?? '') }}">
+        <input type="hidden" name="instructions" value="{{ old('instructions', $assignment->instructions ?? '') }}">
+        <input type="hidden" name="learning_objectives" value="{{ old('learning_objectives', $assignment->learning_objectives ?? '') }}">
+        <input type="hidden" name="max_marks" value="{{ old('max_marks', $assignment->max_marks ?? 100) }}">
+        <input type="hidden" name="submission_type" value="{{ old('submission_type', $assignment->submission_type ?? 'text') }}">
+        <input type="hidden" name="late_policy" value="{{ old('late_policy', $assignment->late_policy ?? 'allow') }}">
+        <input type="hidden" name="allowed_attempts" value="{{ old('allowed_attempts', $assignment->allowed_attempts ?? 1) }}">
+        <input type="hidden" name="due_date" value="{{ old('due_date') }}">
+        <input type="hidden" name="released_at" value="{{ old('released_at') }}">
+        <input type="hidden" name="closes_at" value="{{ old('closes_at') }}">
+        <input type="hidden" name="course_offering_module_id" value="{{ old('course_offering_module_id') }}">
+        <input type="hidden" name="requirement_role" value="{{ old('requirement_role', 'optional') }}">
+        <input type="hidden" name="completion_rule" value="{{ old('completion_rule', 'submission') }}">
+    @endunless
+</form>
+
 @if($isEdit)
-    {{-- A separate form, because HTML forbids nesting a form inside another. --}}
-    <form id="as-resource-form" method="POST" enctype="multipart/form-data" class="d-none"
-          action="{{ route('teacher.course_offerings.assignments.resources.store', [$offering->id, $assignment->id]) }}">
-        @csrf
-    </form>
     @foreach($assignment->resources as $resource)
         <form id="as-del-{{ $resource->id }}" method="POST" class="d-none"
               action="{{ route('teacher.course_offerings.assignments.resources.destroy', $resource->id) }}"
