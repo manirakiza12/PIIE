@@ -2050,7 +2050,8 @@ Route::controller(TeacherCourseOfferingController::class)->middleware('auth', 't
     // superseded file; these routes only hand it the upload.
     Route::post('/{id}/cover-image', 'setCoverImage')->whereNumber('id')->name('cover.set');
     Route::post('/{id}/cover-image/remove', 'clearCoverImage')->whereNumber('id')->name('cover.clear');
-Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
+    Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
+    Route::get('/{id}/progress', 'progress')->whereNumber('id')->name('progress');
     // ΓöÇΓöÇ Course Offering Quizzes & Exams ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     //
     // A CONTEXT BINDER, not an exam engine. `store()` creates an assessment bound

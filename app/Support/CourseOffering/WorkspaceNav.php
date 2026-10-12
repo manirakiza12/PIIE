@@ -153,6 +153,16 @@ class WorkspaceNav
                     ? 'Confirmed students registered for this Course Offering.'
                     : 'The confirmed student roster becomes available when teaching begins.',
             ],
+            [
+                'key' => 'progress',
+                'label' => 'Progress',
+                'url' => route('teacher.course_offerings.progress', $offering->id),
+                'available' => $rosterAvailable,
+                'coming_soon' => false,
+                'description' => $rosterAvailable
+                    ? 'Every confirmed student against every topic: what is complete, what is outstanding, and who has failed an assessment.'
+                    : 'Progress becomes available when teaching begins.',
+            ],
             // GRADEBOOK AND ANALYTICS ARE NOT LISTED AT ALL.
             //
             // They used to be declared here with `coming_soon` and rendered as
