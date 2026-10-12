@@ -64,23 +64,59 @@
     </div>
 </div>
 
-<form method="POST" id="as-form" data-as-draft-key="{{ $draftKey }}"
+{{-- ══ A TWO-STEP AUTHORING FLOW ═══════════════════════════════════════════
+     SETTINGS FIRST, THEN THE WORK. Identical to the lesson form's, and for the
+     same reason: an assignment is a document with a dozen settings on it, and the
+     two or three that make a good brief are buried under marks, attempts, retry
+     policy and release dates.
+
+     ONE FORM, ONE SAVE. Both steps live inside this form, so a submit still writes
+     exactly the assignment it always wrote.
+
+     `novalidate` IS LOAD-BEARING. A field on a hidden step is still submitted -
+     `hidden` removes it from the display, not from the form data - but it is no
+     longer constraint-validated, so the browser will happily post an assignment
+     with no title while the lecturer is looking at step 2. Native validation is
+     therefore off and step 1 is checked explicitly, with the reason shown.
+--}}
+<form method="POST" id="as-form" data-as-draft-key="{{ $draftKey }}" novalidate
       @if($isEdit) action="{{ route('teacher.course_offerings.assignments.update', [$offering->id, $assignment->id]) }}" @else action="{{ route('teacher.course_offerings.assignments.store', $offering->id) }}" @endif>
     @csrf
     @if($isEdit) @method('PUT') @endif
 
+    <ul class="nav nav-pills mb-4 gap-2" id="as-steps" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button type="button" class="nav-link active" data-as-step-tab="1" role="tab"
+                    aria-selected="true" aria-controls="as-step-1" id="as-tab-1">
+                1. Settings
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button" class="nav-link" data-as-step-tab="2" role="tab"
+                    aria-selected="false" aria-controls="as-step-2" id="as-tab-2">
+                2. The work
+            </button>
+        </li>
+    </ul>
+
     <div class="row g-3">
         <div class="col-12 col-lg-8">
-            <div class="mb-3">
+            <div class="mb-3" data-as-step="1">
                 <label for="as-title" class="form-label">Assignment title</label>
                 <input type="text" class="form-control form-control-lg @error('title') is-invalid @enderror"
                        id="as-title" name="title" maxlength="191" required data-as-dirty
                        placeholder="e.g. Assignment 1 — Business Ratios"
                        value="{{ old('title', $assignment->title) }}">
                 @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                {{-- The CLIENT-SIDE reason, which `@error` cannot produce: this form
+                     carries `novalidate` so the step controller can own the check, and
+                     that is the whole point - the lecturer is taken to the field and
+                     told what is wrong, rather than being allowed to walk to step 2
+                     and post an assignment with no title. --}}
+                <div class="invalid-feedback d-block" id="as-title-note"></div>
             </div>
 
-            <div class="mb-3">
+            <div class="mb-3" data-as-step="2">
                 {{-- THE SHARED EDITOR, NOT A HAND-ROLLED ONE.
 
                      This view carried its own copy of the Summernote bootstrap and
@@ -104,7 +140,7 @@
                     testid="as-instructions-editor" />
             </div>
 
-            <div class="mb-3">
+            <div class="mb-3" data-as-step="2">
                 <label for="as-objectives" class="form-label">Learning objectives <span class="text-muted fw-normal">(optional)</span></label>
                 <textarea class="form-control @error('learning_objectives') is-invalid @enderror"
                           id="as-objectives" name="learning_objectives" rows="3" maxlength="5000" data-as-dirty
@@ -114,7 +150,24 @@
                 <div class="form-text">One per line, or separated by <kbd>;</kbd>. Shown to the student before the instructions.</div>
             </div>
 
+            {{-- THE ACTIONS ARE ON BOTH STEPS, ALWAYS.
+
+                 Deliberately unmarked. A lecturer who has just typed the title and
+                 the marks on step 1 must be able to press Save Draft there, rather
+                 than discovering they have to move to step 2 to save what they have
+                 already written - and then arriving on step 2 with the Save button
+                 looking like it belongs to the instructions.
+
+                 The Continue and Back buttons ARE marked, because they mean nothing
+                 on the step they do not lead from. --}}
             <div class="d-flex flex-wrap gap-2 mb-4">
+                <button type="button" class="btn btn-primary" data-as-step-next="2" data-as-step="1">
+                    Continue to the work
+                </button>
+                <button type="button" class="btn btn-link" data-as-step-next="1" data-as-step="2">
+                    Back to settings
+                </button>
+
                 <button type="submit" name="status" value="draft" class="btn btn-outline-secondary" data-as-unsaved-ok>
                     Save Draft
                 </button>
@@ -130,7 +183,7 @@
             </div>
         </div>
 
-        <div class="col-12 col-lg-4">
+        <div class="col-12 col-lg-4" data-as-step="1">
             <div class="border rounded p-3 mb-3" data-testid="as-module-panel">
                 <h6 class="mb-3">Where this task belongs</h6>
 
@@ -323,6 +376,19 @@
                 </div>
             </div>
 
+            </div>{{-- /the settings column --}}
+
+        {{-- HANDOUTS LIVE ON THE WORK STEP, NOT THE SETTINGS STEP.
+
+             They are the material the student works FROM - a dataset, a case study,
+             a worksheet - so they belong beside the instructions they support. And
+             for a file-only assignment they ARE the assignment, in which case a
+             lecturer who never leaves step 1 would have no way to reach the upload.
+
+             They are a separate column rather than a `data-as-step` on the panel
+             itself: a nested step marker would be hidden by its own parent's step,
+             so the handouts would vanish on the step that exists to show them. --}}
+        <div class="col-12 col-lg-4" data-as-step="2">
             {{-- THE PANEL IS ALWAYS SHOWN.
 
                  Only the EXISTING-HANDOUT LIST is edit-only, because a new
@@ -456,6 +522,123 @@
      JavaScript - hiding the only field a no-JS lecturer could type into. --}}
 
 <script>
+// ══ THE TWO-STEP FLOW ══════════════════════════════════════════════════════
+//
+// Settings first, then the work, and the settings are GONE once you are writing.
+// One form and one save: both steps live inside `#as-form`, so submitting still
+// writes exactly the assignment it always wrote.
+//
+// NEITHER STEP IS `hidden` IN THE MARKUP. That is the no-JavaScript fallback: a
+// lecturer whose browser blocks the script sees the whole form, which is usable,
+// rather than a settings step with no way forward. Hiding is applied here, at
+// runtime, so the failure mode of not running is "everything visible", never
+// "trapped on step 1".
+//
+// MOVING FORWARD PAST SETTINGS IS CHECKED. `novalidate` on the form is
+// load-bearing: a field on a hidden step is still submitted but is no longer
+// constraint-validated, so without this the browser would post an assignment with
+// no title while the lecturer is looking at step 2. Only the title is checked
+// here - it is the one field the server will not accept as empty - and everything
+// else remains the server's call, so the rules here cannot drift from them.
+//
+// THE ERROR ROUTING IS THE PART WORTH CARING ABOUT. A save rejected for a
+// settings problem must come back to SETTINGS, not to the work step the lecturer
+// was looking at when they pressed Save - otherwise they are told to fix a field
+// they cannot see, which is the same class of fault as an attachment error being
+// reported against the assignment.
+(function () {
+    var steps = Array.prototype.slice.call(document.querySelectorAll('[data-as-step]'));
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-as-step-tab]'));
+
+    if (!steps.length) { return; }
+
+    // Which step owns which field. Anything not listed is treated as the work,
+    // which is the right default: a newly added field is more likely to be part of
+    // the brief than part of the configuration.
+    var SETTINGS_FIELDS = [
+        'title', 'course_offering_module_id', 'requirement_role',
+        'completion_rule', 'submission_kinds', 'submission_type',
+        'max_marks', 'pass_mark', 'allowed_attempts', 'retry_policy',
+        'late_policy', 'due_date', 'released_at', 'closes_at'
+    ];
+
+    function show(n) {
+        steps.forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-as-step') !== String(n);
+        });
+
+        tabs.forEach(function (tab) {
+            var on = tab.getAttribute('data-as-step-tab') === String(n);
+            tab.classList.toggle('active', on);
+            tab.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function settingsAreAcceptable() {
+        var title = document.getElementById('as-title');
+
+        if (!title || title.value.trim() !== '') { return true; }
+
+        // Marked invalid and FOCUSED, so the lecturer is taken to the field rather
+        // than told to look for it. A refusal that does not say where is a refusal
+        // that gets worked around.
+        title.classList.add('is-invalid');
+        title.focus();
+
+        var note = document.getElementById('as-title-note');
+        if (note) { note.textContent = 'Give the assignment a title before continuing.'; }
+
+        return false;
+    }
+
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            var target = tab.getAttribute('data-as-step-tab');
+
+            // Moving BACK is always allowed. Moving FORWARD has to clear the one
+            // check, or step 2 is reachable with nothing in it.
+            if (target === '2' && !settingsAreAcceptable()) { return; }
+
+            show(target);
+        });
+    });
+
+    document.querySelectorAll('[data-as-step-next]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var target = button.getAttribute('data-as-step-next');
+
+            if (target === '2' && !settingsAreAcceptable()) { return; }
+
+            show(target);
+        });
+    });
+
+    var titleField = document.getElementById('as-title');
+    if (titleField) {
+        titleField.addEventListener('input', function () {
+            titleField.classList.remove('is-invalid');
+
+            var note = document.getElementById('as-title-note');
+            if (note) { note.textContent = ''; }
+        });
+    }
+
+    // Land on the step that owns the first error, if the server sent one.
+    var serverErrors = @json($assignmentErrors->keys());
+    if (serverErrors.length) {
+        var first = serverErrors[0];
+        show(SETTINGS_FIELDS.indexOf(first) !== -1 ? '1' : '2');
+    } else {
+        // No errors: open on the step a lecturer is most likely to want. A NEW
+        // assignment opens on settings, because there is nothing to write yet. An
+        // existing one opens on the work, because that is where a returning
+        // lecturer is going.
+        show(@json($isEdit ? 2 : 1));
+    }
+})();
+
 document.addEventListener('DOMContentLoaded', function () {
     // The completion rule only matters for a REQUIRED task. Hiding it otherwise is
     // not merely tidiness: a visible-but-inert control suggests a setting that has
