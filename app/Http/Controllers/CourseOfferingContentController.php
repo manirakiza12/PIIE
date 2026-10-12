@@ -14,6 +14,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -33,6 +35,15 @@ use Illuminate\Validation\ValidationException;
  */
 class CourseOfferingContentController extends Controller
 {
+    /**
+     * The error bag lesson ATTACHMENTS report into.
+     *
+     * Separate from the lesson's own errors so that "the file field is required"
+     * appears beside the attachment control that caused it, rather than at the
+     * top of a lesson form that never failed.
+     */
+    public const RESOURCE_ERROR_BAG = 'lesson_resources';
+
     public function __construct(
         private CourseContentAccess $access,
         private CourseContentService $content,
@@ -384,6 +395,135 @@ class CourseOfferingContentController extends Controller
         ]);
     }
 
+    /**
+     * Attach a file to a lesson that does not exist yet.
+     *
+     * WHY THIS EXISTS
+     *
+     * Not every lesson is written prose. A lecturer whose lesson IS the material -
+     * a scanned handout, a slide deck, a recorded lecture - had no way to add it:
+     * attachments were only offered on the EDIT screen, so the first thing they
+     * were forced to do was type a paragraph of text purely to make the file
+     * upload possible. The body is `nullable` all the way down, so the data model
+     * always allowed a file-only lesson; only the screen refused to offer one.
+     *
+     * WHY IT SAVES A DRAFT RATHER THAN STASHING THE FILE
+     *
+     * The obvious alternative is a temporary holding area keyed by session, then a
+     * move on first save. That introduces orphan files, a second lifetime for
+     * every upload, and a cleanup job for the orphans. Saving the draft instead
+     * costs one row the lecturer wanted anyway, writes the attachment to its
+     * permanent home immediately, and cannot strand anything: if the upload is
+     * refused, the lesson is a draft they can delete, not a cache entry nobody
+     * will ever find.
+     *
+     * THE LESSON IS FORCED TO A DRAFT HERE, ALWAYS. A file must never be able to
+     * publish a lesson, because publishing is a decision about whether the lesson
+     * is ready - and "someone attached a PDF" is not that decision.
+     */
+    public function storeResourceForNewLesson(Request $request, int $id): RedirectResponse
+    {
+        $offering = $this->access->resolveOffering($request->user(), $id);
+        $this->access->assertCanManage($request->user(), $offering);
+
+        // `$request->validate()` CANNOT BE USED HERE.
+        //
+        // Its signature is `validate($rules, $messages, $customAttributes)` - there
+        // is no error-bag argument, and a fifth one is silently discarded. So
+        // calling it with a bag looks like it works and quietly reports the
+        // refusal in the DEFAULT bag, which is the lesson's own "before saving"
+        // block: an upload that failed to attach would once again be reported as
+        // the lesson having failed. Built by hand so the bag is really applied.
+        $validator = Validator::make($request->all(), $this->resourceRules());
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator, null, self::RESOURCE_ERROR_BAG);
+        }
+
+        $validated = $validator->validated();
+
+        $parent = $this->resolveModule($offering, $request->input('course_offering_module_id') ?: null);
+
+        // ONE TRANSACTION, so a refused attachment cannot leave a half-made lesson.
+        //
+        // Creating the lesson and attaching the file are two writes that only make
+        // sense together: a lesson with no attachment is precisely the empty
+        // draft this route exists to avoid producing. Validation catches the
+        // obvious cases, but an upload that passes validation and then fails to
+        // store - a full disk, an extension the service refuses on content rather
+        // than on name - would otherwise leave the lecturer a blank lesson they
+        // never asked for and cannot explain.
+        $lesson = DB::transaction(function () use ($request, $validated, $parent) {
+            // `status` is not taken from the request. See the method note.
+            $created = $this->guarded(fn () => $this->content->createLesson($request->user(), $parent, [
+                'title' => $request->input('title') ?: 'Untitled lesson',
+                'summary' => $request->input('summary') ?: null,
+                'learning_objectives' => $request->input('learning_objectives') ?: null,
+                'status' => CourseOfferingLesson::STATUS_DRAFT,
+                'body' => $request->input('body'),
+            ]));
+
+            if ($validated['type'] === 'file') {
+                $this->guarded(fn () => $this->content->attachFileResource(
+                    $request->user(),
+                    $created,
+                    $request->file('file')
+                ));
+            } else {
+                $this->guarded(fn () => $this->content->attachLinkResource(
+                    $request->user(),
+                    $created,
+                    (string) ($validated['title'] ?: $validated['link_url']),
+                    (string) $validated['link_url']
+                ));
+            }
+
+            return $created;
+        });
+
+        return redirect()
+            ->route('teacher.course_offerings.content.lessons.edit', [$offering->id, $lesson->id])
+            ->with(
+                'success',
+                'Lesson created as a draft and the file attached. A lesson can be only files - '
+                .'add written notes if you want them, then Publish when you are ready.'
+            );
+    }
+
+    /**
+     * The attachment rules, shared by both upload paths.
+     *
+     * Two paths exist - one against a saved lesson, one against a lesson being
+     * created by the upload itself - and they MUST validate identically. A second
+     * hand-written copy is how "the file field is required" ends up meaning two
+     * slightly different things depending on which screen a lecturer used.
+     *
+     * `nullable` IS DELIBERATELY ABSENT from `file` and `link_url`.
+     *
+     * These rules used to carry it, and `nullable` quietly cancels `required_if`:
+     * Laravel skips every rule on an attribute marked nullable when its value is
+     * null, and `required_if` is not evaluated first. So "type=file, no file
+     * chosen" PASSED validation, the handler then got a null file and failed
+     * later - on the create-a-lesson path, after the draft had already been
+     * written. The lecturer was left with an empty lesson from an upload that
+     * was never attached.
+     *
+     * An absent value is already skipped by the non-implicit rules (`url`,
+     * `file`), so `nullable` was doing nothing useful: it was only ever
+     * suppressing the requirement it sat next to.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function resourceRules(): array
+    {
+        return [
+            'type' => ['required', 'in:link,file'],
+            'title' => ['nullable', 'string', 'max:191'],
+            'link_url' => ['required_if:type,link', 'url:http,https', 'max:500'],
+            'file' => ['required_if:type,file', 'file', 'max:20480'],
+        ];
+    }
+
     public function storeResource(Request $request, int $id, int $lesson): RedirectResponse
     {
         $offering = $this->access->resolveOffering($request->user(), $id);
@@ -395,12 +535,25 @@ class CourseOfferingContentController extends Controller
             ->whereKey($lesson)
             ->firstOrFail();
 
-        $validated = $request->validate([
-            'type' => ['required', 'in:link,file'],
-            'title' => ['nullable', 'string', 'max:191'],
-            'link_url' => ['nullable', 'required_if:type,link', 'url:http,https', 'max:500'],
-            'file' => ['nullable', 'required_if:type,file', 'file', 'max:20480'],
-        ]);
+        // ATTACHMENT ERRORS GO IN THEIR OWN BAG.
+        //
+        // Without this, a lecturer who taps "Upload file" without choosing a file
+        // is told, at the top of the page under "Please fix the following before
+        // saving", that the file field is required - which reads as the LESSON
+        // having failed to save, not the attachment. The lesson was never
+        // involved in that request. The same message was equally true of the
+        // lesson and was about neither.
+        //
+        // A named bag lets the Resources panel show its own message in its own
+        // place, and lets the lesson's error block stay silent when the lesson
+        // itself is fine.
+        $validator = Validator::make($request->all(), $this->resourceRules());
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator, null, self::RESOURCE_ERROR_BAG);
+        }
+
+        $validated = $validator->validated();
 
         if ($validated['type'] === 'file') {
             $this->guarded(fn () => $this->content->attachFileResource($request->user(), $row, $request->file('file')));

@@ -2253,6 +2253,16 @@ Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
         Route::post('/lessons/{lesson}/preview', 'previewLesson')->whereNumber('lesson')->name('lessons.preview.draft');
 
         Route::post('/lessons/{lesson}/resources', 'storeResource')->whereNumber('lesson')->name('resources.store');
+
+// Attaching material to a lesson that does not exist yet.
+//
+// Not every lesson is written prose: a scanned handout, a slide deck or a
+// recorded lecture is a complete lesson on its own. Without this, attachments
+// were only offered on the edit screen, so such a lecturer had to type filler
+// text purely to unlock the upload. The handler creates the draft and attaches
+// in one request - never a temporary store, because orphan files and a cleanup
+// job are a worse problem than the one being solved.
+Route::post('/lessons/attachments', 'storeResourceForNewLesson')->name('lessons.resources.store_new');
     });
 
     // Attachment bytes.

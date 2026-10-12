@@ -1022,7 +1022,15 @@ class CourseContentTest extends TestCase
                 'type' => 'link',
                 'link_url' => 'javascript:alert(1)',
             ])
-            ->assertSessionHasErrors('link_url');
+            // Attachment errors carry their own bag. The bag is not cosmetic: the
+            // DEFAULT bag is what the lesson's own "before saving" block renders,
+            // so an attachment failure sharing it reported a perfectly good
+            // lesson as having failed.
+            ->assertSessionHasErrors(
+                'link_url',
+                null,
+                \App\Http\Controllers\CourseOfferingContentController::RESOURCE_ERROR_BAG
+            );
 
         $this->assertSame(0, DB::table('course_offering_lesson_resources')->count());
     }
@@ -1059,7 +1067,12 @@ class CourseContentTest extends TestCase
                 'type' => 'file',
                 'file' => UploadedFile::fake()->create('huge.mp4', 21 * 1024, 'video/mp4'),
             ])
-            ->assertSessionHasErrors('file');
+            // Its own bag - see the note on the link test above.
+            ->assertSessionHasErrors(
+                'file',
+                null,
+                \App\Http\Controllers\CourseOfferingContentController::RESOURCE_ERROR_BAG
+            );
 
         // A lecture recording is a link, not an upload. A 20 MB ceiling is a
         // deliberate product decision for PIIE's low-bandwidth markets.

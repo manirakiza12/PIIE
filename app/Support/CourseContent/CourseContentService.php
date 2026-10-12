@@ -167,6 +167,25 @@ class CourseContentService
                 'created_by' => $actor->id,
             ])->save();
 
+            // THE SAME RULE AS ON UPDATE, AND IT WAS MISSING HERE.
+            //
+            // `updateLesson()` refused to publish a lesson with nothing in it, but
+            // `createLesson()` never checked at all - so the one path a lecturer
+            // takes FIRST was the one path that could publish a blank lesson to
+            // students. The guard on update was not protecting anything.
+            //
+            // Attachments cannot rescue this case, and deliberately so: on CREATE
+            // there is no lesson yet, so no attachment can exist. A brand-new
+            // published lesson must have a body.
+            if ($lesson->status === CourseOfferingLesson::STATUS_PUBLISHED
+                && ! $this->sanitizer->hasMeaningfulText($lesson->body)) {
+                throw new DomainException(
+                    'This lesson has nothing in it yet. Add written content before publishing - '
+                    .'a published lesson with no content is not something a student should be shown. '
+                    .'You can also save it as a draft and attach a file or link instead.'
+                );
+            }
+
             return $lesson->fresh();
         });
     }
@@ -197,17 +216,57 @@ class CourseContentService
 
         // Publishing something empty would put a blank lesson in front of
         // students, so it is refused here rather than discovered by them.
+        //
+        // "EMPTY" HAS TO MEAN SOMETHING A STUDENT WOULD CALL BLANK - AND AN
+        // ATTACHED FILE IS NOT THAT.
+        //
+        // The check used to read only the lesson body, so a lecturer whose lesson
+        // IS the material - a slide deck, a scanned handout, a recorded lecture,
+        // or simply a link to the reading - was told to "add some lesson content"
+        // while looking at a list of perfectly good attachments. The rule existed
+        // to stop a blank page reaching a student, and it was refusing a lesson
+        // that had content of a different kind.
+        //
+        // So an attachment counts. A link or an uploaded file IS the lesson, and a
+        // student opening it sees the attachment rather than nothing at all.
         if (($changes['status'] ?? $lesson->status) === CourseOfferingLesson::STATUS_PUBLISHED) {
             $body = array_key_exists('body', $changes) ? $changes['body'] : $lesson->body;
-            // The one canonical emptiness answer - see HtmlSanitizer::hasMeaningfulText().
-        if (! $this->sanitizer->hasMeaningfulText($body)) {
-                throw new DomainException('Add some lesson content before publishing. A published lesson with no content is not something a student should be shown.');
+
+            if (! $this->lessonHasSomethingToShow($lesson, $body)) {
+                throw new DomainException(
+                    'This lesson has nothing in it yet. Add written content, or attach a file or a link, '
+                    .'before publishing - a published lesson with no content is not something a student should be shown.'
+                );
             }
         }
 
         $lesson->forceFill($changes)->save();
 
         return $lesson->fresh();
+    }
+
+    /**
+     * Does this lesson have anything a student would find worth opening?
+     *
+     * The body is checked with the ONE canonical emptiness answer rather than a
+     * local `trim()` - see `HtmlSanitizer::hasMeaningfulText()`. That matters
+     * because the same question is asked when a lesson is rendered, and two
+     * answers would let a lesson publish as empty and then display as blank.
+     *
+     * Attachments are read from the SAVED lesson, not from the request. An
+     * attachment is uploaded through its own endpoint against an existing lesson,
+     * so by the time a lecturer presses Publish it is already a row - reading it
+     * from the request would mean a lesson could never satisfy this rule.
+     *
+     * @param  string|null  $body  the body as it will be after this save
+     */
+    private function lessonHasSomethingToShow(CourseOfferingLesson $lesson, ?string $body): bool
+    {
+        if ($this->sanitizer->hasMeaningfulText($body)) {
+            return true;
+        }
+
+        return $lesson->resources()->exists();
     }
 
     /** @param array<int> $orderedIds */

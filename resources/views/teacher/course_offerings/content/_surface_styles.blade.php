@@ -45,17 +45,31 @@
 
     /* ── The editor frame ──────────────────────────────────────────────
        A roomy, fixed-height editing area. Substantial authoring in a cramped
-       one-line box is the main reason people abandon a content builder. */
-    .cc-editor-shell { border: 1px solid var(--cc-line); border-radius: 8px; overflow: hidden; background: #fff; }
-    .cc-editor-shell .note-editor { min-height: 460px; max-height: 70vh; overflow-y: auto; }
-    .cc-editor-shell .note-editable { min-height: 460px; padding: 1rem 1.15rem; }
+       one-line box is the main reason people abandon a content builder.
+
+       THE SELECTOR FOLLOWS THE COMPONENT, NOT THE OLD VIEW.
+
+       These rules used to target `.cc-editor-shell`, which was emitted by the
+       lesson form's own markup. That markup was replaced by
+       `x-academic-editor`, which emits `.piie-editor-shell` - so every rule
+       below silently stopped matching, and the editor lost its border, its
+       radius and its height without a single error anywhere. Dead selectors are
+       the quietest kind of regression: nothing fails, something just stops
+       being true.
+
+       `.piie-editor-shell` is the SHARED class, so these rules now apply to the
+       editor on every PIIE authoring screen rather than only this one. That is
+       the point of the shared component; the duplication is what was wrong. */
+    .piie-editor-shell { border: 1px solid var(--cc-line); border-radius: 8px; overflow: hidden; background: #fff; }
+    .piie-editor-shell .note-editor { min-height: 460px; max-height: 70vh; overflow-y: auto; }
+    .piie-editor-shell .note-editable { min-height: 460px; padding: 1rem 1.15rem; }
     @media (max-width: 767.98px) {
         /* Phones: shorter, so the Save/Preview/Publish bar stays reachable
            without a long scroll past the toolbar. */
-        .cc-editor-shell .note-editable { min-height: 300px; }
-        .cc-editor-shell .note-editor { min-height: 300px; max-height: 55vh; }
+        .piie-editor-shell .note-editable { min-height: 300px; }
+        .piie-editor-shell .note-editor { min-height: 300px; max-height: 55vh; }
     }
     @media print {
-        .cc-editor-shell .note-toolbar { display: none !important; }
+        .piie-editor-shell .note-toolbar { display: none !important; }
     }
 </style>
