@@ -4,14 +4,42 @@ Date: 2026-10-11
 Commit audited: `a67658d`
 Status: **read-only investigation. No files were modified.**
 
-This maps each requested capability to what the codebase already does, what it
-does not do, and what building it would involve. It exists because requirements
-are still arriving and each one needs a verified starting position rather than an
-assumption.
+> ## ⚠️ The "Exists?" column below describes `a67658d`, NOT TODAY
+>
+> This document was a point-in-time gap analysis. Every row marked **No** or
+> **Partly** below has since been built. It is kept as the record of *why* each
+> thing was built the way it was — the reasoning in each section is the design
+> rationale, and several of those decisions are load-bearing and non-obvious — but
+> **do not read the table as the current state of the system.**
+>
+> Current state as of `56ac0dd` (CI green, 4,042 tests / 34,516 assertions):
+>
+> | # | Requirement | State today | Built in |
+> |---|---|---|---|
+> | 1 | Every unit has a lecturer-set assessment | Done — empty module refused at publish; a missing required assessment is **warned**, not refused, because a reading-only topic is legitimate | `6f6611d` |
+> | 2 | Next content unreadable until current is finished | Done — `ProgressionGate`, enforced server-side in `CourseContentAccess::resolveLessonForStudent()` | `6f6611d` |
+> | 3 | Teacher-set pass mark | Done — `pass_mark`, `retry_policy`, `attempts_cycle`, `attempt_cycle` | `6f6611d` |
+> | 4 | Three attempts | Was already done | — |
+> | 5 | 48-hour rest after three failures | Done — `RestPeriod`, per-student and per-cycle, derived so it expires without a job | `10c8ce1` |
+> | 6 | Answers auto-save | Done — `assignment-autosave.js` + `autosaveAnswer()`, lifted from the exam engine | `63a1db6` |
+> | 7 | Teacher sees each student's progress | Done — `CourseProgressGrid`, student × topic, with a "needs support" column | `6aec911` |
+> | 8 | Student sees their own progress | Was already done | — |
+> | 9 | Congratulation popup | Done — `PassCelebration`, returns `null` unless passed, so it *cannot* fire for a non-pass | `ecbf928` |
+> | 10 | Microphone / on-screen keyboard | Both done — audio recording already existed; the on-screen keyboard is `on-screen-keyboard.js` | `f61c185` |
+> | 11 | Content must not appear with no assignment | Done — the publish guard refuses it | `6f6611d` |
+>
+> Two deliberate decisions that are easy to mistake for unfinished work:
+>
+> - **Gating is OFF for every Course Offering.** The switch now exists
+>   (`Content → How students move through this course`) and is owned by the
+>   lecturer, because switching it on in bulk would change what paying students
+>   can reach without anybody having decided that.
+> - **A missing *required* assessment warns rather than refuses**, on purpose. A
+>   module of pure reading with no assessment is a legitimate thing to teach.
 
 ---
 
-## Summary table
+## Summary table (as of `a67658d` — superseded, see above)
 
 | # | Requirement | Exists? | Effort |
 |---|---|---|---|
