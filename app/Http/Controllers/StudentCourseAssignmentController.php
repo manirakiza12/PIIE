@@ -10,6 +10,7 @@ use App\Support\Assignments\AssignmentDisplay;
 use App\Support\Assignments\AssignmentLifecycle;
 use App\Support\Assignments\AssignmentState;
 use App\Support\Assignments\GradingService;
+use App\Support\Assignments\PassCelebration;
 use App\Support\Assignments\SubmissionService;
 use App\Support\TenantConfiguration;
 use DomainException;
@@ -171,6 +172,22 @@ class StudentCourseAssignmentController extends Controller
             'display' => AssignmentDisplay::make($target, $student),
             'state' => $this->stateFor($target, $latest, $used, (bool) $draft),
             'submissions' => $submissions,
+            // THE POPUP, OR NOTHING.
+            //
+            // `PassCelebration::for()` returns null for anything that must not be
+            // celebrated - not passed, not yet marked, still resting, no pass mark.
+            // A template that could reach the congratulations markup at all would be
+            // one careless `@if` away from congratulating a failure, so the view is
+            // not given the string when there is nothing to say.
+            //
+            // The unit label is the TOPIC this assessment belongs to, not the
+            // subject: "you have cleared Introduction to Sets" is the useful claim,
+            // and "you have cleared Mathematics 1" is not.
+            'celebration' => PassCelebration::for(
+                $target,
+                $student,
+                $this->topicTitleFor($target),
+            ),
             'latest' => $latest,
             'draft' => $draft,
             'attempts_used' => $used,
@@ -191,6 +208,26 @@ class StudentCourseAssignmentController extends Controller
      * showing as not submitted. This is the difference between "I am working on
      * it" and "I have handed it in", and the brief needs both to be real.
      */
+    /**
+     * The topic an assessment belongs to, for the words of the celebration.
+     *
+     * Null for a loose assessment that belongs to no topic - and null is a real
+     * answer, not a failure to find one. Such an assessment unlocks nothing, so the
+     * popup must not claim a qualification that no gate will honour.
+     */
+    private function topicTitleFor(Assignment $assignment): ?string
+    {
+        if ($assignment->course_offering_module_id === null) {
+            return null;
+        }
+
+        $module = \App\Models\CourseOfferingModule::query()
+            ->where('school_id', $assignment->school_id)
+            ->find($assignment->course_offering_module_id);
+
+        return $module?->title;
+    }
+
     /**
      * AUTOSAVE ONE ANSWER, WITHOUT A PAGE RELOAD.
      *

@@ -152,6 +152,15 @@
     <div class="col-12 col-lg-5">
         {{-- ══ A returned result, when there is one ══════════════════════════ --}}
         @if($latest && $latest->isReleased())
+            {{-- THE POPUP GOES FIRST, ABOVE THE MARK.
+
+                 A student who has just been told they passed wants that to be the
+                 first thing on the page, not the twentieth. And it is inside the
+                 existing `isReleased()` branch on purpose: that leaves exactly ONE
+                 gate on a student seeing a result, so this cannot become a second
+                 way to read an unreleased mark. --}}
+            @include('student.course_assignments._pass_celebration')
+
             <div class="as-result border rounded p-3 mb-3" data-testid="as-result">
                 <h6 class="mb-2">Your result</h6>
                 <div class="as-mark" data-testid="as-result-mark">
