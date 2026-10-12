@@ -145,6 +145,72 @@ class CourseOfferingService
         });
     }
 
+    /**
+     * Turn the progression gate on or off for one Course Offering.
+     *
+     * WHY THIS IS A SERVICE METHOD AND NOT `$offering->save()`
+     *
+     * `CourseOffering` is `$guarded = ['*']` and its `updating` hook refuses every
+     * direct write, because an Offering is historical record: subject, year,
+     * period and reference have to move together, under audit. A controller that
+     * assigns and saves looks like it works and throws a DomainException on the
+     * first request - which is a far worse failure than a refusal, because the
+     * switch appears to be broken rather than unimplemented.
+     *
+     * This one column has none of those constraints: it carries no identity, no
+     * reference and no knock-on effect on applicability. So it is written with the
+     * same single-statement discipline as the rest of this class, and - unlike
+     * `updateDraft` - it is deliberately available on a RUNNING course. Gating is
+     * about how students move through teaching that is already happening, and an
+     * Offering that could only be configured while a draft would be configured
+     * months before anyone knew whether it was right.
+     *
+     * AUDITED, because it changes what students can reach.
+     *
+     * @throws DomainException
+     */
+    public function setProgressionGate(int $schoolId, int $offeringId, bool $enabled): CourseOffering
+    {
+        return DB::transaction(function () use ($schoolId, $offeringId, $enabled): CourseOffering {
+            // `$draftOnly` is FALSE, deliberately. Every other mutator on this Offering is
+            // draft-only because subject, year, period and reference are identity:
+            // changing them mid-course would rewrite history. This column is not
+            // identity and has no knock-on effect on applicability, and gating is
+            // about teaching that is ALREADY happening. A draft-only switch would
+            // mean configuring it months before anyone knew whether it was right -
+            // and there is no second chance once the course is running.
+            $offering = $this->offering($schoolId, $offeringId, false);
+
+            $before = (bool) $offering->gate_progression;
+
+            // Nothing to record for a no-op, and the audit trail should mean
+            // something: a row saying "gate set to off" when it was already off
+            // is noise that makes the real changes harder to find.
+            if ($before === $enabled) {
+                return $offering;
+            }
+
+            DB::table('course_offerings')
+                ->where('school_id', $schoolId)
+                ->where('id', $offeringId)
+                ->update([
+                    'gate_progression' => $enabled,
+                    'updated_at' => now(),
+                ]);
+
+            $offering->refresh();
+
+            $this->audit(
+                $enabled ? 'COURSE_OFFERING_PROGRESSION_ENABLED' : 'COURSE_OFFERING_PROGRESSION_DISABLED',
+                $offering,
+                ['gate_progression' => $before],
+                ['gate_progression' => $enabled],
+            );
+
+            return $offering;
+        });
+    }
+
     public function addApplicability(int $schoolId, int $offeringId, int $membershipId): void
     {
         DB::transaction(function () use ($schoolId, $offeringId, $membershipId): void {

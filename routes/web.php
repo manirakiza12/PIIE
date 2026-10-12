@@ -2230,6 +2230,11 @@ Route::controller(TeacherCourseOfferingController::class)->middleware('auth', 't
     Route::controller(CourseOfferingContentController::class)->prefix('/{id}/content')->whereNumber('id')->name('content.')->group(function () {
         Route::get('/', 'index')->name('index');
 
+        // The per-course progression gate. A deliberate, lecturer-owned decision -
+        // see `updateProgression()` for why this is a switch a lecturer flips
+        // deliberately, and never a migration that turns it on in bulk.
+        Route::put('/progression', 'updateProgression')->name('progression');
+
         Route::post('/modules', 'storeModule')->name('modules.store');
         Route::put('/modules/{module}', 'updateModule')->whereNumber('module')->name('modules.update');
         // THE MODULE LIFECYCLE, as ONE route with the target state in the URL.

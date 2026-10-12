@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Assignment;
 use App\Models\CourseOfferingLesson;
 use App\Models\CourseOfferingLessonResource;
 use App\Models\CourseOfferingModule;
@@ -77,7 +78,101 @@ class CourseOfferingContentController extends Controller
             'canManage' => $canManage,
             'publishedCount' => $modules->sum(fn ($module) => $module->lessons->where('status', 'published')->count()),
             'draftCount' => $modules->sum(fn ($module) => $module->lessons->where('status', 'draft')->count()),
+            'progression' => $this->progressionFacts($offering),
         ]);
+    }
+
+    /**
+     * WHAT SWITCHING GATING ON WOULD ACTUALLY DO, FOR THIS COURSE.
+     *
+     * The gate is enforced by `ProgressionGate`, and this is a fact sheet for the
+     * person deciding to switch it. It exists because "a student cannot read the
+     * next topic until this one is finished" means two materially different things
+     * depending on how the course is set up, and a lecturer cannot tell which from
+     * a checkbox:
+     *
+     *   - With a PASS MARK on the required tasks, "finished" means "passed", which
+     *     is what a lecturer usually intends.
+     *   - WITHOUT one, "finished" means "handed in" - the student's satisfaction is
+     *     the act of submission, whatever mark comes back. That is a real policy,
+     *     but it is not the one most people mean when they tick the box.
+     *
+     * A lecturer who cannot see that difference will switch on a gate they believe
+     * is about passing, and find it stopping students who submitted a week's
+     * earlier work that has not been marked yet. So the counts are supplied to the
+     * view rather than left for the lecturer to discover by clicking.
+     *
+     * Read-only and cheap: two counts over the offering's own tasks.
+     *
+     * @return array{students:int, required:int, thresholded:int, unthresholded:int}
+     */
+    private function progressionFacts(\App\Models\CourseOffering $offering): array
+    {
+        $required = Assignment::query()
+            ->where('school_id', $offering->school_id)
+            ->where('course_offering_id', $offering->id)
+            ->where('requirement_role', Assignment::ROLE_REQUIRED)
+            ->get(['pass_mark']);
+
+        $thresholded = $required->filter(fn (Assignment $task) => $task->hasPassMark())->count();
+
+        return [
+            'students' => \App\Models\CourseRegistration::query()
+                ->where('course_offering_id', $offering->id)
+                ->where('status', \App\Models\CourseRegistration::STATUS_CONFIRMED)
+                ->count(),
+            'required' => $required->count(),
+            'thresholded' => $thresholded,
+            'unthresholded' => $required->count() - $thresholded,
+        ];
+    }
+
+    /**
+     * SWITCH PROGRESSION GATING ON OR OFF FOR THIS COURSE.
+     *
+     * WHY A SCREEN EXISTS WHEN THE FEATURE WAS DELIBERATELY OPT-IN
+     *
+     * The gate defaults OFF, so that no existing student is locked out of content
+     * they have already paid for and may be part-way through. That is the right
+     * default. But `gate_progression` existed only as a column on the model, so
+     * "off" also meant "off forever" - there was no route, no control and no form,
+     * and switching it on meant editing the database by hand. A safety default that
+     * nobody can deliberately lift is not a safety default; it is a missing feature.
+     *
+     * So the switch is exposed, per course, to the lecturer who owns it - the one
+     * person who knows whether their students are ready for it. It is deliberately
+     * NOT switched on in bulk by a migration or a seeder: doing that would apply a
+     * policy to courses whose content nobody has looked at, and would change what
+     * students can reach without anybody having decided that.
+     *
+     * The same authorisation as every other write here: an allocation is
+     * re-checked in the handler, not inferred from the button being rendered.
+     */
+    public function updateProgression(Request $request, int $id): RedirectResponse
+    {
+        $offering = $this->access->resolveOffering($request->user(), $id);
+
+        // `assertCanManage`, not `canLecturerManage`. The second is a question for
+        // rendering; this one throws. A POST that only checks a boolean is a POST
+        // anybody can make.
+        $this->access->assertCanManage($request->user(), $offering);
+
+        $enabled = $request->boolean('gate_progression');
+
+        // Through the service, NOT `$offering->save()`. `CourseOffering` is
+        // `$guarded = ['*']` with an `updating` hook that refuses every direct
+        // write, because an Offering is historical record. A direct assign-and-save
+        // here reads as correct and throws a DomainException on the first click -
+        // a switch that appears broken rather than one that is absent.
+        app(\App\Support\CourseOffering\CourseOfferingService::class)
+            ->setProgressionGate($offering->school_id, $offering->id, $enabled);
+
+        return back()->with(
+            'success',
+            $enabled
+                ? 'Progression gating is ON. A student must finish each topic before the next one opens.'
+                : 'Progression gating is OFF. Every student can reach every topic again.'
+        );
     }
 
     public function storeModule(Request $request, int $id): RedirectResponse
