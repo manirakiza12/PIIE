@@ -65,13 +65,20 @@
             ',', '.', '?', '!', "'", '-'
         ],
         // The characters a mathematical or business answer actually needs, and
-        // which are otherwise the hardest thing to produce on a touchscreen:
-        // the currency, the percentage, and the arithmetic operators.
+        // which are otherwise the hardest thing to produce on a touchscreen: the
+        // currency, the percentage, the arithmetic operators and the relations a
+        // quantitative student is asked to write rather than describe.
+        //
+        // Every entry is distinct. The first draft of this layer had `$`, `=`,
+        // `÷`, `(`, `)` and `£` twice, which cost six keys' worth of row and read
+        // as a broken keyboard - a duplicate is worse than a missing key, because
+        // a student who presses it twice by accident cannot tell whether the
+        // second one was ignored or lost.
         symbols: [
-            '+', '-', '×', '÷', '=', '(', ')', '[', ']', '%',
-            '$', '£', '€', 'UGX', '$', '£',
-            '<', '>', '=', '≤', '≥', '±', '÷',
-            ':', ';', '"', '(', ')', '/', '&'
+            '+', '-', '×', '÷', '=', '(', ')', '[', ']', '{', '}',
+            '%', '≤', '≥', '≠', '±', '√', '∑', '∫', '∞', 'π',
+            '$', '£', '€', 'UGX', '#', '&', '@', '/', '\\', ':',
+            ';', '"', '<', '>', '_', '|', '~', '^', '*', '≈'
         ]
     };
 

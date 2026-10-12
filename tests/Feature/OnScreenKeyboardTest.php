@@ -241,6 +241,59 @@ class OnScreenKeyboardTest extends TestCase
         }
     }
 
+    public function test_no_symbol_is_offered_twice(): void
+    {
+        // The first draft of the symbols layer had `$`, `=`, `÷`, `(`, `)` and `£`
+        // twice, which cost six keys' worth of row and read as a broken keyboard.
+        // A duplicate is worse than a missing key: a student who presses it twice
+        // by accident cannot tell whether the second press was ignored or lost.
+        $symbols = $this->symbols();
+
+        $this->assertSame(
+            [],
+            array_values(array_diff_assoc($symbols, array_unique($symbols))),
+            'the symbols layer must contain no duplicates'
+        );
+    }
+
+    /**
+     * The symbols layer, read out of the script.
+     *
+     * THE ARRAY TERMINATOR IS ANCHORED, AND THAT IS THE WHOLE TRICK.
+     *
+     * The obvious regex - `/symbols:\s*\[(.*?)\]/s` - stops at the first `]`,
+     * which is the one inside the layer's own `'[', ']'` pair. It therefore read 8
+     * of the 40 keys, and a duplicate injected anywhere in the other 32 was
+     * invisible: the test passed with a defect it claimed to be checking. It was
+     * only caught by injecting a duplicate and watching the test still pass.
+     *
+     * So the match ends at `]` followed by the object's closing brace, which no
+     * string in the layer can produce.
+     */
+    private function symbols(): array
+    {
+        $source = $this->script();
+
+        $matched = preg_match('/symbols:\s*\[(.*?)\]\s*\n\s*\}/s', $source, $matches);
+
+        $this->assertSame(1, $matched, 'the symbols layer must be readable out of the script');
+
+        preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", $matches[1], $found);
+
+        // Guarded, because a regex that quietly matched a fragment is exactly the
+        // failure this method just had once.
+        $this->assertGreaterThan(
+            30,
+            count($found[1]),
+            'the whole symbols layer must be extracted, not a fragment'
+        );
+
+        return array_map(
+            fn (string $ch) => str_replace(["\\'", '\\\\'], ["'", '\\'], $ch),
+            $found[1]
+        );
+    }
+
     public function test_it_names_the_field_it_is_typing_into(): void
     {
         // "Typing into: Question 2" is what makes this usable by a student who
