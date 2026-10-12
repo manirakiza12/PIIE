@@ -320,6 +320,24 @@ class SubmissionService
     {
         $this->assertRegistered($student, $assignment);
 
+        // THE REST PERIOD IS CHECKED FIRST, BEFORE THE ATTEMPT COUNT.
+        //
+        // Order matters for what the student is TOLD, not for whether they are
+        // stopped - both refusals stop the submission. The attempt message says
+        // "you have used all 3 attempts", which is true and useless: it gives a
+        // student who has just been told to wait 48 hours no reason for the wait
+        // and no date to return on. The pause message says what to do and when it
+        // ends. When both apply, the student needs the second one.
+        //
+        // An assignment with no pass mark can never rest, so this is a no-op for
+        // every pre-existing assignment and changes nothing about the long-standing
+        // attempt rules.
+        $rest = new RestPeriod($assignment, $student);
+
+        if ($rest->isResting()) {
+            throw new DomainException($rest->message());
+        }
+
         $attemptsUsed = $this->attemptsUsed($assignment, $student);
 
         $refusal = AssignmentLifecycle::refusalReason($assignment, $attemptsUsed);
@@ -407,11 +425,28 @@ class SubmissionService
                 ->count();
 
             if ($used >= $assignment->attemptsAllowed()) {
-                throw new DomainException(
-                    $assignment->attemptsAllowed() === 1
-                        ? 'You have already submitted this assignment.'
-                        : 'You have used all '.$assignment->attemptsAllowed().' attempts for this assignment.'
-                );
+                // Re-checked INSIDE the lock, against the CYCLE rather than the
+                // whole history, because the attempt count above is the lifetime
+                // total while the three-attempt rule is per cycle.
+                //
+                // Two guards, because they catch different things. The lifetime
+                // total keeps the existing, well-tested behaviour for assignments
+                // with no pass mark and therefore no cycles at all - changing that
+                // would weaken a rule that has always applied. The cycle check is
+                // what lets a student come back after a pause.
+                if (! $assignment->hasPassMark()) {
+                    throw new DomainException(
+                        $assignment->attemptsAllowed() === 1
+                            ? 'You have already submitted this assignment.'
+                            : 'You have used all '.$assignment->attemptsAllowed().' attempts for this assignment.'
+                    );
+                }
+
+                $rest = new RestPeriod($assignment, $student);
+
+                if ($rest->attemptsUsedInCycle() >= $assignment->attemptsAllowed() && $rest->isResting()) {
+                    throw new DomainException($rest->message());
+                }
             }
 
             $attemptNo = $used + 1;
@@ -431,6 +466,23 @@ class SubmissionService
             $submission->assignment_id = $assignment->id;
             $submission->student_id = $student->id;
             $submission->attempt_no = $attemptNo;
+
+            // WHICH CYCLE THIS ATTEMPT BELONGS TO.
+            //
+            // Recorded at write time rather than derived on read, because the
+            // UNIQUE index on (assignment, student, attempt_no) is the thing that
+            // stops two racing requests consuming the same slot. If `attempt_no`
+            // counted per cycle but `attempt_cycle` did not, a student's second
+            // cycle would collide with their first - and the collision would
+            // surface as a constraint violation rather than as a refusal.
+            //
+            // `attempt_no` itself stays the LIFETIME count for an assignment with
+            // no pass mark, so the long-standing single-attempt and few-attempt
+            // rules keep their exact existing behaviour.
+            if ($assignment->hasPassMark()) {
+                $rest = new RestPeriod($assignment, $student);
+                $submission->attempt_cycle = $rest->currentCycle();
+            }
             $submission->is_draft = false;
             // The AUTHORITATIVE instant, taken here on the server. The browser's
             // clock is never read, so "was this late" cannot be argued with.

@@ -747,7 +747,10 @@ class Assignment extends Model
     {
         $at ??= now();
 
-        return $this->locked_until !== null && $this->locked_until->isFuture($at);
+        // `Carbon::isFuture()` takes no argument and compares against the real
+        // clock, so passing `$at` to it is silently discarded. The explicit
+        // comparison is what makes an injected instant mean anything.
+        return $this->locked_until !== null && $this->locked_until->greaterThan($at);
     }
 
     public function allowsLateSubmissions(): bool
