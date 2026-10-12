@@ -79,11 +79,23 @@
                 @endforeach
             </ul>
             @if(collect($workspaceTabs)->contains('coming_soon', true))
-                <p class="small text-muted mt-1 mb-0">
-                    * Not built yet. Overview, Content, Live Classes, Assignments and Students all work now;
-                    Gradebook and Analytics will be built inside this same Course Offering, and neither is faked
-                    in the meantime.
-                </p>
+                {{-- The footnote is kept, and currently silent.
+
+                     It renders only for a tab that EXISTS and is merely unavailable
+                     to this lecturer - which is information worth stating, because
+                     it tells them a colleague has a tool they do not.
+
+                     Nothing sets `coming_soon` at present, because the unbuilt
+                     sections are no longer declared. The earlier version of this
+                     navigation rendered greyed-out Gradebook and Analytics tabs
+                     with an asterisk and printed "Not built yet" beneath them. That
+                     was honest, and still wrong: a lecturer could not act on either
+                     tab, could not tell whether to look for one, and had to read a
+                     footnote to learn two of the things on offer do not exist. A
+                     workspace that advertises its own gaps reads as half-finished.
+
+                     Absence is the honest signal. The tab returns when the engine
+                     behind it does. --}}
             @endif
         </nav>
     </div>
