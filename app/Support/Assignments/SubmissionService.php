@@ -546,7 +546,20 @@ class SubmissionService
      *
      * @throws DomainException with the same wording the submit path would use
      */
-    private function assertMayStillPrepare(Assignment $assignment, int $attemptsUsed): void
+    /**
+     * PUBLIC NOW, BECAUSE AUTOSAVE HAS TO ASK THE SAME QUESTION.
+     *
+     * The manual "Save without submitting" button has always been gated by this,
+     * and autosave has to be gated by exactly the same rule. If it were not, a
+     * student whose attempts were spent, or whose assignment had closed, could
+     * keep writing through the autosave endpoint - which would be a way around a
+     * deadline using a feature that is supposed to be invisible.
+     *
+     * `private` would have been the tidier signature and would have pushed the
+     * check into the controller, where it would then be a SECOND implementation
+     * of a rule that already exists.
+     */
+    public function assertMayStillPrepare(Assignment $assignment, int $attemptsUsed): void
     {
         $reason = AssignmentLifecycle::refusalReason($assignment, $attemptsUsed);
 

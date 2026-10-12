@@ -11,6 +11,12 @@
 
 <div class="mainSection-title">
     <a href="{{ route('teacher.course_offerings.show', $offering->id) }}" class="btn btn-sm btn-outline-secondary mb-2">Back to Course Offering</a>
+    {{-- A lecturer who arrives here wanting to know who is behind should not have
+         to go hunting through the workspace tabs for it. This roster answers WHO is
+         enrolled; the grid answers HOW FAR they have got. Both are wanted from the
+         same screen, so the link sits on the screen that raised the question. --}}
+    <a href="{{ route('teacher.course_offerings.progress', $offering->id) }}"
+       class="btn btn-sm btn-outline-primary mb-2">See progress</a>
     <h4 class="mb-1">Students &mdash; {{ $offering->subject?->code }} {{ $offering->subject?->name }}</h4>
     <p class="text-muted mb-0">{{ $offering->academicYear?->label }} &middot; {{ $offering->academicPeriod?->label }}</p>
 </div>

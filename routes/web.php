@@ -1133,6 +1133,11 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
             // Both are POSTs. Saving a draft is NOT submitting, and submitting
             // consumes an attempt - neither may ever be a link.
             Route::post('/{assignment}/draft', 'saveDraft')->whereNumber('assignment')->name('draft');
+
+    // Autosave. Debounced per question from the page, writing through the SAME
+    // `saveDraft` the manual button uses - so it cannot consume an attempt, and it
+    // is stopped by the same deadline gate.
+    Route::post('/{assignment}/autosave', 'autosaveAnswer')->whereNumber('assignment')->name('autosave');
             Route::post('/{assignment}/submit', 'submit')->whereNumber('assignment')->name('submit');
             Route::get('/{assignment}/submissions/{submission}', 'submission')
                 ->whereNumber('assignment')->whereNumber('submission')->name('submissions.show');

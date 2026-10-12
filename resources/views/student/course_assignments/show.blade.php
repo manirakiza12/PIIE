@@ -268,7 +268,32 @@
                     <p class="as-draft-note mb-2">
                         This counts as your hand-in. A mark is only visible after your lecturer returns it.
                     </p>
-                    <form method="POST" enctype="multipart/form-data"
+                    {{-- THE FORM AUTOSAVE ATTACHES TO.
+
+                         The SUBMIT form, not the "Save without submitting" one, and
+                         the distinction is deliberate. Autosave has to flush into
+                         whatever form the student presses Submit on, so what is on
+                         screen is guaranteed to be what is handed in. Attaching it
+                         to the draft form instead would mean autosaving a copy of
+                         the answers that is not the copy submitted.
+
+                         `data-autosave-url` is absent for a generic, non-question
+                         assignment - there is no per-question answer to save - and
+                         the script reads that as "nothing to do", not as an error.
+
+                         The indicator states whether the answer is saved. That is the
+                         feature: a student who cannot see whether their work is safe
+                         will not trust it, and will keep retyping defensively. --}}
+                    <div class="mb-2">
+                        <span id="as-autosave-status" class="small text-muted" role="status" aria-live="polite">
+                            Answers save as you type.
+                        </span>
+                    </div>
+
+                    <form method="POST" enctype="multipart/form-data" id="as-form"
+                          @if($questionBased)
+                              data-autosave-url="{{ route('student.courses.assignments.autosave', [$offering->id, $assignment->id]) }}"
+                          @endif
                           action="{{ route('student.courses.assignments.submit', [$offering->id, $assignment->id]) }}">
                         @csrf
                         {{-- The idempotency key. The UNIQUE index on this column is what
@@ -344,6 +369,15 @@
 
      `defer` so it never runs before the panels exist, and the panel markup is
      inert without it. --}}
+@if($questionBased)
+    {{-- Autosave, for the same reason as the recorder: `defer`, so it runs after the
+         form exists, and the page is fully usable without it. Every answer field,
+         the Save button and the Submit button work with JavaScript switched off -
+         autosave only ADDS a way to keep work safe between those, and never becomes
+         the only way to submit. --}}
+    <script src="{{ asset('js/assignment-autosave.js') }}" defer></script>
+@endif
+
 @if($questionBased && $questions->contains(fn ($q) => $q->allowsRecording()))
     <script src="{{ asset('js/assignment-recorder.js') }}" defer></script>
 @endif
