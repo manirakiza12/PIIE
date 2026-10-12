@@ -349,7 +349,7 @@ class OfficialContactIdentityTest extends TestCase
      */
     public function test_the_apply_page_shares_the_same_header_and_footer(): void
     {
-        $html = $this->get('/apply')->assertOk()->getContent();
+        $html = $this->get(route('apply.form'))->assertOk()->getContent();
 
         $this->assertStringContainsString('mailto:'.self::EMAIL, $html);
         $this->assertStringContainsString('tel:'.self::MOBILE, $html);

@@ -285,9 +285,27 @@ class PublicEnquiryModuleTest extends TestCase
         ]);
 
         // Nothing under the public site paths may expose the marker.
-        foreach (['/', '/website/contact-us', '/website/about-us', '/apply', '/login'] as $uri) {
+        //
+        // The apply page is asked for BY ROUTE NAME, not as a literal '/apply'.
+        //
+        // That distinction is the difference between testing something and
+        // appearing to. As a literal it now returns a 301, and a redirect page
+        // cannot possibly contain an enquiry marker - so the assertion would pass
+        // forever while checking nothing at all. A test that has quietly stopped
+        // testing is worse than a missing one, because it is reported as coverage.
+        foreach (['/', '/website/contact-us', '/website/about-us', route('apply.form'), '/login'] as $uri) {
             $response = $this->get($uri);
             $body = $response->getContent();
+
+            // THE PAGE MUST HAVE ACTUALLY RENDERED.
+            //
+            // A redirect body, a 503 body and an error page all trivially contain
+            // no enquiry marker, so "must not contain X" passes against any of them
+            // while checking nothing. Asserting the page rendered first is what
+            // turns this back into a real assertion about a real page - and it is
+            // what stops this test from silently becoming coverage of nothing the
+            // next time a URL moves.
+            $response->assertOk("{$uri} must render for this assertion to mean anything");
 
             $this->assertStringNotContainsString(
                 'MY ENQUIRY TEXT MARKER',
