@@ -62,17 +62,27 @@
 
     /* ── The editor frame ─────────────────────────────────────────────────
        A roomy, fixed-height editing area. Substantial authoring in a cramped
-       one-line box is the main reason people abandon a content builder. */
-    .as-editor-shell { border: 1px solid var(--as-line); border-radius: 8px; overflow: hidden; background: #fff; }
-    .as-editor-shell .note-editor { min-height: 380px; max-height: 68vh; overflow-y: auto; }
-    .as-editor-shell .note-editable { min-height: 380px; padding: 1rem 1.15rem; }
-    .as-editor-shell .note-resizebar { display: none; }
-    .as-editor-shell .note-container { margin: 0; }
-    .as-editor-shell .note-dropdown { z-index: 1080; }
+       one-line box is the main reason people abandon a content builder.
+
+       THE SELECTOR FOLLOWS THE COMPONENT, NOT THE OLD VIEW.
+
+       These rules used to target `.as-editor-shell`, which this form's own
+       markup emitted. That markup is now `x-academic-editor`, which emits
+       `.piie-editor-shell` - so every rule below silently stopped matching and
+       the editor lost its border, its radius and its height. Dead selectors are
+       the quietest kind of regression: nothing errors, something just stops
+       being true. `.piie-editor-shell` is the SHARED class, so the frame now
+       applies to every PIIE editor rather than only this one. */
+    .piie-editor-shell { border: 1px solid var(--as-line); border-radius: 8px; overflow: hidden; background: #fff; }
+    .piie-editor-shell .note-editor { min-height: 380px; max-height: 68vh; overflow-y: auto; }
+    .piie-editor-shell .note-editable { min-height: 380px; padding: 1rem 1.15rem; }
+    .piie-editor-shell .note-resizebar { display: none; }
+    .piie-editor-shell .note-container { margin: 0; }
+    .piie-editor-shell .note-dropdown { z-index: 1080; }
     @media (max-width: 767.98px) {
         /* Phones: shorter, so the action bar stays reachable without a long
            scroll past the toolbar. */
-        .as-editor-shell .note-editable, .as-editor-shell .note-editor { min-height: 240px; max-height: 50vh; }
+        .piie-editor-shell .note-editable, .piie-editor-shell .note-editor { min-height: 240px; max-height: 50vh; }
     }
 
     /* ── The submission panel ─────────────────────────────────────────────
@@ -92,6 +102,6 @@
     .as-result .as-mark { font-size: 1.6rem; font-weight: 700; line-height: 1; }
 
     @media print {
-        .as-editor-shell .note-toolbar { display: none !important; }
+        .piie-editor-shell .note-toolbar { display: none !important; }
     }
 </style>

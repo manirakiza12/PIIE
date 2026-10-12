@@ -81,19 +81,27 @@
             </div>
 
             <div class="mb-3">
-                {{-- The label names the EDITOR, not the hidden source field. `for`
-                     still points at the textarea so the markup stays honest about
-                     what carries the value, and the editable region takes the same
-                     accessible name in JS once Summernote has built it. --}}
-                <label for="as-instructions" id="as-instructions-label" class="form-label">Instructions</label>
-                <div class="as-editor-shell">
-                    <textarea id="as-instructions" name="instructions" data-as-dirty>{{ old('instructions', $assignment->instructions) }}</textarea>
-                </div>
-                @error('instructions')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
-                <div class="form-text">
-                    What the student must do. Use the toolbar for headings, numbered lists, tables, images and
-                    quotations. This is required before publishing.
-                </div>
+                {{-- THE SHARED EDITOR, NOT A HAND-ROLLED ONE.
+
+                     This view carried its own copy of the Summernote bootstrap and
+                     its own `.as-editor-shell`. When the layout stopped loading
+                     Summernote globally, `$.fn.summernote` came back undefined and
+                     the bootstrap REPLACED THE SHELL WITH THE FAILURE PANEL - so a
+                     lecturer could not write a single word of assignment
+                     instructions. The form looked complete; the one field the
+                     screen exists for was a red notice telling them to reload.
+
+                     Identical fault to the lesson form, fixed the same way: the
+                     component loads the vendor bundle itself, so there is no
+                     bootstrap here to go stale. --}}
+                <x-academic-editor
+                    name="instructions"
+                    id="as-instructions"
+                    label="Instructions"
+                    :value="old('instructions', $assignment->instructions)"
+                    help="What the student must do. Use the toolbar for headings, numbered lists, tables, images and quotations. This is required before publishing."
+                    :height="340"
+                    testid="as-instructions-editor" />
             </div>
 
             <div class="mb-3">
@@ -414,17 +422,12 @@
     @endforeach
 @endif
 
-<style>
-    /*
-     * THE SOURCE FIELD IS HIDDEN, NOT REMOVED. `display: none` is not
-     * `disabled`, so it is still submitted, and Summernote keeps writing the
-     * editor's markup into it on every keystroke - which is what submission, the
-     * server-side sanitizer and draft recovery all read. The editor takes the
-     * label's accessible name instead.
-     */
-    .as-editor-shell > textarea#as-instructions,
-    .as-editor-shell textarea[name="instructions"] { display: none; }
-</style>
+{{-- The rule that hides the editor's source textarea is NOT here. It lived in
+     this view while the editor did, and is now owned by
+     `public/css/academic-editor.css` as
+     `html.piie-js .piie-editor-shell > textarea.piie-editor-source`.
+     Duplicating it would be a second, UNSCOPED copy that also fires without
+     JavaScript - hiding the only field a no-JS lecturer could type into. --}}
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -441,102 +444,23 @@ document.addEventListener('DOMContentLoaded', function () {
         role.addEventListener('change', syncRule);
         syncRule();
     }
-    if (typeof jQuery === 'undefined' || typeof jQuery.fn.summernote === 'undefined') {
-        var shell = document.querySelector('.as-editor-shell');
-        if (shell) {
-            shell.innerHTML = '<div class="alert alert-danger m-3" role="alert">' +
-                '<strong>The editor could not be loaded.</strong> Your work has not been lost, but please ' +
-                'reload this page before writing.</div>';
-        }
-        return;
-    }
 
-    jQuery(function ($) {
-        var $body = $('#as-instructions');
-
-        // The editor is the authoring surface, so the label's `for` no longer
-        // points at something reachable. Hand the same name to the editable
-        // region Summernote builds.
-        var nameTheEditor = function () {
-            var editable = document.querySelector('.as-editor-shell .note-editable');
-            if (editable) { editable.setAttribute('aria-labelledby', 'as-instructions-label'); }
-        };
-
-        var options = {
-            height: 380,
-            placeholder: 'What must the student do? Use the toolbar for headings, numbered lists, tables and images.',
-            disableDragAndDrop: true,
-            toolbar: [
-                ['style', ['style']],
-                ['font', ['bold', 'underline', 'clear']],
-                ['fontname', ['fontname']],
-                ['color', ['color']],
-                ['para', ['ul', 'ol', 'paragraph']],
-                ['insert', ['link', 'picture', 'fileLink', 'superscript', 'subscript']],
-                ['alignment', ['left', 'center', 'right', 'justify']],
-                ['table', ['table']],
-                ['quote', ['blockquote']],
-                ['list', ['outdent', 'indent']],
-                ['undo', ['undo']],
-                ['redo', ['redo']],
-                ['fullscreen', ['fullscreen']]
-            ],
-            popover: { image: [], link: [] },
-            callbacks: { onInit: function () { nameTheEditor(); } }
-        };
-
-        $body.summernote(options);
-
-        // Summernote Lite ships no table dialog of its own. Built through its own
-        // API rather than beside it, so the editor still owns the document.
-        $.summernote.plugins.table = function (context) {
-            var ui = $.summernote.ui;
-            context.addButton('table', 'table', {
-                tooltip: 'Insert a table',
-                icon: '<i class="fa fa-table"></i>',
-                click: function () {
-                    var html = ui.dialog({
-                        title: 'Insert table',
-                        callback: function (dialogHtml) {
-                            var $d = $(dialogHtml);
-                            var rows = parseInt($d.find('input.cc-rows').val(), 10) || 2;
-                            var cols = parseInt($d.find('input.cc-cols').val(), 10) || 2;
-                            var out = '<table><thead><tr>';
-                            for (var c = 0; c < cols; c++) { out += '<th scope="col">Heading ' + (c + 1) + '</th>'; }
-                            out += '</tr></thead><tbody>';
-                            for (var r = 0; r < rows; r++) {
-                                out += '<tr>';
-                                for (var k = 0; k < cols; k++) { out += '<td>Cell</td>'; }
-                                out += '</tr>';
-                            }
-                            return out + '</tbody></table>';
-                        }
-                    });
-                    if (html) { context.invoke('insertNode', $.parseHTML(html)[0]); }
-                }
-            });
-        };
-
-        var subSuper = function (command) {
-            return function (context) {
-                context.addButton(command, command, {
-                    tooltip: command === 'superscript' ? 'Superscript' : 'Subscript',
-                    icon: command === 'superscript'
-                        ? '<i class="fa fa-superscript"></i>'
-                        : '<i class="fa fa-subscript"></i>',
-                    click: function () { document.execCommand(command, false, null); }
-                });
-            };
-        };
-        $.summernote.plugins.superscript = subSuper('superscript');
-        $.summernote.plugins.subscript = subSuper('subscript');
-
-        // Destroy and rebuild so the two custom buttons exist. Documented
-        // Summernote practice, and safe: the body is synced into the textarea on
-        // destroy, so the content survives it.
-        $body.summernote('destroy');
-        $body.summernote(options);
-
+    // The Summernote bootstrap that used to live here was removed when this view
+    // moved to the shared `x-academic-editor` component, for the same reason the
+    // lesson form lost its own: the layout stopped loading Summernote globally, so
+    // the local bootstrap found `$.fn.summernote` undefined and REPLACED THE SHELL
+    // WITH THE FAILURE PANEL. Assignment instructions could not be written at all.
+    //
+    // The component loads the vendor bundle itself, which is why nothing is
+    // needed here to make an editor appear.
+    //
+    // What remains is this form's own behaviour: the rule-visibility toggle, the
+    // unsaved-work guard with local recovery, and the preview hand-off.
+    var form = document.getElementById('as-form');
+    if (!form) { return; }
+    var draftKey = form.getAttribute('data-as-draft-key');
+    var dirty = false;
+    var saveTimer = null;
         // ── Dirty-form protection and local recovery ─────────────────────
         var form = document.getElementById('as-form');
         var draftKey = form.getAttribute('data-as-draft-key');
@@ -616,18 +540,30 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // 3. Preview POSTs the current form, so it shows unsaved work. The sync
-        //    is forced first, because the copy below reads the hidden field and
-        //    Summernote debounces its own writes.
-        document.querySelector('[data-as-preview]').addEventListener('click', function () {
-            $body.summernote('code', $body.summernote('code'));
+        // 3. Preview POSTs the current form, so it shows unsaved work.
+        //
+        //    The jQuery sync is GUARDED, not assumed. Without it the preview still
+        //    builds and posts the form; it may simply miss the last few
+        //    keystrokes. Taking the whole page's script down with an undefined `$`
+        //    - which is what this block used to do - is a far worse failure.
+        var previewButton = document.querySelector('[data-as-preview]');
+        var $body = (window.jQuery) ? window.jQuery('#as-instructions') : null;
 
-            var target = $body.closest('form').getAttribute('action')
-                .replace(/\/assignments\/(\d+)$/, '/assignments/$1/preview');
-            if (!/\/assignments\/(\d+)$/.test($body.closest('form').getAttribute('action'))) {
+        if (!previewButton) { return; }
+
+        previewButton.addEventListener('click', function () {
+            if ($body && typeof $body.summernote === 'function') {
+                $body.summernote('code', $body.summernote('code'));
+            }
+
+            var formAction = form.getAttribute('action') || '';
+
+            if (!/\/assignments\/\d+$/.test(formAction)) {
                 window.alert('Save the assignment as a draft first, then you can preview it exactly as a student will read it.');
                 return;
             }
+
+            var target = formAction.replace(/\/assignments\/(\d+)$/, '/assignments/$1/preview');
 
             var previewForm = document.createElement('form');
             previewForm.method = 'POST';
@@ -643,7 +579,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 var input = document.createElement('input');
                 input.type = 'hidden';
                 input.name = name;
-                var field = $body.closest('form').querySelector('[name="' + name + '"]');
+                var field = form.querySelector('[name="' + name + '"]');
                 input.value = field ? field.value : fields[name];
                 previewForm.appendChild(input);
             });
@@ -651,7 +587,6 @@ document.addEventListener('DOMContentLoaded', function () {
             document.body.appendChild(previewForm);
             previewForm.submit();
         });
-    });
 });
 </script>
 
