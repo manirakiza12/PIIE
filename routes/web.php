@@ -161,10 +161,73 @@ Route::get('id-card/verify/{student}', [IdCardVerificationController::class, 'sh
 // here and applicants are not `users`. No school selector: the institution
 // context is resolved automatically (see App\Support\PublicTenantResolver).
 
-// "Apply Now" landing page ΓÇö the entry point linked from the public website.
+// "Apply Now" landing page — the entry point linked from the public website.
+//
+// THE CANONICAL URI IS `admissions/apply`, not `apply`.
+//
+// The route NAME is unchanged, and that is the whole trick: every internal caller
+// - the public header, footer, hero and CTA blocks, the programme catalogue, and
+// the tests - says `route('apply.form')`. Moving the URI rather than renaming the
+// route means all of those follow the new address automatically, with no second
+// list of URLs to keep in step. Renaming the route instead would have meant
+// finding and editing every one of them, and any one missed would have silently
+// kept pointing at the old address.
+//
+// The nesting also groups it honestly: this page sits in the admissions journey
+// with `applicant/register` and `applicant/login`, and a bare top-level `/apply`
+// gave no hint of which journey a visitor had landed in.
 Route::controller(\App\Http\Controllers\PublicApplicationController::class)->group(function () {
-    Route::get('apply', 'showForm')->name('apply.form');
+    Route::get('admissions/apply', 'showForm')->name('apply.form');
 });
+
+/**
+ * THE OLD `/apply` ADDRESS, KEPT ALIVE.
+ *
+ * A 301, not a 302. `/apply` has been published, linked from social media, printed
+ * on prospectuses and possibly indexed by a search engine, and none of that can be
+ * recalled by changing a route. A permanent redirect is the only answer that hands
+ * that accumulated authority to the new address instead of discarding it; a 302
+ * would tell a crawler the move is temporary and leave the old URL sitting in the
+ * search results.
+ *
+ * A `RedirectController` route, NOT a closure returning `redirect()->to(route(...))`.
+ *
+ * The closure version keeps the destination out of this file, which is tidier, and
+ * it was the first thing written. It was changed because a closure forces
+ * `route:cache` to serialise a Closure object into `bootstrap/cache/routes-v7.php`.
+ * That works on this framework version - verified, not assumed - but it is the one
+ * route-table pattern most likely to behave differently on a deploy machine, and a
+ * redirect route is unambiguously cacheable.
+ *
+ * `Route::redirect()` WAS TRIED AND REJECTED, for two reasons worth recording.
+ *
+ * It registers through `Route::any()`, so the redirect answers POST, PUT, PATCH
+ * and DELETE as well - a 301 on a POST is a redirect the visitor never asked for,
+ * on a verb that has no meaning at this address. `/apply` is a page, not an
+ * endpoint, and 405 is the truthful answer to anything else.
+ *
+ * And its return value does not chain. `Router::redirect()` hands back a route
+ * through the registrar rather than something `->methods()` and `->name()` can be
+ * applied to in turn, so constraining it that way dies at route-registration time
+ * with "Call to a member function name() on array". `Route::match()` states the
+ * verbs and the controller plainly and has no such ambiguity.
+ *
+ * The cost is a literal destination, which is a second place the canonical address
+ * appears. `ApplyUrlMoveTest` closes that gap by asserting this string is exactly
+ * the path `route('apply.form')` generates, so if the canonical address ever moves
+ * again this line fails loudly instead of quietly redirecting into nothing.
+ *
+ * The destination is deliberately RELATIVE. It is emitted as `Location:
+ * /admissions/apply`, so the browser carries over whichever host and scheme it
+ * already used to reach us. That is what keeps this from becoming a redirect loop
+ * when the site is visited over a different hostname or protocol than the one
+ * baked into the environment file - a hard-coded absolute URL is exactly how those
+ * loops get built.
+ */
+Route::match(['get', 'head'], 'apply', \Illuminate\Routing\RedirectController::class)
+    ->defaults('destination', '/admissions/apply')
+    ->defaults('status', 301)
+    ->name('apply.form.legacy');
 
 // Applicant account: registration, sign-in, password recovery.
 Route::controller(\App\Http\Controllers\Applicant\AuthController::class)->group(function () {

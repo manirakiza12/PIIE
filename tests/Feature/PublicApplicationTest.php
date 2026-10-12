@@ -12,9 +12,10 @@ use Tests\TestCase;
  * The public admissions entry point.
  *
  * The guarantees here used to belong to a single anonymous form that created
- * an Admission outright. That form is gone — /apply is now a landing page and
- * the first real write is applicant registration — so the same guarantees
- * (no school selector, tenant resolved from configuration, validation,
+ * an Admission outright. That form is gone — the apply page at `/admissions/apply`
+ * (moved from `/apply`, which now 301-redirects; see ApplyUrlMoveTest) is a
+ * landing page and the first real write is applicant registration — so the same
+ * guarantees (no school selector, tenant resolved from configuration, validation,
  * honeypot, rate limiting) are asserted against the registration endpoint.
  * See ApplicantPortalTest for the application flow that follows.
  */
