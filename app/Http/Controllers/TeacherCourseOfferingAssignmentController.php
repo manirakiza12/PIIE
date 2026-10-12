@@ -20,6 +20,7 @@ use App\Support\TenantConfiguration;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -51,6 +52,15 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class TeacherCourseOfferingAssignmentController extends Controller
 {
+    /**
+     * The error bag assignment ATTACHMENTS report into.
+     *
+     * Kept separate from the assignment's own errors so an attachment message
+     * appears beside the attachment control rather than inside a heading that
+     * claims the assignment failed to save.
+     */
+    public const RESOURCE_ERROR_BAG = 'assignment_resources';
+
     public function __construct(
         private readonly AssignmentAccess $access,
         private readonly AssignmentService $assignments,
@@ -696,12 +706,23 @@ class TeacherCourseOfferingAssignmentController extends Controller
     {
         $target = $this->access->resolveForManager($request->user(), $id, $assignment);
 
-        $validated = $request->validate([
+        // ATTACHMENT ERRORS GO IN THEIR OWN BAG - the same defect and the same
+        // reasoning as on the lesson form. Tapping "Upload file" without choosing
+        // one put "the file field is required" into the ASSIGNMENT's error block,
+        // under a heading saying the assignment had failed to save, when the
+        // assignment was never part of that request.
+        $validator = Validator::make($request->all(), [
             'type' => ['required', 'in:link,file'],
             'title' => ['nullable', 'string', 'max:191'],
             'link_url' => ['nullable', 'required_if:type,link', 'url:http,https', 'max:500'],
             'file' => ['nullable', 'required_if:type,file', 'file', 'max:20480'],
         ]);
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator, null, self::RESOURCE_ERROR_BAG);
+        }
+
+        $validated = $validator->validated();
 
         if ($validated['type'] === 'file') {
             $this->guarded(fn () => $this->assignments->attachFile(

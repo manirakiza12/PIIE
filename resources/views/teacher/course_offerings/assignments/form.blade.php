@@ -41,10 +41,16 @@
 </div>
 
 @if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}</div>@endif
-@if($errors->any())
+@php
+    // ONLY THE ASSIGNMENT'S OWN ERRORS. Attachment errors are in their own bag
+    // and render beside the attachment control, so including them here made a
+    // saved assignment appear to have failed.
+    $assignmentErrors = $errors->getBag('default');
+@endphp
+@if($assignmentErrors->any())
     <div class="alert alert-danger" role="alert">
         <strong>Please fix the following:</strong>
-        <ul class="mb-0 mt-1">@foreach($errors->all() as $message)<li>{{ $message }}</li>@endforeach</ul>
+        <ul class="mb-0 mt-1">@foreach($assignmentErrors->all() as $message)<li>{{ $message }}</li>@endforeach</ul>
     </div>
 @endif
 
@@ -345,6 +351,16 @@
                         </ul>
                     @else
                         <p class="small text-muted">No resources yet.</p>
+                    @endif
+
+                    @php $resourceErrors = $errors->getBag(\App\Http\Controllers\TeacherCourseOfferingAssignmentController::RESOURCE_ERROR_BAG); @endphp
+                    @if($resourceErrors->any())
+                        <div class="alert alert-danger" role="alert">
+                            <strong>The attachment was not added:</strong>
+                            <ul class="mb-0 mt-1">
+                                @foreach($resourceErrors->all() as $message)<li>{{ $message }}</li>@endforeach
+                            </ul>
+                        </div>
                     @endif
 
                     <div class="border-top pt-3">
