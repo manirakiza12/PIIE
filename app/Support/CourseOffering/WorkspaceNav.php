@@ -66,6 +66,22 @@ class WorkspaceNav
      * Declared once so the composer, the tests and any future surface cannot
      * disagree about what the workspace contains or what order it is in.
      */
+    /**
+     * THE BUILT DESTINATIONS, IN ORDER.
+     *
+     * Correct as of the day `Gradebook` and `Analytics` were removed from the nav
+     * and `Progress` was added. It previously still listed `gradebook` and
+     * `analytics` and omitted `progress`, so it disagreed with `tabs()` in three
+     * places at once - and its own docblock promised that "the composer, the tests
+     * and any future surface cannot disagree about what the workspace contains".
+     *
+     * A constant that claims to be the single declaration and then contradicts it
+     * is worse than no constant: a future surface building from this list would
+     * have reintroduced precisely the tabs that were deliberately deleted.
+     *
+     * `test_the_declared_keys_match_what_is_actually_rendered` pins it to
+     * `tabs()`, so it cannot drift again silently.
+     */
     public const KEYS = [
         'overview',
         'content',
@@ -73,8 +89,7 @@ class WorkspaceNav
         'assignments',
         'quizzes_exams',
         'students',
-        'gradebook',
-        'analytics',
+        'progress',
     ];
 
     public function __construct(

@@ -1327,6 +1327,32 @@ class CourseContentTest extends TestCase
         $this->assertStringContainsString('overflow-x', $response->getContent());
     }
 
+    public function test_the_declared_keys_match_what_is_actually_rendered(): void
+    {
+        // `WorkspaceNav::KEYS` says it is "declared once so the composer, the tests
+        // and any future surface cannot disagree about what the workspace contains".
+        //
+        // It DID disagree, in three places at once: it still listed `gradebook` and
+        // `analytics` after they were removed, and omitted `progress` after it was
+        // added. Nothing read the constant, so no test caught it - which is exactly
+        // how a future surface building from that list would have quietly
+        // reintroduced the two tabs that were deliberately deleted.
+        //
+        // The constant is now accurate and pinned to what `tabs()` emits, so it can
+        // only change in step with the nav.
+        $tabs = app(\App\Support\CourseOffering\WorkspaceNav::class)->tabs(
+            request(), $this->offering, true, null
+        );
+
+        $rendered = array_column($tabs, 'key');
+
+        $this->assertSame(
+            \App\Support\CourseOffering\WorkspaceNav::KEYS,
+            $rendered,
+            'the declared keys and the rendered tabs must be the same list, in the same order'
+        );
+    }
+
     public function test_the_workspace_navigation_declares_the_destination_without_faking_it(): void
     {
         $response = $this->actingAs($this->lecturer)
