@@ -387,6 +387,29 @@
     <script src="{{ asset('js/assignment-autosave.js') }}" defer></script>
 @endif
 
+{{-- THE ON-SCREEN KEYBOARD, opt-in and additive.
+
+     A student on a tablet, a phone in landscape, a shared or broken keyboard can
+     read a question and cannot answer it. This is for them.
+
+     It never intercepts keystrokes and never traps focus: a student with a
+     physical keyboard is completely unaffected and will not see the button unless
+     they go looking for it. Forcing an overlay on someone who does not need it is
+     the failure mode, and a worse one than not having the feature.
+
+     It dispatches a real `input` event on every insertion, which is what the
+     autosave above listens for - so a character typed here is saved by exactly the
+     same code path as one typed on a physical keyboard. That is the only reason
+     the two work together.
+
+     Loaded for BOTH question-based and generic assignments: a generic assignment's
+     written response is just as much a short answer, and a script gated on the
+     question-based branch would silently be missing from exactly the simpler form.
+
+     `defer`, so the fields exist before it scans for them - and the page is fully
+     usable without it: every answer can still be typed, saved and submitted. --}}
+<script src="{{ asset('js/on-screen-keyboard.js') }}" defer></script>
+
 @if($questionBased && $questions->contains(fn ($q) => $q->allowsRecording()))
     <script src="{{ asset('js/assignment-recorder.js') }}" defer></script>
 @endif
