@@ -1335,20 +1335,52 @@ class CourseContentTest extends TestCase
         $response->assertOk();
         $content = $response->getContent();
 
-        // All eight destination tabs are declared, so the shape of the workspace
-        // is visible and reviewable now rather than a surprise later.
+        // Every BUILT destination is declared, so the shape of the workspace is
+        // visible and reviewable now rather than a surprise later.
         foreach (['Overview', 'Content', 'Live Classes', 'Assignments',
-            'Quizzes &amp; Exams', 'Students', 'Gradebook', 'Analytics'] as $tab) {
+            'Quizzes &amp; Exams', 'Students', 'Progress'] as $tab) {
             $this->assertStringContainsString($tab, $content, "the '{$tab}' tab is missing");
         }
 
-        // A tab with no engine is plain text with NO href. Not a link to a stub
-        // and not a 404 - a lecturer is never offered a door that does not open.
-        $this->assertMatchesRegularExpression(
-            '/<span class="nav-link disabled[^>]*>\s*Gradebook/s',
-            $content
+        // GRADEBOOK AND ANALYTICS ARE NOT LISTED IN THE WORKSPACE NAV.
+        //
+        // They used to be rendered as disabled tabs. That was an improvement on a
+        // 404 link, but it was still misleading in the other direction: a greyed-out
+        // "Gradebook" tells a lecturer the feature exists and is merely unavailable,
+        // which is a different fact from "not built yet". "Exists but not available to
+        // you" and "does not exist" are different things, and a lecturer planning a
+        // marking session needs the second one.
+        //
+        // ASSERTED ON THE NAV, NOT ON THE WHOLE PAGE.
+        //
+        // The site-wide sidebar links to a real `/teacher/gradebook`, and it must
+        // keep doing so - removing a per-course tab must not have taken the working
+        // page with it. Scanning the rendered page for the word would fail on that
+        // link and would be testing the wrong thing: what matters is which tabs the
+        // workspace offers, and the nav is what decides that.
+        $tabs = app(\App\Support\CourseOffering\WorkspaceNav::class)->tabs(
+            request(), $this->offering, true, null
         );
-        $this->assertStringNotContainsString('>Gradebook</a>', $content);
+
+        $labels = array_column($tabs, 'label');
+
+        $this->assertNotContains('Gradebook', $labels);
+        $this->assertNotContains('Analytics', $labels);
+
+        // Every tab listed is either a real link or plainly marked unavailable.
+        // Nothing is offered as a door that does not open.
+        foreach ($tabs as $tab) {
+            if ($tab['coming_soon'] ?? false) {
+                $this->assertSame(
+                    false,
+                    $tab['available'],
+                    "'{$tab['label']}' is coming soon but claims to be available"
+                );
+            }
+        }
+
+        // And the site-wide gradebook link is genuinely still there.
+        $this->assertStringContainsString('/teacher/gradebook', $content);
     }
 
     public function test_built_content_pages_are_reachable_from_the_workspace_navigation(): void
