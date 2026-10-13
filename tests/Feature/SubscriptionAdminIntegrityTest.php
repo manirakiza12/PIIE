@@ -176,7 +176,10 @@ class SubscriptionAdminIntegrityTest extends TestCase
     {
         $school=$this->makeSchool(['status'=>1]);$this->subscription($school,'expired');
         DB::table('global_settings')->insert(['key'=>'primary_school_id','value'=>(string)$school]);
-        $this->get('/apply')->assertOk();
+        // By route name, not by literal path: this is checking that the PAGE is reachable
+        // for an expired school, and the address it lives at is not the thing under
+        // test. The two lines below already ask the router; this one now does too.
+        $this->get(route('apply.form'))->assertOk();
         $this->get(route('applicant.register'))->assertOk();
         $this->get(route('applicant.login'))->assertOk();
         foreach(app('router')->getRoutes() as $route){

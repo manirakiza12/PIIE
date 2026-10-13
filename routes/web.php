@@ -163,8 +163,32 @@ Route::get('id-card/verify/{student}', [IdCardVerificationController::class, 'sh
 
 // "Apply Now" landing page ΓÇö the entry point linked from the public website.
 Route::controller(\App\Http\Controllers\PublicApplicationController::class)->group(function () {
-    Route::get('apply', 'showForm')->name('apply.form');
+    Route::get('admissions/apply', 'showForm')->name('apply.form');
 });
+
+// The old address, kept alive by a PERMANENT redirect.
+//
+// `/apply` is already published, printed on prospectuses, shared and indexed, and
+// none of that can be recalled by changing a route. 301 rather than 302 so that
+// whatever authority the old address accumulated is handed to the new one instead
+// of being discarded with a "this move is temporary" signal to crawlers.
+//
+// GET and HEAD only. `Route::redirect()` was rejected because it registers through
+// `Route::any()` and would answer POST/PUT/DELETE with a 301 on a verb that has no
+// meaning at a page; `/apply` is a page, not an endpoint, and 405 is the truthful
+// answer to anything else.
+//
+// The destination is deliberately RELATIVE. `Location: /admissions/apply` makes the
+// browser carry over whichever host and scheme it already used, so this cannot
+// become a redirect loop when the site is reached over a different address than
+// the one configured in the environment.
+//
+// Deliberately NOT a closure: a closure makes `route:cache` serialise a Closure
+// object, and a RedirectController route is unambiguously cacheable.
+Route::match(['get', 'head'], 'apply', \Illuminate\Routing\RedirectController::class)
+    ->defaults('destination', '/admissions/apply')
+    ->defaults('status', 301)
+    ->name('apply.form.legacy');
 
 // Applicant account: registration, sign-in, password recovery.
 Route::controller(\App\Http\Controllers\Applicant\AuthController::class)->group(function () {
