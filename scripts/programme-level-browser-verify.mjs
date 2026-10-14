@@ -16,6 +16,7 @@ const server=createServer((req,res)=>{
    assert(req.headers['x-csrf-token']);
    res.setHeader('Content-Type','application/json');
    if(requests===1){res.writeHead(422);res.end(JSON.stringify({errors:{name:['Please check the level name.']}}));}
+   else if(requests===2){res.setHeader('Content-Type','text/html');res.end('<p>Please sign in.</p>');}
    else res.end(JSON.stringify({name:'Higher Education Certificate (HEC)'}));
   });return;
  }
@@ -57,11 +58,13 @@ try{
    save.click();while(save.disabled)await new Promise(r=>setTimeout(r,30));
    const errorVisible=form.querySelector('#piie-level-message').textContent==='Please check the level name.'&&!panel.hidden;
    save.click();while(save.disabled)await new Promise(r=>setTimeout(r,30));
+   const unexpectedResponseHandled=form.querySelector('#piie-level-message').textContent==='Unable to add level. Please try again.'&&!panel.hidden;
+   save.click();while(save.disabled)await new Promise(r=>setTimeout(r,30));
    const selected=form.querySelector('#piie-level').value;
    add.click();form.querySelector('#piie-cancel-level').click();
-   return {open,errorVisible,selected,preserved:code.value==='HEC-SCI'&&name.value==='Higher Education Science',closed:panel.hidden,forms:document.querySelectorAll('form').length,width:innerWidth,scrollWidth:document.documentElement.scrollWidth};
+   return {open,errorVisible,unexpectedResponseHandled,selected,preserved:code.value==='HEC-SCI'&&name.value==='Higher Education Science',closed:panel.hidden,forms:document.querySelectorAll('form').length,width:innerWidth,scrollWidth:document.documentElement.scrollWidth};
   })()`);
-  assert(result.open);assert(result.errorVisible);assert(result.preserved);assert(result.closed);assert.equal(result.selected,'Higher Education Certificate (HEC)');assert.equal(result.forms,1);assert(result.scrollWidth<=result.width+1);
+  assert(result.open);assert(result.errorVisible);assert(result.unexpectedResponseHandled);assert(result.preserved);assert(result.closed);assert.equal(result.selected,'Higher Education Certificate (HEC)');assert.equal(result.forms,1);assert(result.scrollWidth<=result.width+1);
   rows.push(result);
   await evaluate(`document.getElementById('piie-add-level').click()`);
   const shot=await send('Page.captureScreenshot',{format:'png'},sessionId);writeFileSync(path.join(output,'add-level-'+width+'.png'),Buffer.from(shot.data,'base64'));

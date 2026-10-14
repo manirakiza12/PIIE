@@ -211,7 +211,7 @@
                 body: JSON.stringify({name: input.value})
             });
             var result = await response.json().catch(function () { return {}; });
-            if (!response.ok) throw new Error(result.errors?.name?.[0] || 'Unable to add level. Please try again.');
+            if (!response.ok || typeof result.name !== 'string') throw new Error(result.errors?.name?.[0] || 'Unable to add level. Please try again.');
             if (!Array.from(select.options).some(function (option) { return option.value === result.name; })) {
                 select.add(new Option(result.name, result.name));
             }
