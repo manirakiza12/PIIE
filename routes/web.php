@@ -117,7 +117,7 @@ Route::get('/logout', function (\Illuminate\Http\Request $request) {
 Route::controller(HomeController::class)->group(function () {
 
     Route::match(['get', 'post'], '/', 'home')->name('landingPage');
-    Route::get('website/{slug}', 'websitePage')->name('website.page');
+    Route::get('website/{slug}', 'redirectWebsitePage')->name('website.page.legacy');
     Route::get('programmes/{id}', 'programmeDetail')->whereNumber('id')->name('website.programme.show');
     Route::get('download-brochure', 'downloadBrochure')->name('download.brochure');
 
@@ -132,9 +132,12 @@ Route::controller(HomeController::class)->group(function () {
     // is `SuperAdminEnquiryController`, behind `auth` + `superAdmin`. The brief's
     // "do not expose submitted enquiries publicly" is therefore satisfied by the
     // absence of a route rather than by remembering to filter one.
-    Route::post('website/contact/enquiry', [PublicEnquiryController::class, 'store'])
+    Route::post('contact/enquiry', [PublicEnquiryController::class, 'store'])
         ->middleware('throttle:6,1')
         ->name('website.enquiry.store');
+    Route::post('website/contact/enquiry', [PublicEnquiryController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('website.enquiry.store.legacy');
 
     Route::post('school/create', 'schoolCreate')->name('school.create');
     Route::get('web_redirect_to_pay_fee', 'webRedirectToPayFee')->name('webRedirectToPayFee');
@@ -2736,3 +2739,8 @@ Route::get('staff/dashboard', \App\Http\Controllers\GenericStaffDashboardControl
 Route::middleware(['auth', 'admin', 'rbac'])->group(function () {
     Route::get('admin/staff/documents/{id}/download', [\App\Http\Controllers\Admin\StaffDocumentController::class, 'download'])->name('admin.staff.documents.download');
 });
+
+// Register CMS slugs last so existing login, applicant and portal routes win.
+Route::get('{slug}', [HomeController::class, 'websitePage'])
+    ->where('slug', '[A-Za-z0-9][A-Za-z0-9_-]*')
+    ->name('website.page');

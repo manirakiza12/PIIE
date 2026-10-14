@@ -104,7 +104,7 @@ ln -s "releases/$RID" "$BASE/current.new"; mv -Tf "$BASE/current.new" "$BASE/cur
 SWITCHED=1
 docker exec piie-app apache2ctl -k graceful
 artisan up; MAINTENANCE=0
-for url in /health / /login /website/careers /applicant/login /assets/css/typography.css /assets/css/workspace-ui.css; do
+for url in /health / /login /careers /applicant/login /assets/css/typography.css /assets/css/workspace-ui.css; do
   docker exec piie-app curl --fail --silent --show-error --retry 3 --retry-delay 2 -H 'Host: piie.ac.ug' "http://127.0.0.1$url" -o /dev/null || fail "HTTP smoke failed: $url"
 done
 # Host cron executes the scheduler in the same runtime as HTTP, without host PHP.

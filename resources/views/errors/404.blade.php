@@ -73,19 +73,19 @@
                         >
                             <i class="fas fa-home"></i> Home
                         </a>
-                        <a href="/website/about" style="padding: 12px 16px; background: var(--light-bg); color: var(--primary-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;"
+                        <a href="/about-us" style="padding: 12px 16px; background: var(--light-bg); color: var(--primary-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;"
                            onmouseover="this.style.background='var(--lighter-bg)'; this.style.color='var(--secondary-color)'"
                            onmouseout="this.style.background='var(--light-bg)'; this.style.color='var(--primary-color)'"
                         >
                             <i class="fas fa-info-circle"></i> About Us
                         </a>
-                        <a href="/website/programs" style="padding: 12px 16px; background: var(--light-bg); color: var(--primary-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;"
+                        <a href="/academic-programmes" style="padding: 12px 16px; background: var(--light-bg); color: var(--primary-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;"
                            onmouseover="this.style.background='var(--lighter-bg)'; this.style.color='var(--secondary-color)'"
                            onmouseout="this.style.background='var(--light-bg)'; this.style.color='var(--primary-color)'"
                         >
                             <i class="fas fa-book"></i> Programs
                         </a>
-                        <a href="/website/contact" style="padding: 12px 16px; background: var(--light-bg); color: var(--primary-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;"
+                        <a href="/contact-us" style="padding: 12px 16px; background: var(--light-bg); color: var(--primary-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;"
                            onmouseover="this.style.background='var(--lighter-bg)'; this.style.color='var(--secondary-color)'"
                            onmouseout="this.style.background='var(--light-bg)'; this.style.color='var(--primary-color)'"
                         >
