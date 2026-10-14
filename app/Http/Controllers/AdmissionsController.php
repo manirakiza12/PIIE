@@ -505,7 +505,7 @@ class AdmissionsController extends Controller
 
         return view('admin.admissions.document_requirements', [
             'requirements' => $requirements,
-            'levels'       => array_merge(Programme::LEVELS, Programme::LEVELS_LEGACY),
+            'levels'       => \App\Support\ProgrammeCatalogue\ProgrammeLevels::options((int) $this->school_id),
             'usingDefaults'=> $requirements->isEmpty(),
         ]);
     }
@@ -529,7 +529,7 @@ class AdmissionsController extends Controller
             'label'              => 'required|string|max:150',
             'description'        => 'nullable|string|max:500',
             'applies_to_levels'  => 'nullable|array',
-            'applies_to_levels.*'=> 'string|max:40',
+            'applies_to_levels.*'=> 'string|max:100',
             'sort_order'         => 'nullable|integer|min:0|max:999',
         ], [
             'key.regex' => get_phrase('The key may only contain lowercase letters, numbers and underscores.'),

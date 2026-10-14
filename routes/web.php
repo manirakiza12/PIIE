@@ -1737,6 +1737,7 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
     Route::get('admin/programmes',                  'index')->name('admin.programmes.index');
     Route::get('admin/programmes/export',           'exportCsv')->name('admin.programmes.export');
     Route::get('admin/programmes/open_modal',       'openModal')->name('admin.programmes.open_modal');
+    Route::post('admin/programmes/levels', 'storeLevel')->name('admin.programmes.levels.store');
     Route::post('admin/programmes/store',           'store')->name('admin.programmes.store');
     Route::post('admin/programmes/update/{id}',     'update')->name('admin.programmes.update');
     Route::get('admin/programmes/delete/{id}',      'destroy')->name('admin.programmes.destroy');

@@ -11,6 +11,8 @@ use App\Support\ProgrammeCatalogue\ProgrammeCoverImage;
 use App\Support\ProgrammeCatalogue\ProgrammeEditor;
 use App\Support\ProgrammeCatalogue\ProgrammeGalleryImageService;
 use App\Support\ProgrammeCatalogue\ProgrammePrice;
+use App\Support\ProgrammeCatalogue\ProgrammeLevels;
+use Illuminate\Support\Facades\DB;
 use App\Support\ProgrammeCatalogue\ProgrammePublisher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -145,6 +147,10 @@ class ProgrammeController extends Controller
 
         return view('admin.programme.modal', compact('programme', 'departments'))
             ->with([
+                'levels' => array_values(array_unique(array_merge(
+                    ProgrammeLevels::options((int) $this->school_id),
+                    $programme?->level ? [$programme->level] : [],
+                ))),
                 'coverUrl'      => $programme ? $this->covers->url($programme) : null,
                 'priceSummary'  => ProgrammePrice::adminSummary($programme),
                 'tenantCurrency' => ProgrammePrice::tenantCurrency($programme),
@@ -167,9 +173,40 @@ class ProgrammeController extends Controller
             ]);
     }
 
+    public function storeLevel(Request $request)
+    {
+        $validated = $request->validate(['name' => ['required', 'string', 'max:100']]);
+        $name = ProgrammeLevels::normalize($validated['name']);
+        if ($name === '') {
+            throw \Illuminate\Validation\ValidationException::withMessages(['name' => 'Enter a programme level.']);
+        }
+        $key = ProgrammeLevels::key($name);
+        foreach (ProgrammeLevels::options((int) $this->school_id) as $option) {
+            if (ProgrammeLevels::key($option) === $key) {
+                return response()->json(['name' => $option]);
+            }
+        }
+        return DB::transaction(function () use ($name, $key) {
+            $created = DB::table('programme_levels')->insertOrIgnore([
+                'school_id' => $this->school_id, 'name' => $name, 'name_key' => $key,
+                'created_by' => Auth::id(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $level = DB::table('programme_levels')->where('school_id', $this->school_id)->where('name_key', $key)->first();
+            if ($created) {
+                AuditLog::record('create', 'Programmes', "Programme level '{$level->name}' added.", [
+                    'record_id' => $level->id, 'school_id' => $this->school_id,
+                ]);
+            }
+            return response()->json(['name' => $level->name]);
+        });
+    }
+
     private function validationRules(?Programme $existing = null): array
     {
-        $allowedLevels = array_merge(Programme::LEVELS, Programme::LEVELS_LEGACY);
+        $allowedLevels = ProgrammeLevels::options((int) $this->school_id);
+        if ($existing?->level) {
+            $allowedLevels[] = $existing->level;
+        }
         $allowedModes  = array_merge(Programme::MODES, Programme::MODES_LEGACY);
 
         return [
@@ -178,7 +215,7 @@ class ProgrammeController extends Controller
                 Rule::unique('programmes', 'code')->where(fn ($q) => $q->where('school_id', $this->school_id))->ignore($existing?->id),
             ],
             'name'          => 'required|max:255',
-            'level'         => ['required', Rule::in($allowedLevels)],
+            'level'         => ['required', 'string', 'max:100', Rule::in($allowedLevels)],
             'duration'      => 'nullable|max:50',
             'mode'          => ['required', Rule::in($allowedModes)],
             'tuition_fee'   => 'nullable|numeric|min:0',
