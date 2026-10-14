@@ -357,6 +357,15 @@ class LiveClassCertificationTest extends TestCase
         $this->assertTrue($jitsi['moderation_by_provider']);
     }
 
+    public function test_public_jitsi_explains_how_the_lecturer_starts_the_room_without_asking_students_to_host(): void
+    {
+        $class = $this->class(['platform' => 'jitsi', 'meeting_url' => 'https://meet.jit.si/lesson-room']);
+        $platform = app(LiveClassPlatform::class);
+        $this->assertStringContainsString('signing in to Jitsi', $platform->describe($class, true)['note']);
+        $this->assertStringContainsString('wait for your lecturer', $platform->describe($class, false)['note']);
+        $this->assertStringContainsString('do not sign in as the host', $platform->describe($class, false)['note']);
+    }
+
     public function test_a_lecturer_is_offered_the_classroom_only_while_the_window_is_open(): void
     {
         $access = app(LiveClassAccessService::class);

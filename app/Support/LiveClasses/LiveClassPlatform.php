@@ -131,7 +131,11 @@ class LiveClassPlatform
             'separate_host_url' => $facts['separate_host_url'],
             'moderation_by_provider' => $facts['moderation_by_provider'],
             'limitations' => $facts['limitations'],
-            'note' => $this->note($facts, $hasHost, $viewerMayHost),
+            'note' => $key === 'jitsi' && strcasecmp((string) parse_url((string) $participantUrl, PHP_URL_HOST), 'meet.jit.si') === 0
+                ? ($viewerMayHost
+                    ? get_phrase('Start the room by signing in to Jitsi in the meeting tab. Students should wait until you have started it.')
+                    : get_phrase('Your lecturer must start this Jitsi room first. If it says waiting for a moderator, wait for your lecturer; do not sign in as the host.'))
+                : $this->note($facts, $hasHost, $viewerMayHost),
         ];
     }
 

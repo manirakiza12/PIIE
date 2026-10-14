@@ -129,6 +129,8 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
             $token = $response->viewData('jitsiJwt');
             $this->assertNotEmpty($token);
             $claims = (array) JWT::decode($token, new Key(self::JITSI_TEST_SECRET, 'HS256'));
+            parse_str((string) parse_url($response->viewData('externalMeetingUrl'), PHP_URL_QUERY), $externalQuery);
+            $this->assertSame($token, $externalQuery['jwt'], 'External fallback retains only the current viewer token');
             $this->assertSame($expectedModerator, (bool) $claims['context']->user->moderator);
             $this->assertSame($lecturer->id, (int) $claims['context']->user->id);
             $this->assertSame('room-1', $claims['room']);
@@ -143,6 +145,37 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
         $this->assertTrue($adminClaims['context']->user->moderator);
     }
 
+    public function test_unsigned_room_has_different_host_and_student_instructions(): void
+    {
+        Config::set('services.jitsi.app_secret', '');
+        $class = $this->liveClass(1, $this->offeringA);
+        $admin = $this->user('unsigned-host@example.test', 2, 1);
+        $this->actingAs($admin)->get(route('admin.live_classes.join', $class->id))
+            ->assertOk()->assertViewHas('jitsiConfigured', false)
+            ->assertSee('sign in with the meeting provider')
+            ->assertDontSee('LIVE_CLASS_JITSI_JWT_SETUP.md');
+        $student = $this->student('unsigned-student@example.test', 1);
+        $this->registration($student, $this->offeringA, CourseRegistration::STATUS_CONFIRMED);
+        $this->actingAs($student)->get(route('student.live_classes.join', $class->id))
+            ->assertOk()->assertSee('Please wait for your lecturer to start the room.')
+            ->assertDontSee('Click "I am the host"');
+    }
+
+    public function test_external_fallback_replaces_stored_token_and_preserves_room_options(): void
+    {
+        $class = $this->liveClass(1, $this->offeringA);
+        $class->update(['meeting_url' => 'https://meet.example.test/room-1?lang=en&jwt=obsolete-token#config.startWithVideoMuted=true']);
+        $admin = $this->user('external-host@example.test', 2, 1);
+        $response = $this->actingAs($admin)->get(route('admin.live_classes.join', $class->id));
+        $response->assertOk();
+        $external = $response->viewData('externalMeetingUrl');
+        parse_str((string) parse_url($external, PHP_URL_QUERY), $query);
+        $this->assertSame('en', $query['lang']);
+        $this->assertSame($response->viewData('jitsiJwt'), $query['jwt']);
+        $this->assertSame('config.startWithVideoMuted=true', parse_url($external, PHP_URL_FRAGMENT));
+        $this->assertStringNotContainsString('obsolete-token', $external);
+    }
+
     public function test_student_jitsi_token_is_participant_only_and_other_registrations_are_denied(): void
     {
         $class = $this->liveClass(1, $this->offeringA);
@@ -150,6 +183,12 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
         $this->registration($confirmed, $this->offeringA, CourseRegistration::STATUS_CONFIRMED);
         $response = $this->actingAs($confirmed)->get(route('student.live_classes.join', $class->id));
         $response->assertOk()->assertViewHas('isModerator', false);
+        $response->assertSee('You are joining as a participant. Your lecturer manages the meeting.');
+        $response->assertDontSee('the host has full moderator rights here.');
+        $external = $response->viewData('externalMeetingUrl');
+        parse_str((string) parse_url($external, PHP_URL_QUERY), $externalQuery);
+        $this->assertSame($response->viewData('jitsiJwt'), $externalQuery['jwt']);
+        $this->assertStringContainsString('referrerpolicy="no-referrer"', $response->getContent());
         $claims = (array) JWT::decode($response->viewData('jitsiJwt'), new Key(self::JITSI_TEST_SECRET, 'HS256'));
         $this->assertFalse($claims['context']->user->moderator);
         $this->assertFalse($claims['context']->features->recording);
