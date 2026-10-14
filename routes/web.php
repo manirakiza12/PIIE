@@ -2741,6 +2741,10 @@ Route::middleware(['auth', 'admin', 'rbac'])->group(function () {
 });
 
 // Register CMS slugs last so existing login, applicant and portal routes win.
+$reservedPublicPaths = collect(Route::getRoutes()->getRoutes())
+    ->map(fn ($route) => $route->uri())
+    ->filter(fn ($uri) => preg_match('/^[A-Za-z0-9_-]+$/', $uri))
+    ->unique()->map(fn ($uri) => preg_quote($uri))->implode('|');
 Route::get('{slug}', [HomeController::class, 'websitePage'])
-    ->where('slug', '[A-Za-z0-9][A-Za-z0-9_-]*')
+    ->where('slug', '(?!(?:'.$reservedPublicPaths.')$)[A-Za-z0-9][A-Za-z0-9_-]*')
     ->name('website.page');

@@ -43,6 +43,7 @@ class CleanPublicUrlsTest extends TestCase
             $this->assertSame($name, $route->getName());
         }
         $this->get('/health')->assertOk()->assertSee('PIIE-APP-OK');
+        $this->get('/clear-cache')->assertStatus(405);
         $application = Route::getRoutes()->match(\Illuminate\Http\Request::create(route('apply.form'), 'GET'));
         $this->assertSame('apply.form', $application->getName());
         $this->get('/not-a-published-page')->assertNotFound();
