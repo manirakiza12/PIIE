@@ -55,4 +55,15 @@ class CleanPublicUrlsTest extends TestCase
         $this->assertSame($new->getActionName(), $old->getActionName());
         $this->assertContains('throttle:6,1', $old->gatherMiddleware());
     }
+
+    public function test_configured_legacy_canonicals_use_clean_local_urls(): void
+    {
+        $seo = \Illuminate\Support\Facades\DB::table('website_seo_settings');
+        $id = $seo->insertGetId(['page_key'=>'about', 'canonical_url'=>url('/website/about-us'), 'status'=>1]);
+        $this->get('/about-us')->assertOk()->assertSee('rel="canonical" href="'.url('/about-us').'"', false);
+        $seo->where('id', $id)->update(['canonical_url'=>'/website/about-us']);
+        $this->get('/about-us')->assertOk()->assertSee('rel="canonical" href="/about-us"', false);
+        $seo->where('id', $id)->update(['canonical_url'=>'https://partner.example/website/reference']);
+        $this->get('/about-us')->assertOk()->assertSee('rel="canonical" href="https://partner.example/website/reference"', false);
+    }
 }
