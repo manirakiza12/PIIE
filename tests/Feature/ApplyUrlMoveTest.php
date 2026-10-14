@@ -10,30 +10,31 @@ use Tests\TestCase;
 /**
  * `/admissions/apply` is the canonical application address; `/apply` redirects to it.
  *
- * WHAT ACTUALLY MOVED, AND WHAT DELIBERATELY DID NOT
+ * WHAT MOVED, AND WHAT DELIBERATELY DID NOT
  *
  * The route's URI moved. Its NAME did not. Every internal caller says
  * `route('apply.form')` - the public header, footer, hero and CTA blocks, the
  * programme catalogue, and the existing tests - so all of them follow the new
- * address with no edit at all. That is the reason for the approach: a rename would
- * have required finding and editing all sixteen references, and any one missed
- * would have silently kept pointing at the old address.
+ * address with no edit at all. A rename would have meant finding and editing every
+ * one of those references, and any one missed would have silently kept pointing at
+ * the old address while every test still passed, because the tests ask the route
+ * helper for the URL rather than asserting the URL itself.
  *
- * WHY 301 AND NOT 302
+ * WHY 301
  *
- * `/apply` has been published, printed on prospectuses, shared on social media and
- * possibly indexed. None of that can be recalled by changing a route. A permanent
- * redirect is the only answer that hands that accumulated authority to the new
- * address; a temporary one tells a crawler the move is provisional and leaves the
- * old URL sitting in the results.
+ * `/apply` has been published, printed on prospectuses, shared and possibly indexed.
+ * None of that can be recalled by changing a route. A 302 would tell a crawler the
+ * move is provisional and leave the old address sitting in the results.
  *
- * WHAT IS *NOT* ASSERTED HERE
+ * WHAT IS DELIBERATELY NOT ASSERTED HERE
  *
- * That the form validates, that submissions persist, that intakes gate correctly.
- * Those belong to `PublicApplicationTest` and `ApplicantPortalTest`, and
- * duplicating them here would create a second place to maintain for a workflow
- * that has not changed. What is asserted here is that MOVING the URL did not
- * break any of it - which is the only new risk this change introduces.
+ * That validation works, that submissions persist, that intakes gate correctly, and
+ * that payment initiation still runs. Those belong to `PublicApplicationTest`,
+ * `ApplicantPortalTest` and the PesaPal suites, and duplicating them here would
+ * create a second place to maintain for a workflow this change does not alter. What
+ * is asserted here is that MOVING the URL did not break any of it - the only new
+ * risk this change introduces - plus a scan proving no page or controller hard-codes
+ * the old address.
  */
 class ApplyUrlMoveTest extends TestCase
 {
@@ -70,18 +71,8 @@ class ApplyUrlMoveTest extends TestCase
     {
         // THE property everything else depends on. If this ever drifts back to
         // `/apply`, every internal link silently reverts with it and the redirect
-        // below becomes a loop: `/apply` -> `/apply`.
-        $this->assertStringEndsWith(
-            '/admissions/apply',
-            route('apply.form'),
-            'route(\'apply.form\') must generate the canonical address'
-        );
-
-        $this->assertStringNotContainsString(
-            '://'.parse_url(route('apply.form'), PHP_URL_HOST).'/apply',
-            route('apply.form'),
-            'the canonical address must not be the bare /apply path'
-        );
+        // becomes a loop: `/apply` -> `/apply`.
+        $this->assertStringEndsWith('/admissions/apply', route('apply.form'));
     }
 
     public function test_the_old_address_is_not_the_canonical_one(): void
@@ -98,8 +89,8 @@ class ApplyUrlMoveTest extends TestCase
     public function test_the_old_address_redirects_permanently(): void
     {
         // 301, not 302. Asserted exactly, because "it redirects" is satisfied by
-        // the wrong status code and the damage - a provisional move, an old URL
-        // left indexed - is invisible until months later.
+        // the wrong status code and the damage - a provisional move, an old URL left
+        // indexed - is invisible until months later.
         $this->get('/apply')->assertStatus(301);
     }
 
@@ -116,13 +107,10 @@ class ApplyUrlMoveTest extends TestCase
         // WHY THIS ASSERTS THE ABSENCE OF A HOST.
         //
         // The destination is relative, so `Location` carries no hostname. That is
-        // deliberate and it is the loop protection: a redirect that hard-codes
-        // `https://piie.ac.ug/...` will loop the moment the site is reached over a
-        // different host or protocol than the one baked into the environment file,
-        // because it sends the visitor somewhere other than where they came from.
-        //
-        // A relative Location carries whatever host and scheme the browser already
-        // used, so there is nothing to disagree with and nothing to loop through.
+        // the loop protection: a redirect hard-coding `https://piie.ac.ug/...` will
+        // loop the moment the site is reached over a different address or protocol
+        // than the environment file names, because it sends the visitor somewhere
+        // other than where they came from.
         $location = $this->get('/apply')->headers->get('Location');
 
         $this->assertNotNull($location, 'a 301 must carry a Location header');
@@ -162,8 +150,8 @@ class ApplyUrlMoveTest extends TestCase
         foreach ($this->siteFiles() as $file) {
             $source = (string) file_get_contents($file);
 
-            if (preg_match('#[\'"(]/apply[\'"(\s>]#', $source, $match, PREG_OFFSET_CAPTURE)) {
-                $offenders[] = $file.' → '.trim($match[0][0]);
+            if (preg_match('#[\'"(]/apply[\'"(\s>]#', $source, $match)) {
+                $offenders[] = $file.' -> '.trim($match[0]);
             }
         }
 
@@ -174,44 +162,13 @@ class ApplyUrlMoveTest extends TestCase
         );
     }
 
-    /** @return list<string> */
-    private function siteFiles(): array
-    {
-        $root = dirname(__DIR__, 2);
-        $paths = [];
-
-        foreach (['resources/views', 'app'] as $dir) {
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($root.'/'.$dir, \FilesystemIterator::SKIP_DOTS)
-            );
-
-            foreach ($iterator as $file) {
-                if ($file->isFile() && str_ends_with($file->getFilename(), '.php')) {
-                    $paths[] = $file->getPathname();
-                }
-            }
-        }
-
-        sort($paths);
-
-        return $paths;
-    }
-
-    public function test_the_programme_catalogue_links_to_the_new_address(): void
-    {
-        // The catalogue builds its own apply link from the route helper, so this
-        // asserts the helper rather than the markup - which is the thing that
-        // could actually regress.
-        $this->assertStringEndsWith('/admissions/apply', route('apply.form'));
-    }
-
     // ── The redirect is not a hole ─────────────────────────────────────────
 
     public function test_the_old_address_only_answers_a_get(): void
     {
-        // A redirect route that accepted POST would answer something that is not
-        // an application with a success code. Restricting it to GET/HEAD keeps
-        // `/apply` meaning "the page", and nothing else.
+        // A redirect route that accepted POST would answer something that is not an
+        // application with a success code. Restricting it to GET/HEAD keeps `/apply`
+        // meaning "the page", and nothing else.
         $this->post('/apply')->assertStatus(405);
     }
 
@@ -243,24 +200,24 @@ class ApplyUrlMoveTest extends TestCase
 
         $this->assertNotNull($legacy, 'the old address must remain registered');
         $this->assertSame(['GET', 'HEAD'], $legacy->methods());
+        $this->assertStringNotContainsString(
+            'Closure',
+            (string) $legacy->getActionName(),
+            'the legacy redirect must use RedirectController, not an inline closure'
+        );
     }
 
     public function test_the_redirect_destination_is_the_canonical_address(): void
     {
-        // Closes the one gap this approach opens.
+        // Closes the one gap this approach opens: the destination is a literal,
+        // which makes it a second place the canonical address appears. If the
+        // canonical address ever moves and this line is not updated, `/apply` would
+        // keep redirecting to an address that no longer serves anything - and every
+        // other assertion here would still pass.
         //
-        // The destination is a literal, which makes it a second place the canonical
-        // address appears. If the canonical address ever moves and this line is not
-        // updated, `/apply` would keep redirecting to an address that no longer
-        // serves anything - and the redirect would look perfectly healthy in every
-        // other assertion here.
-        //
-        // So the literal is compared against what the route helper actually
-        // generates. Change one without the other and this fails.
-        //
-        // It lives in `$route->defaults`, not `getAction()`: `RedirectController`
+        // It lives in `$route->defaults`, not `getAction()`: RedirectController
         // reads its destination and status from the route defaults, and
-        // `getAction('destination')` returns null, which is easy to mistake for
+        // `getAction('destination')` returns null, which is easy to misread as
         // "no destination configured".
         $legacy = Route::getRoutes()->getByName('apply.form.legacy');
         $this->assertNotNull($legacy);
@@ -274,27 +231,45 @@ class ApplyUrlMoveTest extends TestCase
         $this->assertSame(301, $legacy->defaults['status'] ?? null);
     }
 
-    public function test_the_legacy_route_does_not_use_an_inline_closure(): void
+    /**
+     * The payment flow must be untouched by a change to the application page's
+     * address. This is asserted rather than assumed because the callback and IPN
+     * routes sit in the same file, and a careless edit to a neighbouring block is
+     * exactly how a URL move ends up breaking payments.
+     *
+     * They are under `/payments/pesopal/...`, not under `/apply`, so nothing about
+     * this change can reach them - and this test fails if that ever stops being so.
+     */
+    public function test_the_payment_callback_and_ipn_routes_are_untouched(): void
     {
-        // Scoped to THIS route, on purpose.
-        //
-        // An earlier version of this test asserted that no route in the application
-        // was a closure. That is false - `admin/account-disable` and the six other
-        // role-scoped equivalents are - and the assertion was wrong in a way that
-        // would have embarrassed anyone who read it and went looking.
-        //
-        // What actually matters here is narrower and true: this route must not be
-        // one of them, because a closure forces `route:cache` to serialise a
-        // Closure object into the route cache. That is a pre-existing condition of
-        // the other seven routes and not this change's business to fix; it is not
-        // this change's business to make worse either.
-        $legacy = Route::getRoutes()->getByName('apply.form.legacy');
+        foreach (['payments/pesapal/callback', 'payments/pesapal/ipn'] as $uri) {
+            $route = collect(Route::getRoutes()->getRoutes())
+                ->first(fn ($r) => $r->uri() === $uri);
 
-        $this->assertNotNull($legacy);
-        $this->assertStringNotContainsString(
-            'Closure',
-            (string) $legacy->getActionName(),
-            'the legacy redirect must use RedirectController, not an inline closure'
-        );
+            $this->assertNotNull($route, "{$uri} must still be registered");
+        }
+    }
+
+    /** @return list<string> */
+    private function siteFiles(): array
+    {
+        $root = dirname(__DIR__, 2);
+        $paths = [];
+
+        foreach (['resources/views', 'app'] as $dir) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($root.'/'.$dir, \FilesystemIterator::SKIP_DOTS)
+            );
+
+            foreach ($iterator as $file) {
+                if ($file->isFile() && str_ends_with($file->getFilename(), '.php')) {
+                    $paths[] = $file->getPathname();
+                }
+            }
+        }
+
+        sort($paths);
+
+        return $paths;
     }
 }

@@ -98,8 +98,11 @@ class AdminController extends Controller
         $this->middleware(function ($request, $next) {
             $this->user = Auth()->user();
 
-            // Super admin and unauthenticated requests should not be blocked by subscription checks.
-            if ($this->user && (int) $this->user->role_id !== 1) {
+            // Apply the school subscription gate only when explicitly enabled.
+            // This keeps the controller consistent with EnsureSchoolSubscription.
+            if (config('app.enforce_school_subscriptions', false)
+                && $this->user
+                && (int) $this->user->role_id !== 1) {
                 if ($denial = $this->check_subscription_status($this->user->school_id)) {
                     return $denial;
                 }

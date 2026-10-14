@@ -72,6 +72,17 @@ class SubscriptionAdminIntegrityTest extends TestCase
         $this->assertFalse(config('app.bypass_subscription'));
     }
 
+    public function test_school_dashboard_is_accessible_without_subscription_when_enforcement_is_disabled(): void
+    {
+        config(['app.enforce_school_subscriptions' => false]);
+
+        $school = $this->makeSchool();
+        $this->actingAs($this->makeAdminUser($school));
+
+        $this->get(route('admin.dashboard'))->assertOk();
+        $this->assertFalse(config('app.bypass_subscription'));
+    }
+
     public function test_authorized_superadmin_keeps_dashboard_access_when_school_is_expired(): void
     {
         $school=$this->makeSchool();$this->subscription($school,'expired');
