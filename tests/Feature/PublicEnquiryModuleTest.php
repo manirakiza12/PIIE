@@ -293,7 +293,7 @@ class PublicEnquiryModuleTest extends TestCase
         // cannot possibly contain an enquiry marker - so the assertion would pass
         // forever while checking nothing at all. A test that has quietly stopped
         // testing is worse than a missing one, because it is reported as coverage.
-        foreach (['/', '/website/contact-us', '/website/about-us', route('apply.form'), '/login'] as $uri) {
+        foreach (['/', '/contact-us', '/about-us', route('apply.form'), '/login'] as $uri) {
             $response = $this->get($uri);
             $body = $response->getContent();
 

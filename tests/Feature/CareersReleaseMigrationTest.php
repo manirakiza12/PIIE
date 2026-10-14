@@ -23,7 +23,7 @@ class CareersReleaseMigrationTest extends TestCase
         $migration->up();
         $this->assertSame(1, DB::table('website_pages')->where('page_key', 'careers')->count());
         $this->assertSame(3, DB::table('website_sections')->where('page_key', 'careers')->count());
-        $this->get('/website/careers')->assertOk()->assertSee('Careers');
+        $this->get('/careers')->assertOk()->assertSee('Careers');
     }
 
     public function test_release_preserves_existing_copy_and_other_schools(): void

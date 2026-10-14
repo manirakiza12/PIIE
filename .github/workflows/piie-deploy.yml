@@ -237,7 +237,7 @@ jobs:
       - name: Public smoke check
         if: ${{ inputs.mode == 'activate' }}
         run: |
-          for u in / /login /apply /applicant/login /website/careers /assets/css/typography.css /assets/css/workspace-ui.css; do
+          for u in / /login /apply /applicant/login /careers /assets/css/typography.css /assets/css/workspace-ui.css; do
             code=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 20 "https://piie.ac.ug$u")
             echo "$u -> $code"; [ "$code" = 200 ] || [ "$code" = 302 ] || exit 1
           done

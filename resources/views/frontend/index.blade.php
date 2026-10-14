@@ -8,13 +8,15 @@
     <title>{{ $websiteSeo->meta_title ?? 'PIIE - Prime International Institute of Excellence' }}</title>
     <meta name="description" content="{{ $websiteSeo->meta_description ?? 'Prime International Institute of Excellence (PIIE) - internationally benchmarked higher education through flexible, technology-enabled learning.' }}">
     <meta name="keywords" content="{{ $websiteSeo->meta_keywords ?? 'PIIE, Prime International Institute of Excellence, ODeL Uganda, higher education Uganda' }}">
-    @if(!empty($websiteSeo) && !empty($websiteSeo->canonical_url))
-        <link rel="canonical" href="{{ $websiteSeo->canonical_url }}">
-    @else
-        {{-- A canonical is emitted even when Super Admin has not set one: without it
-             a page can be indexed under any URL that happens to reach it. --}}
-        <link rel="canonical" href="{{ url()->current() }}">
-    @endif
+    @php
+        $piieCanonical = $websiteSeo->canonical_url ?? url()->current();
+        $piieCanonical = $piieCanonical ?: url()->current();
+        $piieCanonicalHost = parse_url($piieCanonical, PHP_URL_HOST);
+        if ($piieCanonicalHost === null || strcasecmp((string) $piieCanonicalHost, request()->getHost()) === 0) {
+            $piieCanonical = preg_replace('~^((?:https?://[^/]+)?)/website/~i', '$1/', $piieCanonical);
+        }
+    @endphp
+    <link rel="canonical" href="{{ $piieCanonical }}">
 
     {{-- Open Graph / Twitter.
          `frontend.index` is shared by FOUR views and only two of them pass

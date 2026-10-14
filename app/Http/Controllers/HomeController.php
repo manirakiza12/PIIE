@@ -152,6 +152,13 @@ class HomeController extends Controller
     }
 
     /** Show website page by slug. */
+    public function redirectWebsitePage(Request $request, string $slug)
+    {
+        $url = route('website.page', ['slug' => $slug]);
+        $query = $request->getQueryString();
+        return redirect()->to($url.($query ? '?'.$query : ''), 301);
+    }
+
     public function websitePage($slug)
     {
         if(get_settings('frontend_view') != '1') {
