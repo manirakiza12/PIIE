@@ -16,24 +16,30 @@
         @csrf
         <div class="programme-editor-grid"><section class="programme-editor-card"><h5>{{ get_phrase('Programme details') }}</h5><div class="form-row">
             <div class="row">
-                <div class="col-6 fpb-7">
+                <div class="col-12 col-sm-6 fpb-7">
                     <label class="eForm-label" for="piie-code">{{ get_phrase('Programme Code') }} *</label>
                     <input type="text" id="piie-code" class="form-control eForm-control" name="code"
                            value="{{ old('code', $programme->code ?? '') }}" placeholder="e.g. BSC-CS" required maxlength="20">
                 </div>
-                <div class="col-6 fpb-7">
+                <div class="col-12 col-sm-6 fpb-7">
                     <label class="eForm-label" for="piie-level">{{ get_phrase('Level') }} *</label>
+                    <div class="d-flex gap-2 align-items-center">
                     <select id="piie-level" class="form-control eForm-control" name="level" required>
-                        @foreach(\App\Models\Programme::LEVELS as $lvl)
+                        @foreach($levels ?? \App\Support\ProgrammeCatalogue\ProgrammeLevels::options((int) auth()->user()->school_id) as $lvl)
                             <option value="{{ $lvl }}" {{ (old('level', $programme->level ?? '') == $lvl) ? 'selected' : '' }}>{{ $lvl }}</option>
                         @endforeach
-                        {{-- Legacy values: kept selectable only so a programme already
-                             using one doesn't lose data on its next edit; not offered
-                             as a first choice for a brand-new programme. --}}
-                        @foreach(\App\Models\Programme::LEVELS_LEGACY as $lvl)
-                            <option value="{{ $lvl }}" {{ (old('level', $programme->level ?? '') == $lvl) ? 'selected' : '' }}>{{ $lvl }} ({{ get_phrase('legacy') }})</option>
-                        @endforeach
                     </select>
+                    <button type="button" id="piie-add-level" class="btn btn-outline-primary flex-shrink-0" aria-label="Add programme level" title="Add programme level" aria-controls="piie-level-panel" aria-expanded="false">+</button>
+                    </div>
+                    <div id="piie-level-panel" class="border rounded p-2 mt-2" hidden>
+                        <label for="piie-new-level" class="eForm-label">New programme level</label>
+                        <input id="piie-new-level" type="text" class="form-control eForm-control" maxlength="100" placeholder="e.g. Higher Education Certificate (HEC)">
+                        <div id="piie-level-message" class="small mt-1" role="status" aria-live="polite"></div>
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" id="piie-save-level" class="btn btn-primary btn-sm" data-url="{{ route('admin.programmes.levels.store') }}">Add level</button>
+                            <button type="button" id="piie-cancel-level" class="btn btn-light btn-sm">Cancel</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -174,6 +180,48 @@
 </div>
 
 <script>
+(function () {
+    var form = document.getElementById('piie-programme-edit');
+    var add = form.querySelector('#piie-add-level');
+    var panel = form.querySelector('#piie-level-panel');
+    var input = form.querySelector('#piie-new-level');
+    var save = form.querySelector('#piie-save-level');
+    var cancel = form.querySelector('#piie-cancel-level');
+    var message = form.querySelector('#piie-level-message');
+    var select = form.querySelector('#piie-level');
+    function close() { panel.hidden = true; add.setAttribute('aria-expanded', 'false'); add.focus(); }
+    add.addEventListener('click', function () {
+        panel.hidden = !panel.hidden;
+        add.setAttribute('aria-expanded', String(!panel.hidden));
+        if (!panel.hidden) { message.textContent = ''; input.focus(); }
+    });
+    cancel.addEventListener('click', close);
+    input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') { event.preventDefault(); save.click(); }
+        if (event.key === 'Escape') { event.preventDefault(); close(); }
+    });
+    save.addEventListener('click', async function () {
+        if (!input.value.trim()) { message.textContent = 'Enter a programme level.'; input.focus(); return; }
+        save.disabled = true; cancel.disabled = true; add.disabled = true;
+        message.textContent = 'Saving level…';
+        try {
+            var response = await fetch(save.dataset.url, {
+                method: 'POST', credentials: 'same-origin',
+                headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': form.querySelector('[name="_token"]').value},
+                body: JSON.stringify({name: input.value})
+            });
+            var result = await response.json().catch(function () { return {}; });
+            if (!response.ok) throw new Error(result.errors?.name?.[0] || 'Unable to add level. Please try again.');
+            if (!Array.from(select.options).some(function (option) { return option.value === result.name; })) {
+                select.add(new Option(result.name, result.name));
+            }
+            select.value = result.name;
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+            input.value = ''; close();
+        } catch (error) { message.textContent = error.message || 'Unable to add level. Please try again.'; }
+        finally { save.disabled = false; cancel.disabled = false; add.disabled = false; }
+    });
+})();
     // Keeps the "the website will show" line live while the form is open. It is
     // a convenience only: the line is rendered server-side, so it is correct on
     // first paint and remains correct if this script never runs.
