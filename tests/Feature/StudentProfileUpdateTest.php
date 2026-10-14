@@ -115,4 +115,49 @@ class StudentProfileUpdateTest extends TestCase
 
         @unlink(public_path('assets/uploads/user-images/' . $info['photo']));
     }
+
+    public function test_photo_only_upload_preserves_account_and_admission_information(): void
+    {
+        $original = ['blood_group' => 'AB+', 'phone' => '0700123456', 'admission_note' => 'Keep this'];
+        $student = $this->makeStudent($this->makeSchool(), 'photoonly@example.com', $original);
+        $this->actingAs($student)->post(route('student.profile.update'), [
+            'photo' => UploadedFile::fake()->image('passport.jpg'),
+        ])->assertRedirect(route('student.profile'));
+
+        $updated = $student->fresh();
+        $info = json_decode($updated->user_information, true);
+        try {
+            $this->assertSame($student->name, $updated->name);
+            $this->assertSame($student->email, $updated->email);
+            $this->assertSame($original, array_diff_key($info, ['photo' => true]));
+            $this->assertFileExists(public_path('assets/uploads/user-images/' . $info['photo']));
+        } finally {
+            if (! empty($info['photo'])) {
+                @unlink(public_path('assets/uploads/user-images/' . $info['photo']));
+            }
+        }
+    }
+
+    public function test_invalid_photo_submissions_are_rejected_without_changing_the_profile(): void
+    {
+        $student = $this->makeStudent($this->makeSchool(), 'invalidphoto@example.com', ['photo' => 'existing.jpg']);
+        $original = $student->user_information;
+        foreach (['not-an-upload', ['unexpected'], UploadedFile::fake()->create('passport.pdf', 20, 'application/pdf'),
+            UploadedFile::fake()->image('large.jpg')->size(4097)] as $photo) {
+            $this->actingAs($student)->from(route('student.profile'))->post(route('student.profile.update'), [
+                'photo' => $photo,
+            ])->assertRedirect(route('student.profile'))->assertSessionHasErrors('photo');
+            $this->assertSame($original, $student->fresh()->user_information);
+        }
+        $this->get(route('student.profile'))->assertOk()->assertSee('alert-danger');
+    }
+
+    public function test_client_cannot_replace_the_saved_photo_using_old_photo(): void
+    {
+        $student = $this->makeStudent($this->makeSchool(), 'savedphoto@example.com', ['photo' => 'existing.jpg']);
+        $this->actingAs($student)->post(route('student.profile.update'), [
+            'phone' => '0700999888', 'old_photo' => 'another-student.jpg',
+        ])->assertRedirect(route('student.profile'));
+        $this->assertSame('existing.jpg', json_decode($student->fresh()->user_information, true)['photo']);
+    }
 }
