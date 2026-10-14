@@ -23,6 +23,9 @@ REL="$BASE/releases/$RID"
 [ ! -e "$REL" ] || fail 'Release already exists'
 mkdir "$REL"
 tar -xzf "$ART" -C "$REL" --no-same-owner
+# CI's mktemp staging directory is 0700 and tar preserves its '.' entry.
+# Apache's www-data user must be able to traverse the extracted release root.
+chmod 755 "$REL"
 SHA=$(cat "$REL/RELEASE_SHA")
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ "${SHA:0:12}" = "${RID##*-}" ] || fail 'Release SHA does not match ID'
 [ -f "$REL/vendor/autoload.php" ] || fail 'Production dependencies missing'

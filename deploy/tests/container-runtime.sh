@@ -34,6 +34,7 @@ export PATH="$S/bin:$PATH" FIXTURE_LOG="$S/docker.log"
 RID=20261014-120000-aaaaaaaaaaaa
 bash "$S/scripts/container-deploy.sh" "$RID" "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage >/dev/null
 [ "$(readlink "$S/current")" = releases/old ]
+[ "$(stat -c %a "$S/releases/$RID")" = 755 ]
 [ ! -d "$S/backups" ]
 [ ! -d "$S/shared/public-uploads" ]
 ! grep -q 'migrate --force' "$S/docker.log"
