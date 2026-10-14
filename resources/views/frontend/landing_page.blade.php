@@ -411,6 +411,7 @@
                             @include('frontend.partials.blocks.card', [
                                 'variant'      => 'programme',
                                 'title'        => $piieProgramme['title'],
+                                'detailLink'   => $piieProgramme['detail_url'] ?? null,
                                 'tag'          => $piieProgramme['level'],
                                 'image'        => $piieProgramme['image'],
                                 'alt'          => $piieProgramme['title'],
@@ -460,7 +461,7 @@
                     </ol>
 
                     <div class="piie-btn-row" style="margin-top:2rem;">
-                        <a class="piie-btn piie-btn--primary" href="{{ $piieLoginUrl }}">Student Portal</a>
+                        <a class="piie-btn piie-btn--primary" href="{{ $piieLoginUrl }}">Login</a>
                         <a class="piie-btn piie-btn--ghost" href="{{ $piieAdmissionsUrl }}">How to Apply</a>
                     </div>
                 </div>

@@ -297,10 +297,14 @@ class PublicEnquiryModuleTest extends TestCase
             $response = $this->get($uri);
             $body = $response->getContent();
 
-            // The page must have ACTUALLY rendered before "must not contain X" means
-            // anything. A redirect body, a 503 and an error page all trivially
-            // contain no enquiry marker, so without this the same blindness returns
-            // the next time a page errors.
+            // THE PAGE MUST HAVE ACTUALLY RENDERED.
+            //
+            // A redirect body, a 503 body and an error page all trivially contain
+            // no enquiry marker, so "must not contain X" passes against any of them
+            // while checking nothing. Asserting the page rendered first is what
+            // turns this back into a real assertion about a real page - and it is
+            // what stops this test from silently becoming coverage of nothing the
+            // next time a URL moves.
             $response->assertOk("{$uri} must render for this assertion to mean anything");
 
             $this->assertStringNotContainsString(

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Admin\ApplicantPesaPalSettingsController;
+use App\Models\Admission;
 use App\Models\PaymentMethods;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,8 +44,8 @@ class ApplicantPesaPalAdminUiTest extends TestCase
         $this->get(route('admin.hei_admissions.payment.pesapal.settings'))->assertOk()
             ->assertSee('assets/vendors/bootstrap-5.1.3/css/bootstrap.min.css', false)
             ->assertSee('assets/css/style.css', false)
-            ->assertSee('Create application')->assertSee('Application payment status')
-            ->assertSee('Failed admission notifications')->assertSee('Shared application payment configuration');
+            ->assertSee('New Application')->assertSee('Application Payments')
+            ->assertSee('Failed Payment Notifications')->assertSee('Shared application payment configuration');
         Http::assertNothingSent();
     }
 
@@ -86,20 +87,27 @@ class ApplicantPesaPalAdminUiTest extends TestCase
         $this->assertStringNotContainsString('Retry notification', $html);
     }
 
-    public function test_navigation_reuses_existing_workflows_and_primary_school_gate(): void
+    public function test_navigation_reuses_existing_workflows_for_each_staff_school(): void
     {
         $html = view('admin.admissions.partials.navigation')->render();
-        foreach (['Create application', 'Application payment status', 'Applicant PesaPal settings', 'Failed admission notifications'] as $label) {
+        // One section for the whole module: the applications queue, its intake
+        // configuration and its payment setup are no longer split across an
+        // "Application Workflow" and an "Admissions" block.
+        $this->assertStringContainsString('ADMISSIONS', $html);
+        foreach (['Applications', 'New Application', 'Application Payments', 'Intake Sessions', 'Required Documents', 'Admission Agents', 'PesaPal Settings', 'Failed Payment Notifications'] as $label) {
             $this->assertStringContainsString($label, $html);
         }
         $this->assertStringContainsString(route('admin.hei_admissions.wizard.create'), $html);
+        // Application Payments is the applications queue filtered to unpaid fees,
+        // not a second link to the identical unfiltered URL.
+        $this->assertStringContainsString(route('admin.hei_admissions.index', ['fee_status' => Admission::FEE_PENDING]), $html);
         $this->assertStringContainsString('#failed-notifications', $html);
         $this->be($this->makeAdminUser($this->makeSchool()));
         $html = view('admin.admissions.partials.navigation')->render();
-        $this->assertStringNotContainsString('Create application', $html);
-        $this->assertStringNotContainsString('Application payment status', $html);
-        $this->assertStringContainsString('Applicant PesaPal settings', $html);
-        $this->get(route('admin.hei_admissions.index'))->assertRedirect(route('admin.dashboard'));
+        $this->assertStringContainsString('New Application', $html);
+        $this->assertStringContainsString('Application Payments', $html);
+        $this->assertStringContainsString('PesaPal Settings', $html);
+        $this->get(route('admin.hei_admissions.index'))->assertOk();
     }
 
     public function test_notification_retry_is_visible_only_when_exhausted_and_due_without_message_content(): void

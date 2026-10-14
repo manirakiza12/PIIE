@@ -24,7 +24,7 @@
     background: var(--ap-bg);
     min-height: 100vh;
     color: var(--ap-ink);
-    font-family: 'Inter', 'Cabin', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--piie-font, 'Nunito', Arial, sans-serif);
 }
 
 .ap-shell a { text-decoration: none; }

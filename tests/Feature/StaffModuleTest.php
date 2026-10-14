@@ -65,7 +65,7 @@ class StaffModuleTest extends TestCase
         $this->assertSame('Full Time', $teacher->employment_type);
         $this->assertSame('active', $teacher->staff_status);
         $this->assertNotEmpty($teacher->code, 'Staff Number must be auto-generated.');
-        $this->assertStringStartsWith('STF-', $teacher->code);
+        $this->assertSame(now()->format('Y/m').'/TRS/001/', $teacher->code);
         $this->assertSame($schoolId, $teacher->school_id);
     }
 

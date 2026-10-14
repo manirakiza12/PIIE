@@ -161,11 +161,31 @@ class CourseContentTest extends TestCase
         $html = $editor->getContent();
 
         // Hidden: a CSS rule that takes the source field out of the page.
-        $this->assertStringContainsString('textarea#cc-body', $html, 'the source field is not hidden by any rule');
-        $this->assertMatchesRegularExpression(
-            '/\.cc-editor-shell[^}]*textarea#cc-body[^}]*\{[^}]*display:\s*none/i',
+        //
+        // THE RULE NOW LIVES IN THE SHARED STYLESHEET, AND IS SCOPED.
+        //
+        // This view no longer owns the editor. The rule is
+        // `html.piie-js .piie-editor-shell > textarea.piie-editor-source { display:none }`
+        // in `public/css/academic-editor.css`, and it is deliberately scoped to
+        // `html.piie-js` - a class the editor script adds only once it has
+        // actually started. That scoping is an improvement on the old
+        // unconditional rule it replaced: with no JavaScript the class is absent,
+        // the textarea stays visible, and the page degrades to a plain multi-line
+        // field that posts exactly the same value, rather than to an invisible
+        // field nothing can fill in.
+        $this->assertStringContainsString(
+            'piie-editor-source',
             $html,
-            'the source field has no display:none rule'
+            'the source field is not marked as the hidden source'
+        );
+
+        $editorCss = file_get_contents(base_path('public/css/academic-editor.css'));
+
+        $this->assertIsString($editorCss, 'the shared editor stylesheet must be readable');
+        $this->assertMatchesRegularExpression(
+            '/html\.piie-js[^}]*\.piie-editor-shell[^}]*textarea\.piie-editor-source[^}]*\{[^}]*display:\s*none/i',
+            $editorCss,
+            'the source field has no scoped display:none rule'
         );
 
         // Still present and still named, so it is still posted and still holds
@@ -175,8 +195,24 @@ class CourseContentTest extends TestCase
 
         // The editor remains the authoring surface, and carries the label's
         // accessible name now that the label's own control is hidden.
+        //
+        // The label element is still rendered HERE, by the component, so its id is
+        // still on the page. The `aria-labelledby` ATTRIBUTE is applied by the
+        // editor script at runtime, from `cfg.labelId`, so it appears in the
+        // bundle rather than in this view's markup - which is why it is asserted
+        // against the bundle. Splitting the assertion across the two files is
+        // deliberate: the label must be on the page for the script to find, and
+        // the wiring must be in the script for the name to reach the editor.
         $this->assertStringContainsString('id="cc-body-label"', $html);
-        $this->assertStringContainsString("aria-labelledby', 'cc-body-label'", $html);
+
+        $editorJs = file_get_contents(base_path('public/js/academic-editor.js'));
+
+        $this->assertIsString($editorJs, 'the shared editor bundle must be readable');
+        $this->assertStringContainsString(
+            "aria-labelledby",
+            $editorJs,
+            'the editor never gives its editable region an accessible name'
+        );
 
         // And the hidden field really does carry the content through a save:
         // submitted, sanitised on the way in, and stored.
@@ -986,7 +1022,15 @@ class CourseContentTest extends TestCase
                 'type' => 'link',
                 'link_url' => 'javascript:alert(1)',
             ])
-            ->assertSessionHasErrors('link_url');
+            // Attachment errors carry their own bag. The bag is not cosmetic: the
+            // DEFAULT bag is what the lesson's own "before saving" block renders,
+            // so an attachment failure sharing it reported a perfectly good
+            // lesson as having failed.
+            ->assertSessionHasErrors(
+                'link_url',
+                null,
+                \App\Http\Controllers\CourseOfferingContentController::RESOURCE_ERROR_BAG
+            );
 
         $this->assertSame(0, DB::table('course_offering_lesson_resources')->count());
     }
@@ -1023,7 +1067,12 @@ class CourseContentTest extends TestCase
                 'type' => 'file',
                 'file' => UploadedFile::fake()->create('huge.mp4', 21 * 1024, 'video/mp4'),
             ])
-            ->assertSessionHasErrors('file');
+            // Its own bag - see the note on the link test above.
+            ->assertSessionHasErrors(
+                'file',
+                null,
+                \App\Http\Controllers\CourseOfferingContentController::RESOURCE_ERROR_BAG
+            );
 
         // A lecture recording is a link, not an upload. A 20 MB ceiling is a
         // deliberate product decision for PIIE's low-bandwidth markets.
@@ -1060,17 +1109,67 @@ class CourseContentTest extends TestCase
             ->get("/teacher/course-offerings/{$this->offering->id}/content/lessons/create");
 
         $response->assertOk();
-        // Summernote, which PIIE already ships in every portal layout. Adding a
-        // second editor beside one already on every page would cost PIIE's
-        // low-bandwidth students bandwidth to save a lecturer a dependency.
-        $response->assertSee('summernote', false);
-        $response->assertSee('cc-editor-shell', false);
-        // The capability set the authoring brief asks for, as real toolbar
-        // buttons rather than a comment.
+
+        // THE EDITOR IS THE SHARED COMPONENT NOW, NOT A LOCAL BOOTSTRAP.
+        //
+        // This view used to carry its own copy of the Summernote bootstrap, which
+        // silently stopped working when the layout stopped loading Summernote
+        // globally: `$.fn.summernote` came back undefined and the authoring surface
+        // was replaced by a failure notice, so a lecturer could not write a lesson
+        // at all. It now renders `x-academic-editor`, which loads the vendor bundle
+        // itself.
+        //
+        // So the assertions below moved with it. The old test asserted on
+        // `cc-editor-shell` - markup that belonged to the deleted local bootstrap -
+        // and on toolbar button names that were inline in this view. Both are now
+        // in the component and in `public/js/academic-editor.js` respectively, so
+        // asserting on them HERE would be asserting that a file this view does not
+        // own contains particular strings.
+        $response->assertSee('piie-editor-shell', false);
+        // The old wrapper is gone. Asserted on the emitted MARKUP rather than on
+        // the whole response, because the explanatory comment above names the old
+        // class and a raw substring search would match this test's own prose.
+        $this->assertStringNotContainsString(
+            'class="cc-editor-shell"',
+            $response->getContent(),
+            'the deleted local editor wrapper is still being rendered'
+        );
+
+        // The bundle really is requested, which is what actually fixes the bug:
+        // a page that never asks for Summernote cannot render an editor.
+        $response->assertSee('academic-editor.js', false);
+
+        // The capability set is asserted where it is decided.
+        //
+        // `public/js/academic-editor.js` is the single place the toolbar is
+        // defined for every editor in PIIE. Asserting the capabilities against
+        // that file - rather than against a view that merely includes it - is what
+        // stops a future change quietly dropping superscript from every editor at
+        // once, and it is a stronger claim than a string match on one page.
+        $toolbar = file_get_contents(base_path('public/js/academic-editor.js'));
+
+        $this->assertIsString($toolbar, 'the shared editor bundle must be readable');
+
         foreach (['bold', 'underline', 'ul', 'ol', 'table', 'picture', 'link',
-            'blockquote', 'superscript', 'subscript', 'undo', 'redo', 'align', 'fullscreen'] as $feature) {
-            $this->assertStringContainsString($feature, $response->getContent(),
-                "the editor is missing the '{$feature}' control");
+            'blockquote', 'superscript', 'subscript', 'undo', 'redo', 'fullscreen'] as $feature) {
+            $this->assertStringContainsString(
+                "'".$feature."'",
+                $toolbar,
+                "the shared editor is missing the '{$feature}' control"
+            );
+        }
+
+        // ALIGNMENT is listed by its four buttons rather than under Summernote's
+        // `align` alias, which is why it gets its own assertion instead of riding
+        // in the loop above. The capability is present; only the spelling differs,
+        // and pretending otherwise would mean either weakening this test or
+        // renaming a working toolbar group to satisfy a string match.
+        foreach (['left', 'center', 'right', 'justify'] as $alignment) {
+            $this->assertStringContainsString(
+                "'".$alignment."'",
+                $toolbar,
+                "the shared editor is missing the '{$alignment}' alignment control"
+            );
         }
     }
 
@@ -1228,6 +1327,32 @@ class CourseContentTest extends TestCase
         $this->assertStringContainsString('overflow-x', $response->getContent());
     }
 
+    public function test_the_declared_keys_match_what_is_actually_rendered(): void
+    {
+        // `WorkspaceNav::KEYS` says it is "declared once so the composer, the tests
+        // and any future surface cannot disagree about what the workspace contains".
+        //
+        // It DID disagree, in three places at once: it still listed `gradebook` and
+        // `analytics` after they were removed, and omitted `progress` after it was
+        // added. Nothing read the constant, so no test caught it - which is exactly
+        // how a future surface building from that list would have quietly
+        // reintroduced the two tabs that were deliberately deleted.
+        //
+        // The constant is now accurate and pinned to what `tabs()` emits, so it can
+        // only change in step with the nav.
+        $tabs = app(\App\Support\CourseOffering\WorkspaceNav::class)->tabs(
+            request(), $this->offering, true, null
+        );
+
+        $rendered = array_column($tabs, 'key');
+
+        $this->assertSame(
+            \App\Support\CourseOffering\WorkspaceNav::KEYS,
+            $rendered,
+            'the declared keys and the rendered tabs must be the same list, in the same order'
+        );
+    }
+
     public function test_the_workspace_navigation_declares_the_destination_without_faking_it(): void
     {
         $response = $this->actingAs($this->lecturer)
@@ -1236,20 +1361,52 @@ class CourseContentTest extends TestCase
         $response->assertOk();
         $content = $response->getContent();
 
-        // All eight destination tabs are declared, so the shape of the workspace
-        // is visible and reviewable now rather than a surprise later.
+        // Every BUILT destination is declared, so the shape of the workspace is
+        // visible and reviewable now rather than a surprise later.
         foreach (['Overview', 'Content', 'Live Classes', 'Assignments',
-            'Quizzes &amp; Exams', 'Students', 'Gradebook', 'Analytics'] as $tab) {
+            'Quizzes &amp; Exams', 'Students', 'Progress'] as $tab) {
             $this->assertStringContainsString($tab, $content, "the '{$tab}' tab is missing");
         }
 
-        // A tab with no engine is plain text with NO href. Not a link to a stub
-        // and not a 404 - a lecturer is never offered a door that does not open.
-        $this->assertMatchesRegularExpression(
-            '/<span class="nav-link disabled[^>]*>\s*Gradebook/s',
-            $content
+        // GRADEBOOK AND ANALYTICS ARE NOT LISTED IN THE WORKSPACE NAV.
+        //
+        // They used to be rendered as disabled tabs. That was an improvement on a
+        // 404 link, but it was still misleading in the other direction: a greyed-out
+        // "Gradebook" tells a lecturer the feature exists and is merely unavailable,
+        // which is a different fact from "not built yet". "Exists but not available to
+        // you" and "does not exist" are different things, and a lecturer planning a
+        // marking session needs the second one.
+        //
+        // ASSERTED ON THE NAV, NOT ON THE WHOLE PAGE.
+        //
+        // The site-wide sidebar links to a real `/teacher/gradebook`, and it must
+        // keep doing so - removing a per-course tab must not have taken the working
+        // page with it. Scanning the rendered page for the word would fail on that
+        // link and would be testing the wrong thing: what matters is which tabs the
+        // workspace offers, and the nav is what decides that.
+        $tabs = app(\App\Support\CourseOffering\WorkspaceNav::class)->tabs(
+            request(), $this->offering, true, null
         );
-        $this->assertStringNotContainsString('>Gradebook</a>', $content);
+
+        $labels = array_column($tabs, 'label');
+
+        $this->assertNotContains('Gradebook', $labels);
+        $this->assertNotContains('Analytics', $labels);
+
+        // Every tab listed is either a real link or plainly marked unavailable.
+        // Nothing is offered as a door that does not open.
+        foreach ($tabs as $tab) {
+            if ($tab['coming_soon'] ?? false) {
+                $this->assertSame(
+                    false,
+                    $tab['available'],
+                    "'{$tab['label']}' is coming soon but claims to be available"
+                );
+            }
+        }
+
+        // And the site-wide gradebook link is genuinely still there.
+        $this->assertStringContainsString('/teacher/gradebook', $content);
     }
 
     public function test_built_content_pages_are_reachable_from_the_workspace_navigation(): void

@@ -196,7 +196,7 @@ class PublicContactExperienceTest extends TestCase
             $this->assertStringContainsString('Download Brochure', $html,
                 "{$slug} must offer the brochure");
             $this->assertStringContainsString('>Apply Now<', $html);
-            $this->assertStringContainsString('>Student Portal<', $html);
+            $this->assertStringContainsString('>Login<', $html);
         }
     }
 

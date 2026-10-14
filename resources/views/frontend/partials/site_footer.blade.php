@@ -238,11 +238,11 @@
                 <h3>Programmes</h3>
                 <ul class="piie-footer__links">
                     <li><a href="{{ $piieProgramsUrl }}">All Programmes</a></li>
-                    <li><a href="{{ $piieProgramsUrl }}#levels">Master's Degrees</a></li>
-                    <li><a href="{{ $piieProgramsUrl }}#levels">Postgraduate Diplomas</a></li>
-                    <li><a href="{{ $piieProgramsUrl }}#levels">Bachelor's Degrees</a></li>
-                    <li><a href="{{ $piieProgramsUrl }}#levels">Diplomas</a></li>
-                    <li><a href="{{ $piieProgramsUrl }}#levels">Certificates</a></li>
+                    <li><a href="{{ $piieProgramsUrl }}?category=postgraduate#catalogue">Master's Degrees</a></li>
+                    <li><a href="{{ $piieProgramsUrl }}?category=diploma&amp;level=PGD#catalogue">Postgraduate Diplomas</a></li>
+                    <li><a href="{{ $piieProgramsUrl }}?category=bachelors#catalogue">Bachelor's Degrees</a></li>
+                    <li><a href="{{ $piieProgramsUrl }}?category=diploma#catalogue">Diplomas</a></li>
+                    <li><a href="{{ $piieProgramsUrl }}?category=certificate#catalogue">Certificates</a></li>
                 </ul>
             </nav>
 
@@ -256,7 +256,7 @@
                     <li><a href="{{ $piieProgramsUrl }}#support">Student Support</a></li>
                     <li><a href="{{ $piieBrochureUrl }}">Download Brochure</a></li>
                     <li><a href="{{ $piieApplyUrl }}">Apply Now</a></li>
-                    <li><a href="{{ $piieLoginUrl }}">Student Portal</a></li>
+                    <li><a href="{{ $piieLoginUrl }}">Login</a></li>
                 </ul>
             </nav>
 

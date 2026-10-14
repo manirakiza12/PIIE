@@ -26,10 +26,11 @@
   <div class="col-12">
     <div class="eSection-wrap-2">
       <div id="printableDiv">
+
         <h4 class="invoice_title pb-21">{{ get_phrase('INVOICE') }}</h4>
         <!-- Invoice Info -->
         <div
-          class="row flex-wrap justify-content-md-between align-items-start"printableDiv
+          class="row flex-wrap justify-content-md-between align-items-start"
         >
           <div class="col-sm-7">
             <div class="invoice_details">
@@ -37,11 +38,7 @@
                 <div class="title">{{ $student_details['name'] }}</div>
                 <p class="sub-title">{{ get_phrase('Please find below the invoice') }}</p>
               </div>
-              <div class="item pt-57">
-                <div class="title">{{ get_phrase('Billing Address') }}</div>
-                <p class="sub-title">{{ $student_details['address'] }}<br>
-                <abbr title="Phone">P:</abbr> {{ $student_details['phone'] == "" ? '('.get_phrase('Phone number not found').')' : $student_details['phone'] }}<br></p>
-              </div>
+              @include('shared.invoice_billing')
             </div>
           </div>
           <div class="col-sm-5">
@@ -52,7 +49,7 @@
               </div>
               <div class="item">
                 <p class="sub-title">{{ get_phrase('Date') }}</p>
-                <div class="title">{{ date('D, d-M-Y') }}</div>
+                <div class="title">{{ date('D, d-M-Y', strtotime($invoice_details['created_at'])) }}</div>
               </div>
                 @if(strtolower($invoice_details['status']) == 'paid')
                   <span class="eBadge ebg-soft-success">{{ get_phrase('Paid') }}</span>
@@ -212,4 +209,5 @@
 
 
 
+@include('shared.invoice_email_action')
 @endsection

@@ -37,6 +37,39 @@ class CourseOfferingModuleLifecycleTest extends TestCase
     {
         parent::setUp();
         $this->bootCourseOfferingExamSchema();
+        $this->ensureLessonResourcesTable();
+    }
+
+    /**
+     * The reduced Course Offering fixture declares lessons but not their
+     * attachments.
+     *
+     * Nothing here creates a lesson resource, but rendering any lesson loads the
+     * `resources` relation, so the table has to exist or the page 500s. Declared
+     * here rather than in the shared fixture because that fixture is deliberately
+     * minimal and four other suites depend on its exact shape.
+     */
+    private function ensureLessonResourcesTable(): void
+    {
+        if (\Illuminate\Support\Facades\Schema::hasTable('course_offering_lesson_resources')) {
+            return;
+        }
+
+        \Illuminate\Support\Facades\Schema::create('course_offering_lesson_resources', function ($table): void {
+            $table->id();
+            $table->unsignedBigInteger('school_id');
+            $table->unsignedBigInteger('course_offering_id');
+            $table->unsignedBigInteger('course_offering_lesson_id');
+            $table->string('title', 191);
+            $table->string('type', 20)->default('link');
+            $table->string('link_url', 500)->nullable();
+            $table->string('original_name', 191)->nullable();
+            $table->string('stored_name', 255)->nullable();
+            $table->string('mime_type', 100)->nullable();
+            $table->unsignedBigInteger('size_bytes')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->timestamps();
+        });
     }
 
     private function lecturer(): \App\Models\User
@@ -88,7 +121,35 @@ class CourseOfferingModuleLifecycleTest extends TestCase
         $id = (int) DB::table('course_offering_modules')
             ->insertGetId($this->onlyExistingColumns('course_offering_modules', $row));
 
-        return CourseOfferingModule::query()->findOrFail($id);
+        $module = CourseOfferingModule::query()->findOrFail($id);
+
+        // These tests are about the LIFECYCLE - draft to published, scheduled,
+        // released early - and a module with nothing in it is no longer
+        // publishable, because publishing an empty topic is the stage-5 failure
+        // `ModulePublicationCheckTest` exists to prevent. Rather than weaken that
+        // rule to suit four tests that are not about it, the fixture gives the
+        // module one published lesson: the module then has real content, and each
+        // test still exercises exactly the transition it was written for.
+        DB::table('course_offering_lessons')->insert(
+            $this->onlyExistingColumns('course_offering_lessons', [
+                'school_id' => 1,
+                'course_offering_id' => $this->offering()->id,
+                'course_offering_module_id' => $id,
+                'title' => 'Reading for '.$module->title,
+                'summary' => null,
+                'body' => '<p>Content.</p>',
+                'content_type' => 'lesson',
+                'sequence' => 1,
+                'status' => \App\Models\CourseOfferingLesson::STATUS_PUBLISHED,
+                'released_at' => null,
+                'created_by' => 1,
+                'updated_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])
+        );
+
+        return $module->fresh();
     }
 
     /**

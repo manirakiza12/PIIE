@@ -66,6 +66,22 @@ class WorkspaceNav
      * Declared once so the composer, the tests and any future surface cannot
      * disagree about what the workspace contains or what order it is in.
      */
+    /**
+     * THE BUILT DESTINATIONS, IN ORDER.
+     *
+     * Correct as of the day `Gradebook` and `Analytics` were removed from the nav
+     * and `Progress` was added. It previously still listed `gradebook` and
+     * `analytics` and omitted `progress`, so it disagreed with `tabs()` in three
+     * places at once - and its own docblock promised that "the composer, the tests
+     * and any future surface cannot disagree about what the workspace contains".
+     *
+     * A constant that claims to be the single declaration and then contradicts it
+     * is worse than no constant: a future surface building from this list would
+     * have reintroduced precisely the tabs that were deliberately deleted.
+     *
+     * `test_the_declared_keys_match_what_is_actually_rendered` pins it to
+     * `tabs()`, so it cannot drift again silently.
+     */
     public const KEYS = [
         'overview',
         'content',
@@ -73,8 +89,7 @@ class WorkspaceNav
         'assignments',
         'quizzes_exams',
         'students',
-        'gradebook',
-        'analytics',
+        'progress',
     ];
 
     public function __construct(
@@ -154,21 +169,37 @@ class WorkspaceNav
                     : 'The confirmed student roster becomes available when teaching begins.',
             ],
             [
-                'key' => 'gradebook',
-                'label' => 'Gradebook',
-                'url' => null,
-                'available' => false,
-                'coming_soon' => true,
-                'description' => 'Not built. A gradebook needs a marks engine and an assessment source, and neither exists yet.',
+                'key' => 'progress',
+                'label' => 'Progress',
+                'url' => route('teacher.course_offerings.progress', $offering->id),
+                'available' => $rosterAvailable,
+                'coming_soon' => false,
+                'description' => $rosterAvailable
+                    ? 'Every confirmed student against every topic: what is complete, what is outstanding, and who has failed an assessment.'
+                    : 'Progress becomes available when teaching begins.',
             ],
-            [
-                'key' => 'analytics',
-                'label' => 'Analytics',
-                'url' => null,
-                'available' => false,
-                'coming_soon' => true,
-                'description' => 'Not built. It will read real engagement and outcome data, not page counts.',
-            ],
+            // GRADEBOOK AND ANALYTICS ARE NOT LISTED AT ALL.
+            //
+            // They used to be declared here with `coming_soon` and rendered as
+            // greyed-out tabs carrying an asterisk, under a footnote reading "Not
+            // built yet". That was honest and it was still wrong: a lecturer
+            // reading the navigation cannot act on a tab, cannot tell whether
+            // "Gradebook" is something they should be looking for, and has to
+            // read a footnote to discover that two of the things on offer do not
+            // exist. A navigation that admits its own gaps looks like a
+            // half-finished product, which is exactly the impression the rest of
+            // this workspace is built to avoid.
+            //
+            // A tab that is not there cannot mislead anyone, and it will appear
+            // the moment the engine behind it does - which is the honest signal
+            // that the work landed. The entries are removed rather than disabled
+            // for exactly that reason: a disabled entry still occupies the space
+            // a lecturer expects to use.
+            //
+            // `coming_soon` is KEPT on the shape below rather than deleted with
+            // them, because it is the honest answer for a tab that exists and is
+            // merely unavailable to this lecturer - a different thing entirely,
+            // and one that SHOULD still be shown.
         ];
 
         return array_map(function (array $tab) use ($currentKey): array {

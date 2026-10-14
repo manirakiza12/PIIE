@@ -35,6 +35,12 @@ class ApplicantNotificationEmail extends Mailable
 
     public function build()
     {
+        if (! empty($this->data['admission_letter'])) {
+            $letter = $this->data['admission_letter'];
+            $this->attachData(\App\Support\Admissions\AdmissionLetterDocument::pdf($letter)->output(),
+                \App\Support\Admissions\AdmissionLetterDocument::filename($letter), ['mime' => 'application/pdf']);
+            if (filter_var($letter['email'] ?? null, FILTER_VALIDATE_EMAIL)) $this->replyTo($letter['email']);
+        }
         return $this->subject($this->data['subject'] ?? 'Your application')
             ->view('email.applicantNotification')
             ->from(get_settings('smtp_user'), get_settings('system_title'));

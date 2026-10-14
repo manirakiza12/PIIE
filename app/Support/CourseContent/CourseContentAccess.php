@@ -291,6 +291,22 @@ class CourseContentAccess
             throw new HttpException(404, 'Lesson not found.');
         }
 
+        // SEQUENTIAL GATING, LAST, AND SERVER-SIDE.
+        //
+        // This is the check the whole "restrict access" feature rests on, and it
+        // is here rather than in a blade template for the reason the benchmark is
+        // explicit about: a link the student cannot see is a suggestion, not a
+        // restriction. A student who types this lesson's URL reaches this method,
+        // so this is the only place the refusal can be trusted.
+        //
+        // It runs AFTER the release checks, so a module that does not exist for
+        // this student is still a 404 and never becomes a "locked" message - a
+        // refusal that reveals the existence of unreleased content is itself a
+        // disclosure.
+        if (! app(ProgressionGate::class)->mayOpenLesson($actor, $lesson)) {
+            throw new HttpException(404, 'Lesson not found.');
+        }
+
         return $lesson;
     }
 

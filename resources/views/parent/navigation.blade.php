@@ -57,6 +57,7 @@
 
      <!--Main Jquery-->
      <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
+    @include('shared.workspace_assets')
 </head>
 <body>
 
@@ -156,7 +157,7 @@
         </ul>
 			</li>
 
-      @if (addon_status('transport') == 1)
+      @if (addon_status('transport') == 1 && Route::has('parent.trips.list'))
                 <li class="nav-links-li {{ request()->is('parent/trips/list*') ? 'showMenu' : '' }}">
                     <div class="iocn-link">
                         <a href="{{ route('parent.trips.list') }}">

@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Programme;
+use App\Models\ProgrammeGalleryImage;
 use App\Support\ProgrammeCatalogue\ProgrammeCatalogueSchema;
 use App\Support\ProgrammeCatalogue\ProgrammeCoverImage;
+use App\Support\ProgrammeCatalogue\ProgrammeEditor;
+use App\Support\ProgrammeCatalogue\ProgrammeGalleryImageService;
 use App\Support\ProgrammeCatalogue\ProgrammePrice;
 use App\Support\ProgrammeCatalogue\ProgrammePublisher;
 use Illuminate\Http\Request;
@@ -22,6 +25,8 @@ class ProgrammeController extends Controller
         private ProgrammePublisher $publisher,
         private ProgrammeCoverImage $covers,
         private ProgrammeCatalogueSchema $catalogueSchema,
+        private ProgrammeGalleryImageService $gallery,
+        private ProgrammeEditor $editor,
     ) {
         $this->middleware(function ($request, $next) {
             $this->school_id = Auth::user()->school_id;
@@ -144,6 +149,21 @@ class ProgrammeController extends Controller
                 'priceSummary'  => ProgrammePrice::adminSummary($programme),
                 'tenantCurrency' => ProgrammePrice::tenantCurrency($programme),
                 'catalogueSections' => ProgrammePublisher::CATALOGUE_SECTIONS,
+                // Gallery state for the modal. Empty when the table has not been
+                // migrated yet, so a rolling deploy shows the cover controls and a
+                // plain "not available" note instead of a SQL error.
+                'galleryImages'    => $programme
+                    ? $this->gallery->records($programme)->map(fn ($image) => [
+                        'id'   => $image->id,
+                        'url'  => $this->gallery->url($image),
+                        'name' => $image->original_name,
+                    ])->values()
+                    : collect(),
+                'galleryMax'       => ProgrammeGalleryImageService::MAX_IMAGES,
+                'galleryRemaining' => $programme
+                    ? max(0, ProgrammeGalleryImageService::MAX_IMAGES - $this->gallery->countFor($programme))
+                    : ProgrammeGalleryImageService::MAX_IMAGES,
+                'galleryReady'     => $this->gallery->ready(),
             ]);
     }
 
@@ -179,6 +199,14 @@ class ProgrammeController extends Controller
             // Display order. Capped so a mistaken 1e9 cannot push a programme to
             // the far end of the catalogue unnoticed.
             'website_sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
+            'cover_image' => ['nullable', 'file', 'mimes:'.implode(',', ProgrammeCoverImage::ALLOWED), 'max:4096'],
+            'gallery_images' => ['nullable', 'array', 'max:2'],
+            'gallery_images.*' => ['required', 'file', 'mimes:'.implode(',', ProgrammeCoverImage::ALLOWED), 'max:4096'],
+            'remove_cover' => ['sometimes', 'boolean'],
+            'remove_gallery_images' => ['nullable', 'array', 'max:2'],
+            'remove_gallery_images.*' => ['required', 'integer', 'distinct'],
+            'is_published' => ['sometimes', 'boolean'],
+            'section_key' => ['nullable', Rule::in(ProgrammePublisher::CATALOGUE_SECTIONS)],
         ];
     }
 
@@ -270,7 +298,7 @@ class ProgrammeController extends Controller
 
         $validated['school_id']  = $this->school_id;
         $validated['is_active']  = 1;
-        $programme = Programme::create($validated);
+        $programme = $this->editor->save($request, $validated);
         AuditLog::record('create', 'Programmes', "Created programme: {$programme->name}");
 
         if ($request->ajax() || $request->wantsJson()) {
@@ -286,16 +314,8 @@ class ProgrammeController extends Controller
         $validated = $request->validate($this->validationRules($programme));
         $validated = $this->normalisePriceMetadata($validated);
 
-        $programme->update($validated);
+        $programme = $this->editor->save($request, $validated, $programme);
         AuditLog::record('update', 'Programmes', "Updated programme: {$programme->name}");
-
-        // A published programme's public card shows its name and level. Refreshing
-        // the projection here is what makes the academic record authoritative:
-        // editing the name updates the website without a second, manual step.
-        // Publication state is untouched — a rename must not withdraw a live card.
-        if ($programme->is_published) {
-            $this->publisher->refreshProjection($programme);
-        }
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['status' => 'success', 'message' => get_phrase('Programme updated successfully')]);
@@ -319,7 +339,18 @@ class ProgrammeController extends Controller
         }
 
         AuditLog::record('delete', 'Programmes', "Deleted programme: {$programme->name}");
-        $programme->delete();
+        $images = \Illuminate\Support\Facades\DB::transaction(function () use ($programme) {
+            Programme::where('school_id', $this->school_id)->whereKey($programme->id)->lockForUpdate()->firstOrFail();
+            $images = $this->gallery->records($programme);
+            foreach ($images as $image) {
+                $image->delete();
+            }
+            $programme->delete();
+            return $images;
+        });
+        foreach ($images as $image) {
+            $this->gallery->deleteFile($image->path);
+        }
         return redirect()->back()->with('success', get_phrase('Programme deleted'));
     }
 
@@ -396,6 +427,95 @@ class ProgrammeController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    // CATALOGUE: GALLERY
+    //
+    // The additional pictures beside the cover. Separate routes from the cover's
+    // own, and a separate service, so the two cannot be confused: the cover is
+    // ONE image held as columns on `programmes`, the gallery is up to TWO rows in
+    // `programme_gallery_images`. Scoped to programmes only — there is deliberately
+    // no equivalent for course units, lessons or examinations, whose media is
+    // private teaching material.
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * List a programme's gallery, for the admin preview.
+     *
+     * Returned as JSON so the modal can render thumbnails without a page reload,
+     * and tenant-scoped by the same findOwned() every other programme action uses.
+     */
+    public function galleryImages(Request $request, $id)
+    {
+        $programme = $this->findOwned($id);
+
+        $images = $this->gallery->records($programme)->map(fn ($image) => [
+            'id'    => $image->id,
+            'url'   => $this->gallery->url($image),
+            'name'  => $image->original_name,
+            'order' => $image->sort_order,
+        ])->values();
+
+        return response()->json([
+            'images'    => $images,
+            'max'       => ProgrammeGalleryImageService::MAX_IMAGES,
+            'remaining' => max(0, ProgrammeGalleryImageService::MAX_IMAGES - $this->gallery->countFor($programme)),
+        ]);
+    }
+
+    public function storeGalleryImage(Request $request, $id)
+    {
+        $programme = $this->findOwned($id);
+
+        $request->validate([
+            'gallery_image' => [
+                'required', 'file',
+                'mimes:'.implode(',', ProgrammeGalleryImageService::ALLOWED),
+                'max:'.\App\Support\Images\ImageOptimizer::MAX_KB,
+            ],
+        ], [
+            'gallery_image.mimes' => 'The image must be a JPG, PNG or WebP image.',
+            'gallery_image.max'   => 'The image must be no larger than 4 MB.',
+        ]);
+
+        // The service enforces the two-image ceiling inside the same transaction
+        // that writes the row, and re-validates by CONTENT via ImageOptimizer.
+        $image = $this->gallery->add($programme, $request->file('gallery_image'));
+
+        AuditLog::record('create', 'Programmes', "Added catalogue gallery image to: {$programme->name}", [
+            'event_type' => 'DATA',
+            'record_type' => ProgrammeGalleryImage::class,
+            'record_id' => $image->id,
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'id' => $image->id], 201);
+        }
+
+        return redirect()->back()->with('success', get_phrase('Programme image added'));
+    }
+
+    /**
+     * Remove one gallery image.
+     *
+     * The image id is resolved INSIDE the programme that owns it, so an id from a
+     * different programme — or a different institution — matches nothing and the
+     * request is a no-op. The programme row itself is never written.
+     */
+    public function destroyGalleryImage(Request $request, $id, $imageId)
+    {
+        $programme = $this->findOwned($id);
+
+        $this->gallery->remove($programme, (int) $imageId);
+
+        AuditLog::record('delete', 'Programmes', "Removed a catalogue gallery image from: {$programme->name}");
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true]);
+        }
+
+        return redirect()->back()->with('success', get_phrase('Programme image removed'));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     // CATALOGUE: PUBLICATION
     // ══════════════════════════════════════════════════════════════════════
 
@@ -454,6 +574,13 @@ class ProgrammeController extends Controller
             'coverUrl'  => $this->covers->url($programme),
             'price'     => $price,
             'contactLabel' => ProgrammePrice::contactLabel(),
+            // The gallery, for the one view that renders a single programme.
+            'galleryUrls'  => $this->gallery->images($programme)
+                ->map(fn ($image) => $this->gallery->url($image))
+                ->filter()
+                ->values()
+                ->all(),
+            'galleryMax'   => ProgrammeGalleryImageService::MAX_IMAGES,
             // The faculty name is what the branded fallback renders, so the
             // preview must resolve it the same way the card does.
             'fallback'  => optional($programme->department)->name

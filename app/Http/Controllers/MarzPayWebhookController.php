@@ -3,11 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\ApplicationPayment;
-use App\Models\AuditLog;
 use App\Models\HostelFee;
 use App\Models\StudentFeeManager;
 use App\Support\Payments\ApplicationPaymentSettlement;
 use App\Support\Payments\MarzPayService;
+use App\Support\Payments\TuitionFeeSettlement;
+use App\Support\Payments\VerifiedTuitionPayment;
 use App\Support\Subscriptions\SubscriptionActivator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +25,21 @@ use Illuminate\Support\Facades\Log;
  * algorithm, this always re-fetches the transaction directly from MarzPay
  * before trusting it — the same "never trust the callback alone" rule
  * Applicant\PaymentController already applies to Stripe/Flutterwave.
+ *
+ * TUITION specifically is settled through {@see TuitionFeeSettlement}, and the
+ * body of this controller deliberately does NOT decide the outcome for it:
+ *
+ *  - The invoice is located by the posted `context_id`, but never verified
+ *    against the posted `transaction.uuid`. A caller can therefore name any
+ *    invoice, but the transaction actually examined is always the one that
+ *    invoice itself recorded in `gateway_reference` at payment start. Naming
+ *    someone else's invoice can no longer settle it with someone else's
+ *    successful payment — that was the vulnerability this replaced.
+ *  - Amount, currency, ownership, status and re-delivery are all decided by
+ *    the settlement boundary, under a locking read inside a transaction.
+ *
+ * The admissions (application) path is unchanged and remains independently
+ * hardened by ApplicationPaymentSettlement.
  */
 class MarzPayWebhookController extends Controller
 {
@@ -51,6 +67,14 @@ class MarzPayWebhookController extends Controller
         $schoolId = $this->resolveSchoolId($context, $contextId);
         if (! $schoolId) {
             return response()->json(['status' => 'ignored'], 200);
+        }
+
+        // Tuition first, and on its own boundary. It is the one flow whose
+        // invoice the attacker-supplied `context_id` selects, so it gets the
+        // strictest treatment: the provider transaction consulted is the one
+        // stored on that invoice, never the one named in the request body.
+        if ($context === 'tuition') {
+            return $this->settleTuition((int) $contextId, (int) $schoolId);
         }
 
         if ($context === 'application') {
@@ -115,10 +139,61 @@ class MarzPayWebhookController extends Controller
         return $schoolId ? (int) $schoolId : null;
     }
 
+    /**
+     * Settle a tuition invoice from provider evidence only.
+     *
+     * The posted transaction UUID is deliberately NOT consulted. The invoice's
+     * own `gateway_reference` — written when the payer started this very
+     * payment — is what gets looked up at MarzPay, so a caller naming an
+     * arbitrary invoice can only ever cause that invoice's OWN transaction to
+     * be consulted.
+     *
+     * 503 (not 200) when the provider cannot be consulted, so MarzPay retries
+     * instead of the payment being silently lost.
+     */
+    private function settleTuition(int $feeId, int $schoolId): \Illuminate\Http\JsonResponse
+    {
+        $fee = StudentFeeManager::where('id', $feeId)->where('school_id', $schoolId)->first();
+
+        if (! $fee) {
+            return response()->json(['status' => 'ignored'], 200);
+        }
+
+        $fetch = MarzPayService::fetchTuitionTransaction($fee);
+
+        // Only a provider we could not reach is worth retrying. If MarzPay
+        // answered and the answer is not about this invoice's own transaction —
+        // a foreign uuid, a missing reference, unconfigured tenant — that is a
+        // final "no", and acknowledging it stops MarzPay redelivering forever.
+        if ($fetch['status'] === 'unverifiable') {
+            Log::warning('MarzPay tuition payment could not be verified', [
+                'fee_id' => $feeId, 'school_id' => $schoolId,
+            ]);
+
+            return response()->json(['status' => 'verification_unavailable'], 503);
+        }
+
+        $evidence = VerifiedTuitionPayment::fromProviderResponse($fee, 'marzpay', $fetch['data']);
+
+        if ($evidence === null) {
+            Log::notice('MarzPay tuition callback did not match the invoice transaction', [
+                'fee_id' => $feeId, 'school_id' => $schoolId,
+            ]);
+
+            return response()->json(['status' => 'ignored'], 200);
+        }
+
+        $result = TuitionFeeSettlement::apply($evidence);
+
+        return response()->json(
+            ['status' => $result === TuitionFeeSettlement::REJECTED ? 'ignored' : 'ok'],
+            200
+        );
+    }
+
     private function applySuccess(string $context, int $contextId, array $verified): void
     {
         match ($context) {
-            'tuition'      => $this->applyTuition($contextId, $verified),
             'hostel'       => $this->applyHostel($contextId, $verified),
             'subscription' => $this->applySubscription($contextId),
             default        => null,
@@ -128,34 +203,15 @@ class MarzPayWebhookController extends Controller
     private function applyFailure(string $context, int $contextId): void
     {
         match ($context) {
-            'tuition' => StudentFeeManager::where('id', $contextId)->where('status', 'processing')->update(['status' => 'failed']),
+            // Tuition failures are handled by settleTuition(), which decides the
+            // outcome from verified provider evidence. Reaching here means the
+            // provider said "failed" for a transaction that is not the invoice's
+            // own stored one, so there is nothing this controller may change.
             // hostel_fees.status is an int column (0=unpaid, 1=paid, 2=rejected/failed)
             // — see acceptOfflinePaymentHostel/rejectOfflinePaymentHostel.
             'hostel'  => HostelFee::where('id', $contextId)->where('status', 0)->update(['status' => 2]),
             default => null,
         };
-    }
-
-    private function applyTuition(int $feeId, array $verified): void
-    {
-        $fee = StudentFeeManager::find($feeId);
-
-        if (! $fee || $fee->status === 'paid') {
-            return;
-        }
-
-        $paidAmount = $verified['collection']['amount']['raw'] ?? $fee->total_amount;
-
-        $fee->update([
-            'status'          => 'paid',
-            'paid_amount'     => $paidAmount,
-            'payment_method'  => 'marzpay',
-            'gateway_payload' => $verified,
-        ]);
-
-        AuditLog::record('update', 'Fees', "Tuition fee #{$fee->id} paid via MarzPay.", [
-            'event_type' => 'DATA', 'record_type' => StudentFeeManager::class, 'record_id' => $fee->id, 'school_id' => $fee->school_id,
-        ]);
     }
 
     private function applyHostel(int $feeId, array $verified): void

@@ -446,7 +446,9 @@
                 ['style', ['style']],
                 ['font', ['bold', 'italic', 'underline', 'superscript', 'subscript', 'strikethrough', 'clear']],
                 ['fontname', ['fontname']],
+                ['color', ['color']],
                 ['para', ['ul', 'ol']],
+                ['height', ['height']],
                 ['alignment', ['left', 'center', 'right', 'justify']],
                 ['insert', ['link', 'table', 'piieSymbol', 'piieEquation', 'specialchars']],
                 ['list', ['outdent', 'indent']],
@@ -457,8 +459,37 @@
 
             // Images are a governed decision, so the button appears only when the
             // deployment allows them. See the file header for why.
-            if (cfg.allowImages) {
-                toolbar[5].splice(1, 0, 'picture');
+            //
+            // The index is a NAME lookup rather than a position because the insert
+            // row moved when `color` and `height` were added above. Hard-coding
+            // `toolbar[5]` here worked only for as long as nothing was inserted
+            // before it - and did not: the lesson form lost its picture button
+            // for exactly that reason, silently.
+            var insertRow = toolbar.find(function (row) { return row[0] === 'insert'; });
+
+            if (cfg.allowImages && insertRow) {
+                insertRow[1].unshift('picture');
+            }
+
+            // MEDIA EMBEDS.
+            //
+            // The lesson editor offered `video` and `fileLink` before it moved onto
+            // this component. `video` was Summernote's own built-in command and
+            // worked; it was lost in the move and is restored here, because a
+            // distance-learning lesson that cannot embed a recorded lecture is
+            // missing the single most-used feature in this whole screen.
+            //
+            // `fileLink` was NOT restored, and deliberately: it was listed in that
+            // view's toolbar but no plugin was ever registered for it, so the
+            // button rendered and did nothing. Deleting it removed a dead control
+            // rather than a capability. Attachments are uploaded through the
+            // Resources panel, which is the governed path.
+            //
+            // `piieMedia` is this file's own plugin for embedding a lesson's own
+            // audio or video FILE by id, so a lecturer can place a recording they
+            // uploaded without pasting a third-party URL into the document.
+            if (insertRow && cfg.allowMedia !== false) {
+                insertRow[1].push('video', 'piieMedia');
             }
 
             return {
@@ -1390,6 +1421,62 @@
 
             $.summernote.plugins.superscript = subSuper('superscript');
             $.summernote.plugins.subscript = subSuper('subscript');
+
+            /* ── piieMedia: embed a lesson's OWN recording ───────────────────
+             *
+             * Summernote's built-in `video` pastes a THIRD-PARTY url - a YouTube
+             * or Vimeo link. That is the wrong tool for the recordings PIIE holds
+             * itself: a lecturer who has uploaded a lecture recording to the
+             * lesson's Resources panel should be able to place THAT recording in
+             * the lesson, not retype its address, and the embed must be reachable
+             * only by registered students.
+             *
+             * So this never accepts a typed url. The Resources panel renders one
+             * radio per playable attachment whose VALUE is the authorised resource
+             * url, built server-side by the route that re-checks registration and
+             * release. There is nothing free-form here to mistype and nothing for
+             * a crafted request to smuggle in - the browser is choosing between
+             * urls this page already vouched for, not supplying one.
+             *
+             * `preload="none"` and no autoplay are deliberate: PIIE's students are
+             * largely on metered connections, and a lesson body full of media that
+             * starts downloading the moment it renders is a data bill, not a
+             * feature. The fallback link matters too, because Safari and older
+             * Android still decline some codecs outright.
+             *
+             * The markup is plain <audio>/<video> with `controls`, which is what
+             * the lesson sanitizer allows through. */
+            $.summernote.plugins.piieMedia = function (context) {
+                context.addButton('piieMedia', 'piieMedia', {
+                    tooltip: 'Insert a recording from this lesson',
+                    icon: '<i class="fa fa-play-circle"></i>',
+                    click: function () {
+                        var chosen = document.querySelector('[data-cc-media]:checked');
+
+                        // Nothing ticked: say so rather than inserting nothing and
+                        // leaving the lecturer to wonder whether it worked.
+                        if (!chosen) {
+                            window.alert(
+                                'Tick a recording in the Resources panel first, then choose Insert.'
+                            );
+                            return;
+                        }
+
+                        var parts = String(chosen.value).split('|');
+                        var kind = parts[0] === 'audio' ? 'audio' : 'video';
+                        var url = parts[1];
+
+                        if (!url) { return; }
+
+                        var html = '<p><' + kind + ' controls preload="none" src="' + url + '">'
+                            + 'Your browser cannot play this recording.'
+                            + ' <a href="' + url + '">Download it instead.</a>'
+                            + '</' + kind + '></p>';
+
+                        context.invoke('insertNode', $.parseHTML(html)[0]);
+                    }
+                });
+            };
 
             /* ── mathematical symbols ──────────────────────────────────────
              * A plain overlay rather than a Summernote dialog, because a symbol

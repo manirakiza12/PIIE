@@ -7,7 +7,7 @@
     $upcomingExams = DB::table('exams')->where('school_id', $schoolId)
         ->where('starting_time', '>=', now()->timestamp)->count();
     $questionBankCount = DB::table('question_banks')->where('school_id', $schoolId)->count();
-    $gradedResults = DB::table('online_exam_submissions')->where('school_id', $schoolId)->where('status', 1)->count();
+    $gradedResults = DB::table('online_exam_submissions')->where('school_id', $schoolId)->whereIn('status', [\App\Models\OnlineExamSubmission::STATUS_FINALIZED, \App\Models\OnlineExamSubmission::STATUS_RESULT_PUBLISHED])->count();
 @endphp
 
 <div class="mainSection-title">
@@ -89,13 +89,13 @@
                     <a href="{{ route('admin.online_exams.index') }}" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-laptop me-1"></i>{{ get_phrase('Online Exams') }}
                     </a>
-                    <a href="{{ route('admin.exam') }}" class="btn btn-outline-secondary btn-sm">
+                    <a href="{{ route('admin.offline_exam') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="bi bi-journal-text me-1"></i>{{ get_phrase('Exams') }}
                     </a>
                     <a href="{{ route('admin.question_bank.index') }}" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-question-square me-1"></i>{{ get_phrase('Question Bank') }}
                     </a>
-                    <a href="{{ route('admin.gradebook.index') }}" class="btn btn-outline-success btn-sm">
+                    <a href="{{ route('admin.gradebook') }}" class="btn btn-outline-success btn-sm">
                         <i class="bi bi-card-list me-1"></i>{{ get_phrase('Gradebook') }}
                     </a>
                     <a href="{{ route('admin.transcripts.index') }}" class="btn btn-outline-dark btn-sm">

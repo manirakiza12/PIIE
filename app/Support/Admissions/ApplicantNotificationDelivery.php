@@ -33,6 +33,12 @@ final class ApplicantNotificationDelivery
         try {
             if (! ApplicantNotifier::isConfigured()) { return false; }
             $message = json_decode(Crypt::decryptString($row->encrypted_message), true, 512, JSON_THROW_ON_ERROR);
+            if (! empty($message['data']['admission_letter'])) {
+                $letter = $message['data']['admission_letter'];
+                $admission = \App\Models\Admission::whereKey($letter['admission_id'])->where('school_id', $row->school_id)->first();
+                if (! $admission || $admission->status !== \App\Models\Admission::STATUS_ENROLLED || $admission->email !== $message['to']) return false;
+                if ((int) ($letter['school_id'] ?? 0) !== (int) $row->school_id) return false;
+            }
             if (isset($message['data']['payment_invitation_admission_id'])) {
                 $admission = \App\Models\Admission::whereKey($message['data']['payment_invitation_admission_id'])
                     ->where('school_id', $row->school_id)->first();

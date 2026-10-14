@@ -3,7 +3,6 @@
     use App\Support\Permissions\OnlineExamPermissionService;
 
     $user = Auth()->user();
-    $isPrimarySchool = is_primary_school($user->school_id);
     // Classes (legacy K-12 class/section structure) don't apply to a
     // purely higher_ed school — those use Programmes/Courses instead.
     // 'k12' and 'mixed' schools (and the 'k12' column default) see it.
@@ -135,7 +134,104 @@
 
         return $required === null || $rbacPermissions->allows($user, $required);
     };
-    $navCanAny = fn (array $routeNames): bool => collect($routeNames)->contains(fn ($routeName) => $navCan($routeName));
+
+    // Legacy menu key check, used by every "may this user see it" flag below.
+    // `menu_permission` is the legacy per-user restriction layer; an empty value
+    // means "no per-user restriction", which is what admin/super admin have.
+    $menuAllows = fn (string ...$keys): bool => empty($user->menu_permission)
+        || count(array_intersect($keys, $menu_permission)) > 0;
+
+    /*
+    | Two academic modules are K-12 leftovers that a purely higher_ed school has
+    | no use for, so they are hidden from its sidebar. Their routes, controllers
+    | and data are untouched — this only hides the menu entry.
+    |
+    |   Assignments       → superseded by Course Offering assignments.
+    |                       AssignmentController@index deliberately lists
+    |                       Assignment::k12() rows ONLY, so on a programme-based
+    |                       school the screen can never show a real assignment.
+    |   Academic Sessions → superseded by Academic Years & Periods. The legacy
+    |                       `sessions` table is bridged onto AcademicYear by
+    |                       AcademicContextManager::mapLegacySession().
+    |
+    | Keyed on the school type, NOT on $canSeeClasses: that flag is also forced
+    | on for higher_ed schools whose staff can reach Online Exams, which use
+    | class/enrollment eligibility, and reusing it would have shown both
+    | leftovers exactly where they are meant to disappear. 'mixed' schools run
+    | class-based and programme-based delivery side by side, so they keep them.
+    */
+    $canSeeLegacyAcademic = $schoolType !== 'higher_ed';
+
+    // True when any of the given URL patterns is the page being viewed. Used to
+    // open the sub-menu that owns the current page, so a grouped nav keeps its
+    // parent expanded and its child highlighted.
+    $onAny = fn (array $patterns): bool => collect($patterns)->contains(fn ($p) => request()->is($p));
+
+    // ---- Admission (rendered by the self-contained partial) ----
+    // ---- Academic: structure ----
+    $showAcademicYears = $menuAllows('admin.academic_structure.index') && $navCan('admin.academic_structure.index');
+    $showLegacySessions = $canSeeLegacyAcademic && $menuAllows('admin.settings.session_manager') && $navCan('admin.settings.session_manager');
+    $showProgrammes = $canSeeProgrammes && $navCan('admin.programmes.index');
+    $showCourseUnits = $menuAllows('admin.subject_list') && $navCan('admin.subject_list');
+    $showStudyPlans = $canSeeProgrammes && $menuAllows('admin.curricula.index') && $navCan('admin.curricula.index');
+    $showCohorts = $canSeeProgrammes && $menuAllows('admin.programme_cohorts.index') && $navCan('admin.programme_cohorts.index');
+    // ---- Academic: teaching & delivery ----
+    $showOfferings = $canSeeProgrammes && $menuAllows('admin.course_offerings.index') && $rbacPermissions->allows($user, 'academic.course_offering.view');
+    $showLecturers = $menuAllows('admin.teacher.permission') && $navCan('admin.teacher.permission');
+    $showClasses = $canSeeClasses && $menuAllows('admin.class_list') && $navCan('admin.class_list');
+    $showTimetable = $menuAllows('admin.routine') && $navCan('admin.routine');
+    $showLiveClasses = $menuAllows('admin.live_classes') && $navCan('admin.live_classes.index');
+    $showAttendance = $menuAllows('admin.daily_attendance') && $navCan('admin.daily_attendance');
+    $showAssignments = $canSeeLegacyAcademic && $menuAllows('admin.assignments') && $navCan('admin.assignments.index');
+    // ---- Academic: assessment ----
+    $showOnlineExams = $menuAllows('admin.online_exams', 'admin.online_exams.index') && $canViewOnlineExamsNav && $navCan('admin.online_exams.index');
+    $showResults = $menuAllows('admin.gradebook') && $navCan('admin.gradebook');
+    $showQuestionBank = $menuAllows('admin.question_bank', 'admin.question_bank.index') && $canManageQuestionBankNav && $navCan('admin.question_bank.index');
+
+    $showAcademicStructureAny = $showAcademicYears || $showLegacySessions || $showProgrammes || $showCourseUnits || $showStudyPlans || $showCohorts;
+    $showTeachingAny = $showOfferings || $showLecturers || $showClasses || $showTimetable || $showLiveClasses || $showAttendance || $showAssignments;
+    $showAssessmentAny = $showOnlineExams || $showResults || $showQuestionBank;
+
+    // ---- Student affairs ----
+    // Student requests (transfers, complaints, appeals) and elections concern
+    // students, not staff, so they belong beside Students — never under
+    // Human Resources.
+    $showStudentRequests = $navCan('admin.student_requests.index');
+    $showElections = $navCan('admin.elections.index');
+    $showStudentAffairsAny = $showStudentRequests || $showElections;
+
+    // ---- Human resources ----
+    $showLeave = $menuAllows('admin.leave') && $navCan('admin.leave.index');
+    $showLeaveTypes = $menuAllows('admin.leave_types') && $navCan('admin.leave_types.index');
+    // Self-service: every signed-in staff member may file their own leave.
+    $showMyLeave = Route::has('staff.leave.index');
+    $showHumanResourcesAny = $showLeave || $showLeaveTypes || $showMyLeave;
+
+    // ---- Finance ----
+    $showStudentFees = $menuAllows('admin.fee_manager.list') && $navCan('admin.fee_manager.list');
+    $showFeeStructures = $menuAllows('admin.fee_structures') && $navCan('admin.fee_structures.index');
+    $showFeePayments = $menuAllows('admin.offline_payment_pending') && $navCan('admin.offline_payment_pending');
+    $showExpenses = $menuAllows('admin.expense.list') && $navCan('admin.expense.list');
+    $showPayroll = $menuAllows('admin.payroll') && $navCan('admin.payroll.index');
+    $showFinanceAny = $showStudentFees || $showFeeStructures || $showFeePayments || $showExpenses || $showPayroll;
+
+    // ---- Resources ----
+    $showLibrary = $menuAllows('admin.book.book_list') && $navCan('admin.book.book_list');
+    $showAssets = $menuAllows('admin.assets') && $navCan('admin.assets.index');
+    $showAssetCategories = $menuAllows('admin.asset_categories') && $navCan('admin.asset_categories.index');
+    $showProcurement = $menuAllows('admin.procurement') && $navCan('admin.procurement.index');
+    $showResourcesAny = $showLibrary || $showAssets || $showAssetCategories || $showProcurement;
+
+    // ---- Communication ----
+    $showNotices = $menuAllows('admin.noticeboard.list') && $navCan('admin.noticeboard.list');
+    $showEvents = $menuAllows('admin.events.list') && $navCan('admin.events.list');
+    $showAcademicCalendar = $menuAllows('admin.academic_calendar') && $navCan('admin.academic_calendar.index');
+    $showCommunicationAny = $showNotices || $showEvents || $showAcademicCalendar;
+
+    // ---- System ----
+    $showAuditLogs = (int) $user->role_id === 2;
+    $showSettings = $menuAllows('admin.settings.school') && $navCan('admin.settings.school');
+    $showSystemAny = $showAuditLogs || $showSettings;
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -169,6 +265,7 @@
          (e.g. the Create Staff form) links them here instead of inlining a
          <style> block in the markup. Rendered last so it wins on order. --}}
     @yield('page_styles')
+    @include('shared.workspace_assets')
 </head>
 
 <body>
@@ -276,12 +373,177 @@
             @endif
 
             <!-- ============================================ -->
-            <!-- HUMAN RESOURCES SECTION HEADER               -->
+            <!-- ADMISSIONS                                    -->
+            <!-- Rendered by a self-contained partial so both admin layouts share -->
+            <!-- one definition of the module. "Application Workflow" and        -->
+            <!-- "Admissions" were two blocks describing this one module.        -->
             <!-- ============================================ -->
+            @include('admin.admissions.partials.navigation')
+
+            <!-- ============================================ -->
+            <!-- ACADEMIC                                      -->
+            <!-- Split into what is taught, how it is delivered -->
+            <!-- and how it is assessed. Fifteen links in one   -->
+            <!-- flat block made the module unusable.            -->
+            <!-- ============================================ -->
+            @if($showAcademicStructureAny || $showTeachingAny || $showAssessmentAny)
+            <li class="nav-section-header">ACADEMIC</li>
+            @endif
+
+            {{-- Academic Structure — the catalogue: what exists and who may take it. --}}
+            @if($showAcademicStructureAny)
+            <li class="nav-links-li {{ $onAny(['admin/academic-structure*', 'admin/session_manager*', 'admin/programmes*', 'admin/subject*', 'admin/curricula*', 'admin/programme-cohorts*']) ? 'showMenu' : '' }}">
+                <div class="iocn-link">
+                    <a href="#" class="has-submenu">
+                        <div class="sidebar_icon"><i class="bi bi-diagram-3"></i></div>
+                        <span class="link_name">{{ get_phrase('Academic Structure') }}</span>
+                    </a>
+                    <span class="arrow">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 4.743 7.773">
+                            <path d="M1.466.247,4.5,3.277a.793.793,0,0,1,.189.288.92.92,0,0,1,0,.643A.793.793,0,0,1,4.5,4.5l-3.03,3.03a.828.828,0,0,1-.609.247.828.828,0,0,1-.609-.247.875.875,0,0,1,0-1.219L2.668,3.886.247,1.466A.828.828,0,0,1,0,.856.828.828,0,0,1,.247.247.828.828,0,0,1,.856,0,.828.828,0,0,1,1.466.247Z" fill="#fff" opacity="1"/>
+                        </svg>
+                    </span>
+                </div>
+                <ul class="sub-menu">
+                    @if($showAcademicYears)
+                    <li><a class="{{ request()->is('admin/academic-structure*') ? 'active' : '' }}" href="{{ route('admin.academic_structure.index') }}"><span>{{ get_phrase('Academic Years & Periods') }}</span></a></li>
+                    @endif
+                    @if($showLegacySessions)
+                    <li><a class="{{ request()->is('admin/session_manager*') ? 'active' : '' }}" href="{{ route('admin.settings.session_manager') }}"><span>{{ get_phrase('Academic Sessions') }}</span></a></li>
+                    @endif
+                    @if($showProgrammes)
+                    <li><a class="{{ request()->is('admin/programmes*') ? 'active' : '' }}" href="{{ route('admin.programmes.index') }}"><span>{{ get_phrase('Programmes') }}</span></a></li>
+                    @endif
+                    @if($showCourseUnits)
+                    <li><a class="{{ request()->is('admin/subject*') ? 'active' : '' }}" href="{{ route('admin.subject_list') }}"><span>{{ academic_term('subjects', $user->school_id) }}</span></a></li>
+                    @endif
+                    @if($showStudyPlans)
+                    <li><a class="{{ request()->is('admin/curricula*') ? 'active' : '' }}" href="{{ route('admin.curricula.index') }}"><span>{{ get_phrase('Study Plans') }}</span></a></li>
+                    @endif
+                    @if($showCohorts)
+                    <li><a class="{{ request()->is('admin/programme-cohorts*') ? 'active' : '' }}" href="{{ route('admin.programme_cohorts.index') }}"><span>{{ get_phrase('Cohorts') }}</span></a></li>
+                    @endif
+                </ul>
+            </li>
+            @endif
+
+            {{-- Teaching & Delivery — an offering, who teaches it, when and where. --}}
+            @if($showTeachingAny)
+            <li class="nav-links-li {{ $onAny(['admin/course-offerings*', 'admin/permission*', 'admin/class_list', 'admin/class/*', 'admin/class_create', 'admin/routine*', 'admin/live-classes*', 'admin/attendance*', 'admin/assignments*']) ? 'showMenu' : '' }}">
+                <div class="iocn-link">
+                    <a href="#" class="has-submenu">
+                        <div class="sidebar_icon"><i class="bi bi-mortarboard"></i></div>
+                        <span class="link_name">{{ get_phrase('Teaching & Delivery') }}</span>
+                    </a>
+                    <span class="arrow">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 4.743 7.773">
+                            <path d="M1.466.247,4.5,3.277a.793.793,0,0,1,.189.288.92.92,0,0,1,0,.643A.793.793,0,0,1,4.5,4.5l-3.03,3.03a.828.828,0,0,1-.609.247.828.828,0,0,1-.609-.247.875.875,0,0,1,0-1.219L2.668,3.886.247,1.466A.828.828,0,0,1,0,.856.828.828,0,0,1,.247.247.828.828,0,0,1,.856,0,.828.828,0,0,1,1.466.247Z" fill="#fff" opacity="1"/>
+                        </svg>
+                    </span>
+                </div>
+                <ul class="sub-menu">
+                    @if($showOfferings)
+                    <li><a class="{{ request()->is('admin/course-offerings*') ? 'active' : '' }}" href="{{ route('admin.course_offerings.index') }}"><span>{{ get_phrase('Course Offerings') }}</span></a></li>
+                    @endif
+                    @if($showLecturers)
+                    <li><a class="{{ request()->is('admin/permission*') ? 'active' : '' }}" href="{{ route('admin.teacher.permission') }}"><span>{{ academic_term('teacher_assignment', $user->school_id) }}</span></a></li>
+                    @endif
+                    @if($showTimetable)
+                    <li><a class="{{ request()->is('admin/routine*') ? 'active' : '' }}" href="{{ route('admin.routine') }}"><span>{{ get_phrase('Timetable') }}</span></a></li>
+                    @endif
+                    @if($showLiveClasses)
+                    <li><a class="{{ request()->is('admin/live-classes*') ? 'active' : '' }}" href="{{ route('admin.live_classes.index') }}"><span>{{ get_phrase('Live Classes') }}</span></a></li>
+                    @endif
+                    @if($showAttendance)
+                    <li><a class="{{ request()->is('admin/attendance*') ? 'active' : '' }}" href="{{ route('admin.daily_attendance') }}"><span>{{ get_phrase('Attendance') }}</span></a></li>
+                    @endif
+                    @if($showClasses)
+                    <li><a class="{{ request()->is('admin/class_list') || request()->is('admin/class/*') || request()->is('admin/class_create') ? 'active' : '' }}" href="{{ route('admin.class_list') }}"><span>{{ get_phrase('Classes') }}</span></a></li>
+                    @endif
+                    @if($showAssignments)
+                    <li><a class="{{ request()->is('admin/assignments*') ? 'active' : '' }}" href="{{ route('admin.assignments.index') }}"><span>{{ get_phrase('Assignments') }}</span></a></li>
+                    @endif
+                </ul>
+            </li>
+            @endif
+
+            {{-- Assessment & Results — how learning is evidenced and reported. --}}
+            @if($showAssessmentAny)
+            <li class="nav-links-li {{ $onAny(['admin/online-exams*', 'admin/gradebook*', 'admin/question-bank*']) ? 'showMenu' : '' }}">
+                <div class="iocn-link">
+                    <a href="#" class="has-submenu">
+                        <div class="sidebar_icon"><i class="bi bi-clipboard-check"></i></div>
+                        <span class="link_name">{{ get_phrase('Assessment & Results') }}</span>
+                    </a>
+                    <span class="arrow">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 4.743 7.773">
+                            <path d="M1.466.247,4.5,3.277a.793.793,0,0,1,.189.288.92.92,0,0,1,0,.643A.793.793,0,0,1,4.5,4.5l-3.03,3.03a.828.828,0,0,1-.609.247.828.828,0,0,1-.609-.247.875.875,0,0,1,0-1.219L2.668,3.886.247,1.466A.828.828,0,0,1,0,.856.828.828,0,0,1,.247.247.828.828,0,0,1,.856,0,.828.828,0,0,1,1.466.247Z" fill="#fff" opacity="1"/>
+                        </svg>
+                    </span>
+                </div>
+                <ul class="sub-menu">
+                    @if($showOnlineExams)
+                    <li><a class="{{ request()->is('admin/online-exams*') ? 'active' : '' }}" href="{{ route('admin.online_exams.index') }}"><span>{{ get_phrase('Online Exams') }}</span></a></li>
+                    @endif
+                    @if($showResults)
+                    <li><a class="{{ request()->is('admin/gradebook*') ? 'active' : '' }}" href="{{ route('admin.gradebook') }}"><span>{{ get_phrase('Marks & Results') }}</span></a></li>
+                    @endif
+                    @if($showQuestionBank)
+                    <li><a class="{{ request()->is('admin/question-bank*') ? 'active' : '' }}" href="{{ route('admin.question_bank.index') }}"><span>{{ get_phrase('Question Bank') }}</span></a></li>
+                    @endif
+                </ul>
+            </li>
+            @endif
+
+            <!-- ============================================ -->
+            <!-- STUDENT AFFAIRS                                -->
+            <!-- Requests and elections concern students, not   -->
+            <!-- employees, so they no longer sit in HR.        -->
+            <!-- ============================================ -->
+            @if($showStudentAffairsAny)
+            <li class="nav-section-header">STUDENT AFFAIRS</li>
+            @endif
+
+            <!-- Student Affairs Requests -->
+            @if($showStudentRequests)
+            <li class="nav-links-li {{ request()->is('admin/student-requests*') ? 'showMenu' : '' }}">
+                <div class="iocn-link">
+                    <a href="{{ route('admin.student_requests.index') }}" class="{{ request()->is('admin/student-requests*') ? 'active' : '' }}">
+                        <div class="sidebar_icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/></svg>
+                        </div>
+                        <span class="link_name">{{ get_phrase('Student Affairs Requests') }}</span>
+                    </a>
+                </div>
+            </li>
+            @endif
+
+            <!-- Elections -->
+            @if($showElections)
+            <li class="nav-links-li {{ request()->is('admin/elections*') ? 'showMenu' : '' }}">
+                <div class="iocn-link">
+                    <a href="{{ route('admin.elections.index') }}" class="{{ request()->is('admin/elections*') ? 'active' : '' }}">
+                        <div class="sidebar_icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><path d="M12,2L1,7l4,2v8l7,3l7-3v-8l2-1v6h2V7L12,2z M12,4.15L18.5,7L12,9.85L5.5,7L12,4.15z M17,15.5l-5,2.15l-5-2.15V10.15l5,2.15l5-2.15V15.5z"/></svg>
+                        </div>
+                        <span class="link_name">{{ get_phrase('Elections') }}</span>
+                    </a>
+                </div>
+            </li>
+            @endif
+
+            <!-- ============================================ -->
+            <!-- HUMAN RESOURCES                                -->
+            <!-- Staff matters only. Programmes, Course Units, -->
+            <!-- Student Affairs Requests and Elections used to -->
+            <!-- be filed here and no longer are.                -->
+            <!-- ============================================ -->
+            @if($showHumanResourcesAny)
             <li class="nav-section-header">HUMAN RESOURCES</li>
+            @endif
 
             <!-- Leave Management -->
-            @if((empty($user->menu_permission) || in_array('admin.leave', $menu_permission)) && $navCan('admin.leave.index'))
+            @if($showLeave)
             <li class="nav-links-li {{ request()->is('admin/leave') || request()->is('admin/leave/*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.leave.index') }}" class="{{ request()->is('admin/leave') || request()->is('admin/leave/*') ? 'active' : '' }}">
@@ -300,36 +562,8 @@
             </li>
             @endif
 
-            <!-- Student Affairs Requests -->
-            @if($navCan('admin.student_requests.index'))
-            <li class="nav-links-li {{ request()->is('admin/student-requests*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.student_requests.index') }}" class="{{ request()->is('admin/student-requests*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/></svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Student Affairs Requests') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Elections -->
-            @if($navCan('admin.elections.index'))
-            <li class="nav-links-li {{ request()->is('admin/elections*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.elections.index') }}" class="{{ request()->is('admin/elections*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><path d="M12,2L1,7l4,2v8l7,3l7-3v-8l2-1v6h2V7L12,2z M12,4.15L18.5,7L12,9.85L5.5,7L12,4.15z M17,15.5l-5,2.15l-5-2.15V10.15l5,2.15l5-2.15V15.5z"/></svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Elections') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
             <!-- Leave Types -->
-            @if((empty($user->menu_permission) || in_array('admin.leave_types', $menu_permission)) && $navCan('admin.leave_types.index'))
+            @if($showLeaveTypes)
             <li class="nav-links-li {{ request()->is('admin/leave-types*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.leave_types.index') }}" class="{{ request()->is('admin/leave-types*') ? 'active' : '' }}">
@@ -346,6 +580,7 @@
             @endif
 
             <!-- My Leave (self-service) -->
+            @if($showMyLeave)
             <li class="nav-links-li {{ request()->is('staff/leave*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('staff.leave.index') }}" class="{{ request()->is('staff/leave*') ? 'active' : '' }}">
@@ -359,247 +594,16 @@
                     </a>
                 </div>
             </li>
-
-            <!-- Programmes (higher_ed/mixed only — pure k12 schools have no use for degree-programme management) -->
-            @if(($canSeeProgrammes) && $navCan('admin.programmes.index'))
-            <li class="nav-links-li {{ request()->is('admin/programmes*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.programmes.index') }}" class="{{ request()->is('admin/programmes*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Programmes') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Courses (shared module — serves Class-based subjects AND Programme-based courses, so always visible regardless of academic_structure) -->
-            @if((empty($user->menu_permission) || in_array('admin.subject_list', $menu_permission)) && $navCan('admin.subject_list'))
-            <li class="nav-links-li {{ request()->is('admin/subject*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.subject_list') }}" class="{{ request()->is('admin/subject*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ academic_term('subjects', $user->school_id) }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- ============================================ -->
-            <!-- ACADEMIC SECTION HEADER                      -->
-            <!-- ============================================ -->
-            <li class="nav-section-header">ACADEMIC</li>
-
-            <!-- Classes (K-12 class/section structure; hidden for higher_ed schools) -->
-            @if(($canSeeClasses && (empty($user->menu_permission) || in_array('admin.class_list', $menu_permission))) && $navCan('admin.class_list'))
-            <li class="nav-links-li {{ request()->is('admin/class_list') || request()->is('admin/class/*') || request()->is('admin/class_create') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.class_list') }}" class="{{ request()->is('admin/class_list') || request()->is('admin/class/*') || request()->is('admin/class_create') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                                <polyline points="2 17 12 22 22 17"></polyline>
-                                <polyline points="2 12 12 17 22 12"></polyline>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Classes') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-            @if((empty($user->menu_permission) || in_array('admin.teacher.permission', $menu_permission)) && $navCan('admin.teacher.permission'))
-            <li class="nav-links-li {{ request()->is('admin/permission*') ? 'showMenu' : '' }}">
-                <a href="{{ route('admin.teacher.permission') }}" class="{{ request()->is('admin/permission*') ? 'active' : '' }}">
-                    <div class="sidebar_icon"><i class="bi bi-person-workspace"></i></div>
-                    <span class="link_name">{{ academic_term('teacher_assignment', $user->school_id) }}</span>
-                </a>
-            </li>
-            @endif
-
-            @if((empty($user->menu_permission) || in_array('admin.settings.session_manager', $menu_permission)) && $navCan('admin.settings.session_manager'))
-            <li class="nav-links-li {{ request()->is('admin/session_manager*') ? 'showMenu' : '' }}">
-                <a href="{{ route('admin.settings.session_manager') }}" class="{{ request()->is('admin/session_manager*') ? 'active' : '' }}">
-                    <div class="sidebar_icon"><i class="bi bi-calendar3"></i></div>
-                    <span class="link_name">{{ get_phrase('Academic Sessions') }}</span>
-                </a>
-            </li>
-            @endif
-
-            @if((empty($user->menu_permission) || in_array('admin.academic_structure.index', $menu_permission)) && $navCan('admin.academic_structure.index'))
-            <li class="nav-links-li {{ request()->is('admin/academic-structure*') ? 'showMenu' : '' }}">
-                <a href="{{ route('admin.academic_structure.index') }}" class="{{ request()->is('admin/academic-structure*') ? 'active' : '' }}">
-                    <div class="sidebar_icon"><i class="bi bi-calendar-range"></i></div>
-                    <span class="link_name">{{ get_phrase('Academic Years & Periods') }}</span>
-                </a>
-            </li>
-            @endif
-
-            @if($canSeeProgrammes && (empty($user->menu_permission) || in_array('admin.curricula.index', $menu_permission)) && $navCan('admin.curricula.index'))
-            <li class="nav-links-li {{ request()->is('admin/curricula*') ? 'showMenu' : '' }}">
-                <a href="{{ route('admin.curricula.index') }}" class="{{ request()->is('admin/curricula*') ? 'active' : '' }}">
-                    <div class="sidebar_icon"><i class="bi bi-journal-bookmark"></i></div>
-                    <span class="link_name">{{ get_phrase('Programme Study Plans') }}</span>
-                </a>
-            </li>
-            @endif
-
-            @if($schoolType !== 'k12' && (empty($user->menu_permission) || in_array('admin.programme_cohorts.index', $menu_permission)) && $navCan('admin.programme_cohorts.index'))
-            <li class="nav-links-li {{ request()->is('admin/programme-cohorts*') ? 'showMenu' : '' }}">
-                <a href="{{ route('admin.programme_cohorts.index') }}" class="{{ request()->is('admin/programme-cohorts*') ? 'active' : '' }}">
-                    <div class="sidebar_icon"><i class="bi bi-people"></i></div>
-                    <span class="link_name">{{ get_phrase('Programme Cohorts') }}</span>
-                </a>
-            </li>
-            @endif
-
-            @if($canSeeProgrammes && (empty($user->menu_permission) || in_array('admin.course_offerings.index', $menu_permission)) && app(\App\Support\Permissions\PermissionService::class)->allows($user, 'academic.course_offering.view'))
-            <li class="nav-links-li {{ request()->is('admin/course-offerings*') ? 'showMenu' : '' }}">
-                <a href="{{ route('admin.course_offerings.index') }}" class="{{ request()->is('admin/course-offerings*') ? 'active' : '' }}">
-                    <div class="sidebar_icon"><i class="bi bi-journal-check"></i></div>
-                    <span class="link_name">{{ get_phrase('Course Offerings') }}</span>
-                </a>
-            </li>
-            @endif
-
-            <!-- Attendance -->
-            @if((empty($user->menu_permission) || in_array('admin.daily_attendance', $menu_permission)) && $navCan('admin.daily_attendance'))
-            <li class="nav-links-li {{ request()->is('admin/attendance*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.daily_attendance') }}" class="{{ request()->is('admin/attendance*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Attendance') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Online Exams -->
-            @if(((empty($user->menu_permission) || in_array('admin.online_exams', $menu_permission) || in_array('admin.online_exams.index', $menu_permission)) && $canViewOnlineExamsNav) && $navCan('admin.online_exams.index'))
-            <li class="nav-links-li {{ request()->is('admin/online-exams*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.online_exams.index') }}" class="{{ request()->is('admin/online-exams*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Online Exams') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Timetable -->
-            @if((empty($user->menu_permission) || in_array('admin.routine', $menu_permission)) && $navCan('admin.routine'))
-            <li class="nav-links-li {{ request()->is('admin/routine*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.routine') }}" class="{{ request()->is('admin/routine*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Timetable') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Assignments -->
-            @if((empty($user->menu_permission) || in_array('admin.assignments', $menu_permission)) && $navCan('admin.assignments.index'))
-            <li class="nav-links-li {{ request()->is('admin/assignments*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.assignments.index') }}" class="{{ request()->is('admin/assignments*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="8" y1="13" x2="16" y2="13"></line>
-                                <line x1="8" y1="17" x2="12" y2="17"></line>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Assignments') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Live Classes -->
-            @if((empty($user->menu_permission) || in_array('admin.live_classes', $menu_permission)) && $navCan('admin.live_classes.index'))
-            <li class="nav-links-li {{ request()->is('admin/live-classes*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.live_classes.index') }}" class="{{ request()->is('admin/live-classes*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Live Classes') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Marks & Results -->
-            @if((empty($user->menu_permission) || in_array('admin.gradebook', $menu_permission)) && $navCan('admin.gradebook'))
-            <li class="nav-links-li {{ request()->is('admin/gradebook*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.gradebook') }}" class="{{ request()->is('admin/gradebook*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                                <path d="M2 17l10 5 10-5"></path>
-                                <path d="M2 12l10 5 10-5"></path>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Marks & Results') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Question Bank -->
-            @if(((empty($user->menu_permission) || in_array('admin.question_bank', $menu_permission) || in_array('admin.question_bank.index', $menu_permission)) && $canManageQuestionBankNav) && $navCan('admin.question_bank.index'))
-            <li class="nav-links-li {{ request()->is('admin/question-bank*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.question_bank.index') }}" class="{{ request()->is('admin/question-bank*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Question Bank') }}</span>
-                    </a>
-                </div>
-            </li>
             @endif
 
             <!-- ============================================ -->
             <!-- FINANCE SECTION HEADER                       -->
             <!-- ============================================ -->
-            @if($navCanAny(['admin.fee_manager.list', 'admin.fee_structures.index', 'admin.offline_payment_pending', 'admin.expense.list', 'admin.payroll.index']))<li class="nav-section-header">FINANCE</li>@endif
+            @if($showFinanceAny)<li class="nav-section-header">FINANCE</li>@endif
 
-            <!-- Finance -->
-            @if((empty($user->menu_permission) || in_array('admin.fee_manager.list', $menu_permission)) && $navCan('admin.fee_manager.list'))
+            <!-- Student Fees (was labelled "Finance", which named the whole section
+                 rather than the module: student fee invoices and their balances) -->
+            @if($showStudentFees)
             <li class="nav-links-li {{ request()->is('admin/fee_manager*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.fee_manager.list') }}" class="{{ request()->is('admin/fee_manager*') ? 'active' : '' }}">
@@ -609,14 +613,14 @@
                                 <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                             </svg>
                         </div>
-                        <span class="link_name">{{ get_phrase('Finance') }}</span>
+                        <span class="link_name">{{ get_phrase('Student Fees') }}</span>
                     </a>
                 </div>
             </li>
             @endif
 
             <!-- Fee Structures -->
-            @if((empty($user->menu_permission) || in_array('admin.fee_structures', $menu_permission)) && $navCan('admin.fee_structures.index'))
+            @if($showFeeStructures)
             <li class="nav-links-li {{ request()->is('admin/fee-structures*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.fee_structures.index') }}" class="{{ request()->is('admin/fee-structures*') ? 'active' : '' }}">
@@ -632,8 +636,10 @@
             </li>
             @endif
 
-            <!-- Payments -->
-            @if((empty($user->menu_permission) || in_array('admin.offline_payment_pending', $menu_permission)) && $navCan('admin.offline_payment_pending'))
+            <!-- Fee Payments: offline fee payments awaiting approval. Named to match
+                 "Student Fees"/"Fee Structures" instead of the bare "Payments",
+                 which did not say whose payments these were. -->
+            @if($showFeePayments)
             <li class="nav-links-li {{ request()->is('admin/offline_payment/pending*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.offline_payment_pending') }}" class="{{ request()->is('admin/offline_payment/pending*') ? 'active' : '' }}">
@@ -644,14 +650,14 @@
                                 <path d="M2 12l10 5 10-5"></path>
                             </svg>
                         </div>
-                        <span class="link_name">{{ get_phrase('Payments') }}</span>
+                        <span class="link_name">{{ get_phrase('Fee Payments') }}</span>
                     </a>
                 </div>
             </li>
             @endif
 
             <!-- Expenses -->
-            @if((empty($user->menu_permission) || in_array('admin.expense.list', $menu_permission)) && $navCan('admin.expense.list'))
+            @if($showExpenses)
             <li class="nav-links-li {{ request()->is('admin/expenses*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.expense.list') }}" class="{{ request()->is('admin/expenses*') ? 'active' : '' }}">
@@ -669,7 +675,7 @@
             @endif
 
             <!-- Payroll -->
-            @if((empty($user->menu_permission) || in_array('admin.payroll', $menu_permission)) && $navCan('admin.payroll.index'))
+            @if($showPayroll)
             <li class="nav-links-li {{ request()->is('admin/payroll*') || request()->is('admin/salary-structures*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.payroll.index') }}" class="{{ request()->is('admin/payroll*') ? 'active' : '' }}">
@@ -686,100 +692,13 @@
             </li>
             @endif
 
-            @include('admin.admissions.partials.navigation')
-            @if($isPrimarySchool)
-            <!-- ============================================ -->
-            <!-- ADMISSIONS SECTION HEADER                    -->
-            <!-- Admissions/Intake Sessions/Agents only apply  -->
-            <!-- to the one school the public Apply Now portal -->
-            <!-- currently belongs to (primary_school_id).     -->
-            <!-- ============================================ -->
-            @if($navCanAny(['admin.hei_admissions.index', 'admin.intake_sessions.index', 'admin.admissions_documents.index', 'admin.admissions_agents.index']))<li class="nav-section-header">ADMISSIONS</li>@endif
-
-            <!-- Admissions -->
-            @if((empty($user->menu_permission) || in_array('admin.hei_admissions', $menu_permission)) && $navCan('admin.hei_admissions.index'))
-            <li class="nav-links-li {{ request()->is('admin/hei-admissions*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.hei_admissions.index') }}" class="{{ request()->is('admin/hei-admissions*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                                <path d="M2 17l10 5 10-5"></path>
-                                <path d="M2 12l10 5 10-5"></path>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Admissions') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Intake Sessions -->
-            @if((empty($user->menu_permission) || in_array('admin.intake_sessions', $menu_permission)) && $navCan('admin.intake_sessions.index'))
-            <li class="nav-links-li {{ request()->is('admin/intake-sessions*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.intake_sessions.index') }}" class="{{ request()->is('admin/intake-sessions*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Intake Sessions') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Document Requirements — gated on the same permission as the
-                 Admissions queue: it is configuration for that one module, not
-                 a separately assignable area. -->
-            @if((empty($user->menu_permission) || in_array('admin.hei_admissions', $menu_permission)) && $navCan('admin.admissions_documents.index'))
-            <li class="nav-links-li {{ request()->is('admin/admissions-documents*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.admissions_documents.index') }}" class="{{ request()->is('admin/admissions-documents*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="9" y1="15" x2="15" y2="15"></line>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Document Requirements') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Agents -->
-            @if((empty($user->menu_permission) || in_array('admin.admissions_agents', $menu_permission)) && $navCan('admin.admissions_agents.index'))
-            <li class="nav-links-li {{ request()->is('admin/admissions-agents*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.admissions_agents.index') }}" class="{{ request()->is('admin/admissions-agents*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Agents') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-            @endif
-
             <!-- ============================================ -->
             <!-- RESOURCES SECTION HEADER                     -->
             <!-- ============================================ -->
-            @if($navCanAny(['admin.book.book_list', 'admin.assets.index', 'admin.asset_categories.index', 'admin.procurement.index']))<li class="nav-section-header">RESOURCES</li>@endif
+            @if($showResourcesAny)<li class="nav-section-header">RESOURCES</li>@endif
 
             <!-- Library -->
-            @if((empty($user->menu_permission) || in_array('admin.book.book_list', $menu_permission)) && $navCan('admin.book.book_list'))
+            @if($showLibrary)
             <li class="nav-links-li {{ request()->is('admin/book*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.book.book_list') }}" class="{{ request()->is('admin/book*') ? 'active' : '' }}">
@@ -796,7 +715,7 @@
             @endif
 
             <!-- Assets -->
-            @if((empty($user->menu_permission) || in_array('admin.assets', $menu_permission)) && $navCan('admin.assets.index'))
+            @if($showAssets)
             <li class="nav-links-li {{ request()->is('admin/assets') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.assets.index') }}" class="{{ request()->is('admin/assets') ? 'active' : '' }}">
@@ -813,7 +732,7 @@
             @endif
 
             <!-- Asset Categories -->
-            @if((empty($user->menu_permission) || in_array('admin.asset_categories', $menu_permission)) && $navCan('admin.asset_categories.index'))
+            @if($showAssetCategories)
             <li class="nav-links-li {{ request()->is('admin/asset-categories*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.asset_categories.index') }}" class="{{ request()->is('admin/asset-categories*') ? 'active' : '' }}">
@@ -830,7 +749,7 @@
             @endif
 
             <!-- Procurement -->
-            @if((empty($user->menu_permission) || in_array('admin.procurement', $menu_permission)) && $navCan('admin.procurement.index'))
+            @if($showProcurement)
             <li class="nav-links-li {{ request()->is('admin/procurement*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.procurement.index') }}" class="{{ request()->is('admin/procurement*') ? 'active' : '' }}">
@@ -849,10 +768,10 @@
             <!-- ============================================ -->
             <!-- COMMUNICATION SECTION HEADER                 -->
             <!-- ============================================ -->
-            @if($navCanAny(['admin.noticeboard.list', 'admin.events.list', 'admin.academic_calendar.index']))<li class="nav-section-header">COMMUNICATION</li>@endif
+            @if($showCommunicationAny)<li class="nav-section-header">COMMUNICATION</li>@endif
 
             <!-- Notices -->
-            @if((empty($user->menu_permission) || in_array('admin.noticeboard.list', $menu_permission)) && $navCan('admin.noticeboard.list'))
+            @if($showNotices)
             <li class="nav-links-li {{ request()->is('admin/noticeboard*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.noticeboard.list') }}" class="{{ request()->is('admin/noticeboard*') ? 'active' : '' }}">
@@ -868,7 +787,7 @@
             @endif
 
             <!-- Events -->
-            @if((empty($user->menu_permission) || in_array('admin.events.list', $menu_permission)) && $navCan('admin.events.list'))
+            @if($showEvents)
             <li class="nav-links-li {{ request()->is('admin/events*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.events.list') }}" class="{{ request()->is('admin/events*') ? 'active' : '' }}">
@@ -887,7 +806,7 @@
             @endif
 
             <!-- Academic Calendar -->
-            @if((empty($user->menu_permission) || in_array('admin.academic_calendar', $menu_permission)) && $navCan('admin.academic_calendar.index'))
+            @if($showAcademicCalendar)
             <li class="nav-links-li {{ request()->is('admin/academic-calendar*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.academic_calendar.index') }}" class="{{ request()->is('admin/academic-calendar*') ? 'active' : '' }}">
@@ -906,8 +825,17 @@
             @endif
 
             <!-- ============================================ -->
-            <!-- PROFILE & LOGOUT                             -->
+            <!-- SYSTEM                                        -->
+            <!-- Account and institution administration.      -->
+            <!-- "Roles & Permissions" is deliberately absent: -->
+            <!-- it already lives in the Staff sub-menu above, -->
+            <!-- where staff access belongs.                   -->
             <!-- ============================================ -->
+            @if($showSystemAny)
+            <li class="nav-section-header">SYSTEM</li>
+            @endif
+
+            <!-- My Profile -->
             <li class="nav-links-li {{ request()->is('admin/profile*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.profile') }}" class="{{ request()->is('admin/profile*') ? 'active' : '' }}">
@@ -923,7 +851,7 @@
             </li>
 
             <!-- Audit Logs (School Admin only) -->
-            @if($user->role_id == 2)
+            @if($showAuditLogs)
             <li class="nav-links-li {{ request()->is('admin/audit-log*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.audit_log.index') }}" class="{{ request()->is('admin/audit-log*') ? 'active' : '' }}">
@@ -941,25 +869,8 @@
             </li>
             @endif
 
-            <!-- Roles & Permissions (RBAC Phase 3B — School Administrators only) -->
-            @permission('roles.view')
-            <li class="nav-links-li {{ request()->is('admin/roles-permissions*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.rbac.roles.index') }}" class="{{ request()->is('admin/roles-permissions*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                <polyline points="9 12 11 14 15 10"></polyline>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Roles & Permissions') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endpermission
-
-            <!-- Settings (if user has permission) -->
-            @if((empty($user->menu_permission) || in_array('admin.settings.school', $menu_permission)) && $navCan('admin.settings.school'))
+            <!-- School Settings -->
+            @if($showSettings)
             <li class="nav-links-li {{ request()->is('admin/settings*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('admin.settings.school') }}" class="{{ request()->is('admin/settings*') ? 'active' : '' }}">
@@ -969,7 +880,7 @@
                                 <circle cx="12" cy="12" r="3"></circle>
                             </svg>
                         </div>
-                        <span class="link_name">{{ get_phrase('Settings') }}</span>
+                        <span class="link_name">{{ get_phrase('School Settings') }}</span>
                     </a>
                 </div>
             </li>

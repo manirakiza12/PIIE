@@ -43,6 +43,7 @@
     <!--Main Jquery-->
     <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
     <link rel="stylesheet" href="{{ asset('assets/css/online-exams.css') }}?v=20260920-3">
+    @include('shared.workspace_assets')
 </head>
 
 <body>
@@ -95,6 +96,11 @@
                     </a>
                 </div>
             </li>
+            @if(\Illuminate\Support\Facades\Schema::hasTable('admission_letters') && \App\Models\AdmissionLetter::where('school_id', auth()->user()->school_id)->where('student_id', auth()->id())->exists())
+                <li class="nav-links-li {{ request()->routeIs('student.admission_letter') ? 'showMenu' : '' }}">
+                    <div class="iocn-link"><a href="{{ route('student.admission_letter') }}"><div class="sidebar_icon"><i class="bi bi-file-earmark-pdf"></i></div><span class="link_name">{{ get_phrase('Admission Letter') }}</span></a></div>
+                </li>
+            @endif
             <li class="nav-links-li {{ request()->is('student/profile*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="{{ route('student.profile') }}">
@@ -283,7 +289,7 @@
                     </a>
                 </div>
             </li>
-            @if (addon_status('online_courses') == 1)
+            @if (addon_status('online_courses') == 1 && Route::has('student.addons.courses'))
                 <li class="nav-links-li {{ request()->is('student/addons/courses*') ? 'showMenu' : '' }}">
                     <div class="iocn-link">
                         <a class="{{ request()->is('student/courses*') ? 'active' : '' }}"
@@ -306,7 +312,7 @@
                     </div>
                 </li>
             @endif
-            @if (addon_status('assignments') == 1)
+            @if (addon_status('assignments') == 1 && Route::has('student.assignment_home'))
                 <li class="nav-links-li {{ request()->is('student/my-assignments*') ? 'showMenu' : '' }}">
                     <div class="iocn-link">
                         <a href="{{ route('student.assignment_home', ['type' => 'active']) }}">

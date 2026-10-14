@@ -191,6 +191,27 @@ class ProgrammeCatalogueBridgeTest extends TestCase
             ->get();
     }
 
+    public function test_combined_save_publishes_and_unpublishes_without_replacing_unselected_images(): void
+    {
+        $school = $this->makeSchool();
+        $admin = $this->makeAdminUser($school);
+        $payload = ['code' => 'ALL-IN-ONE', 'name' => 'All in one', 'level' => 'Diploma', 'mode' => 'ODEL'];
+        $this->actingAs($admin)->postJson(route('admin.programmes.store'), $payload + [
+            'cover_image' => $this->realImage(), 'is_published' => 1,
+        ])->assertOk();
+        $programme = Programme::where('code', 'ALL-IN-ONE')->firstOrFail();
+        $this->assertTrue($programme->is_published);
+        $this->assertNotNull($programme->website_item_id);
+        $item = WebsiteItem::findOrFail($programme->website_item_id);
+        $this->assertSame('All in one', $item->title);
+        $this->assertSame(1, (int) $item->status);
+        $cover = $programme->cover_image_path;
+        $this->postJson(route('admin.programmes.update', $programme->id), $payload + ['is_published' => 0])->assertOk();
+        $this->assertFalse($programme->fresh()->is_published);
+        $this->assertSame($cover, $programme->fresh()->cover_image_path);
+        $this->assertSame(0, (int) $item->fresh()->status);
+    }
+
     /**
      * A student of this tenant.
      *

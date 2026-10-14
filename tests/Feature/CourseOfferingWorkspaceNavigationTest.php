@@ -336,18 +336,65 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
         }
     }
 
-    public function test_a_tab_with_no_href_does_not_claim_to_be_usable(): void
+    public function test_an_unbuilt_feature_is_not_listed_rather_than_shown_disabled(): void
     {
         $tabs = collect($this->tabsForLecturer(
             "/teacher/course-offerings/{$this->offering->id}/content"
         ))->keyBy('key');
 
+        // Gradebook and Analytics used to be declared with `coming_soon` and
+        // rendered as greyed tabs with an asterisk and a footnote. That was
+        // honest, and still wrong: a lecturer cannot act on them, cannot tell
+        // whether to look for them, and has to read a footnote to learn that two
+        // things on offer do not exist. A navigation that advertises its own gaps
+        // reads as a half-finished product.
+        //
+        // ABSENCE is the assertion now, not a null href. A disabled entry still
+        // occupies the space a lecturer expects to use.
         foreach (['gradebook', 'analytics'] as $key) {
-            $tab = $tabs[$key];
-            $this->assertNull($tab['url'], "{$key} has no engine and so must have no href");
-            $this->assertFalse($tab['available'], "{$key} is not built and so cannot be available");
-            $this->assertTrue($tab['coming_soon'], "{$key} is declared but not built");
+            $this->assertFalse(
+                $tabs->has($key),
+                "{$key} has no engine, so it must not occupy the navigation at all"
+            );
         }
+
+        // And the footnote that announced them goes with them - otherwise the page
+        // still says "Not built yet" about tabs it no longer lists.
+        $page = $this->actingAs($this->lecturer)
+            ->get("/teacher/course-offerings/{$this->offering->id}/content")
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('Not built yet', $page);
+        $this->assertStringNotContainsString('coming_soon', $page);
+    }
+
+    public function test_a_tab_that_exists_but_is_unavailable_is_still_shown(): void
+    {
+        // NOT THE SAME THING AS NOT BUILT, and deliberately kept.
+        //
+        // "This tab exists and you may not use it" is information a lecturer needs
+        // - it tells them a colleague has a tool they do not. Hiding it would
+        // remove that. Hiding an unbuilt tab removes a capability nobody has. The
+        // distinction is why `coming_soon` survives on the shape above even
+        // though nothing currently sets it.
+        $tabs = collect($this->tabsForLecturer(
+            "/teacher/course-offerings/{$this->offering->id}/content"
+        ));
+
+        // Whatever is listed must be actionable or explicitly marked unavailable.
+        // Nothing in between: no tab may render as ordinary text a lecturer is
+        // expected to click.
+        foreach ($tabs as $tab) {
+            if ($tab['url'] === null) {
+                $this->assertFalse(
+                    $tab['available'],
+                    "{$tab['key']} has no href, so it must be reported unavailable"
+                );
+            }
+        }
+
+        $this->assertTrue(true);
     }
 
     public function test_the_quizzes_tab_points_at_the_existing_online_exam_workflow(): void
@@ -367,30 +414,68 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
         $this->assertSame($tab['url'], route('teacher.online_exams.index'));
     }
 
-    public function test_unbuilt_sections_are_declared_but_never_linked(): void
+    public function test_unbuilt_sections_are_not_listed_at_all(): void
     {
-        $response = $this->actingAs($this->lecturer)
+        // REPLACES a test that asserted the opposite.
+        //
+        // This used to require Gradebook and Analytics to be VISIBLE on the page
+        // as disabled spans carrying an asterisk, under a footnote reading "Not
+        // built yet". That was a deliberate, defensible choice - a disabled entry
+        // offers no door that does not open, and the asterisk is honest.
+        //
+        // It is still wrong. A lecturer reading this navigation cannot act on
+        // either tab, cannot tell whether they are something they should be
+        // looking for, and has to read a footnote to learn that two of the things
+        // on offer do not exist. A workspace that advertises its own gaps reads as
+        // a half-finished product - the opposite of what the rest of this
+        // navigation is for.
+        //
+        // ABSENCE is the honest signal. The tab appears when the engine behind it
+        // does, and its appearing is itself the news.
+        //
+        // So this asserts the sections are not mentioned at all - not as a
+        // disabled tab, not in a footnote, not anywhere on the page.
+        $html = $this->actingAs($this->lecturer)
             ->get("/teacher/course-offerings/{$this->offering->id}/content")
-            ->assertOk();
+            ->assertOk()
+            ->getContent();
 
-        $html = $response->getContent();
+        // Comments are stripped first: this suite's own prose names both sections
+        // when explaining why they are gone, and an unstripped assertion would
+        // match that explanation instead of the page.
+        $html = (string) preg_replace('/<!--.*?-->/s', '', $html);
 
-        // Declared, so the intended shape is visible...
-        $this->assertStringContainsString('Gradebook', $html);
-        $this->assertStringContainsString('Analytics', $html);
-
-        // ...but rendered with no href at all, so no door is offered that does not
-        // open. Not a stub link, not a 404, and not an invented result.
-        $this->assertMatchesRegularExpression(
-            '#<span[^>]*nav-link disabled[^>]*>Gradebook#',
-            $html,
-            'Gradebook must render as a disabled span, not a link'
+        // SCOPED TO THE WORKSPACE NAVIGATION, NOT THE WHOLE PAGE.
+        //
+        // PIIE has a real, working, site-wide `teacher/gradebook` page linked from
+        // the main sidebar. That link is a genuine feature and must keep working -
+        // it is a different thing entirely from the Course Offering workspace tab
+        // that never had an engine behind it. Asserting on the whole document
+        // conflated the two and failed on a page that is working correctly.
+        $this->assertNotFalse(
+            strpos($html, 'data-testid="offering-workspace-nav"'),
+            'the workspace navigation must be present for this assertion to mean anything'
         );
-        $this->assertMatchesRegularExpression(
-            '#<span[^>]*nav-link disabled[^>]*>Analytics#',
-            $html,
-            'Analytics must render as a disabled span, not a link'
-        );
+
+        $nav = substr($html, strpos($html, 'data-testid="offering-workspace-nav"'));
+
+        // Bounded by the end of that element, so the document after it cannot leak
+        // in either.
+        $end = strpos($nav, '</nav>', $nav === '' ? 0 : 0);
+        if ($end !== false) {
+            $nav = substr($nav, 0, $end);
+        }
+
+        foreach (['Gradebook', 'Analytics', 'Not built yet'] as $phrase) {
+            $this->assertStringNotContainsString(
+                $phrase,
+                $nav,
+                "an unbuilt section must not occupy the workspace navigation: {$phrase}"
+            );
+        }
+
+        // And the sidebar's real gradebook is untouched by any of this.
+        $this->assertStringContainsString('/teacher/gradebook', $html);
     }
 
     public function test_the_legend_no_longer_claims_assignments_is_unbuilt(): void

@@ -61,9 +61,7 @@ class AdmissionWizardController extends Controller
         $this->middleware(function ($request, $next) {
             $this->school_id = Auth::user()->school_id;
 
-            if (! is_primary_school($this->school_id)) {
-                return redirect()->route('admin.dashboard')->with('error', get_phrase('Admissions is not available for your school.'));
-            }
+            abort_unless($this->school_id, 403);
 
             return $next($request);
         });

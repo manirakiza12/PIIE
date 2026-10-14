@@ -10,7 +10,8 @@ class IntakeSession extends Model
     use HasFactory;
 
     protected $fillable = [
-        'school_id', 'name', 'open_date', 'close_date', 'application_fee', 'is_open'
+        'school_id', 'name', 'open_date', 'close_date', 'application_fee', 'is_open',
+        'start_date', 'orientation_start_date', 'orientation_end_date', 'registration_deadline',
     ];
 
     public function admissions()

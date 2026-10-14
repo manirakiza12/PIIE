@@ -10,10 +10,12 @@ use App\Support\Assignments\AssignmentDisplay;
 use App\Support\Assignments\AssignmentLifecycle;
 use App\Support\Assignments\AssignmentState;
 use App\Support\Assignments\GradingService;
+use App\Support\Assignments\PassCelebration;
 use App\Support\Assignments\SubmissionService;
 use App\Support\TenantConfiguration;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -170,6 +172,22 @@ class StudentCourseAssignmentController extends Controller
             'display' => AssignmentDisplay::make($target, $student),
             'state' => $this->stateFor($target, $latest, $used, (bool) $draft),
             'submissions' => $submissions,
+            // THE POPUP, OR NOTHING.
+            //
+            // `PassCelebration::for()` returns null for anything that must not be
+            // celebrated - not passed, not yet marked, still resting, no pass mark.
+            // A template that could reach the congratulations markup at all would be
+            // one careless `@if` away from congratulating a failure, so the view is
+            // not given the string when there is nothing to say.
+            //
+            // The unit label is the TOPIC this assessment belongs to, not the
+            // subject: "you have cleared Introduction to Sets" is the useful claim,
+            // and "you have cleared Mathematics 1" is not.
+            'celebration' => PassCelebration::for(
+                $target,
+                $student,
+                $this->topicTitleFor($target),
+            ),
             'latest' => $latest,
             'draft' => $draft,
             'attempts_used' => $used,
@@ -190,6 +208,115 @@ class StudentCourseAssignmentController extends Controller
      * showing as not submitted. This is the difference between "I am working on
      * it" and "I have handed it in", and the brief needs both to be real.
      */
+    /**
+     * The topic an assessment belongs to, for the words of the celebration.
+     *
+     * Null for a loose assessment that belongs to no topic - and null is a real
+     * answer, not a failure to find one. Such an assessment unlocks nothing, so the
+     * popup must not claim a qualification that no gate will honour.
+     */
+    private function topicTitleFor(Assignment $assignment): ?string
+    {
+        if ($assignment->course_offering_module_id === null) {
+            return null;
+        }
+
+        $module = \App\Models\CourseOfferingModule::query()
+            ->where('school_id', $assignment->school_id)
+            ->find($assignment->course_offering_module_id);
+
+        return $module?->title;
+    }
+
+    /**
+     * AUTOSAVE ONE ANSWER, WITHOUT A PAGE RELOAD.
+     *
+     * The exam engine solved this years ago and the solution is lifted rather than
+     * reinvented: a debounced write per question, an immediate write on `change`
+     * for discrete controls, a periodic sweep as a safety net, and - the part that
+     * actually matters - a flush that WAITS FOR THE SERVER ACKNOWLEDGEMENT before
+     * a submit is allowed to proceed, refusing the submit if the save did not land.
+     *
+     * That last part is the whole feature. Autosave that does not confirm itself is
+     * a promise; a student who loses work to a flaky connection and was told it was
+     * saved has been told a lie by the platform. The exam refuses the submit
+     * rather than let that happen, and this endpoint exists so the assignment page
+     * can do the same.
+     *
+     * A DRAFT IS NOT A SUBMISSION
+     *
+     * Everything here writes through `saveDraft`, which does not consume an
+     * attempt - the same guarantee the "Save without submitting" button gives. A
+     * student who types for ten minutes with autosave running has spent no
+     * attempts.
+     */
+    public function autosaveAnswer(Request $request, int $id, int $assignment): JsonResponse
+    {
+        $student = $request->user();
+        $target = $this->access->resolveForStudent($student, $id, $assignment);
+
+        // The same gate the manual draft save uses. A student whose attempts are
+        // spent, or whose assignment has closed, is refused here too - otherwise
+        // autosave becomes a way to keep writing after the deadline.
+        //
+        // Wrapped in `guarded()`, which turns the service's DomainException into a
+        // validation error. Without it a spent-attempt refusal surfaced as an HTTP
+        // 500 from a JSON endpoint, which a browser reports as a network failure and
+        // the student reads as "my answers are gone".
+        $this->guarded(fn () => $this->submissions->assertMayStillPrepare(
+            $target,
+            $this->submissions->attemptsUsed($target, $student)
+        ));
+
+        $questionId = $request->input('question_id');
+
+        $this->guarded(fn () => $this->submissions->saveDraft($student, $target, [
+            // Only the one question is sent. Sending the whole form would race the
+            // student's own typing: a slow request carrying a stale copy of another
+            // answer could overwrite what they have since typed.
+            'text' => null,
+            'items' => [],
+            'questions' => $questionId === null || $questionId === ''
+                ? []
+                : [$questionId => $this->autosaveAnswerPayload($request)],
+        ]));
+
+        return response()->json([
+            'saved' => true,
+            'saved_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * The `{text, items}` shape `saveDraft` already expects for one question.
+     *
+     * Assembled from a raw JSON request rather than the form-shaped `questions[...]`
+     * parser, because autosave posts JSON and re-parsing a form payload would mean
+     * two shapes for one concept.
+     *
+     * @return array<string, mixed>
+     */
+    private function autosaveAnswerPayload(Request $request): array
+    {
+        $payload = [
+            'text' => $request->input('text'),
+            'items' => [],
+        ];
+
+        // Evidence for a question is a FILE, and a file cannot arrive as JSON. An
+        // autosave therefore carries text only, and the upload path continues to be
+        // the Save button. Saying so beats silently dropping an attachment.
+        foreach (['document', 'image', 'audio', 'video', 'link'] as $kind) {
+            if ($request->hasFile($kind)) {
+                $payload['items'][$kind] = $request->file($kind);
+            } elseif ($request->filled($kind)) {
+                $payload['items'][$kind] = $request->input($kind);
+            }
+        }
+
+        return $payload;
+    }
+
     public function saveDraft(Request $request, int $id, int $assignment): RedirectResponse
     {
         $student = $request->user();

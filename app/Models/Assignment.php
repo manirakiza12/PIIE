@@ -181,6 +181,53 @@ class Assignment extends Model
     public const LATE_POLICIES = [self::LATE_ALLOWED, self::LATE_BLOCKED];
 
     /**
+     * Retry policy: what a student may do once every attempt in a cycle is spent
+     * and the rest period has elapsed.
+     *
+     *   'automatic' - begin the next cycle as soon as the rest period expires.
+     *                 This is Moodle's behaviour for a quiz with limited
+     *                 attempts, and it means the attempt limit bounds each
+     *                 sitting rather than the student's whole enrolment.
+     *   'approval'  - a lecturer must authorise the next cycle. This is the
+     *                 DEFAULT, because a lecturer who has set a pass mark and a
+     *                 rest period has chosen to police this assessment, and
+     *                 defaulting them to unlimited silent retries would quietly
+     *                 make their own pass mark meaningless.
+     */
+    public const RETRY_AUTOMATIC = 'automatic';
+
+    public const RETRY_APPROVAL = 'approval';
+
+    public const RETRY_POLICIES = [self::RETRY_AUTOMATIC, self::RETRY_APPROVAL];
+
+    /**
+     * THE OUTCOME OF AN ATTEMPT, AS PIIE NAMES IT.
+     *
+     * A single vocabulary, used by the progression engine, the lecturer's
+     * progress grid and the student's own screens alike. The point of naming it
+     * once is that a student cannot be told "failed" on one screen while another
+     * screen unlocks the next topic - which is precisely the failure mode that
+     * appears when pass, gating and notification each invent their own word.
+     */
+    public const OUTCOME_PASSED = 'passed';
+
+    public const OUTCOME_FAILED = 'failed';
+
+    public const OUTCOME_PENDING = 'pending';
+
+    public const OUTCOME_NOT_ATTEMPTED = 'not_attempted';
+
+    public const OUTCOME_RESTING = 'resting';
+
+    public const OUTCOMES = [
+        self::OUTCOME_PASSED,
+        self::OUTCOME_FAILED,
+        self::OUTCOME_PENDING,
+        self::OUTCOME_NOT_ATTEMPTED,
+        self::OUTCOME_RESTING,
+    ];
+
+    /**
      * THE SAFE DEFAULTS, ON THE MODEL.
      *
      * A column default is applied by the database but NOT by Eloquent: `create()`
@@ -209,6 +256,8 @@ class Assignment extends Model
         'closed_at', 'closed_by',
         // Module/chapter task fields
         'course_offering_module_id', 'requirement_role', 'completion_rule', 'submission_kinds',
+        // Threshold and recovery
+        'pass_mark', 'retry_policy', 'attempts_cycle', 'locked_until',
     ];
 
     protected $casts = [
@@ -216,8 +265,14 @@ class Assignment extends Model
         'released_at' => 'datetime',
         'closes_at' => 'datetime',
         'closed_at' => 'datetime',
+        'locked_until' => 'datetime',
         'max_marks' => 'integer',
         'allowed_attempts' => 'integer',
+        'attempts_cycle' => 'integer',
+        // A mark may be fractional, and a pass mark set as 0 must not decay to
+        // null: `decimal:2` returns the string '0.00' which is not falsey, but
+        // an unset pass_mark returns null, and `float` keeps the two distinct.
+        'pass_mark' => 'float',
         'course_offering_id' => 'integer',
         'course_offering_module_id' => 'integer',
         'is_published' => 'boolean',
@@ -628,6 +683,74 @@ class Assignment extends Model
         $attempts = (int) ($this->allowed_attempts ?? 1);
 
         return $attempts > 0 ? $attempts : 1;
+    }
+
+    /**
+     * Whether this assignment has a threshold at all.
+     *
+     * Null means no threshold, which is how every assignment that existed before
+     * pass marks behave. A lecturer who has not chosen to police an assessment
+     * must not have a threshold invented for them - `0` is a real pass mark and
+     * is distinguished from null here deliberately.
+     */
+    public function hasPassMark(): bool
+    {
+        return $this->pass_mark !== null;
+    }
+
+    /**
+     * Does a released mark clear this assignment's threshold?
+     *
+     * An assignment with no pass mark accepts any mark, including zero. That is
+     * not a loophole, it is the absence of a rule: before pass marks existed,
+     * releasing 0/100 completed a required task, and silently changing that for
+     * every existing assignment would retroactively un-complete work students
+     * have already had returned to them.
+     *
+     * A threshold above the maximum is impossible to meet and is refused at the
+     * point of configuration; treating it here as unmeetable rather than as
+     * "no threshold" means a misconfigured mark can never quietly pass anyone.
+     */
+    public function meetsPassMark(?float $marksAwarded): bool
+    {
+        if (! $this->hasPassMark()) {
+            return true;
+        }
+
+        if ($marksAwarded === null) {
+            return false;
+        }
+
+        return $marksAwarded >= (float) $this->pass_mark;
+    }
+
+    /** Attempts in the cycle the student is currently in. Never below 1. */
+    public function currentCycle(): int
+    {
+        return max(1, (int) ($this->attempts_cycle ?? 1));
+    }
+
+    /** Whether a student may begin another cycle without asking a lecturer. */
+    public function allowsAutomaticRetry(): bool
+    {
+        return $this->retry_policy === self::RETRY_AUTOMATIC;
+    }
+
+    /**
+     * Is this student in a rest period right now?
+     *
+     * A `locked_until` in the past is not a lock - the rest period has simply
+     * expired and the column is left for the audit trail rather than cleared on
+     * read. Clearing it during a read would mean a page view mutates state.
+     */
+    public function isResting(?Carbon $at = null): bool
+    {
+        $at ??= now();
+
+        // `Carbon::isFuture()` takes no argument and compares against the real
+        // clock, so passing `$at` to it is silently discarded. The explicit
+        // comparison is what makes an injected instant mean anything.
+        return $this->locked_until !== null && $this->locked_until->greaterThan($at);
     }
 
     public function allowsLateSubmissions(): bool

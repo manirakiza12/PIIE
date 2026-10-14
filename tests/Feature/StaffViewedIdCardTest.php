@@ -83,7 +83,7 @@ class StaffViewedIdCardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Viewed Student');
-        $response->assertSee('PIIE-ID-' . str_pad((string) $student->id, 6, '0', STR_PAD_LEFT));
+        $response->assertSee($student->code);
     }
 
     /** Security Phase 2G: a parent's ID card view is limited to their own children in their own school. */

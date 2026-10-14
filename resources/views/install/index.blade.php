@@ -33,6 +33,7 @@
     <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
 
 
+@include('shared.typography')
 </head>
 <body class="page-body">
 

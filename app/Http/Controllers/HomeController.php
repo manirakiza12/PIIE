@@ -123,8 +123,35 @@ class HomeController extends Controller
     }
 
     /**
-     * Show website page by slug
+     * Show a published programme and its own gallery.
      */
+    public function programmeDetail(int $id, \App\Support\ProgrammeCatalogue\PublicProgrammeCatalogue $catalogue)
+    {
+        if (get_settings('frontend_view') != '1') {
+            return redirect(route('login'));
+        }
+
+        $detail = $catalogue->detailFor($id);
+        abort_if($detail === null, 404);
+
+        $schoolId = PublicTenantResolver::resolveSchoolId();
+        $allPages = Schema::hasTable('website_pages')
+            ? WebsitePage::where('status', 1)
+                ->where(fn ($q) => $q->where('school_id', $schoolId)->orWhereNull('school_id'))
+                ->orderBy('display_order')->orderBy('sort_order')->orderBy('id')->get()
+            : collect();
+        $websiteSettings = Schema::hasTable('website_settings')
+            ? WebsiteSetting::where('status', 1)
+                ->where(fn ($q) => $q->where('school_id', $schoolId)->orWhereNull('school_id'))
+                ->pluck('value', 'key')
+            : collect();
+
+        $websitePage = $allPages->firstWhere('slug', 'academic-programmes');
+
+        return view('frontend.programme_detail', $detail + compact('allPages', 'websiteSettings', 'websitePage'));
+    }
+
+    /** Show website page by slug. */
     public function websitePage($slug)
     {
         if(get_settings('frontend_view') != '1') {

@@ -3,9 +3,11 @@
 namespace App\Support\ProgrammeCatalogue;
 
 use App\Models\Programme;
+use App\Models\ProgrammeGalleryImage;
 use App\Models\WebsiteItem;
 use App\Support\PublicTenantResolver;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * The ONE read path the public programme catalogue uses.
@@ -172,6 +174,7 @@ class PublicProgrammeCatalogue
             'key'            => 'programme:'.$programme->id,
             'origin'         => 'academic',
             'programme_id'   => (int) $programme->id,
+            'detail_url'     => route('website.programme.show', $programme->id),
 
             'title'          => (string) $programme->name,
             'level'          => (string) $programme->level,
@@ -300,18 +303,22 @@ class PublicProgrammeCatalogue
      */
     private function ctaFor(Programme $programme): array
     {
-        $link = $programme->website_item_id
-            ? WebsiteItem::query()->value('link', $programme->website_item_id)
-            : null;
+        $link = $this->verifiedProjection($programme)?->link;
 
         // A safe CMS link wins, so an administrator can point a programme at a
         // prospectus or an external page. Otherwise the visitor goes to the
-        // application form — the action an applicant actually wants, rather than a
-        // detail page that does not exist.
+        // application form with the selected programme preserved.
         $url = $this->safeLink($link);
 
+        $application = route('apply.form', ['programme_id' => $programme->id]);
+        $applicationPaths = [parse_url(route('apply.form.legacy'), PHP_URL_PATH), parse_url($application, PHP_URL_PATH)];
+        if ($url !== null && in_array(parse_url($url, PHP_URL_PATH), $applicationPaths, true)
+            && (! parse_url($url, PHP_URL_HOST) || parse_url($url, PHP_URL_HOST) === parse_url($application, PHP_URL_HOST))) {
+            $url = null;
+        }
+
         return $url === null
-            ? ['url' => route('apply.form'), 'text' => 'Apply for this programme']
+            ? ['url' => $application, 'text' => 'Apply for this programme']
             : ['url' => $url, 'text' => 'View programme'];
     }
 
@@ -368,15 +375,21 @@ class PublicProgrammeCatalogue
      */
     private function projectionExcerpt(Programme $programme): ?string
     {
-        if (! $programme->website_item_id) {
+        $description = $this->verifiedProjection($programme)?->description;
+
+        return $description ? \Illuminate\Support\Str::limit(strip_tags((string) $description), 130) : null;
+    }
+
+    private function verifiedProjection(Programme $programme): ?WebsiteItem
+    {
+        if (! Schema::hasTable('website_items')) {
             return null;
         }
 
-        $description = WebsiteItem::query()
-            ->where('id', $programme->website_item_id)
-            ->value('description');
+        $item = app(ProgrammePublisher::class)->projectionFor($programme);
 
-        return $description ? \Illuminate\Support\Str::limit(strip_tags((string) $description), 130) : null;
+        return $item && (int) $item->status === 1
+            && in_array($item->section_key, self::CATALOGUE_SECTIONS, true) ? $item : null;
     }
 
     /** A legacy CMS image, resolved only if the file actually exists. */
@@ -449,6 +462,28 @@ class PublicProgrammeCatalogue
     }
 
     /**
+     * The catalogue partitioned into presentation categories.
+     *
+     * Grouping is derived from each card's REAL stored `programmes.level` via
+     * {@see ProgrammeCategories} — it is presentation only, and adds no second
+     * source of truth. Categories are returned even when empty, so the public page
+     * can render one section per award type and state plainly when nothing is
+     * offered yet.
+     *
+     * @return array<string, Collection<int, array<string,mixed>>>
+     */
+    public function cardsByCategory(?int $schoolId = null): array
+    {
+        return ProgrammeCategories::group($this->cards($schoolId));
+    }
+
+    /** Just the cards in one category. */
+    public function cardsInCategory(string $category, ?int $schoolId = null): Collection
+    {
+        return $this->cardsByCategory($schoolId)[$category] ?? collect();
+    }
+
+    /**
      * Distinct faculties, as [key => label] for the filter control.
      *
      * @return array<string,string>
@@ -461,5 +496,53 @@ class PublicProgrammeCatalogue
             ->unique()
             ->sortByDesc(fn ($label) => $label)
             ->all();
+    }
+
+    /**
+     * One programme's additional images, as absolute URLs.
+     *
+     * ── DELIBERATELY NOT PART OF A CARD ───────────────────────────────────────
+     *
+     * The catalogue list renders dozens of programmes at once. Folding gallery
+     * URLs into `card()` would add one query per programme to every catalogue
+     * page to serve pictures that a card must not show anyway — a card shows the
+     * COVER, and additional images belong to the single-programme view. So this is
+     * a per-programme lookup, called by the one view that renders one programme,
+     * and `card()` is left exactly as wide as it was.
+     *
+     * @return array<int,string>
+     */
+    public function galleryFor(Programme $programme): array
+    {
+        return app(ProgrammeGalleryImageService::class)
+            ->images($programme)
+            ->map(fn (ProgrammeGalleryImage $image) => app(ProgrammeGalleryImageService::class)->url($image))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /** Resolve only an active, published programme belonging to the public site. */
+    public function detailFor(int $id): ?array
+    {
+        $schoolId = PublicTenantResolver::resolveSchoolId();
+        if ($schoolId === null || ! Schema::hasTable('programmes')
+            || ! app(ProgrammeCatalogueSchema::class)->columnsExist()) {
+            return null;
+        }
+
+        $programme = Programme::published()->where('school_id', $schoolId)
+            ->with('department')->find($id);
+        if (! $programme) {
+            return null;
+        }
+
+        return [
+            'programme' => $programme,
+            'card' => $this->academicCard($programme),
+            'galleryUrls' => $this->galleryFor($programme),
+            'description' => $this->verifiedProjection($programme)?->description,
+            'applicationUrl' => route('apply.form', ['programme_id' => $programme->id]),
+        ];
     }
 }

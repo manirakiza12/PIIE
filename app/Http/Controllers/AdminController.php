@@ -192,10 +192,8 @@ class AdminController extends Controller
     private function schoolDashboardData(): array
     {
         $schoolId = auth()->user()->school_id;
-        // The Admissions module (and therefore this panel) only applies to
-        // the one school the public Apply Now portal belongs to — same gate
-        // AdmissionsController's middleware and the nav item already use.
-        $admissionsAvailable = is_primary_school($schoolId);
+        // Internal Admissions is scoped to the staff member's own school.
+        $admissionsAvailable = ! empty($schoolId);
 
         $todayStart = strtotime(date('d M Y'));
         $todayEnd   = $todayStart + 86400;
@@ -538,7 +536,8 @@ class AdminController extends Controller
         $staff = $this->findStaffOrFail($id, $role_id);
         $pdf = PDF::loadView('admin.staff.profile_pdf', ['staff' => $staff]);
 
-        return $pdf->stream('Staff_Profile_' . ($staff->code ?? $staff->id) . '.pdf');
+        $number = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($staff->code ?: $staff->id));
+        return $pdf->stream('Staff_Profile_' . trim($number, '-') . '.pdf');
     }
 
     /**
@@ -1888,7 +1887,8 @@ class AdminController extends Controller
         $student_details = (new CommonController)->get_student_details_by_id($id);
         $profile = StudentProfile::where('user_id', $id)->first();
         $pdf = PDF::loadView('admin.student.profile_pdf', ['student_details' => $student_details, 'profile' => $profile]);
-        $filename = 'Student_Profile_' . ($student_details['code'] ?? $id) . '.pdf';
+        $number = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($student_details['code'] ?: $id));
+        $filename = 'Student_Profile_' . trim($number, '-') . '.pdf';
 
         return $request->boolean('inline') ? $pdf->stream($filename) : $pdf->download($filename);
     }
@@ -4426,7 +4426,8 @@ class AdminController extends Controller
             $data['school_id']    = auth()->user()->school_id;
             $data['session_id']   = $active_session;
 
-            StudentFeeManager::create($data);
+            $invoice = StudentFeeManager::create($data);
+            if ($request->boolean('email_invoice')) \App\Support\Billing\InvoiceEmail::request($invoice);
 
             return redirect()->back()->with('message', 'You have successfully create a new invoice.');
         } else if ($value == 'mass') {
@@ -4457,7 +4458,8 @@ class AdminController extends Controller
                 $parent_id          = User::find($data['student_id'])->toArray();
                 $parent_id          = $parent_id['parent_id'];
                 $data['parent_id']  = $parent_id;
-                StudentFeeManager::create($data);
+                $invoice = StudentFeeManager::create($data);
+                if ($request->boolean('email_invoice')) \App\Support\Billing\InvoiceEmail::request($invoice);
             }
 
             if (sizeof($enrolments) > 0) {
@@ -5327,16 +5329,35 @@ class AdminController extends Controller
     {
         $feeBefore = $this->findSchoolFeeOrFail($id);
 
-        $amount = StudentFeeManager::find($id)->toArray();
-        $amount = $amount['total_amount'];
-
         $studentFeeManager = StudentFeeManager::find($id);
+        $amount = $studentFeeManager->total_amount;
+
         $students_id       = User::find($studentFeeManager->student_id);
         $student_email     = $students_id->email;
         $parents_id        = User::find($studentFeeManager->parent_id);
 
         if (! empty($parents_id)) {
             $parents_email = $parents_id->email;
+        }
+
+        // Only an invoice actually awaiting review may be approved or declined.
+        //
+        // `pending` is the discriminator that matters: it is the only status the
+        // offline submit routes ever set, and it is what separates a claim
+        // awaiting a decision from an invoice already `paid` or one sitting
+        // `processing` on a live gateway. Without this guard the action — a GET
+        // route, so trivially reachable — could overwrite either of those.
+        //
+        // `payment_method` is deliberately NOT required to be 'offline'. Legacy
+        // invoices exist with an empty method awaiting review, and demanding it
+        // here would strand them with no way to be approved. Status already
+        // excludes everything this guard is protecting against.
+        if (! in_array($status, ['approve', 'decline'], true)) {
+            return redirect()->back()->with('error', 'Unknown payment decision.');
+        }
+
+        if ($studentFeeManager->status !== 'pending') {
+            return redirect()->back()->with('error', 'This invoice is not awaiting review of an offline payment.');
         }
 
         if ($status == 'approve') {
@@ -5359,10 +5380,15 @@ class AdminController extends Controller
             StatusChangeAudit::feePayment($feeBefore, 'approved');
             return redirect()->back()->with('message', 'Payment Approved');
         } elseif ($status == 'decline') {
+            // A declined payment collected nothing, so paid_amount must go to 0.
+            // It previously kept the FULL invoice total here while setting
+            // status='unpaid', which reported money received on an invoice that
+            // had just been refused. AccountantController already did the
+            // correct thing; these two paths are now identical.
             StudentFeeManager::where('id', $id)->update([
                 'status'         => 'unpaid',
                 'updated_at'     => date("Y-m-d H:i:s"),
-                'paid_amount'    => $amount,
+                'paid_amount'    => 0,
                 'payment_method' => 'offline'
             ]);
 

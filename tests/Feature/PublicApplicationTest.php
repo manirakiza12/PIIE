@@ -12,9 +12,10 @@ use Tests\TestCase;
  * The public admissions entry point.
  *
  * The guarantees here used to belong to a single anonymous form that created
- * an Admission outright. That form is gone — /apply is now a landing page and
- * the first real write is applicant registration — so the same guarantees
- * (no school selector, tenant resolved from configuration, validation,
+ * an Admission outright. That form is gone — the apply page at `/admissions/apply`
+ * (moved from `/apply`, which now 301-redirects; see ApplyUrlMoveTest) is a
+ * landing page and the first real write is applicant registration — so the same
+ * guarantees (no school selector, tenant resolved from configuration, validation,
  * honeypot, rate limiting) are asserted against the registration endpoint.
  * See ApplicantPortalTest for the application flow that follows.
  */
@@ -50,6 +51,37 @@ class PublicApplicationTest extends TestCase
             'password_confirmation' => 'secret-password',
             'terms'                 => '1',
         ], $overrides);
+    }
+
+    public function test_programme_selection_survives_registration_and_is_preselected_without_changing_an_existing_choice(): void
+    {
+        $school = $this->makeSchool();
+        $this->configurePrimarySchool($school);
+        $programme = $this->makeProgramme($school, ['name' => 'Bachelor of Computing', 'is_published' => 1]);
+        $this->makeIntakeSession($school);
+        $this->get(route('apply.form', ['programme_id' => $programme]))->assertOk()
+            ->assertSessionHas('public_programme_selection', ['school_id' => $school, 'programme_id' => $programme]);
+        $this->post(route('applicant.register.submit'), $this->registrationPayload())->assertRedirect();
+        $this->get(route('applicant.application.step', 'programme'))->assertOk()
+            ->assertSee('value="'.$programme.'" selected', false);
+        $admission = Admission::firstOrFail();
+        $existing = $this->makeProgramme($school);
+        $admission->update(['programme_id' => $existing]);
+        $this->get(route('applicant.application.step', 'programme'))->assertOk()
+            ->assertSee('value="'.$existing.'" selected', false);
+    }
+
+    public function test_contextual_application_links_reject_foreign_inactive_and_unpublished_programmes(): void
+    {
+        $school = $this->makeSchool();
+        $this->configurePrimarySchool($school);
+        foreach ([
+            $this->makeProgramme($this->makeSchool(), ['is_published' => 1]),
+            $this->makeProgramme($school, ['is_published' => 1, 'is_active' => 0]),
+            $this->makeProgramme($school),
+        ] as $programme) {
+            $this->get(route('apply.form', ['programme_id' => $programme]))->assertNotFound();
+        }
     }
 
     public function test_apply_page_shows_no_school_selector_and_uses_configured_institution(): void

@@ -60,6 +60,7 @@
      <!--Main Jquery-->
      <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
     <link rel="stylesheet" href="{{ asset('assets/css/online-exams.css') }}?v=20260920-3">
+    @include('shared.workspace_assets')
 </head>
 
 <body>
@@ -280,7 +281,7 @@
                 </ul>
             </li>
 
-            @if(addon_status('online_courses')==1)
+            @if(addon_status('online_courses')==1 && Route::has('teacher.addons.courses'))
             <li class="nav-links-li {{ request()->is('teacher/addons/courses*') ? 'showMenu':'' }}">
                 <div class="iocn-link">
                     <a class="{{ (request()->is('teacher/addons/courses*')) ? 'active' : '' }}" href="{{ route('teacher.addons.courses') }}">
@@ -295,7 +296,7 @@
             </li>
             @endif
 
-            @if(addon_status('hr_management')==1)
+            @if(addon_status('hr_management')==1 && Route::has('hr.list_of_attendence') && Route::has('hr.list_of_leaves') && Route::has('hr.user_list_of_payrolls'))
             <?php
             $to=strtotime(date("m/d/Y"))+8600;
             $f= date('d/m/Y', strtotime("-31 days"));
@@ -359,7 +360,7 @@
 
             @endif
 
-            @if(addon_status('assignments')==1)
+            @if(addon_status('assignments')==1 && Route::has('teacher.assignment_home'))
 
             <li class="nav-links-li {{ request()->is('teacher/assignments*') ? 'showMenu':'' }}">
                 <div class="iocn-link">

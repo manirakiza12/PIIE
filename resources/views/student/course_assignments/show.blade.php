@@ -152,6 +152,15 @@
     <div class="col-12 col-lg-5">
         {{-- ══ A returned result, when there is one ══════════════════════════ --}}
         @if($latest && $latest->isReleased())
+            {{-- THE POPUP GOES FIRST, ABOVE THE MARK.
+
+                 A student who has just been told they passed wants that to be the
+                 first thing on the page, not the twentieth. And it is inside the
+                 existing `isReleased()` branch on purpose: that leaves exactly ONE
+                 gate on a student seeing a result, so this cannot become a second
+                 way to read an unreleased mark. --}}
+            @include('student.course_assignments._pass_celebration')
+
             <div class="as-result border rounded p-3 mb-3" data-testid="as-result">
                 <h6 class="mb-2">Your result</h6>
                 <div class="as-mark" data-testid="as-result-mark">
@@ -268,7 +277,32 @@
                     <p class="as-draft-note mb-2">
                         This counts as your hand-in. A mark is only visible after your lecturer returns it.
                     </p>
-                    <form method="POST" enctype="multipart/form-data"
+                    {{-- THE FORM AUTOSAVE ATTACHES TO.
+
+                         The SUBMIT form, not the "Save without submitting" one, and
+                         the distinction is deliberate. Autosave has to flush into
+                         whatever form the student presses Submit on, so what is on
+                         screen is guaranteed to be what is handed in. Attaching it
+                         to the draft form instead would mean autosaving a copy of
+                         the answers that is not the copy submitted.
+
+                         `data-autosave-url` is absent for a generic, non-question
+                         assignment - there is no per-question answer to save - and
+                         the script reads that as "nothing to do", not as an error.
+
+                         The indicator states whether the answer is saved. That is the
+                         feature: a student who cannot see whether their work is safe
+                         will not trust it, and will keep retyping defensively. --}}
+                    <div class="mb-2">
+                        <span id="as-autosave-status" class="small text-muted" role="status" aria-live="polite">
+                            Answers save as you type.
+                        </span>
+                    </div>
+
+                    <form method="POST" enctype="multipart/form-data" id="as-form"
+                          @if($questionBased)
+                              data-autosave-url="{{ route('student.courses.assignments.autosave', [$offering->id, $assignment->id]) }}"
+                          @endif
                           action="{{ route('student.courses.assignments.submit', [$offering->id, $assignment->id]) }}">
                         @csrf
                         {{-- The idempotency key. The UNIQUE index on this column is what
@@ -344,6 +378,38 @@
 
      `defer` so it never runs before the panels exist, and the panel markup is
      inert without it. --}}
+@if($questionBased)
+    {{-- Autosave, for the same reason as the recorder: `defer`, so it runs after the
+         form exists, and the page is fully usable without it. Every answer field,
+         the Save button and the Submit button work with JavaScript switched off -
+         autosave only ADDS a way to keep work safe between those, and never becomes
+         the only way to submit. --}}
+    <script src="{{ asset('js/assignment-autosave.js') }}" defer></script>
+@endif
+
+{{-- THE ON-SCREEN KEYBOARD, opt-in and additive.
+
+     A student on a tablet, a phone in landscape, a shared or broken keyboard can
+     read a question and cannot answer it. This is for them.
+
+     It never intercepts keystrokes and never traps focus: a student with a
+     physical keyboard is completely unaffected and will not see the button unless
+     they go looking for it. Forcing an overlay on someone who does not need it is
+     the failure mode, and a worse one than not having the feature.
+
+     It dispatches a real `input` event on every insertion, which is what the
+     autosave above listens for - so a character typed here is saved by exactly the
+     same code path as one typed on a physical keyboard. That is the only reason
+     the two work together.
+
+     Loaded for BOTH question-based and generic assignments: a generic assignment's
+     written response is just as much a short answer, and a script gated on the
+     question-based branch would silently be missing from exactly the simpler form.
+
+     `defer`, so the fields exist before it scans for them - and the page is fully
+     usable without it: every answer can still be typed, saved and submitted. --}}
+<script src="{{ asset('js/on-screen-keyboard.js') }}" defer></script>
+
 @if($questionBased && $questions->contains(fn ($q) => $q->allowsRecording()))
     <script src="{{ asset('js/assignment-recorder.js') }}" defer></script>
 @endif

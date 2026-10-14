@@ -98,7 +98,7 @@ class StudentProvisioningService
                     'name'                   => $name,
                     'email'                  => $data['email'],
                     'password'               => Hash::make($plainPassword),
-                    'code'                   => student_code(),
+                    'code'                   => RegistrationNumber::student($data),
                     'role_id'                => 7, // student
                     'school_id'              => $data['school_id'],
                     'account_status'         => 'active',

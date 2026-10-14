@@ -189,8 +189,33 @@ class AcademicEditorSurfacesTest extends TestCase
         // on the reader's connection, and it tells that host who opened the page.
         // So the button AND the paste path both have to respect the decision -
         // otherwise copying an image out of a browser bypasses the toolbar.
-        $this->assertStringContainsString("if (cfg.allowImages) {", $js);
-        $this->assertStringContainsString("if (!cfg || !cfg.allowImages) {", $js);
+        //
+        // ASSERTED AS A PROPERTY, NOT AS A SENTENCE.
+        //
+        // This used to look for the literal `if (cfg.allowImages) {`. That is a
+        // claim about punctuation, not about behaviour: adding a second condition
+        // to the same guard - which had to happen, because the picture button is
+        // now spliced into the insert row found BY NAME rather than by a
+        // hard-coded index - broke the string while leaving the gate exactly as
+        // strict. A test that fails when a guard gets stricter is a test that
+        // trains people to make guards weaker.
+        //
+        // What matters is that the toolbar branch which adds the picture button is
+        // CONDITIONAL ON the flag, and that it is the branch that adds it. So the
+        // pattern below ties the two together: `allowImages` must appear in the
+        // condition of a branch whose body mentions `picture`.
+        $this->assertMatchesRegularExpression(
+            '/if\s*\([^)]*cfg\.allowImages[^)]*\)\s*\{[^}]*picture/',
+            $js,
+            'the picture button must only be added inside a branch guarded by cfg.allowImages'
+        );
+
+        // And the paste path, which is the other way an image can arrive.
+        $this->assertMatchesRegularExpression(
+            '/if\s*\(\s*!cfg\s*\|\|\s*!cfg\.allowImages\s*\)\s*\{/',
+            $js,
+            'the paste handler must refuse images when they are not authorised'
+        );
     }
 
     // ══════════════════════════════════════════════════════════════════════

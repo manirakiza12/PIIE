@@ -79,7 +79,7 @@ class CommonController extends Controller
 
         $active_session = get_school_settings($student->school_id)->value('running_session');
 
-        $school_name = School::find($student->school_id)->value('title');
+        $school_name = School::find($student->school_id)?->title ?? '';
 
         //End Fetch
 

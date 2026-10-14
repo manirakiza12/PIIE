@@ -4,6 +4,7 @@ namespace App\Support\Payments;
 
 use App\Models\PaymentMethods;
 use App\Models\ApplicationPayment;
+use App\Models\StudentFeeManager;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -240,6 +241,86 @@ class MarzPayService
             $transaction['reference'], $transaction['uuid'], (string) $amount['raw'],
             $amount['currency'], $status, $data,
         );
+    }
+
+    /**
+     * Fetch the provider's own record of the transaction an invoice recorded.
+     *
+     * The tuition counterpart of verifyApplicationPayment(). The decisive
+     * choice: the lookup uses the invoice's OWN stored `gateway_reference`, never
+     * a transaction id supplied by a caller. That alone stops an unauthenticated
+     * webhook from steering the lookup at an unrelated transaction and then
+     * crediting it to whichever invoice it happened to name.
+     *
+     * Returns null only when the provider could not be consulted or did not
+     * return the documented fields — a TRANSIENT condition the caller should
+     * retry. A provider that answers, but about a transaction that is not this
+     * invoice's, returns a non-null array that simply fails to become evidence;
+     * that is a DEFINITIVE answer and retrying it would loop forever.
+     *
+     * @return array{status: string, data: ?array} `status` is 'unverifiable'
+     *         (retry later) or 'answered' (the provider replied).
+     */
+    public static function fetchTuitionTransaction(StudentFeeManager $fee): array
+    {
+        if ($fee->payment_method !== 'marzpay' || blank($fee->gateway_reference)) {
+            // Nothing was ever started for this invoice, so there is nothing to
+            // retry: a payment cannot appear later for a reference we never hold.
+            return ['status' => 'answered', 'data' => null];
+        }
+
+        if (! self::isConfigured((int) $fee->school_id)) {
+            // This tenant has no MarzPay credentials, so its callback is not
+            // actionable. Definitive, not transient.
+            return ['status' => 'answered', 'data' => null];
+        }
+
+        $data = self::getCollectionStatus((string) $fee->gateway_reference, (int) $fee->school_id);
+
+        if (! is_array($data)) {
+            return ['status' => 'unverifiable', 'data' => null];
+        }
+
+        $uuid = $data['transaction']['uuid'] ?? null;
+
+        if (! is_string($uuid) || $uuid === '') {
+            return ['status' => 'unverifiable', 'data' => null];
+        }
+
+        // MarzPay named a transaction but did not describe its collection — no
+        // amount, no currency, or an amount we cannot parse exactly. That is a
+        // provider-side defect rather than a statement about this invoice, so it
+        // is transient and the caller should retry. Crediting on a partial
+        // record is exactly the failure mode this boundary exists to prevent.
+        $amount = $data['collection']['amount'] ?? null;
+        $currency = is_array($amount) ? ($amount['currency'] ?? null) : null;
+
+        if (! is_array($amount)
+            || ! is_string($currency) || $currency === ''
+            || DecimalAmount::minorUnits($amount['raw'] ?? null) === null) {
+            return ['status' => 'unverifiable', 'data' => null];
+        }
+
+        return ['status' => 'answered', 'data' => $data];
+    }
+
+    /**
+     * Fetch and validate the provider's record for a TUITION invoice.
+     *
+     * VerifiedTuitionPayment::fromProviderResponse() refuses to build evidence
+     * unless the provider's returned uuid matches the invoice's stored
+     * reference, so a provider response about a different transaction cannot be
+     * laundered into this invoice either.
+     */
+    public static function verifyTuitionPayment(StudentFeeManager $fee): ?VerifiedTuitionPayment
+    {
+        $result = self::fetchTuitionTransaction($fee);
+
+        if ($result['status'] !== 'answered') {
+            return null;
+        }
+
+        return VerifiedTuitionPayment::fromProviderResponse($fee, 'marzpay', $result['data']);
     }
 
     /**

@@ -13,7 +13,6 @@
     $authUser = Auth()->user();
     $user = $authUser ?? new User();
 
-    $isPrimarySchool = $authUser ? is_primary_school($authUser->school_id) : false;
     // Classes (legacy K-12 class/section structure) don't apply to a
     // purely higher_ed school — those use Programmes/Courses instead.
     // 'k12' and 'mixed' schools (and the 'k12' column default) see it.
@@ -237,6 +236,7 @@
         }
     </style>
 
+    @include('shared.workspace_assets')
 </head>
 
 <body>
@@ -618,92 +618,6 @@
             @endif
 
             @include('admin.admissions.partials.navigation')
-            @if($isPrimarySchool)
-            <!-- ============================================ -->
-            <!-- ADMISSIONS SECTION HEADER                    -->
-            <!-- Admissions/Intake Sessions/Agents only apply  -->
-            <!-- to the one school the public Apply Now portal -->
-            <!-- currently belongs to (primary_school_id).     -->
-            <!-- ============================================ -->
-            <li class="nav-section-header"><i class="fas fa-file-alt"></i> ADMISSIONS</li>
-
-            <!-- Admissions -->
-            @if(empty($user->menu_permission) || in_array('admin.hei_admissions', $menu_permission))
-            <li class="nav-links-li {{ request()->is('admin/hei-admissions*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.hei_admissions.index') }}" class="{{ request()->is('admin/hei-admissions*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                                <path d="M2 17l10 5 10-5"></path>
-                                <path d="M2 12l10 5 10-5"></path>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Admissions') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Intake Sessions -->
-            @if(empty($user->menu_permission) || in_array('admin.intake_sessions', $menu_permission))
-            <li class="nav-links-li {{ request()->is('admin/intake-sessions*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.intake_sessions.index') }}" class="{{ request()->is('admin/intake-sessions*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Intake Sessions') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Document Requirements — gated on the same permission as the
-                 Admissions queue: it is configuration for that one module, not
-                 a separately assignable area. -->
-            @if(empty($user->menu_permission) || in_array('admin.hei_admissions', $menu_permission))
-            <li class="nav-links-li {{ request()->is('admin/admissions-documents*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.admissions_documents.index') }}" class="{{ request()->is('admin/admissions-documents*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="9" y1="15" x2="15" y2="15"></line>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Document Requirements') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-
-            <!-- Agents -->
-            @if(empty($user->menu_permission) || in_array('admin.admissions_agents', $menu_permission))
-            <li class="nav-links-li {{ request()->is('admin/admissions-agents*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('admin.admissions_agents.index') }}" class="{{ request()->is('admin/admissions-agents*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Agents') }}</span>
-                    </a>
-                </div>
-            </li>
-            @endif
-            @endif
-
             <!-- ============================================ -->
             <!-- RESOURCES SECTION HEADER                     -->
             <!-- ============================================ -->

@@ -89,14 +89,14 @@ $msg_user_lists = DB::table('users')
 								<div class="d-flex align-items-start">
 									<?php 
 										$info = json_decode($msg_user_list->user_information);
-										$user_image = $info->photo;
+										$user_image = $info->photo ?? '';
 										if(!empty($info->photo)){
 											$user_image = 'uploads/user-images/'.$info->photo;
 										}else{
 											$user_image = 'uploads/user-images/thumbnail.png';
 										}
 									?>
-									<img src="{{ asset('assets') }}/{{ $user_image }}" class="rounded-circle mr-1" alt="{{ $msg_user_list->name }}" width="40" height="40">
+                                        <img src="{{ asset('assets') }}/{{ $user_image }}" class="rounded-circle mr-1" alt="{{ $msg_user_list->name }}" width="40" height="40">
 									<div class="flex-grow-1 ml-3 user_list_username">
 										{{ $msg_user_list->name }}
 									</div>
@@ -112,7 +112,7 @@ $msg_user_lists = DB::table('users')
                     <div class="chat_body">
                         <?php 
                                 $info = json_decode($msg_user_details->user_information);
-                                $user_image = $info->photo;
+                                $user_image = $info->photo ?? '';
                                 if(!empty($info->photo)){
                                     $user_image = 'uploads/user-images/'.$info->photo;
                                 }else{
@@ -154,7 +154,7 @@ $msg_user_lists = DB::table('users')
                                         @if($msg_user_details->user_id == $chat_data->sender_id) 
                                         <div class="chat-message-left pb-3">
                                             <div>
-                                                <img src="{{ asset('assets') }}/{{ $user_image }}" class="rounded-circle mr-1" alt="{{ $msg_user_list->name }}" width="40" height="40">
+                                                <img src="{{ asset('assets') }}/{{ $user_image }}" class="rounded-circle mr-1" alt="{{ $msg_user_details->name }}" width="40" height="40">
                                                 <div class="text-muted small text-nowrap mt-2">
                                                     @if ($chat_data->created_at->isToday())
                                                         {{ $chat_data->created_at->format('h:i A') }}
@@ -184,7 +184,7 @@ $msg_user_lists = DB::table('users')
                                             $single_chat = DB::table('chats')->where('message_thrade', $msg_user_details->thread_id)->orderBy('id', 'desc')->first();
 
                                             $info = json_decode($msg_user_details->user_information);
-                                            $user_image = $info->photo;
+                                            $user_image = $info->photo ?? '';
                                             if(!empty($info->photo)){
                                                 $user_image = 'uploads/user-images/'.$info->photo;
                                             }else{
@@ -196,7 +196,7 @@ $msg_user_lists = DB::table('users')
                                             @if( $single_chat->sender_id == auth()->user()->id)
                                             @if($unreadCount == 0)
                                             <div class="seen_meesage">
-                                                <img src="{{ asset('assets') }}/{{ $user_image }}" alt="{{ $msg_user_list->name }}" class="rounded-circle mr-1"  width="20" height="20">
+                                                <img src="{{ asset('assets') }}/{{ $user_image }}" alt="{{ $msg_user_details->name }}" class="rounded-circle mr-1"  width="20" height="20">
                                             </div>
                                             @endif
                                             @else

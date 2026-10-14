@@ -1,37 +1,4 @@
-{{--
-    Create / edit an academic Programme.
-
-    STAGE 1 ADDITIONS, and the reasoning that shaped them:
-
-    1. TUITION IS NOW THREE FIELDS, NOT ONE.
-       The platform already carried `intake_sessions.application_fee` (per
-       INTAKE) and an invoiced per-STUDENT balance, so a bare "Tuition Fee"
-       number sat next to two other amounts with entirely different meanings and
-       nothing said which it was. Amount, currency and basis are separate inputs
-       now. The basis has an honest "Contact us" option, because "enquire" is a
-       real answer and forcing an invented period would be worse than none.
-
-    2. A MISSING PRICE IS A FIRST-CLASS STATE.
-       The form says so under the amount, and the admin summary line states what
-       the website will actually render. An administrator must never be able to
-       save a number and believe the site is showing it when the site is
-       withholding it for want of a basis.
-
-    3. COVER IMAGE IS ITS OWN FORM.
-       A file upload cannot share a form with the field edits it would otherwise
-       be attached to, because an unrelated save of a programme's name must never
-       re-run the upload pipeline or delete a photograph. Uploading and removing
-       are separate POSTs; the surrounding form is unchanged in behaviour.
-
-    4. WEBSITE PUBLICATION IS SEPARATE FROM ACADEMIC ACTIVATION.
-       `is_active` decides whether the programme is OFFERED — the applicant
-       portal and eligibility depend on it. `is_published` decides whether it is
-       ADVERTISED. A programme can be taught and not yet marketed. Conflating
-       them would make marketing a precondition of teaching.
---}}
 @php
-    $piieHasProgramme = (bool) ($programme ?? null);
-
     // The `currency` table is a global payment-gateway lookup, not part of the
     // academic schema, so it may legitimately be absent in a partially migrated
     // or partially migrated-for-tests installation. A missing table must not
@@ -44,10 +11,10 @@
 @endphp
 
 <div class="eoff-form">
-    <form method="POST" id="piie-programme-edit" enctype="multipart/form-data" class="d-block ajaxForm"
+    <form method="POST" id="piie-programme-edit" enctype="multipart/form-data" class="d-block ajaxForm" data-workspace-continuous
           action="{{ $programme ? route('admin.programmes.update', $programme->id) : route('admin.programmes.store') }}">
         @csrf
-        <div class="form-row">
+        <div class="programme-editor-grid"><section class="programme-editor-card"><h5>{{ get_phrase('Programme details') }}</h5><div class="form-row">
             <div class="row">
                 <div class="col-6 fpb-7">
                     <label class="eForm-label" for="piie-code">{{ get_phrase('Programme Code') }} *</label>
@@ -110,9 +77,6 @@
                             <a href="{{ route('admin.department_list') }}" target="_blank" rel="noopener">{{ get_phrase('Add one') }}</a>
                         </small>
                     @endif
-                    <small class="text-muted d-block mt-1">
-                        {{ get_phrase('The faculty also chooses the colour of the branded fallback panel used when a programme has no cover image.') }}
-                    </small>
                 </div>
             </div>
 
@@ -124,7 +88,7 @@
                     {{ get_phrase('Tuition and fees') }}
                 </legend>
                 <p class="text-muted" style="font-size:.8125rem;line-height:1.5;">
-                    {{ get_phrase('The amount alone does not say what it is. State the amount, the currency and what the amount covers, so the website can print it honestly. This does not affect invoices, balances or payments.') }}
+                    {{ get_phrase('Optional: enter the amount, currency and payment period to display on the website.') }}
                 </p>
 
                 <div class="row">
@@ -200,134 +164,15 @@
                 </div>
             </fieldset>
 
-            <div class="fpb-7 pt-3">
-                <button class="btn-form" type="submit">{{ $programme ? get_phrase('Update Programme') : get_phrase('Create Programme') }}</button>
-            </div>
+        </div></section>
+        <aside>@include('admin.programme._media_fields')</aside>
+        </div>
+        <div class="workspace-actions">
+            <button class="btn btn-primary" type="submit">{{ $programme ? get_phrase('Save all changes') : get_phrase('Create programme with images') }}</button>
         </div>
     </form>
-
-    {{-- ══════════════════════════════════════════════════════════════════
-         COVER IMAGE — a separate form, because a file upload must not be
-         submitted by an unrelated edit of the fields above.
-    ══════════════════════════════════════════════════════════════════ --}}
-    @if($piieHasProgramme)
-        <div class="mt-4 pt-3" style="border-top:1px solid var(--piie-line,#e6e9ef);">
-            <h6 style="font-size:.95rem;">{{ get_phrase('Public catalogue cover image') }}</h6>
-            <p class="text-muted" style="font-size:.8125rem;line-height:1.5;">
-                {{ get_phrase('This image is public: it appears on the marketing website. It is cropped to 16:9 and re-encoded on upload. A JPG, PNG or WebP up to 8 MB.') }}
-            </p>
-
-            <div class="row align-items-start g-3">
-                <div class="col-12 col-md-5">
-                    @if($coverUrl)
-                        <img src="{{ $coverUrl }}" alt="{{ get_phrase('Current programme cover') }}"
-                             style="width:100%;max-width:320px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;border:1px solid #e6e9ef;">
-                        <p class="text-muted mt-2 mb-0" style="font-size:.75rem;">
-                            {{ $programme->cover_image_name ?: get_phrase('Current cover') }}
-                            @if($programme->cover_image_updated_at)
-                                &middot; {{ get_phrase('updated') }} {{ $programme->cover_image_updated_at->format('j M Y') }}
-                            @endif
-                        </p>
-                    @else
-                        <div data-testid="piie-no-cover"
-                             style="width:100%;max-width:320px;aspect-ratio:16/9;border-radius:8px;border:1px dashed #c9d2de;
-                                    background:linear-gradient(135deg,#0B2E4F 0%,#14507F 60%,#1D6FA8 100%);
-                                    display:flex;align-items:center;justify-content:center;color:#fff;
-                                    font-size:.75rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;text-align:center;padding:.5rem;">
-                            {{ get_phrase('No cover — branded fallback will be shown') }}
-                        </div>
-                        <p class="text-muted mt-2 mb-0" style="font-size:.75rem;">
-                            {{ get_phrase('No cover is a normal state. The catalogue shows a designed panel in the faculty colour rather than an invented photograph.') }}
-                        </p>
-                    @endif
-                </div>
-
-                <div class="col-12 col-md-7">
-                    <form method="POST" enctype="multipart/form-data" action="{{ route('admin.programmes.cover.store', $programme->id) }}">
-                        @csrf
-                        <div class="mb-2">
-                            <label class="eForm-label" for="piie-cover">{{ $coverUrl ? get_phrase('Replace cover image') : get_phrase('Upload cover image') }}</label>
-                            <input type="file" id="piie-cover" class="form-control eForm-control" name="cover_image"
-                                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                                   required>
-                            @error('cover_image')
-                                <div class="text-danger mt-1" style="font-size:.8125rem;" role="alert">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <button class="btn btn-primary btn-sm" type="submit">
-                            {{ $coverUrl ? get_phrase('Replace image') : get_phrase('Upload image') }}
-                        </button>
-                    </form>
-
-                    @if($coverUrl)
-                        <form method="POST" class="mt-2" action="{{ route('admin.programmes.cover.remove', $programme->id) }}"
-                              onsubmit="return confirm('{{ get_phrase('Remove the cover image? The programme will return to the branded fallback.') }}');">
-                            @csrf
-                            <button class="btn btn-outline-danger btn-sm" type="submit">
-                                {{ get_phrase('Remove image') }}
-                            </button>
-                        </form>
-                    @endif
-                </div>
-            </div>
-        </div>
-
-        {{-- ══════════════════════════════════════════════════════════════
-             WEBSITE PUBLICATION — separate from academic activation
-        ══════════════════════════════════════════════════════════════ --}}
-        <div class="mt-4 pt-3" style="border-top:1px solid var(--piie-line,#e6e9ef);">
-            <h6 style="font-size:.95rem;">{{ get_phrase('Website catalogue') }}</h6>
-            <p class="text-muted" style="font-size:.8125rem;line-height:1.5;">
-                {{ get_phrase('Publishing projects this programme onto the public catalogue. The academic record stays the source of truth: renaming the programme here updates the website. Manually written CMS cards are never overwritten.') }}
-            </p>
-
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                @if($programme->is_published)
-                    <span class="badge bg-success">{{ get_phrase('Published to website') }}</span>
-                    <form method="POST" action="{{ route('admin.programmes.unpublish', $programme->id) }}">
-                        @csrf
-                        <button class="btn btn-outline-danger btn-sm" type="submit">{{ get_phrase('Unpublish') }}</button>
-                    </form>
-                @else
-                    <span class="badge bg-secondary">{{ get_phrase('Not published') }}</span>
-                    @unless($programme->is_active)
-                        <button class="btn btn-primary btn-sm" type="button" disabled
-                                title="{{ get_phrase('Activate this programme before publishing it.') }}">
-                            {{ get_phrase('Publish to website') }}
-                        </button>
-                        <small class="text-muted d-block w-100" style="font-size:.8125rem;">
-                            {{ get_phrase('This programme is deactivated, so it cannot be advertised.') }}
-                        </small>
-                    @else
-                        <form method="POST" action="{{ route('admin.programmes.publish', $programme->id) }}">
-                            @csrf
-                            <input type="hidden" name="section_key" value="{{ $programme->website_section_key ?? \App\Support\ProgrammeCatalogue\ProgrammePublisher::DEFAULT_SECTION }}">
-                            <button class="btn btn-primary btn-sm" type="submit">{{ get_phrase('Publish to website') }}</button>
-                        </form>
-                    @endunless
-                @endif
-
-                <a class="btn btn-light btn-sm" href="{{ route('admin.programmes.preview', $programme->id) }}" target="_blank" rel="noopener">
-                    {{ get_phrase('Preview card') }}
-                </a>
-            </div>
-
-            <div class="mt-2">
-                <label class="eForm-label" for="piie-order">{{ get_phrase('Catalogue order') }}</label>
-                <input type="number" id="piie-order" class="form-control eForm-control" name="website_sort_order"
-                       form="piie-programme-edit"
-                       value="{{ old('website_sort_order', $programme->website_sort_order ?? '') }}"
-                       min="0" step="1" style="max-width:160px;"
-                       placeholder="{{ get_phrase('last') }}">
-                <small class="text-muted d-block mt-1" style="font-size:.75rem;">
-                    {{ get_phrase('Lower numbers appear first. Leave blank to sort last, after every explicitly ordered programme.') }}
-                </small>
-            </div>
-        </div>
-    @endif
 </div>
 
-@push('scripts')
 <script>
     // Keeps the "the website will show" line live while the form is open. It is
     // a convenience only: the line is rendered server-side, so it is correct on
@@ -373,5 +218,27 @@
         var currency = document.getElementById('piie-currency');
         if (currency) { currency.addEventListener('change', update); }
     })();
+    (function () {
+        var form = document.getElementById('piie-programme-edit');
+        if (!form) return;
+        form.querySelectorAll('input[type="file"][data-preview]').forEach(function (input) {
+            var preview = document.getElementById(input.dataset.preview);
+            var original = preview.getAttribute('src') || '';
+            var objectUrl;
+            input.addEventListener('change', function () {
+                if (objectUrl) URL.revokeObjectURL(objectUrl);
+                objectUrl = input.files[0] ? URL.createObjectURL(input.files[0]) : null;
+                preview.src = objectUrl || original;
+                preview.classList.toggle('d-none', !objectUrl && !original);
+                if (input.name === 'cover_image') {
+                    var placeholder = form.querySelector('.piie-no-cover');
+                    if (placeholder) placeholder.classList.toggle('d-none', !!objectUrl);
+                }
+                if (input.name === 'cover_image' && objectUrl) {
+                    var remove = form.querySelector('[name="remove_cover"]');
+                    if (remove) remove.checked = false;
+                }
+            });
+        });
+    })();
 </script>
-@endpush

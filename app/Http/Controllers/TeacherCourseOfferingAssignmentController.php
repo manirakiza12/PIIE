@@ -20,6 +20,8 @@ use App\Support\TenantConfiguration;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -51,6 +53,15 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class TeacherCourseOfferingAssignmentController extends Controller
 {
+    /**
+     * The error bag assignment ATTACHMENTS report into.
+     *
+     * Kept separate from the assignment's own errors so an attachment message
+     * appears beside the attachment control rather than inside a heading that
+     * claims the assignment failed to save.
+     */
+    public const RESOURCE_ERROR_BAG = 'assignment_resources';
+
     public function __construct(
         private readonly AssignmentAccess $access,
         private readonly AssignmentService $assignments,
@@ -692,16 +703,149 @@ class TeacherCourseOfferingAssignmentController extends Controller
 
     // ── resources ─────────────────────────────────────────────────────────
 
+    /**
+     * Attach a handout to an assignment that does not exist yet.
+     *
+     * WHY THIS EXISTS
+     *
+     * Not every assignment is a written brief. A lecturer whose assignment IS the
+     * material - a dataset to analyse, a case study, a worksheet - previously had
+     * no way to start one: handouts were only offered on the EDIT screen, behind
+     * "Save the assignment first", so the first thing they had to do was write
+     * instructions purely to make the upload possible.
+     *
+     * WHY IT SAVES A DRAFT RATHER THAN STASHING THE UPLOAD
+     *
+     * The alternative - upload to a temporary area, move on first save - buys
+     * nothing and costs a great deal: orphan files nobody will ever find, two
+     * lifetimes for every upload, and a cleanup job. Saving the draft puts the
+     * handout in its permanent home on the first request. If the upload is
+     * refused, what remains is a draft the lecturer can delete, not a cache entry.
+     *
+     * THE ASSIGNMENT IS FORCED TO A DRAFT HERE, ALWAYS. Attaching a PDF is not a
+     * decision that an assessment is ready to be marked - publishing is, and
+     * publishing is a separate, deliberate act.
+     */
+    public function storeResourceForNewAssignment(Request $request, int $id): RedirectResponse
+    {
+        $offering = $this->access->resolveOffering($request->user(), $id);
+        $this->access->assertCanManage($request->user(), $offering);
+
+        // Built by hand rather than through `$request->validate()`, which has no
+        // error-bag parameter and silently discards a fifth argument. Getting that
+        // wrong reports a failed handout as a failed assignment.
+        $validator = Validator::make($request->all(), $this->resourceRules());
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator, null, self::RESOURCE_ERROR_BAG);
+        }
+
+        $validated = $validator->validated();
+
+        // ONE TRANSACTION, so a refused handout cannot leave a half-made
+        // assignment behind: a brief-less assignment is exactly what this route
+        // exists to avoid producing.
+        $assignment = DB::transaction(function () use ($request, $validated, $offering) {
+            $attributes = [
+                'title' => (string) ($request->input('title') ?: 'Untitled assignment'),
+                'submission_type' => (string) ($request->input('submission_type') ?: Assignment::SUBMISSION_TEXT),
+                'late_policy' => (string) ($request->input('late_policy') ?: Assignment::LATE_ALLOWED),
+                'allowed_attempts' => $request->input('allowed_attempts'),
+                'max_marks' => $request->input('max_marks'),
+                'pass_mark' => $request->input('pass_mark'),
+                'retry_policy' => $request->input('retry_policy'),
+                'instructions' => $request->input('instructions'),
+                'learning_objectives' => $request->input('learning_objectives'),
+                'due_date' => $request->input('due_date'),
+                'released_at' => $request->input('released_at'),
+                'closes_at' => $request->input('closes_at'),
+                'course_offering_module_id' => $request->input('course_offering_module_id'),
+                'requirement_role' => (string) ($request->input('requirement_role') ?: Assignment::ROLE_OPTIONAL),
+                'completion_rule' => (string) ($request->input('completion_rule') ?: Assignment::RULE_SUBMISSION),
+
+                // Not taken from the request. See the method note.
+                'status' => Assignment::STATUS_DRAFT,
+            ];
+
+            $created = $this->guarded(fn () => $this->assignments->create(
+                $request->user(),
+                $offering,
+                $attributes
+            ));
+
+            if ($validated['type'] === 'file') {
+                $this->guarded(fn () => $this->assignments->attachFile(
+                    $request->user(),
+                    $created,
+                    $request->file('file')
+                ));
+            } else {
+                $this->guarded(fn () => $this->assignments->attachLink(
+                    $request->user(),
+                    $created,
+                    (string) ($validated['title'] ?: $validated['link_url']),
+                    (string) $validated['link_url']
+                ));
+            }
+
+            return $created;
+        });
+
+        return redirect()
+            ->route('teacher.course_offerings.assignments.show', [$offering->id, $assignment->id])
+            ->with(
+                'success',
+                'Assignment created as a draft and the handout attached. An assignment can be only '
+                .'files - add the brief if you want one, then Publish when you are ready.'
+            );
+    }
+
+    /**
+     * The handout rules, shared by both upload paths.
+     *
+     * Two paths exist - one against a saved assignment, one against an assignment
+     * being created by the upload itself - and they MUST validate identically. A
+     * second hand-written copy is how "the file field is required" comes to mean
+     * two slightly different things depending on the screen a lecturer used.
+     *
+     * `nullable` is deliberately ABSENT from `file` and `link_url`: Laravel skips
+     * every rule on a null attribute marked nullable, and `required_if` is not
+     * evaluated first, so `nullable` silently cancels the very requirement it sits
+     * beside.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function resourceRules(): array
+    {
+        return [
+            'type' => ['required', 'in:link,file'],
+            'title' => ['nullable', 'string', 'max:191'],
+            'link_url' => ['required_if:type,link', 'url:http,https', 'max:500'],
+            'file' => ['required_if:type,file', 'file', 'max:20480'],
+        ];
+    }
+
     public function storeResource(Request $request, int $id, int $assignment): RedirectResponse
     {
         $target = $this->access->resolveForManager($request->user(), $id, $assignment);
 
-        $validated = $request->validate([
+        // ATTACHMENT ERRORS GO IN THEIR OWN BAG - the same defect and the same
+        // reasoning as on the lesson form. Tapping "Upload file" without choosing
+        // one put "the file field is required" into the ASSIGNMENT's error block,
+        // under a heading saying the assignment had failed to save, when the
+        // assignment was never part of that request.
+        $validator = Validator::make($request->all(), [
             'type' => ['required', 'in:link,file'],
             'title' => ['nullable', 'string', 'max:191'],
             'link_url' => ['nullable', 'required_if:type,link', 'url:http,https', 'max:500'],
             'file' => ['nullable', 'required_if:type,file', 'file', 'max:20480'],
         ]);
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator, null, self::RESOURCE_ERROR_BAG);
+        }
+
+        $validated = $validator->validated();
 
         if ($validated['type'] === 'file') {
             $this->guarded(fn () => $this->assignments->attachFile(
@@ -780,6 +924,13 @@ class TeacherCourseOfferingAssignmentController extends Controller
             // PIIE cannot keep.
             'submission_type' => ['required', Rule::in(Assignment::HEI_SUBMISSION_TYPES)],
             'allowed_attempts' => ['nullable', 'integer', 'min:1', 'max:99'],
+            // The threshold a returned mark must reach for this assessment to
+            // count as passed. Nullable is the meaningful case: not set means no
+            // threshold, which is how every assignment predating this behaved.
+            // The upper bound is checked against THIS submission's max_marks by
+            // the service, which is the only layer that knows both numbers.
+            'pass_mark' => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'retry_policy' => ['nullable', Rule::in(Assignment::RETRY_POLICIES)],
             'late_policy' => ['required', Rule::in(Assignment::LATE_POLICIES)],
             'due_date' => ['nullable', 'date'],
             'released_at' => ['nullable', 'date'],
@@ -872,6 +1023,8 @@ class TeacherCourseOfferingAssignmentController extends Controller
             'submission_type' => $validated['submission_type'],
             'late_policy' => $validated['late_policy'],
             'allowed_attempts' => $validated['allowed_attempts'] ?? null,
+            'pass_mark' => $validated['pass_mark'] ?? null,
+            'retry_policy' => $validated['retry_policy'] ?? null,
             'due_date' => $validated['due_date'] ?? null,
             'released_at' => $validated['released_at'] ?? null,
             'closes_at' => $validated['closes_at'] ?? null,

@@ -163,6 +163,7 @@
             color: #fff;
         }
     </style>
+    @include('shared.workspace_assets')
 </head>
 <body>
 

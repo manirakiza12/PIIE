@@ -106,8 +106,8 @@ html {
     --piie-surface-alt: #F5F8FB;
 
     /* Type scale - a fixed ratio, so headings never drift between sections. */
-    --piie-font-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-    --piie-font-head: Georgia, "Times New Roman", "Segoe UI", serif;
+    --piie-font-body: var(--piie-font, 'Nunito', Arial, sans-serif);
+    --piie-font-head: var(--piie-font, 'Nunito', Arial, sans-serif);
 
     /* A single spacing rhythm. Sections use --piie-section-y. */
     --piie-space-1: 0.25rem;

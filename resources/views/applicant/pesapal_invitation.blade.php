@@ -1,5 +1,6 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>PIIE application payment</title></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>PIIE application payment</title>@include('shared.typography')
+</head>
 <body><main style="max-width:640px;margin:3rem auto;padding:1rem;font-family:system-ui">
     <h1>Application fee payment</h1>
     <p>Application reference: {{ $admission->app_number }}</p>

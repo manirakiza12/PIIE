@@ -56,7 +56,7 @@ final class StudentProvisioner
                 'name'             => $data['name'],
                 'email'            => $email,
                 'password'         => Hash::make($plainPassword),
-                'code'             => student_code(),
+                'code'             => \App\Support\RegistrationNumber::student($data + ['school_id' => $schoolId]),
                 'role_id'          => '7',
                 'school_id'        => $schoolId,
                 'user_information' => $data['user_information'] ?? json_encode([]),

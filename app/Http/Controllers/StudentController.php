@@ -66,6 +66,15 @@ class StudentController extends Controller
      *
      * @return \Illuminate\Contracts\Support\Renderable
      */
+    public function admissionLetter()
+    {
+        $student = auth()->user();
+        abort_unless(\Illuminate\Support\Facades\Schema::hasTable('admission_letters'), 404);
+        $letter = \App\Models\AdmissionLetter::where('school_id', $student->school_id)->where('student_id', $student->id)->firstOrFail();
+        return \App\Support\Admissions\AdmissionLetterDocument::pdf($letter->snapshot)->download(
+            \App\Support\Admissions\AdmissionLetterDocument::filename($letter->snapshot));
+    }
+
     public function studentDashboard()
     {
         if (auth()->user()->role_id != 7) {
@@ -1075,27 +1084,19 @@ class StudentController extends Controller
             return response()->json(['status' => $fee->status]);
         }
 
-        $verified = \App\Support\Payments\MarzPayService::getCollectionStatus($fee->gateway_reference, (int) $fee->school_id);
-        $verifiedStatus = $verified['transaction']['status'] ?? null;
+        // Polling is a second door into the same settlement, so it goes through
+        // the same boundary as the webhook and must credit no less strictly.
+        // Previously it wrote the provider's amount straight into paid_amount
+        // without ever checking it was the invoice's own amount.
+        $evidence = \App\Support\Payments\MarzPayService::verifyTuitionPayment($fee);
 
-        if (in_array($verifiedStatus, ['successful', 'completed'], true)) {
-            $fee->update([
-                'status'          => 'paid',
-                'paid_amount'     => $verified['collection']['amount']['raw'] ?? $fee->total_amount,
-                'payment_method'  => 'marzpay',
-                'gateway_payload' => $verified,
-            ]);
-
-            return response()->json(['status' => 'paid']);
+        if ($evidence === null) {
+            return response()->json(['status' => $fee->status]);
         }
 
-        if (in_array($verifiedStatus, ['failed', 'cancelled'], true)) {
-            $fee->update(['status' => 'failed']);
+        \App\Support\Payments\TuitionFeeSettlement::apply($evidence);
 
-            return response()->json(['status' => 'failed']);
-        }
-
-        return response()->json(['status' => 'processing']);
+        return response()->json(['status' => $fee->fresh()->status]);
     }
 
     public function studentFeeinvoice(Request $request, $id)

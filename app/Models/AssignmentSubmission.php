@@ -66,7 +66,7 @@ class AssignmentSubmission extends Model
         'assignment_id', 'student_id', 'submission', 'file_path', 'link',
         'submitted_at', 'marks_awarded', 'feedback', 'status',
         // Course Offering shape
-        'course_offering_id', 'attempt_no', 'is_draft', 'file_name', 'file_size',
+        'course_offering_id', 'attempt_no', 'attempt_cycle', 'is_draft', 'file_name', 'file_size',
         'file_mime', 'graded_at', 'graded_by', 'returned_at', 'returned_by',
         'marks_released_at', 'idempotency_key',
     ];
@@ -79,6 +79,7 @@ class AssignmentSubmission extends Model
         'started_at' => 'datetime',
         'is_draft' => 'boolean',
         'attempt_no' => 'integer',
+        'attempt_cycle' => 'integer',
         'file_size' => 'integer',
         'marks_awarded' => 'float',
         'course_offering_id' => 'integer',

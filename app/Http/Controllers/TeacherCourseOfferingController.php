@@ -126,6 +126,56 @@ class TeacherCourseOfferingController extends Controller
         return back()->with('success', 'The course image has been removed.');
     }
 
+    /**
+     * THE COURSE PROGRESS GRID.
+     *
+     * Moodle's Activity Completion report is the benchmark: every student against
+     * every module, so a lecturer can see at a glance who is behind and where.
+     *
+     * AUTHORITY IS NOT RE-DERIVED HERE. The grid is a read model over
+     * `ModuleCompletion` and `AssignmentOutcome`, which between them already decide
+     * every question it reports. It adds a shape, not a rule - so it cannot come to
+     * disagree with the student-facing screens, which is the failure that matters:
+     * a lecturer told a student has passed while the student is locked out of the
+     * next topic.
+     *
+     * The SAME authorisation as the rest of the workspace: the allocation is
+     * re-checked here rather than inferred from the navigation that linked to it.
+     */
+    public function progress(Request $request, int $id): View
+    {
+        [$offering, $terms, $canTeach] = $this->resolve($request, $id);
+
+        $empty = ['modules' => [], 'rows' => [], 'totals' => ['students' => 0, 'modules' => 0, 'needing_attention' => 0]];
+
+        if (! $this->access->rosterAvailable($offering)) {
+            return view('teacher.course_offerings.progress', [
+                'offering' => $offering,
+                'terms' => $terms,
+                'canTeach' => $canTeach,
+                'grid' => $empty,
+                'withheld' => 'Student progress becomes available once teaching begins, and remains readable after the Course Offering is completed.',
+            ]);
+        }
+
+        // NOT FOUND, NOT A REFUSAL PAGE.
+        //
+        // This matches every other route in the workspace, and it is the stronger
+        // of the two answers: a 404 does not confirm the Course Offering exists, so
+        // the page cannot be used to discover which offerings a lecturer may not
+        // see. A polite "you are not allocated to teach this" would confirm all of
+        // that, and hand the same information to anyone who guessed an id.
+        abort_unless($canTeach, 404);
+
+        return view('teacher.course_offerings.progress', [
+            'offering' => $offering,
+            'terms' => $terms,
+            'canTeach' => true,
+            'grid' => app(\App\Support\CourseExperience\CourseProgressGrid::class)->forOffering($offering),
+            'withheld' => null,
+        ]);
+    }
+
     public function students(Request $request, int $id): View
     {
         [$offering, $terms, $canTeach] = $this->resolve($request, $id);

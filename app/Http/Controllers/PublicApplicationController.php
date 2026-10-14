@@ -11,6 +11,7 @@ use App\Models\WebsiteSetting;
 use App\Support\PublicTenantResolver;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\Request;
 
 /**
  * The public "Apply Now" landing page.
@@ -60,18 +61,12 @@ class PublicApplicationController extends Controller
         'DO NOT USE',
     ];
 
-    public function showForm()
+    public function showForm(Request $request)
     {
         $schoolId = PublicTenantResolver::resolveSchoolId();
 
         if (! $schoolId) {
             abort(503, get_phrase('Online applications are not currently configured.'));
-        }
-
-        // Already signed in as an applicant — no reason to show them the
-        // marketing page again.
-        if (Auth::guard('applicant')->check()) {
-            return redirect()->route('applicant.dashboard');
         }
 
         /**
@@ -121,6 +116,18 @@ class PublicApplicationController extends Controller
             ->orderBy('level')
             ->orderBy('name')
             ->get();
+
+        if ($request->has('programme_id')) {
+            $selectedId = filter_var($request->query('programme_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            $selected = $selectedId !== false ? $programmes->firstWhere('id', $selectedId) : null;
+            abort_unless($selected && $selected->is_published, 404);
+            $request->session()->put('public_programme_selection', ['school_id' => $schoolId, 'programme_id' => $selected->id]);
+        }
+        if (Auth::guard('applicant')->check()) {
+            return $request->has('programme_id')
+                ? redirect()->route('applicant.application.step', 'programme')
+                : redirect()->route('applicant.dashboard');
+        }
 
         $intakeSessions = IntakeSession::where('school_id', $schoolId)
             ->where('is_open', 1)

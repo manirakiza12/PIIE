@@ -73,19 +73,10 @@ Route::get('/health', function () {
 */
 
 // Clear application cache:
-Route::get('/clear-cache', function () {
-    Artisan::call('cache:clear');
-
-    //Artisan::call('route:cache');
-
-    Artisan::call('config:cache');
-
-    Artisan::call('view:clear');
-
+Route::post('/clear-cache', function () {
     Artisan::call('optimize:clear');
-
-    return 'Cache cleard';
-})->name('clear.cache');
+    return 'Cache cleared';
+})->middleware(['auth', 'superAdmin', 'throttle:2,1'])->name('clear.cache');
 
 // MarzPay's server posts here directly ΓÇö no login, no CSRF token (see
 // VerifyCsrfToken::$except). Shared across every payment flow; the payload's
@@ -126,6 +117,7 @@ Route::controller(HomeController::class)->group(function () {
 
     Route::match(['get', 'post'], '/', 'home')->name('landingPage');
     Route::get('website/{slug}', 'websitePage')->name('website.page');
+    Route::get('programmes/{id}', 'programmeDetail')->whereNumber('id')->name('website.programme.show');
     Route::get('download-brochure', 'downloadBrochure')->name('download.brochure');
 
     // ΓöÇΓöÇ PUBLIC ENQUIRY SUBMISSION ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -161,30 +153,69 @@ Route::get('id-card/verify/{student}', [IdCardVerificationController::class, 'sh
 // here and applicants are not `users`. No school selector: the institution
 // context is resolved automatically (see App\Support\PublicTenantResolver).
 
-// "Apply Now" landing page ΓÇö the entry point linked from the public website.
+// "Apply Now" landing page — the entry point linked from the public website.
+//
+// THE CANONICAL URI IS `admissions/apply`, not `apply`.
+//
+// The route NAME is unchanged, and that is the whole trick: every internal caller
+// - the public header, footer, hero and CTA blocks, the programme catalogue, and
+// the tests - says `route('apply.form')`. Moving the URI rather than renaming the
+// route means all of those follow the new address automatically, with no second
+// list of URLs to keep in step. Renaming the route instead would have meant
+// finding and editing every one of them, and any one missed would have silently
+// kept pointing at the old address.
+//
+// The nesting also groups it honestly: this page sits in the admissions journey
+// with `applicant/register` and `applicant/login`, and a bare top-level `/apply`
+// gave no hint of which journey a visitor had landed in.
 Route::controller(\App\Http\Controllers\PublicApplicationController::class)->group(function () {
     Route::get('admissions/apply', 'showForm')->name('apply.form');
 });
 
-// The old address, kept alive by a PERMANENT redirect.
-//
-// `/apply` is already published, printed on prospectuses, shared and indexed, and
-// none of that can be recalled by changing a route. 301 rather than 302 so that
-// whatever authority the old address accumulated is handed to the new one instead
-// of being discarded with a "this move is temporary" signal to crawlers.
-//
-// GET and HEAD only. `Route::redirect()` was rejected because it registers through
-// `Route::any()` and would answer POST/PUT/DELETE with a 301 on a verb that has no
-// meaning at a page; `/apply` is a page, not an endpoint, and 405 is the truthful
-// answer to anything else.
-//
-// The destination is deliberately RELATIVE. `Location: /admissions/apply` makes the
-// browser carry over whichever host and scheme it already used, so this cannot
-// become a redirect loop when the site is reached over a different address than
-// the one configured in the environment.
-//
-// Deliberately NOT a closure: a closure makes `route:cache` serialise a Closure
-// object, and a RedirectController route is unambiguously cacheable.
+/**
+ * THE OLD `/apply` ADDRESS, KEPT ALIVE.
+ *
+ * A 301, not a 302. `/apply` has been published, linked from social media, printed
+ * on prospectuses and possibly indexed by a search engine, and none of that can be
+ * recalled by changing a route. A permanent redirect is the only answer that hands
+ * that accumulated authority to the new address instead of discarding it; a 302
+ * would tell a crawler the move is temporary and leave the old URL sitting in the
+ * search results.
+ *
+ * A `RedirectController` route, NOT a closure returning `redirect()->to(route(...))`.
+ *
+ * The closure version keeps the destination out of this file, which is tidier, and
+ * it was the first thing written. It was changed because a closure forces
+ * `route:cache` to serialise a Closure object into `bootstrap/cache/routes-v7.php`.
+ * That works on this framework version - verified, not assumed - but it is the one
+ * route-table pattern most likely to behave differently on a deploy machine, and a
+ * redirect route is unambiguously cacheable.
+ *
+ * `Route::redirect()` WAS TRIED AND REJECTED, for two reasons worth recording.
+ *
+ * It registers through `Route::any()`, so the redirect answers POST, PUT, PATCH
+ * and DELETE as well - a 301 on a POST is a redirect the visitor never asked for,
+ * on a verb that has no meaning at this address. `/apply` is a page, not an
+ * endpoint, and 405 is the truthful answer to anything else.
+ *
+ * And its return value does not chain. `Router::redirect()` hands back a route
+ * through the registrar rather than something `->methods()` and `->name()` can be
+ * applied to in turn, so constraining it that way dies at route-registration time
+ * with "Call to a member function name() on array". `Route::match()` states the
+ * verbs and the controller plainly and has no such ambiguity.
+ *
+ * The cost is a literal destination, which is a second place the canonical address
+ * appears. `ApplyUrlMoveTest` closes that gap by asserting this string is exactly
+ * the path `route('apply.form')` generates, so if the canonical address ever moves
+ * again this line fails loudly instead of quietly redirecting into nothing.
+ *
+ * The destination is deliberately RELATIVE. It is emitted as `Location:
+ * /admissions/apply`, so the browser carries over whichever host and scheme it
+ * already used to reach us. That is what keeps this from becoming a redirect loop
+ * when the site is visited over a different hostname or protocol than the one
+ * baked into the environment file - a hard-coded absolute URL is exactly how those
+ * loops get built.
+ */
 Route::match(['get', 'head'], 'apply', \Illuminate\Routing\RedirectController::class)
     ->defaults('destination', '/admissions/apply')
     ->defaults('status', 301)
@@ -745,6 +776,8 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::post('admin/fee_manager_list/{id}', 'feeManagerUpdate')->name('admin.fee_manager.update');
     Route::get('admin/student_fee/delete/{id}', 'studentFeeDelete')->name('admin.fee_manager.delete');
     Route::get('admin/student_fee/invoice/{id}', 'studentFeeinvoice')->name('admin.studentFeeinvoice');
+    Route::post('admin/student_fee/invoice/{id}/email', [\App\Http\Controllers\InvoiceEmailController::class, 'send'])->name('admin.invoice_email.send')->middleware('throttle:10,1');
+    Route::post('admin/invoice-email/preferences', [\App\Http\Controllers\InvoiceEmailController::class, 'preferences'])->name('admin.invoice_email.preferences');
     Route::get('admin/offline_payment/pending', 'offline_payment_pending')->name('admin.offline_payment_pending')->middleware('admin_permission');
 
     //Expense routes
@@ -1141,6 +1174,7 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
     Route::get('student/dashboard', 'studentDashboard')->name('student.dashboard')->middleware('role_id');
     Route::get('student/id-card', 'idCardGenerate')->name('student.id_card');
     Route::get('student/id-card/pdf', 'idCardPdf')->name('student.id_card.pdf');
+    Route::get('student/admission-letter', 'admissionLetter')->name('student.admission_letter');
     Route::get('student/my-courses', 'myCourses')->name('student.my_courses');
 
     // ΓöÇΓöÇ Course Assignments (student) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -1157,6 +1191,11 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
             // Both are POSTs. Saving a draft is NOT submitting, and submitting
             // consumes an attempt - neither may ever be a link.
             Route::post('/{assignment}/draft', 'saveDraft')->whereNumber('assignment')->name('draft');
+
+    // Autosave. Debounced per question from the page, writing through the SAME
+    // `saveDraft` the manual button uses - so it cannot consume an attempt, and it
+    // is stopped by the same deadline gate.
+    Route::post('/{assignment}/autosave', 'autosaveAnswer')->whereNumber('assignment')->name('autosave');
             Route::post('/{assignment}/submit', 'submit')->whereNumber('assignment')->name('submit');
             Route::get('/{assignment}/submissions/{submission}', 'submission')
                 ->whereNumber('assignment')->whereNumber('submission')->name('submissions.show');
@@ -1445,6 +1484,8 @@ Route::controller(AccountantController::class)->middleware('accountant', 'auth')
     Route::post('accountant/fee_manager_list/{id}', 'feeManagerUpdate')->name('accountant.fee_manager.update');
     Route::get('accountant/student_fee/delete/{id}', 'studentFeeDelete')->name('accountant.fee_manager.delete');
     Route::get('accountant/student_fee/invoice/{id}', 'studentFeeinvoice')->name('accountant.studentFeeinvoice');
+    Route::post('accountant/student_fee/invoice/{id}/email', [\App\Http\Controllers\InvoiceEmailController::class, 'send'])->name('accountant.invoice_email.send')->middleware('throttle:10,1');
+    Route::post('accountant/invoice-email/preferences', [\App\Http\Controllers\InvoiceEmailController::class, 'preferences'])->name('accountant.invoice_email.preferences');
     Route::get('accountant/student_fee_manager/sync', 'feeSyncForm')->name('accountant.fee_manager.sync');
     Route::post('accountant/student_fee_manager/sync', 'feeSyncGenerate')->name('accountant.fee_manager.sync.generate');
 
@@ -1507,6 +1548,8 @@ Route::controller(AccountantController::class)->middleware('bursar', 'auth')->gr
     Route::post('bursar/fee_manager_list/{id}', 'feeManagerUpdate')->name('bursar.fee_manager.update');
     Route::get('bursar/student_fee/delete/{id}', 'studentFeeDelete')->name('bursar.fee_manager.delete');
     Route::get('bursar/student_fee/invoice/{id}', 'studentFeeinvoice')->name('bursar.studentFeeinvoice');
+    Route::post('bursar/student_fee/invoice/{id}/email', [\App\Http\Controllers\InvoiceEmailController::class, 'send'])->name('bursar.invoice_email.send')->middleware('throttle:10,1');
+    Route::post('bursar/invoice-email/preferences', [\App\Http\Controllers\InvoiceEmailController::class, 'preferences'])->name('bursar.invoice_email.preferences');
     Route::get('bursar/student_fee_manager/sync', 'feeSyncForm')->name('bursar.fee_manager.sync');
     Route::post('bursar/student_fee_manager/sync', 'feeSyncGenerate')->name('bursar.fee_manager.sync.generate');
     Route::get('bursar/offline_payment/pending', 'offline_payment_pending')->name('bursar.offline_payment_pending');
@@ -1596,6 +1639,9 @@ Route::controller(LibrarianController::class)->middleware('librarian', 'auth')->
     Route::any('librarian/password/{action_type}', 'password')->name('librarian.password');
     Route::post('librarian/language', 'user_language')->name('librarian.language');
     Route::get('librarian/message/chat_empty', 'chat_empty')->name('librarian.message.chat_empty');
+    Route::get('librarian/message/all-message/{id}', 'allMessage')->whereNumber('id')->name('librarian.message.all_message');
+    Route::get('librarian/message/message-thrades/{id}', 'messagethrades')->whereNumber('id')->name('librarian.message.messagethrades');
+    Route::post('librarian/message/single-chat/save', 'chat_save')->middleware('throttle:60,1')->name('librarian.message.chat_save');
 });
 //Librarian routes end here
 
@@ -1647,6 +1693,17 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
     // exactly the shape of mistake not to repeat here.
     Route::post('admin/programmes/{id}/cover',        'storeCover')->whereNumber('id')->name('admin.programmes.cover.store');
     Route::post('admin/programmes/{id}/cover/remove', 'removeCover')->whereNumber('id')->name('admin.programmes.cover.remove');
+
+    // The gallery: up to TWO additional pictures beside the cover. Separate routes
+    // from the cover's own because the storage, the limit and the unit of removal
+    // are all different - one cover held as columns on `programmes`, up to two
+    // gallery rows in `programme_gallery_images`. PROGRAMMES ONLY: there is
+    // deliberately no equivalent for course units, lessons, lesson materials or
+    // examinations, whose media is private teaching material with its own
+    // authorisation rules and must never inherit a public upload path.
+    Route::get('admin/programmes/{id}/gallery',            'galleryImages')->whereNumber('id')->name('admin.programmes.gallery.index');
+    Route::post('admin/programmes/{id}/gallery',           'storeGalleryImage')->whereNumber('id')->name('admin.programmes.gallery.store');
+    Route::delete('admin/programmes/{id}/gallery/{image}', 'destroyGalleryImage')->whereNumber(['id', 'image'])->name('admin.programmes.gallery.destroy');
     Route::post('admin/programmes/{id}/publish',      'publish')->whereNumber('id')->name('admin.programmes.publish');
     Route::post('admin/programmes/{id}/unpublish',    'unpublish')->whereNumber('id')->name('admin.programmes.unpublish');
     Route::get('admin/programmes/{id}/preview',       'preview')->whereNumber('id')->name('admin.programmes.preview');
@@ -2074,7 +2131,8 @@ Route::controller(TeacherCourseOfferingController::class)->middleware('auth', 't
     // superseded file; these routes only hand it the upload.
     Route::post('/{id}/cover-image', 'setCoverImage')->whereNumber('id')->name('cover.set');
     Route::post('/{id}/cover-image/remove', 'clearCoverImage')->whereNumber('id')->name('cover.clear');
-Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
+    Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
+    Route::get('/{id}/progress', 'progress')->whereNumber('id')->name('progress');
     // ΓöÇΓöÇ Course Offering Quizzes & Exams ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     //
     // A CONTEXT BINDER, not an exam engine. `store()` creates an assessment bound
@@ -2203,6 +2261,16 @@ Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
 
             // Lecturer handouts
             Route::post('/{assignment}/resources', 'storeResource')->whereNumber('assignment')->name('resources.store');
+
+        // Attaching a handout to an assignment that does not exist yet.
+        //
+        // Not every assignment is a written brief: a dataset, a case study or a
+        // worksheet is a complete assignment on its own. Without this, handouts
+        // were only offered on the edit screen, so such a lecturer had to invent a
+        // brief purely to unlock the upload button. The handler creates the draft
+        // and attaches in one request, and forces the status to draft so no
+        // request can publish an assessment by attaching a file to it.
+        Route::post('/assignments/handouts', 'storeResourceForNewAssignment')->name('resources.store_new');
         });
 
     // Handout bytes. RELATIVE paths, because the enclosing group already applies
@@ -2237,6 +2305,11 @@ Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
     // append to it, which is a silent and very confusing way to lose a route.
     Route::controller(CourseOfferingContentController::class)->prefix('/{id}/content')->whereNumber('id')->name('content.')->group(function () {
         Route::get('/', 'index')->name('index');
+
+        // The per-course progression gate. A deliberate, lecturer-owned decision -
+        // see `updateProgression()` for why this is a switch a lecturer flips
+        // deliberately, and never a migration that turns it on in bulk.
+        Route::put('/progression', 'updateProgression')->name('progression');
 
         Route::post('/modules', 'storeModule')->name('modules.store');
         Route::put('/modules/{module}', 'updateModule')->whereNumber('module')->name('modules.update');
@@ -2277,6 +2350,16 @@ Route::get('/{id}/students', 'students')->whereNumber('id')->name('students');
         Route::post('/lessons/{lesson}/preview', 'previewLesson')->whereNumber('lesson')->name('lessons.preview.draft');
 
         Route::post('/lessons/{lesson}/resources', 'storeResource')->whereNumber('lesson')->name('resources.store');
+
+// Attaching material to a lesson that does not exist yet.
+//
+// Not every lesson is written prose: a scanned handout, a slide deck or a
+// recorded lecture is a complete lesson on its own. Without this, attachments
+// were only offered on the edit screen, so such a lecturer had to type filler
+// text purely to unlock the upload. The handler creates the draft and attaches
+// in one request - never a temporary store, because orphan files and a cleanup
+// job are a worse problem than the one being solved.
+Route::post('/lessons/attachments', 'storeResourceForNewLesson')->name('lessons.resources.store_new');
     });
 
     // Attachment bytes.

@@ -1,5 +1,6 @@
 <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('accountant.create.fee_manager', ['value' => 'single']) }}">
-	@csrf 
+	@csrf
+@include('shared.invoice_email_option')
 	<div class="form-row">
 		<div class="fpb-7">
 			<label for="class_id_on_create" class="eForm-label">{{ get_phrase('Class') }}</label>

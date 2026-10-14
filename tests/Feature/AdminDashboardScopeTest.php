@@ -127,7 +127,7 @@ class AdminDashboardScopeTest extends TestCase
         $response->assertDontSee('Needs Your Action');
     }
 
-    public function test_needs_your_action_panel_is_absent_for_a_non_primary_school(): void
+    public function test_non_primary_school_dashboard_shows_only_its_own_admissions_action_items(): void
     {
         $primarySchoolId = $this->makeSchool();
         $otherSchoolId = $this->makeSchool();
@@ -135,10 +135,11 @@ class AdminDashboardScopeTest extends TestCase
 
         $admin = $this->makeAdminUser($otherSchoolId);
         $this->makeAdmission($otherSchoolId, ['status' => Admission::STATUS_SUBMITTED]);
+        $this->makeAdmission($primarySchoolId, ['status' => Admission::STATUS_SUBMITTED, 'first_name' => 'Foreign applicant']);
 
         $response = $this->actingAs($admin)->get(route('admin.dashboard'));
 
         $response->assertStatus(200);
-        $response->assertDontSee('Needs Your Action');
+        $response->assertSee('Needs Your Action')->assertDontSee('Foreign applicant');
     }
 }

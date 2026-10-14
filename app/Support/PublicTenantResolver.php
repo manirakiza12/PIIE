@@ -21,12 +21,8 @@ class PublicTenantResolver
     {
         $configured = get_settings('primary_school_id');
 
-        if (! empty($configured)) {
-            return (int) $configured;
-        }
+        $id = filter_var($configured, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
-        // No value configured yet — fall back to the first school on record
-        // rather than failing the public form outright.
-        return School::query()->orderBy('id')->value('id');
+        return $id !== false && School::query()->whereKey($id)->exists() ? (int) $id : null;
     }
 }

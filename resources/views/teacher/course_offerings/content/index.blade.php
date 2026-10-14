@@ -61,6 +61,110 @@
     </div>
 @endif
 
+{{-- ══ THE PROGRESSION GATE ═══════════════════════════════════════════════
+     "A student cannot read the next content until the current one is finished."
+
+     This is that switch, per course, owned by the lecturer who teaches it. It is
+     OFF by default so that no existing student is locked out of content they have
+     already paid for - and it was previously off FOREVER, because the column
+     existed only on the model, with no route and no control. A safety default that
+     nobody can deliberately lift is not a safety default, it is a missing feature.
+
+     THE COUNTS ARE HERE BECAUSE "FINISHED" MEANS TWO DIFFERENT THINGS.
+
+     With a pass mark on the required tasks, finished means PASSED - which is what
+     most people mean when they tick this. Without one, it means HANDED IN: the
+     student's satisfaction is the act of submission, whatever mark comes back.
+     Both are legitimate, they are different promises, and a lecturer cannot tell
+     them apart from a checkbox. A lecturer who switches on a gate they believe is
+     about passing, and finds it stopping students who submitted a week ago and
+     are waiting to be marked, has been misled by the interface - so the numbers
+     that distinguish the two cases are supplied rather than left to be discovered.
+--}}
+<section class="eSection-wrap mb-3" aria-labelledby="cc-gate-heading" data-testid="cc-progression-panel">
+    <h5 id="cc-gate-heading" class="mb-2">How students move through this course</h5>
+
+    <div class="border rounded p-3">
+        @if($canManage)
+            <form method="POST"
+                  action="{{ route('teacher.course_offerings.content.progression', $offering->id) }}">
+                @csrf
+                @method('PUT')
+
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           id="cc-gate-progression" name="gate_progression" value="1"
+                           @checked($offering->gate_progression)
+                           data-testid="cc-gate-toggle">
+                    <label class="form-check-label fw-semibold" for="cc-gate-progression">
+                        Require each topic to be finished before the next one opens
+                    </label>
+                </div>
+
+                <p class="small text-muted mb-2">
+                    @if($offering->gate_progression)
+                        <strong class="text-success">Currently ON.</strong>
+                        A student who has not finished a topic cannot open the one after it,
+                        on any device, including by typing the address directly.
+                    @else
+                        <strong>Currently OFF.</strong>
+                        Every student can open every topic at once.
+                    @endif
+                </p>
+
+                @if($progression['required'] === 0)
+                    <div class="alert alert-info small mb-2" role="note">
+                        This course has <strong>no required tasks</strong>, so nothing currently
+                        holds a student back: each topic is finished when its lessons are read.
+                    </div>
+                @elseif($progression['unthresholded'] > 0)
+                    <div class="alert alert-warning small mb-2" role="note">
+                        <strong>{{ $progression['unthresholded'] }} of {{ $progression['required'] }}
+                        required {{ $progression['unthresholded'] === 1 ? 'task has' : 'tasks have' }}
+                        no pass mark.</strong>
+                        For {{ $progression['unthresholded'] === 1 ? 'that task' : 'those tasks' }},
+                        &ldquo;finished&rdquo; means <strong>handed in</strong> &mdash; whatever mark comes back.
+                        Add a pass mark to the {{ $progression['unthresholded'] === 1 ? 'task' : 'tasks' }}
+                        if you mean finished to mean <strong>passed</strong>.
+                    </div>
+                @else
+                    <div class="alert alert-success small mb-2" role="note">
+                        All {{ $progression['required'] }} required
+                        {{ $progression['required'] === 1 ? 'task carries' : 'tasks carry' }} a pass mark,
+                        so &ldquo;finished&rdquo; means <strong>passed</strong>.
+                    </div>
+                @endif
+
+                <p class="small text-muted mb-3">
+                    @if($progression['students'] > 0)
+                        {{ $progression['students'] }}
+                        {{ $progression['students'] === 1 ? 'student is' : 'students are' }}
+                        enrolled now. Switching this on takes effect for {{ $progression['students'] === 1 ? 'that student' : 'them' }}
+                        immediately &mdash; any student behind on a topic will lose access to the ones
+                        after it.
+                    @else
+                        Nobody is enrolled on this course yet, so switching this on affects no one today.
+                    @endif
+                </p>
+
+                <button type="submit" class="btn btn-sm btn-primary" data-testid="cc-gate-save">
+                    Save this setting
+                </button>
+            </form>
+        @else
+            {{-- View-only, like the rest of the authoring surface. The route
+                 authorises every write regardless. --}}
+            <p class="small mb-0">
+                <strong>{{ $offering->gate_progression ? 'On' : 'Off' }}</strong> &mdash;
+                {{ $offering->gate_progression
+                    ? 'each topic must be finished before the next one opens.'
+                    : 'every student can open every topic at once.' }}
+                You are not allocated to teach this course, so this cannot be changed here.
+            </p>
+        @endif
+    </div>
+</section>
+
 {{-- ══ How this works ════════════════════════════════════════════════════ --}}
 <section class="eSection-wrap mb-3" aria-labelledby="cc-how-heading">
     <h5 id="cc-how-heading" class="mb-2">How this works</h5>

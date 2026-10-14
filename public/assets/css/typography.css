@@ -1,0 +1,41 @@
+/* One locally hosted text family across the public site and every portal. */
+@font-face {
+    font-family: 'Nunito';
+    src: url('fonts/Nunito-Regular.woff') format('woff');
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Nunito';
+    src: url('fonts/Nunito-SemiBold.woff') format('woff');
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Nunito';
+    src: url('fonts/Nunito-Bold.woff') format('woff');
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+:root {
+    --piie-font: 'Nunito', Arial, sans-serif;
+    --piie-font-body: var(--piie-font);
+    --piie-font-head: var(--piie-font);
+    --bs-font-sans-serif: var(--piie-font);
+    --bs-body-font-family: var(--piie-font);
+}
+/* Target text, including editor content and forms; keep icon glyph families. */
+html, body,
+body :is(h1,h2,h3,h4,h5,h6,p,a,label,input,button,select,textarea,option,optgroup,
+         table,thead,tbody,tfoot,tr,td,th,ul,ol,li,dl,dt,dd,small,strong,b,em,
+         blockquote,legend,fieldset,summary,details,code,pre,kbd,samp,font,div,span,text,tspan):not(:is(
+    .bi,[class^='bi-'],[class*=' bi-'],.fa,.fas,.far,.fal,.fab,.fad,
+    .fa-solid,.fa-regular,.fa-brands,[class^='icon-'],[class*=' icon-'],
+    [class^='mdi'],[class*=' mdi'],[class^='entypo'],[class*=' entypo'],
+    [class^='flaticon'],[class*=' flaticon'],[class^='dripicons'],[class*=' dripicons'],
+    [class^='note-icon'],[class*=' note-icon'])) {
+    font-family: var(--piie-font) !important;
+}

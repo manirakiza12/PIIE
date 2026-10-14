@@ -136,6 +136,10 @@ trait LiveClassFixture
                 $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('subject_id');
                 $t->unsignedBigInteger('academic_year_id'); $t->unsignedBigInteger('academic_period_id');
                 $t->string('reference', 50)->nullable(); $t->string('status', 20)->default('draft'); $t->timestamps();
+                // Mirrors 2026_10_11_091000_add_progression_gate_to_course_offerings.
+                // The fixture builds its own schema rather than migrating, so a
+                // column added by a migration has to be declared here too.
+                $t->boolean('gate_progression')->default(false);
             });
         }
         if (! Schema::hasTable('course_offering_lecturer_allocations')) {

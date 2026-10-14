@@ -121,6 +121,43 @@
                         </div>
                     </div>
 
+                    {{-- The GALLERY: the additional pictures beside the cover. They
+                         appear on the programme's own view only — never on a
+                         catalogue card, never on a list, never on another
+                         programme's page. If the application grows a public
+                         programme detail page, this is the strip it should render,
+                         because the images already pass through the same
+                         16:9 crop and re-encode as the cover. --}}
+                    <div class="card mt-4" style="max-width:70ch">
+                        <div class="card-body">
+                            <h6 class="card-title" style="font-size:.95rem">
+                                {{ get_phrase('Gallery') }}
+                                <span class="badge bg-light text-dark border ms-1">
+                                    {{ count($galleryUrls) }} / {{ $galleryMax }}
+                                </span>
+                            </h6>
+
+                            @if(! empty($galleryUrls))
+                                <div class="row g-2">
+                                    @foreach($galleryUrls as $galleryUrl)
+                                        <div class="col-6 col-md-4">
+                                            <img src="{{ $galleryUrl }}"
+                                                 alt="{{ get_phrase('Gallery image for') }} {{ $programme->name }}"
+                                                 style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px;border:1px solid #e6e9ef;">
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <p class="text-muted mt-2 mb-0" style="font-size:.8125rem;">
+                                    {{ get_phrase('Additional images are shown only where this single programme is shown.') }}
+                                </p>
+                            @else
+                                <p class="text-muted mb-0" style="font-size:.875rem;">
+                                    {{ get_phrase('No gallery images. The cover alone is a normal state.') }}
+                                </p>
+                            @endif
+                        </div>
+                    </div>
+
                     {{-- What the card is NOT showing, stated plainly. An
                          administrator needs to know that a missing price is a
                          deliberate withholding rather than an oversight. --}}

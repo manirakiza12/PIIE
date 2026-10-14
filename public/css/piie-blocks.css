@@ -291,6 +291,82 @@
     grid-template-columns: minmax(0, 1fr);
 }
 
+/* Award-type index. A wrapping row of links rather than a dropdown, so the whole
+   set of categories is visible at once on a page whose entire purpose is letting
+   a candidate narrow the list. Scrolls horizontally on a phone instead of
+   wrapping into an unusable stack. */
+.piie-category-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: var(--piie-space-4);
+}
+
+.piie-category-nav__link {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .5rem .875rem;
+    border: 1px solid var(--piie-line);
+    border-radius: 999px;
+    background: var(--piie-surface);
+    color: var(--piie-ink);
+    font-size: .875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color .2s ease, border-color .2s ease, color .2s ease;
+}
+
+.piie-category-nav__link:hover,
+.piie-category-nav__link:focus-visible {
+    border-color: var(--piie-primary);
+    color: var(--piie-primary);
+}
+
+/* The selected category. Also marked with aria-current in the markup, so the
+   state does not depend on colour alone. */
+.piie-category-nav__link.is-current {
+    background: var(--piie-primary);
+    border-color: var(--piie-primary);
+    color: #fff;
+}
+
+.piie-category-nav__count {
+    font-variant-numeric: tabular-nums;
+    opacity: .7;
+    font-weight: 500;
+}
+
+/* One section per award type. The heading is an anchor target: a category link
+   ends in #piie-category-<slug> so selecting a category also brings its section
+   into view. */
+.piie-catalogue__group {
+    margin-bottom: var(--piie-space-6);
+}
+
+.piie-catalogue__group-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 0 0 var(--piie-space-3);
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--piie-ink);
+}
+
+.piie-catalogue__group-count {
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--piie-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* A section jumped to via the category links must not hide under a sticky
+   header, so its heading takes scroll-margin. */
+.piie-catalogue__group {
+    scroll-margin-top: var(--piie-space-6);
+}
+
 .piie-pagination {
     display: flex;
     flex-wrap: wrap;
@@ -612,6 +688,18 @@
 }
 
 @media (max-width: 575.98px) {
+    /* Six category links wrap into a tall stack on a phone, which pushes the
+       actual programmes below the fold. One scrolling row keeps them reachable
+       without that cost. */
+    .piie-category-nav {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .piie-category-nav__link { white-space: nowrap; }
+
     .piie-timeline > li { grid-template-columns: 2.5rem minmax(0, 1fr); gap: var(--piie-space-2); }
     .piie-timeline > li::before { width: 2.5rem; height: 2.5rem; font-size: .8125rem; }
     .piie-filters { padding: var(--piie-space-3); }

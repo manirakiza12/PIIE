@@ -216,6 +216,9 @@ jobs:
           php artisan migrate --force --no-interaction
 
       # ---- PHPUnit -----------------------------------------------------------
+      - name: Verify routes, links and compiled template syntax
+        run: php scripts/system-route-audit.php
+
       # `--testdox` is not used: the output is unreadable at this size. Failures
       # are captured to a file and published as an artefact so the CI summary can
       # show WHICH tests failed without the log needing scrolling.
@@ -276,6 +279,7 @@ jobs:
             phpunit-ci.log
             phpunit-ci.txt
             junit.xml
+            output/system-check/routes.json
           retention-days: 14
           if-no-files-found: warn
 

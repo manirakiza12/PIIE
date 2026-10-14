@@ -231,6 +231,7 @@ class ApplicationWorkflow
             'new_values'  => ['status' => $newStatus],
         ]);
 
+        if ($newStatus === Admission::STATUS_ENROLLED) AdmissionLetterDocument::issue($admission);
         ApplicantNotifier::statusChanged($admission, $fromStatus);
 
         return true;
