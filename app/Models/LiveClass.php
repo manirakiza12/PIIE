@@ -166,6 +166,8 @@ class LiveClass extends Model
         // classes created before this feature existed.
         'google_calendar_event_id',
         'google_conference_status',
+        'google_account_owner_id',
+        'google_calendar_id',
         'scheduled_at',
         'ends_at',
         'start_date',

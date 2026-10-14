@@ -26,6 +26,8 @@ final class MeetingResolution
         public readonly ?string $eventId = null,
         public readonly ?string $conferenceStatus = null,
         public readonly ?string $htmlLink = null,
+        public readonly ?int $ownerUserId = null,
+        public readonly ?string $calendarId = null,
     ) {}
 
     /**

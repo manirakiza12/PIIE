@@ -52,6 +52,13 @@ final class GoogleOAuthCredentials
      */
     public static function read(): array
     {
+        // The test override and existing private-file installations remain supported.
+        if (self::$pathOverride === null && ($settings = GoogleMeetSetup::settings())) {
+            if (!$settings->enabled || !$settings->client_id || !$settings->client_secret) {
+                throw new RuntimeException('Google Meet is disabled or its credentials are incomplete.');
+            }
+            return ['client_id' => $settings->client_id, 'client_secret' => $settings->client_secret, 'redirect_uri' => GoogleMeetSetup::callbackUrl()];
+        }
         $path = self::path();
 
         if (! is_file($path) || ! is_readable($path)) {

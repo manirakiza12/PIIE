@@ -459,6 +459,7 @@ class LiveClassController extends Controller
             ...array_filter([
                 'google_calendar_event_id' => $meetNowResolution?->eventId,
                 'google_conference_status' => $meetNowResolution?->conferenceStatus,
+                ...($meetNowResolution?->ownerUserId && \Illuminate\Support\Facades\Schema::hasColumn('live_classes', 'google_account_owner_id') ? ['google_account_owner_id' => $meetNowResolution->ownerUserId, 'google_calendar_id' => $meetNowResolution->calendarId] : []),
             ], fn ($value) => $value !== null),
             'created_by' => Auth::id(),
             'updated_by' => Auth::id(),
@@ -1489,6 +1490,10 @@ class LiveClassController extends Controller
         if ($googleEventId !== null || $googleConferenceStatus !== null) {
             $attributes['google_calendar_event_id'] = $googleEventId;
             $attributes['google_conference_status'] = $googleConferenceStatus;
+            if (!empty($resolution?->ownerUserId) && \Illuminate\Support\Facades\Schema::hasColumn('live_classes', 'google_account_owner_id')) {
+                $attributes['google_account_owner_id'] = $resolution->ownerUserId;
+                $attributes['google_calendar_id'] = $resolution->calendarId;
+            }
         }
 
         try {
@@ -1902,6 +1907,7 @@ class LiveClassController extends Controller
         $endsAt = Carbon::parse($validated['start_date'] . ' ' . $validated['end_time'], $validated['timezone'] ?? config('app.timezone', 'UTC'));
 
         $meetingUrl = $validated['meeting_url'] ?? ($existing?->meeting_url ?? null);
+        $resolution = null;
         $googleEventId = $existing?->google_calendar_event_id;
         $googleConferenceStatus = $existing?->google_conference_status;
 
@@ -1935,7 +1941,7 @@ class LiveClassController extends Controller
         $statusInput = $validated['status'] ?? ($existing?->status ?? LiveClass::STATUS_DRAFT);
         $status = $this->deriveStatus($statusInput, $scheduledAt, $endsAt, $isPublished);
 
-        return [
+        $payload = [
             'school_id' => $this->school_id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -1980,6 +1986,10 @@ class LiveClassController extends Controller
         if ($googleEventId !== null || $googleConferenceStatus !== null) {
             $payload['google_calendar_event_id'] = $googleEventId;
             $payload['google_conference_status'] = $googleConferenceStatus;
+            if (!empty($resolution?->ownerUserId) && \Illuminate\Support\Facades\Schema::hasColumn('live_classes', 'google_account_owner_id')) {
+                $payload['google_account_owner_id'] = $resolution->ownerUserId;
+                $payload['google_calendar_id'] = $resolution->calendarId;
+            }
         }
 
         return $payload;
@@ -2332,12 +2342,28 @@ class LiveClassController extends Controller
              * the provider the lecturer chose, not with the meeting link they may
              * still paste in by hand. Manual entry is untouched.
              */
-            if ($requireOwnGoogleAccount) {
+            if ($requireOwnGoogleAccount && (int) Auth::user()->role_id === PermissionService::TEACHER) {
                 throw ValidationException::withMessages([
                     'platform' => get_phrase('Connect your Google Account before scheduling a Google Meet class.'),
                 ]);
             }
 
+            if (\App\Support\Google\GoogleMeetSetup::settings()) {
+                $owner = \App\Support\Google\GoogleMeetSetup::owner((int) $this->school_id);
+                if (!$owner || !GoogleOAuthCredentials::isConfigured()) throw ValidationException::withMessages(['platform' => 'Ask Super Admin to connect the institution Google account in Google Meet Setup.']);
+                try {
+                    $access = app(GoogleAccountService::class)->accessTokenFor($owner);
+                    if (!$access) throw new RuntimeException('Institution Google account needs reconnection.');
+                    $calendarId = \App\Support\Google\GoogleMeetSetup::settings()->calendar_id;
+                    $result = app(GoogleCalendarService::class)->createMeetingEvent($access['token'], $calendarId, [
+                        'title' => $title, 'description' => $description, 'starts_at' => $scheduledAt, 'ends_at' => $endsAt, 'timezone' => $timezone,
+                        'attendees' => LiveClassMeetGuest::forSchool($this->school_id)->pluck('email')->map(fn ($email) => ['email' => $email])->all(),
+                    ]);
+                    return new MeetingResolution($result['meeting_url'], $result['event_id'], $result['conference_status'], $result['html_link'], (int) $owner->id, $calendarId);
+                } catch (\Throwable $e) {
+                    throw ValidationException::withMessages(['meeting_url' => 'Google could not create this meeting. Verify the Calendar API and institution account connection in Google Meet Setup.']);
+                }
+            }
             $url = $this->callMeetingProvider('Google Meet', fn () => $this->createGoogleMeetUrl($title, $scheduledAt, $endsAt, $timezone));
             if (!empty($url)) {
                 return MeetingResolution::urlOnly($url);
@@ -2704,6 +2730,7 @@ class LiveClassController extends Controller
     private function platformIsConfigured(string $platform): bool
     {
         if ($platform === 'google_meet') {
+            if (\App\Support\Google\GoogleMeetSetup::settings()) return \App\Support\Google\GoogleMeetSetup::ready((int) $this->school_id);
             return (string) config('services.google_meet.client_id') !== ''
                 && (string) config('services.google_meet.client_secret') !== ''
                 && (string) config('services.google_meet.refresh_token') !== '';
