@@ -95,6 +95,15 @@
                 <div class="eForm-layouts">
                 <form action="{{route('student.profile.update')}}" method="post" enctype="multipart/form-data">
                     @CSRF
+                    @if ($errors->any())
+                        <div class="alert alert-danger" role="alert">
+                            <ul class="mb-0">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
                     
                     <div class="fpb-7">
                     <label for="eInputName" class="eForm-label">{{ get_phrase('Name') }}</label>
@@ -103,7 +112,7 @@
                         class="form-control eForm-control"
                         id="eInputName"
                         name="name"
-                        value="{{ auth()->user()->name }}"
+                        value="{{ old('name', auth()->user()->name) }}"
                         placeholder="Your Name"
                         aria-label="Your Name"
                     />
@@ -117,7 +126,7 @@
                         class="form-control eForm-control"
                         id="eInputEmail"
                         name="email"
-                        value="{{ auth()->user()->email }}"
+                        value="{{ old('email', auth()->user()->email) }}"
                         placeholder="example@email.com"
                         aria-label="example@email.com"
                     />
@@ -139,7 +148,7 @@
                         class="form-control eForm-control"
                         id="eInputDate"
                         name="eDefaultDateRange"
-                        value="{{ date('m/d/Y', $birthday) }}"
+                        value="{{ old('eDefaultDateRange', date('m/d/Y', $birthday)) }}"
                     />
                     </div>
                     <div class="fpb-7">
@@ -163,7 +172,7 @@
                         class="form-control eForm-control"
                         id="eInputPhone"
                         name="phone"
-                        value="{{ $user_information['phone'] }}"
+                        value="{{ old('phone', $user_information['phone']) }}"
                         placeholder="00 (00) 12345 6789"
                         aria-label="00 (00) 12345 6789"
                     />
@@ -177,7 +186,7 @@
                         class="form-control eForm-control"
                         id="eInputAddress"
                         name="address"
-                        value="{{ $user_information['address'] }}"
+                        value="{{ old('address', $user_information['address']) }}"
                         placeholder="Enter Address"
                         aria-label="Enter Address"
                     />
@@ -199,11 +208,11 @@
                     </div>
 
                     <div class="fpb-7">
-                    <label for="eInputAddress" class="eForm-label"
+                    <label for="profilePhoto" class="eForm-label"
                         >{{ get_phrase('Photo') }}</label
                     >
-                    <input type="hidden" class="form-control" name="old_photo" value="{{ $user_information['photo'] }}"/>
-                    <input type="file" class="form-control eForm-control-file" name="photo" accept="image/*" />
+                    <input type="file" id="profilePhoto" class="form-control eForm-control-file" name="photo" accept=".jpg,.jpeg,.png,image/jpeg,image/png" aria-describedby="profilePhotoHelp" />
+                    <div id="profilePhotoHelp" class="form-text">{{ get_phrase('Choose a JPG or PNG image, up to 4 MB.') }}</div>
                     </div>
 
                 <button type="submit" class="userFormEdit-btn btn">{{ get_phrase('Save Changes') }}</button>
