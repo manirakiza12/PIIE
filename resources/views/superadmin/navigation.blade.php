@@ -410,6 +410,7 @@
                     <li><a class="{{ request()->is('superadmin/payment/settings*') ? 'active' : '' }}" href="{{ route('superadmin.payment_settings') }}"><span>{{ get_phrase('Payment Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/language*') ? 'active' : '' }}" href="{{ route('superadmin.language.manage') }}"><span>{{ get_phrase('Language Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/smtp*') ? 'active' : '' }}" href="{{ route('superadmin.smtp_settings') }}"><span>{{ get_phrase('SMTP Settings') }}</span></a></li>
+                    <li><a class="{{ request()->is('superadmin/settings/google-meet*') ? 'active' : '' }}" href="{{ route('superadmin.google_meet.settings') }}"><span>{{ get_phrase('Google Meet Setup') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/about*') ? 'active' : '' }}" href="{{ route('superadmin.about') }}"><span>{{ get_phrase('About') }}</span></a></li>
                 </ul>
             </li>

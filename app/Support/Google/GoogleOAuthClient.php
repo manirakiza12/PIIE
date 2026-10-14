@@ -65,7 +65,7 @@ final class GoogleOAuthClient
      *
      * @param  list<string>  $scopes
      */
-    public function authorizationUrl(string $state, string $redirectUri, array $scopes = [self::SCOPE_CALENDAR_EVENTS]): string
+    public function authorizationUrl(string $state, string $redirectUri, array $scopes = [self::SCOPE_CALENDAR_EVENTS, 'openid', 'email']): string
     {
         $credentials = GoogleOAuthCredentials::read();
 

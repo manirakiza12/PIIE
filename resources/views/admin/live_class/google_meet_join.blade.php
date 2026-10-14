@@ -27,7 +27,7 @@
      * Both branches are still real, so both are described honestly rather than
      * pretending the shared-credential path no longer exists.
      */
-    $onLecturerOwnAccount = filled($liveClass->google_calendar_event_id);
+    $onLecturerOwnAccount = filled($liveClass->google_calendar_event_id) && !$liveClass->google_account_owner_id;
 @endphp
 
 <div class="mainSection-title">

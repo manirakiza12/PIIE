@@ -49,9 +49,18 @@ class GoogleAccountService
     public function connect(User $user, string $code, string $redirectUri): GoogleAccountConnection
     {
         $tokens = $this->client->exchangeCode($code, $redirectUri);
+        if (is_string($tokens['scope']) && $tokens['scope'] !== '' && !in_array(GoogleOAuthClient::SCOPE_CALENDAR_EVENTS, explode(' ', $tokens['scope']), true)) {
+            throw new RuntimeException('Calendar access was not granted. Reconnect and approve the calendar permission.');
+        }
         $identity = $this->client->identify($tokens['access_token']);
 
         return DB::transaction(function () use ($user, $tokens, $identity) {
+            $previous = GoogleAccountConnection::where('user_id', (int) $user->id)->lockForUpdate()->first();
+            $refreshToken = $tokens['refresh_token'];
+            if ($refreshToken === null && $previous && filled($identity['sub']) && $previous->google_subject_id === $identity['sub']) {
+                $refreshToken = $previous->refresh_token_ciphertext;
+            }
+            if (!filled($refreshToken)) throw new RuntimeException('Google did not grant ongoing access. Reconnect and approve offline calendar access.');
             /** @var GoogleAccountConnection $connection */
             $connection = GoogleAccountConnection::updateOrCreate(
                 ['user_id' => (int) $user->id],
@@ -61,7 +70,7 @@ class GoogleAccountService
                     // A first grant always returns a refresh token. A RE-grant may
                     // not, and overwriting a good one with null would silently
                     // break a working connection.
-                    'refresh_token_ciphertext' => $tokens['refresh_token'],
+                    'refresh_token_ciphertext' => $refreshToken,
                     'access_token_expires_at' => $tokens['expires_in'] === null
                         ? null
                         : time() + $tokens['expires_in'],
@@ -80,11 +89,6 @@ class GoogleAccountService
 
             // Only overwrite a stored refresh token when Google actually issued a
             // new one, which is the first-grant case and a rotation.
-            if ($tokens['refresh_token'] === null && filled($connection->getOriginal('refresh_token_ciphertext'))) {
-                $connection->refresh_token_ciphertext = $connection->getOriginal('refresh_token_ciphertext');
-                $connection->save();
-            }
-
             return $connection;
         });
     }

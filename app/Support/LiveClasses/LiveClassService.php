@@ -29,6 +29,7 @@ class LiveClassService
         // them when it has something to record; the intersect simply skips them
         // otherwise, which keeps fixtures that do not define these columns working.
         'google_calendar_event_id', 'google_conference_status',
+        'google_account_owner_id', 'google_calendar_id',
     ];
 
     private const RESERVED_CONTEXT_FIELDS = [

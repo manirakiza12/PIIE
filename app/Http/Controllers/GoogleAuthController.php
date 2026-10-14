@@ -43,7 +43,7 @@ class GoogleAuthController extends Controller
 
         if (! GoogleOAuthCredentials::isConfigured()) {
             return back()->with('error', get_phrase(
-                'Google integration is not configured on this installation. Ask your administrator to add the OAuth credentials file.'
+                'Google integration is not configured. Ask Super Admin to configure Google Meet Setup in Settings.'
             ));
         }
 
@@ -54,6 +54,7 @@ class GoogleAuthController extends Controller
         $request->session()->put(self::STATE_KEY, [
             'state' => $state,
             'user_id' => (int) $request->user()->id,
+            'client_id' => GoogleOAuthCredentials::read()['client_id'],
         ]);
 
         // Where to land afterwards. Only a same-site path, taken from a constant,
@@ -99,6 +100,10 @@ class GoogleAuthController extends Controller
             return $this->failure($returnPath, get_phrase('The Google sign-in could not be verified. Please try again.'));
         }
 
+        if (isset($pending['client_id']) && (!GoogleOAuthCredentials::isConfigured() || $pending['client_id'] !== GoogleOAuthCredentials::read()['client_id'])) {
+            return $this->failure($returnPath, 'Google settings changed during sign-in. Please connect again.');
+        }
+
         if ($request->filled('error')) {
             $error = (string) $request->query('error');
 
@@ -119,11 +124,15 @@ class GoogleAuthController extends Controller
         }
 
         try {
-            $this->accounts->connect($request->user(), $code, $this->callbackUrl());
+            $connection = $this->accounts->connect($request->user(), $code, $this->callbackUrl());
+            if ((int) $request->user()->role_id === PermissionService::SUPER_ADMIN && $returnPath === '/superadmin/settings/google-meet'
+                && ($settings = \App\Support\Google\GoogleMeetSetup::settings()) && $settings->enabled) {
+                $settings->update(['platform_user_id' => $request->user()->id, 'verified_at' => null]);
+            }
         } catch (RuntimeException $e) {
             // The message is safe: GoogleAccountService and GoogleOAuthClient only
             // ever put a Google error code or description in it, never a token.
-            Log::warning('Google OAuth callback failed.', ['message' => $e->getMessage()]);
+            Log::warning('Google OAuth callback failed.');
 
             return $this->failure($returnPath, get_phrase('Google could not complete the connection. Please try again.'));
         }
@@ -204,6 +213,7 @@ class GoogleAuthController extends Controller
             && ! str_starts_with($candidate, '//')
             && ! str_contains($candidate, "\r")
             && ! str_contains($candidate, "\n")
+            && ! str_contains($candidate, '\\')
         ) {
             return $candidate;
         }

@@ -277,6 +277,13 @@ Route::middleware('applicant')->group(function () {
     });
 });
 
+Route::controller(\App\Http\Controllers\GoogleMeetSettingsController::class)->middleware('auth')->group(function () {
+    Route::get('superadmin/settings/google-meet', 'index')->name('superadmin.google_meet.settings');
+    Route::post('superadmin/settings/google-meet', 'save')->name('superadmin.google_meet.save');
+    Route::post('superadmin/settings/google-meet/verify', 'verify')->middleware('throttle:5,1')->name('superadmin.google_meet.verify');
+    Route::post('superadmin/settings/google-meet/disconnect', 'disconnect')->name('superadmin.google_meet.disconnect');
+});
+
 // Website management routes for Superadmin
 Route::controller(WebsiteManagementController::class)->middleware('auth', 'superAdmin')->group(function () {
     Route::get('superadmin/website-management', 'superadminIndex')->name('superadmin.website.index');
