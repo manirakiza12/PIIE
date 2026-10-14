@@ -6,8 +6,11 @@
         <details><summary class="h5 mb-0">1. Google Cloud setup instructions</summary>
         <div class="mt-3">
         <p>Enable the <strong>Google Calendar API</strong> in your Google Cloud project. Configure the OAuth consent screen and create an OAuth client of type <strong>Web application</strong>.</p>
-        <label class="form-label" for="googleCallback">Add this exact Authorized redirect URI in Google Cloud</label>
-        <input id="googleCallback" class="form-control" readonly value="{{ $callbackUrl }}">
+        <p class="mb-2">Add these exact <strong>Authorized redirect URIs</strong> in Google Cloud so sign-in works on each supported website hostname.</p>
+        @foreach($callbackUrls as $callbackUrl)
+            <label class="visually-hidden" for="googleCallback{{ $loop->index }}">Authorized redirect URI {{ $loop->iteration }}</label>
+            <input id="googleCallback{{ $loop->index }}" class="form-control mb-2" readonly value="{{ $callbackUrl }}">
+        @endforeach
         <p class="small text-muted mt-2 mb-0">If your Google app is in Testing, add the account you will connect as a test user. Google may expire test grants after seven days; use the appropriate production publishing and verification process for ongoing access.</p>
         <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary mt-3">Open Google Cloud</a>
         </div></details>

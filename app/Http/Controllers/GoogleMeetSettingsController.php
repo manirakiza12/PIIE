@@ -29,7 +29,7 @@ class GoogleMeetSettingsController extends Controller
         return response()->view('superadmin.settings.google_meet', [
             'settings' => $settings, 'schools' => School::orderBy('title')->get(['id', 'title']),
             'connection' => $connection, 'configured' => GoogleOAuthCredentials::isConfigured(),
-            'callbackUrl' => GoogleMeetSetup::callbackUrl(),
+            'callbackUrls' => GoogleMeetSetup::callbackUrls(),
         ])->header('Cache-Control', 'no-store, private');
     }
 

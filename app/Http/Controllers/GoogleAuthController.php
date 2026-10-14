@@ -16,11 +16,11 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * ── WHY THE REDIRECT URI IS NOT TAKEN FROM THE REQUEST ─────────────────────
  *
- * The registered callback is fixed. If the URI were taken from a query parameter
+ * The callback uses only the configured domain and its www alias. If the URI were taken from a query parameter
  * or the current URL, an attacker could start a flow with their own redirect_uri,
  * receive Google's code at their own server, and replay it here. Google rejects
  * an unregistered `redirect_uri` — but only because we send the value it expects.
- * Deriving it from configuration means there is exactly one value, ever.
+ * The selected trusted callback is stored in the bound state and reused during token exchange.
  */
 class GoogleAuthController extends Controller
 {
@@ -48,6 +48,7 @@ class GoogleAuthController extends Controller
         }
 
         $state = $this->accounts->newState();
+        $redirectUri = $this->callbackUrl($request);
 
         // The state is bound to the session AND to the user id that started it, so
         // a state leaked from another session cannot complete this one.
@@ -55,6 +56,7 @@ class GoogleAuthController extends Controller
             'state' => $state,
             'user_id' => (int) $request->user()->id,
             'client_id' => GoogleOAuthCredentials::read()['client_id'],
+            'redirect_uri' => $redirectUri,
         ]);
 
         // Where to land afterwards. Only a same-site path, taken from a constant,
@@ -62,7 +64,7 @@ class GoogleAuthController extends Controller
         // convincing Google-branded bounce.
         $request->session()->put(self::RETURN_KEY, $this->returnPath($request));
 
-        return redirect()->away($this->client->authorizationUrl($state, $this->callbackUrl()));
+        return redirect()->away($this->client->authorizationUrl($state, $redirectUri));
     }
 
     /**
@@ -124,7 +126,7 @@ class GoogleAuthController extends Controller
         }
 
         try {
-            $connection = $this->accounts->connect($request->user(), $code, $this->callbackUrl());
+            $connection = $this->accounts->connect($request->user(), $code, $pending['redirect_uri'] ?? $this->callbackUrl());
             if ((int) $request->user()->role_id === PermissionService::SUPER_ADMIN && $returnPath === '/superadmin/settings/google-meet'
                 && ($settings = \App\Support\Google\GoogleMeetSetup::settings()) && $settings->enabled) {
                 $settings->update(['platform_user_id' => $request->user()->id, 'verified_at' => null]);
@@ -182,18 +184,21 @@ class GoogleAuthController extends Controller
     /**
      * The registered callback, built from the app URL.
      *
-     * This is the exact URI registered in Google Cloud. It is constructed rather
-     * than configured so it cannot drift from `APP_URL`, and it is never taken
-     * from the request.
+     * This is the exact URI registered in Google Cloud. Its trusted hostname is derived from APP_URL, and the matching login hostname
+     * keeps host-only session cookies available on the callback.
      */
-    private function callbackUrl(): string
+    private function callbackUrl(?Request $request = null): string
     {
-        return rtrim(config('app.url'), '/').'/auth/google/callback';
+        return \App\Support\Google\GoogleMeetSetup::callbackUrl($request);
     }
 
     private function defaultReturnPath(): string
     {
-        return '/teacher/live-classes';
+        return match ((int) auth()->user()?->role_id) {
+            PermissionService::SUPER_ADMIN => '/superadmin/settings/google-meet',
+            PermissionService::SCHOOL_ADMIN => '/admin/live-classes',
+            default => '/teacher/live-classes',
+        };
     }
 
     /**

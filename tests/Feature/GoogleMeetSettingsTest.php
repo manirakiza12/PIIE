@@ -154,4 +154,22 @@ class GoogleMeetSettingsTest extends TestCase
             $this->assertSame('previous-owner', GoogleAccountConnection::first()->google_subject_id);
         }
     }
+
+    public function test_google_callback_keeps_trusted_login_hostname_and_rejects_arbitrary_hosts(): void
+    {
+        $this->save();
+        config(['app.url' => 'https://www.piie.ac.ug']);
+        $response = $this->actingAs($this->root)->get('https://piie.ac.ug/auth/google/connect');
+        parse_str(parse_url($response->headers->get('Location'), PHP_URL_QUERY), $query);
+        $this->assertSame('https://piie.ac.ug/auth/google/callback', $query['redirect_uri']);
+        $this->assertSame($query['redirect_uri'], session('google.oauth.state.redirect_uri'));
+        Http::fake([
+            'oauth2.googleapis.com/token' => Http::response(['access_token'=>'host-access','refresh_token'=>'host-refresh','expires_in'=>3600]),
+            'www.googleapis.com/oauth2/v3/userinfo' => Http::response(['sub'=>'host-owner','email'=>'host@example.test']),
+        ]);
+        $this->actingAs($this->root)->get('https://piie.ac.ug/auth/google/callback?'.http_build_query(['code'=>'host-code','state'=>$query['state']]))->assertRedirect('/superadmin/settings/google-meet');
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'oauth2.googleapis.com/token') && $request['redirect_uri']==='https://piie.ac.ug/auth/google/callback');
+        $this->assertSame('https://www.piie.ac.ug/auth/google/callback', \App\Support\Google\GoogleMeetSetup::callbackUrl(\Illuminate\Http\Request::create('https://attacker.example.test/')));
+        $this->assertCount(2, \App\Support\Google\GoogleMeetSetup::callbackUrls());
+    }
 }
