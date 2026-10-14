@@ -227,6 +227,7 @@ class TenantIsolationSweepTest extends TestCase
     public function test_library_books_and_issues_are_tenant_isolated(): void
     {
         (require database_path('migrations/2026_10_14_160000_upgrade_library_management.php'))->up();
+        (require database_path('migrations/2026_10_14_170000_add_library_governance_and_digital_resources.php'))->up();
         foreach (['admin', 'librarian'] as $portal) {
             $this->assertReadIsolated("{$portal}.edit.book", 'books');
             $this->assertMutationIsolated("{$portal}.book.update", 'books', ['name' => 'CHANGED', 'author' => 'x', 'copies' => 3, 'language' => 'English', 'is_active' => 1]);

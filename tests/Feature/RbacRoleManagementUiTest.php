@@ -694,6 +694,8 @@ class RbacRoleManagementUiTest extends TestCase
 
     public function test_a_delegated_permission_never_reaches_another_schools_records(): void
     {
+        (require database_path('migrations/2026_10_14_160000_upgrade_library_management.php'))->up();
+        (require database_path('migrations/2026_10_14_170000_add_library_governance_and_digital_resources.php'))->up();
         $keeper = $this->user(17, $this->schoolA);
         $this->actingAs($this->adminA)->post(route('admin.rbac.staff.permissions.grant', $keeper->id), ['permissions' => ['library.manage_books', 'live_classes.manage_all']]);
         $keeper = $keeper->fresh();

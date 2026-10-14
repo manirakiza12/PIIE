@@ -17,7 +17,8 @@ class Book extends Model
     protected $fillable = [
         'name', 'author', 'copies', 'school_id', 'session_id', 'timestamp',
         'isbn', 'category', 'publisher', 'edition', 'publication_year', 'language',
-        'shelf_location', 'description', 'resource_url', 'is_active'
+        'shelf_location', 'description', 'resource_url', 'is_active', 'resource_type', 'digital_path', 'digital_name',
+        'digital_mime', 'download_audience', 'replacement_cost'
     ];
 
     protected $casts = ['is_active' => 'boolean'];

@@ -17,6 +17,9 @@ class LibraryService
     {
         return DB::table('library_policies')->where('school_id', $school)->first() ?? (object) [
             'loan_days' => 14, 'max_loans' => 3, 'max_renewals' => 1, 'reservation_days' => 7, 'block_overdue' => true,
+            'library_name' => 'PIIE Library', 'opening_hours' => null, 'module_enabled' => true,
+            'student_downloads' => true, 'staff_downloads' => true, 'allow_epub' => false,
+            'fine_per_day' => 0, 'fine_grace_days' => 0, 'fine_cap' => 0, 'fine_currency' => 'UGX',
         ];
     }
 
@@ -88,11 +91,15 @@ class LibraryService
             $member = $this->member($actor, (int) $data['student_id']);
             $policy = $this->policy($actor->school_id);
             $today = $this->today($actor);
+            $override = trim((string) ($data['override_reason'] ?? ''));
+            if ($override !== '' && !app(\App\Support\Permissions\PermissionService::class)->allows($actor,'library.override')) abort(403);
+            if (!$policy->module_enabled) $this->fail('The library module is disabled.');
             if (!$book->is_active) $this->fail('This title is archived.');
             $this->initializeCopies($book);
             $loans = BookIssue::where('school_id', $actor->school_id)->where('student_id', $member->id)->where('status', 0);
-            if ((clone $loans)->count() >= $policy->max_loans) $this->fail('This borrower has reached the loan limit.');
-            if ($policy->block_overdue && (clone $loans)->whereDate('due_date', '<', $today)->exists()) $this->fail('Return overdue books before borrowing another title.');
+            if (!$override && (clone $loans)->count() >= $policy->max_loans) $this->fail('This borrower has reached the loan limit.');
+            if (!$override && $policy->block_overdue && (clone $loans)->whereDate('due_date', '<', $today)->exists()) $this->fail('Return overdue books before borrowing another title.');
+            if (!$override && DB::table('library_member_blocks')->where('school_id',$actor->school_id)->where('user_id',$member->id)->where('is_active',true)->exists()) $this->fail('This member has a library borrowing block. An administrator must review it.');
             if ((clone $loans)->where('book_id', $book->id)->exists()) $this->fail('This borrower already has this title on loan.');
             if ($this->available($book) < 1) $this->fail('No circulating copy is available.');
             $hold = $this->queue($book, $today)->first();
@@ -104,9 +111,12 @@ class LibraryService
             $due = \Illuminate\Support\Carbon::parse($today)->addDays($policy->loan_days)->toDateString();
             $loan = BookIssue::create(['school_id' => $actor->school_id, 'book_id' => $book->id, 'copy_id' => $copy->id,
                 'student_id' => $member->id, 'class_id' => 0, 'session_id' => 0, 'issue_date' => now()->timestamp,
-                'timestamp' => now()->timestamp, 'status' => 0, 'due_date' => $due, 'issued_by' => $actor->id, 'notes' => $data['notes'] ?? null]);
+                'timestamp' => now()->timestamp, 'status' => 0, 'due_date' => $due, 'issued_by' => $actor->id, 'notes' => $data['notes'] ?? null,
+                'fine_per_day'=>$policy->fine_per_day,'fine_grace_days'=>$policy->fine_grace_days,'fine_cap'=>$policy->fine_cap,
+                'replacement_cost'=>$book->replacement_cost ?? 0,'fine_currency'=>$policy->fine_currency]);
             if ($hold) $hold->update(['status' => 'fulfilled']);
             $this->event($actor, 'checkout', 'Issued '.$copy->accession.' to member #'.$member->id.'; due '.$due, $book->id, $loan->id);
+            if ($override) $this->event($actor,'checkout_override','Borrowing-policy override for member #'.$member->id.': '.$override,$book->id,$loan->id);
             return $loan;
         }, 3);
     }
@@ -126,6 +136,10 @@ class LibraryService
             // Unassigned legacy loans still reduce aggregate availability while open.
             // A lost/damaged unassigned legacy copy must remain unavailable after closure.
             elseif (in_array($condition, ['lost', 'damaged'], true)) $this->fail('Reconcile this title’s accession inventory before closing an unassigned loan as lost or damaged.');
+            foreach (['overdue'=>$this->overdueAmount($loan,$this->today($actor)), 'lost'=>$condition==='lost' ? $this->cents($loan->replacement_cost) : 0] as $reason=>$cents) {
+                if ($cents > 0) DB::table('library_fines')->insert(['school_id'=>$actor->school_id,'loan_id'=>$loan->id,'user_id'=>$loan->student_id,
+                    'reason'=>$reason,'amount'=>number_format($cents/100,2,'.',''),'currency'=>$loan->fine_currency,'status'=>'outstanding','created_at'=>now(),'updated_at'=>now()]);
+            }
             $this->event($actor, 'return', 'Closed loan #'.$loan->id.'; condition '.$condition, $book->id, $loan->id);
         }, 3);
     }
@@ -136,7 +150,7 @@ class LibraryService
             $initial = BookIssue::where('school_id', $actor->school_id)->findOrFail($id);
             $book = $this->book($actor, $initial->book_id);
             $loan = BookIssue::where('school_id', $actor->school_id)->lockForUpdate()->findOrFail($id);
-            if ((int) $actor->role_id === 7 && (int) $loan->student_id !== (int) $actor->id) abort(404);
+            if (in_array((int) $actor->role_id,[3,7],true) && request()->is('teacher/*','student/*') && (int) $loan->student_id !== (int) $actor->id) abort(404);
             $policy = $this->policy($actor->school_id); $today = $this->today($actor);
             if (!$book->is_active || (int) $loan->status !== 0 || !$loan->due_date) $this->fail('Only current loans with a due date can be renewed. Ask the librarian to review legacy loans.');
             if ($loan->due_date->toDateString() < $today) $this->fail('Overdue books must be returned before renewal.');
@@ -153,8 +167,10 @@ class LibraryService
             $book = $this->book($actor, $bookId);
             $member = $this->member($actor, $memberId);
             if (!$book->is_active) $this->fail('Archived titles cannot be reserved.');
+            if ((int)$book->copies<=0) $this->fail('This resource has no physical stock. Use its permitted digital download or recommend a physical acquisition.');
             if (BookIssue::where('school_id', $actor->school_id)->where('student_id', $member->id)->where('book_id', $book->id)->where('status', 0)->exists()) $this->fail('This borrower already has this title.');
             $today = $this->today($actor); $policy = $this->policy($actor->school_id);
+            if (!$policy->module_enabled) $this->fail('The library module is disabled.');
             $holds = LibraryReservation::where('school_id', $actor->school_id)->where('user_id', $member->id)->where('status', 'waiting')->where('expires_on', '>=', $today);
             if ((clone $holds)->where('book_id', $book->id)->exists()) $this->fail('There is already a reservation for this title.');
             if ((clone $holds)->count() >= $policy->max_loans) $this->fail('The reservation limit has been reached.');
@@ -162,5 +178,15 @@ class LibraryService
                 'expires_on' => \Illuminate\Support\Carbon::parse($today)->addDays($policy->reservation_days)->toDateString()]);
             $this->event($actor, 'reserve', 'Reserved title for member #'.$member->id, $book->id);
         }, 3);
+    }
+
+    public function cents(mixed $amount): int { return (int) round((float) $amount * 100); }
+
+    public function overdueAmount(BookIssue $loan, string $today): int
+    {
+        if (!$loan->due_date || $loan->due_date->toDateString() >= $today) return 0;
+        $days = max(0,(int) $loan->due_date->diffInDays(\Illuminate\Support\Carbon::parse($today)) - (int) $loan->fine_grace_days);
+        $amount = $days * $this->cents($loan->fine_per_day);
+        return $this->cents($loan->fine_cap) > 0 ? min($amount,$this->cents($loan->fine_cap)) : $amount;
     }
 }

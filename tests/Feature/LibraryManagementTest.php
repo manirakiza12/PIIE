@@ -21,6 +21,7 @@ class LibraryManagementTest extends TestCase
         parent::setUp();
         $this->bootAdmissionsTestSchema();
         (require database_path('migrations/2026_10_14_160000_upgrade_library_management.php'))->up();
+        (require database_path('migrations/2026_10_14_170000_add_library_governance_and_digital_resources.php'))->up();
         $school = $this->makeSchool(['title' => 'Training Library']);
         $this->admin = $this->makeAdminUser($school);
         $this->student = User::factory()->create(['school_id'=>$school,'role_id'=>7,'name'=>'Amina Reader','code'=>'PIIE-0001','account_status'=>'active']);
@@ -278,5 +279,158 @@ class LibraryManagementTest extends TestCase
         $this->post(route('admin.library.copies.update',['id'=>$copy->id]),['accession'=>$copy->accession,'status'=>'circulating','condition'=>'damaged'])->assertSessionHasErrors('status');
         $this->post(route('admin.library.books.store'),['name'=>'Unsafe Link','author'=>'Author','copies'=>1,'language'=>'English','is_active'=>1,'resource_url'=>'javascript:alert(1)'])->assertSessionHasErrors('resource_url');
         $this->assertSame(1,Book::count());
+    }
+
+    public function test_librarian_runs_operations_but_cannot_change_policy_or_waive_fines(): void
+    {
+        $librarian=User::factory()->create(['school_id'=>$this->admin->school_id,'role_id'=>5]);
+        $this->actingAs($librarian)->get(route('librarian.library.settings'))->assertForbidden();
+        $this->post(route('librarian.library.settings.update'),['loan_days'=>1])->assertForbidden();
+        $this->get(route('librarian.library.reports'))->assertOk();
+        $this->get(route('librarian.library.requests'))->assertOk();
+        $this->get(route('librarian.library.fines'))->assertOk();
+        $this->post(route('librarian.library.checkout.store'),['book_id'=>$this->book->id,'student_id'=>$this->student->id])->assertSessionHasNoErrors();
+        $this->post(route('librarian.library.checkout.store'),['book_id'=>$this->book->id,'student_id'=>$this->second->id,'override_reason'=>'Unauthorised override reason'])->assertForbidden();
+        $this->assertSame(1,BookIssue::count());
+    }
+
+    public function test_disabled_module_blocks_readers_and_operations_but_admin_can_reenable(): void
+    {
+        DB::table('library_policies')->insert(['school_id'=>$this->admin->school_id,'module_enabled'=>false]);
+        $this->get(route('admin.library.dashboard'))->assertForbidden();
+        $this->get(route('admin.library.settings'))->assertOk();
+        $this->issue()->assertForbidden();
+        $this->actingAs($this->student)->get(route('student.library.catalogue'))->assertForbidden();
+        $this->actingAs($this->admin)->post(route('admin.library.settings.update'),['loan_days'=>14,'max_loans'=>3,'max_renewals'=>1,'reservation_days'=>7,'block_overdue'=>1,'module_enabled'=>1])->assertSessionHasNoErrors();
+        $this->get(route('admin.library.catalogue'))->assertOk();
+    }
+
+    public function test_private_pdf_download_checks_audience_module_and_tenant(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $file=\Illuminate\Http\UploadedFile::fake()->createWithContent('reading.pdf',"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF");
+        $this->post(route('admin.library.books.store'),['name'=>'Private Clinical Reading','author'=>'Faculty','copies'=>0,'language'=>'English','is_active'=>1,
+            'resource_type'=>'reading','download_audience'=>'staff','digital_file'=>$file])->assertSessionHasNoErrors();
+        $book=Book::where('name','Private Clinical Reading')->firstOrFail();
+        $this->assertStringStartsWith('library/'.$this->admin->school_id.'/resources/',$book->digital_path);
+        $this->actingAs($this->student)->get(route('student.library.books.download',['id'=>$book->id]))->assertForbidden();
+        $this->get(route('student.library.books.show',['id'=>$book->id]))->assertOk()->assertDontSee('Download reading.pdf');
+        $book->update(['download_audience'=>'all']);
+        $this->get(route('student.library.books.download',['id'=>$book->id]))->assertOk()->assertDownload('reading.pdf');
+        $other=User::factory()->create(['school_id'=>$this->makeSchool(),'role_id'=>7]);
+        $this->actingAs($other)->get(route('student.library.books.download',['id'=>$book->id]))->assertNotFound();
+        $book->update(['is_active'=>false]);
+        $this->actingAs($this->student)->get(route('student.library.books.download',['id'=>$book->id]))->assertNotFound();
+    }
+
+    public function test_fake_pdf_and_disallowed_epub_are_rejected_without_catalogue_or_storage_writes(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        foreach (['fake.pdf'=>'<?php echo "bad";','reading.epub'=>'not an epub'] as $name=>$content) {
+            $this->post(route('admin.library.books.store'),['name'=>'Bad Upload','author'=>'Author','copies'=>0,'language'=>'English','is_active'=>1,
+                'digital_file'=>\Illuminate\Http\UploadedFile::fake()->createWithContent($name,$content)])->assertSessionHasErrors('digital_file');
+        }
+        $this->assertSame(1,Book::count());
+        $this->assertSame([],\Illuminate\Support\Facades\Storage::disk('local')->allFiles());
+    }
+
+    public function test_lecturer_submitted_reading_requires_librarian_approval(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $teacher=User::factory()->create(['school_id'=>$this->admin->school_id,'role_id'=>3]);
+        $this->actingAs($teacher)->get(route('teacher.library.catalogue'))->assertOk()->assertSee($this->book->name);
+        $this->post(route('teacher.library.requests.store'),['title'=>'Proposed Reading','author'=>'Lecturer','resource_type'=>'reading','reason'=>'Recommended reading for a nursing course.',
+            'digital_file'=>\Illuminate\Http\UploadedFile::fake()->createWithContent('course.pdf',"%PDF-1.4\n%%EOF")])->assertSessionHasNoErrors();
+        $record=DB::table('library_requests')->first();
+        $this->assertSame('pending',$record->status); $this->assertSame(1,Book::count());
+        $this->get(route('teacher.library.requests'))->assertOk()->assertSee('Proposed Reading');
+        $librarian=User::factory()->create(['school_id'=>$this->admin->school_id,'role_id'=>5]);
+        $this->actingAs($librarian)->post(route('librarian.library.requests.review',['id'=>$record->id]),['decision'=>'approved','review_note'=>'Approved faculty-owned reading.','download_audience'=>'all'])->assertSessionHasNoErrors();
+        $this->assertSame('approved',DB::table('library_requests')->value('status'));
+        $book=Book::where('name','Proposed Reading')->firstOrFail();
+        $this->assertSame(0,$book->copies); $this->assertSame($record->digital_path,$book->digital_path);
+        $this->actingAs($this->student)->get(route('student.library.books.download',['id'=>$book->id]))->assertOk();
+    }
+
+    public function test_student_cannot_upload_or_view_other_reading_requests(): void
+    {
+        $this->actingAs($this->student)->post(route('student.library.requests.store'),['title'=>'Student Suggestion','author'=>'Author','resource_type'=>'book','reason'=>'This title is needed for my coursework.'])->assertSessionHasNoErrors();
+        $this->actingAs($this->second)->get(route('student.library.requests'))->assertOk()->assertDontSee('Student Suggestion');
+        $this->actingAs($this->student)->post(route('student.library.requests.store'),['title'=>'Hidden Upload','author'=>'Author','resource_type'=>'reading','reason'=>'This title is needed for my coursework.',
+            'digital_file'=>\Illuminate\Http\UploadedFile::fake()->createWithContent('course.pdf',"%PDF-1.4\n%%EOF")])->assertForbidden();
+        $this->assertSame(1,DB::table('library_requests')->count());
+    }
+
+    public function test_fines_use_checkout_snapshot_grace_cap_and_admin_only_waiver(): void
+    {
+        DB::table('library_policies')->insert(['school_id'=>$this->admin->school_id,'fine_per_day'=>500,'fine_grace_days'=>1,'fine_cap'=>1000,'fine_currency'=>'UGX']);
+        $this->book->update(['replacement_cost'=>2500]);
+        $this->issue()->assertSessionHasNoErrors(); $loan=BookIssue::first();
+        $loan->update(['due_date'=>now()->subDays(5)->toDateString()]);
+        DB::table('library_policies')->update(['fine_per_day'=>10000]);
+        $this->assertSame(100000,$this->library->overdueAmount($loan,now()->toDateString()));
+        $this->post(route('admin.library.loans.return.store',['id'=>$loan->id]),['condition'=>'lost'])->assertSessionHasNoErrors();
+        $this->assertSame(2,DB::table('library_fines')->count());
+        $this->assertEquals(3500,DB::table('library_fines')->sum('amount'));
+        $fine=DB::table('library_fines')->where('reason','overdue')->first();
+        $librarian=User::factory()->create(['school_id'=>$this->admin->school_id,'role_id'=>5]);
+        $this->actingAs($librarian)->post(route('librarian.library.fines.resolve',['id'=>$fine->id]),['status'=>'waived','resolution_note'=>'Attempted library waiver.'])->assertForbidden();
+        $this->actingAs($this->admin)->post(route('admin.library.fines.resolve',['id'=>$fine->id]),['status'=>'waived','resolution_note'=>'Approved disputed-charge waiver.'])->assertSessionHasNoErrors();
+        $this->assertSame('waived',DB::table('library_fines')->where('id',$fine->id)->value('status'));
+        $this->actingAs($this->second)->get(route('student.library.fines'))->assertOk()->assertDontSee('Approved disputed-charge waiver');
+    }
+
+    public function test_library_block_and_supervisor_override_are_audited(): void
+    {
+        $this->post(route('admin.library.blocks.store'),['user_id'=>$this->student->id,'reason'=>'Temporary restriction pending a stock review.','is_active'=>1])->assertSessionHasNoErrors();
+        $this->issue()->assertSessionHasErrors('library');
+        $this->post(route('admin.library.checkout.store'),['book_id'=>$this->book->id,'student_id'=>$this->student->id,'override_reason'=>'Supervisor approved a temporary borrowing exception.'])->assertSessionHasNoErrors();
+        $this->assertSame(1,DB::table('library_events')->where('action','checkout_override')->count());
+        $this->assertSame('active',$this->student->fresh()->account_status);
+    }
+
+    public function test_notices_audience_and_overdue_portal_reminder_deduplication(): void
+    {
+        $this->post(route('admin.library.notices.store'),['title'=>'Staff Collection Review','body'=>'Review the reference collection this week.','audience'=>'staff'])->assertSessionHasNoErrors();
+        $this->actingAs($this->student)->get(route('student.library.notices'))->assertOk()->assertDontSee('Staff Collection Review');
+        $this->issue()->assertSessionHasNoErrors(); $loan=BookIssue::first();
+        $loan->update(['due_date'=>now()->subDay()->toDateString()]);
+        $this->post(route('admin.library.loans.remind',['id'=>$loan->id]))->assertSessionHasNoErrors();
+        $this->post(route('admin.library.loans.remind',['id'=>$loan->id]))->assertSessionHasErrors('library');
+        $this->assertSame(1,DB::table('user_notifications')->where('type','library')->where('user_id',$this->student->id)->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_superadmin_selects_school_without_changing_account_tenant_or_misbinding_record_ids(): void
+    {
+        \Illuminate\Support\Facades\Schema::create('payment_history',fn(\Illuminate\Database\Schema\Blueprint $t)=>$t->string('status')->nullable());
+        $root=User::factory()->create(['role_id'=>1,'school_id'=>null]);
+        $book=$this->title(['name'=>'Root-selected Resource','isbn'=>'9780000000009']);
+        $this->actingAs($root)->get(route('superadmin.library.institutions'))->assertOk()->assertSee('Training Library');
+        $this->get(route('superadmin.library.settings',['school'=>$this->admin->school_id]))->assertOk()->assertSee('Library configuration');
+        $this->get(route('superadmin.library.books.show',['school'=>$this->admin->school_id,'id'=>$book->id]))->assertOk()->assertSee($book->name);
+        $other=$this->makeSchool();
+        $this->get(route('superadmin.library.books.show',['school'=>$other,'id'=>$book->id]))->assertNotFound();
+        $this->assertNull($root->fresh()->school_id);
+    }
+
+    public function test_assignable_assistant_role_is_scoped_and_revocation_preserves_library_data(): void
+    {
+        (require database_path('migrations/2026_09_23_000003_create_rbac_tables.php'))->up();
+        (require database_path('migrations/2026_09_23_000004_add_is_active_to_staff_roles.php'))->up();
+        $assistant=User::factory()->create(['school_id'=>$this->admin->school_id,'role_id'=>20,'name'=>'Library Assistant']);
+        $this->post(route('admin.library.staff-access.update'),['user_id'=>$assistant->id,'template'=>'assistant_librarian','action'=>'assign'])->assertSessionHasNoErrors();
+        $this->actingAs($assistant)->get(route('admin.library.dashboard'))->assertOk();
+        $this->get(route('admin.library.settings'))->assertStatus(302);
+        $this->get(route('admin.library.reports'))->assertStatus(302);
+        $this->get(route('admin.library.staff-access'))->assertStatus(302);
+        $this->post(route('admin.library.books.update',['id'=>$this->book->id]),['name'=>$this->book->name,'author'=>$this->book->author,'copies'=>2,'language'=>'English','is_active'=>0])->assertForbidden();
+        $this->post(route('admin.library.checkout.store'),['book_id'=>$this->book->id,'student_id'=>$this->student->id])->assertSessionHasNoErrors();
+        $this->actingAs($this->admin)->post(route('admin.library.staff-access.update'),['user_id'=>$assistant->id,'template'=>'assistant_librarian','action'=>'remove'])->assertSessionHasNoErrors();
+        $this->actingAs($assistant)->get(route('admin.library.dashboard'))->assertStatus(302);
+        $this->assertSame(1,BookIssue::count()); $this->assertSame(1,Book::count());
+        $foreign=User::factory()->create(['school_id'=>$this->makeSchool(),'role_id'=>20]);
+        $this->actingAs($this->admin)->post(route('admin.library.staff-access.update'),['user_id'=>$foreign->id,'template'=>'library_officer','action'=>'assign'])->assertNotFound();
+        $this->assertSame(0,DB::table('user_staff_roles')->where('user_id',$foreign->id)->count());
     }
 }
