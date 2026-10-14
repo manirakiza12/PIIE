@@ -226,14 +226,17 @@ class TenantIsolationSweepTest extends TestCase
 
     public function test_library_books_and_issues_are_tenant_isolated(): void
     {
+        (require database_path('migrations/2026_10_14_160000_upgrade_library_management.php'))->up();
+        (require database_path('migrations/2026_10_14_170000_add_library_governance_and_digital_resources.php'))->up();
         foreach (['admin', 'librarian'] as $portal) {
             $this->assertReadIsolated("{$portal}.edit.book", 'books');
-            // librarian.book.update does not complete in the sqlite fixture even for its own school (same as before Phase 2G).
-            $this->assertMutationIsolated("{$portal}.book.update", 'books', ['name' => 'CHANGED', 'author' => 'x', 'copies' => 3], $portal === 'admin');
-            $this->assertMutationIsolated("{$portal}.book.delete", 'books');
-            $this->assertMutationIsolated("{$portal}.book_issue.update", 'book_issues', ['book_id' => '@book', 'class_id' => '@class', 'student_id' => '@student', 'issue_date' => '09/01/2026']);
-            $this->assertMutationIsolated("{$portal}.book_issue.return", 'book_issues');
-            $this->assertMutationIsolated("{$portal}.book_issue.delete", 'book_issues');
+            $this->assertMutationIsolated("{$portal}.book.update", 'books', ['name' => 'CHANGED', 'author' => 'x', 'copies' => 3, 'language' => 'English', 'is_active' => 1]);
+            // Old destructive GET links are now review forms; loan history cannot
+            // be overwritten. LibraryManagementTest verifies own-school POST flows.
+            $this->assertMutationIsolated("{$portal}.book.delete", 'books', [], false);
+            $this->assertMutationIsolated("{$portal}.book_issue.update", 'book_issues', ['book_id' => '@book', 'class_id' => '@class', 'student_id' => '@student', 'issue_date' => '09/01/2026'], false);
+            $this->assertMutationIsolated("{$portal}.book_issue.return", 'book_issues', [], false);
+            $this->assertMutationIsolated("{$portal}.book_issue.delete", 'book_issues', [], false);
         }
     }
 

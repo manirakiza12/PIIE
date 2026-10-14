@@ -7,6 +7,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\IdCardVerificationController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\LibrarianController;
+use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\ParentController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SuperAdminController;
@@ -490,6 +491,56 @@ Route::controller(SuperAdminController::class)->middleware('auth', 'superAdmin')
 //Superadmin routes end here
 
 //Admin routes are here
+// Library workspaces use the existing portal gates and tenant-bound permissions.
+Route::get('superadmin/library', [\App\Http\Controllers\LibraryCommunityController::class,'institutions'])->middleware(['auth','superAdmin'])->name('superadmin.library.institutions');
+foreach (['admin' => ['auth', 'admin', 'rbac'], 'librarian' => ['auth', 'librarian'], 'student' => ['auth', 'student'], 'teacher'=>['auth','teacher'], 'superadmin'=>['auth','superAdmin',\App\Http\Middleware\LibraryTenant::class]] as $portal => $gates) {
+    Route::prefix($portal.'/library'.($portal==='superadmin'?'/{school}':''))->name($portal.'.library.')->middleware($gates)->controller(LibraryController::class)->group(function () use ($portal) {
+        Route::get('/', 'dashboard')->name('dashboard');
+        Route::get('/catalogue', 'catalogue')->name('catalogue');
+        Route::get('/loans', 'loans')->name('loans');
+        Route::get('/reservations', 'reservations')->name('reservations');
+        Route::post('/loans/{id}/renew', 'renew')->name('loans.renew');
+        Route::post('/books/{id}/reserve', 'reserve')->name('books.reserve');
+        Route::post('/reservations/{id}/cancel', 'cancel')->name('reservations.cancel');
+        Route::get('/books/{id}/download', [\App\Http\Controllers\LibraryCommunityController::class,'download'])->name('books.download');
+        Route::get('/requests', [\App\Http\Controllers\LibraryCommunityController::class,'requests'])->name('requests');
+        Route::post('/requests', [\App\Http\Controllers\LibraryCommunityController::class,'requestStore'])->name('requests.store');
+        Route::get('/notices', [\App\Http\Controllers\LibraryCommunityController::class,'notices'])->name('notices');
+        Route::get('/fines', [\App\Http\Controllers\LibraryCommunityController::class,'fines'])->name('fines');
+        if (in_array($portal,['teacher','student'],true)) {
+            Route::get('/course-resources', [\App\Http\Controllers\LibraryCommunityController::class,'courseResources'])->name('course-resources');
+        }
+        if ($portal==='teacher') Route::post('/books/{id}/course-link', [\App\Http\Controllers\LibraryCommunityController::class,'courseLink'])->name('books.course-link');
+        if (!in_array($portal,['student','teacher'],true)) {
+            Route::get('/books/create', 'bookForm')->name('books.create');
+            Route::post('/books', 'saveBook')->name('books.store');
+            Route::get('/books/{id}/edit', 'bookForm')->name('books.edit');
+            Route::post('/books/{id}', 'saveBook')->name('books.update');
+            Route::post('/copies/{id}', 'updateCopy')->name('copies.update');
+            Route::get('/checkout', 'checkoutForm')->name('checkout');
+            Route::post('/checkout', 'checkout')->name('checkout.store');
+            Route::post('/checkout/reserve', 'reserveSelected')->name('checkout.reserve');
+            Route::get('/loans/{id}/return', 'returnForm')->name('loans.return');
+            Route::post('/loans/{id}/return', 'returnLoan')->name('loans.return.store');
+            Route::get('/reports', 'reports')->name('reports');
+            Route::get('/export', 'export')->name('export');
+            Route::get('/settings', 'settings')->name('settings');
+            Route::post('/settings', 'saveSettings')->name('settings.update');
+            Route::post('/requests/{id}/review', [\App\Http\Controllers\LibraryCommunityController::class,'review'])->name('requests.review');
+            Route::get('/requests/{id}/file', [\App\Http\Controllers\LibraryCommunityController::class,'requestFile'])->name('requests.file');
+            Route::post('/notices', [\App\Http\Controllers\LibraryCommunityController::class,'noticeStore'])->name('notices.store');
+            Route::post('/notices/{id}/archive', [\App\Http\Controllers\LibraryCommunityController::class,'noticeArchive'])->name('notices.archive');
+            Route::post('/fines/{id}/resolve', [\App\Http\Controllers\LibraryCommunityController::class,'resolveFine'])->name('fines.resolve');
+            Route::post('/loans/{id}/remind', [\App\Http\Controllers\LibraryCommunityController::class,'remind'])->name('loans.remind');
+            Route::get('/blocks', [\App\Http\Controllers\LibraryCommunityController::class,'blocks'])->name('blocks');
+            Route::post('/blocks', [\App\Http\Controllers\LibraryCommunityController::class,'blockStore'])->name('blocks.store');
+            Route::get('/staff-access', [\App\Http\Controllers\LibraryCommunityController::class,'staffAccess'])->name('staff-access');
+            Route::post('/staff-access', [\App\Http\Controllers\LibraryCommunityController::class,'assignStaff'])->name('staff-access.update');
+        }
+        Route::get('/books/{id}', 'bookDetails')->name('books.show');
+    });
+}
+
 Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->group(function () {
 
     Route::get('admin/dashboard', 'adminDashboard')->name('admin.dashboard')->middleware('role_id');

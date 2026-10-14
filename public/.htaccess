@@ -16,6 +16,14 @@
 # ==========================================================================
 
 # Deny by extension. These types have no legitimate reason to be web-readable.
+# Library PDFs/e-books may be up to 20 MB; retain room for multipart metadata.
+# The verified production Apache runtime uses php_module. Other SAPIs keep
+# their configured limits and the application still enforces its own file cap.
+<IfModule php_module>
+    php_value upload_max_filesize 20M
+    php_value post_max_size 24M
+</IfModule>
+
 # `sql\.gz` and friends are matched explicitly because the pattern is anchored on
 # the whole extension: a plain `\.gz$` would also block legitimate .gz assets.
 <FilesMatch "(?i)\.(sql|sql\.gz|sql\.bz2|sql\.xz|dump|dump\.gz|dmp|bak|old|orig|save|swp|log|ini|conf|env|key|pem|p12|pfx|jks|keystore)$">

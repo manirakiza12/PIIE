@@ -173,6 +173,13 @@ return [
         'library.view' => $p('library', 'View library', 'Book and issue lists.'),
         'library.manage_books' => $p('library', 'Manage books', 'Create, edit and delete books.'),
         'library.issue' => $p('library', 'Issue & return', 'Issue, update and return books.'),
+        'library.configure' => $p('library', 'Configure library', 'Enable module, opening hours, borrowing and fine policies.', true, false),
+        'library.archive' => $p('library', 'Archive resources', 'Archive resources while retaining history.'),
+        'library.digital' => $p('library', 'Digital resources', 'Upload private PDFs/e-books and approve reading requests.'),
+        'library.reports' => $p('library', 'Reports & audit', 'View circulation reports, exports and activity.'),
+        'library.notices' => $p('library', 'Library notices', 'Publish library notices for readers.'),
+        'library.fines' => $p('library', 'Library fine ledger', 'View charges and record payment receipt with a reference.'),
+        'library.override' => $p('library', 'Library overrides', 'Waive disputed charges and override library borrowing blocks with a reason.', true, false),
 
         // HR
         'hr.designations' => $p('hr', 'Designations', 'Manage staff designations.'),
@@ -280,7 +287,7 @@ return [
     'portal_grants' => [
         3 => ['academic.syllabus', 'clubs.view', 'clubs.manage', 'clubs.members', 'clubs.notices', 'academic.feedback'],   // teacher portal
         4 => ['finance.view', 'finance.invoices', 'finance.payments', 'finance.expenses', 'communications.noticeboard'],   // accountant portal
-        5 => ['library.view', 'library.manage_books', 'library.issue', 'communications.noticeboard'],                       // librarian portal
+        5 => ['library.view', 'library.manage_books', 'library.issue', 'library.archive', 'library.digital', 'library.reports', 'library.notices', 'library.fines', 'communications.noticeboard'], // librarian portal
         10 => ['hostel.view', 'hostel.allocate', 'hostel.applications', 'hostel.payments', 'communications.noticeboard'],  // warden portal
     ],
 
@@ -383,6 +390,29 @@ return [
         'admin.reject.offline.payment.hostel' => 'hostel.payments',
 
         // Library
+        'admin.library.books.create' => 'library.manage_books',
+        'admin.library.books.store' => 'library.manage_books',
+        'admin.library.books.edit' => 'library.manage_books',
+        'admin.library.books.update' => 'library.manage_books',
+        'admin.library.copies.update' => 'library.manage_books',
+        'admin.library.settings*' => 'library.configure',
+        'admin.library.staff-access*' => 'library.configure',
+        'admin.library.reports' => 'library.reports',
+        'admin.library.export' => 'library.reports',
+        'admin.library.requests.review' => 'library.digital',
+        'admin.library.requests.file' => 'library.digital',
+        'admin.library.notices.store' => 'library.notices',
+        'admin.library.notices.archive' => 'library.notices',
+        'admin.library.fines.resolve' => 'library.fines',
+        'admin.library.fines' => 'library.fines',
+        'admin.library.blocks*' => 'library.override',
+        'admin.library.loans.remind' => 'library.issue',
+        'admin.library.checkout*' => 'library.issue',
+        'admin.library.loans.return*' => 'library.issue',
+        'admin.library.loans.renew' => 'library.issue',
+        'admin.library.books.reserve' => 'library.issue',
+        'admin.library.reservations.cancel' => 'library.issue',
+        'admin.library.*' => 'library.view',
         'admin.book.book_list' => 'library.view',
         'admin.book_issue.list' => 'library.view',
         'admin.book.*' => 'library.manage_books',
@@ -641,6 +671,8 @@ return [
         'finance.invoices' => ['finance.view'], 'finance.payments' => ['finance.view'],
         'hostel.manage' => ['hostel.view'], 'hostel.allocate' => ['hostel.view'], 'hostel.applications' => ['hostel.view'], 'hostel.payments' => ['hostel.view'],
         'library.manage_books' => ['library.view'], 'library.issue' => ['library.view'],
+        'library.archive' => ['library.view'], 'library.digital' => ['library.view'], 'library.reports' => ['library.view'],
+        'library.notices' => ['library.view'], 'library.fines' => ['library.view'],
         'clubs.manage' => ['clubs.view'], 'clubs.members' => ['clubs.view'], 'clubs.notices' => ['clubs.view'],
     ],
 
@@ -665,7 +697,9 @@ return [
             'permissions' => ['staff.view', 'staff.create', 'staff.edit', 'hr.designations', 'hr.leave', 'hr.leave_types', 'hr.appraisal']],
         'hostel_officer' => ['name' => 'Hostel Officer', 'description' => 'Manages hostels, rooms, allocations and hostel applications.',
             'permissions' => ['hostel.view', 'hostel.manage', 'hostel.allocate', 'hostel.applications', 'hostel.payments']],
-        'library_officer' => ['name' => 'Library Officer', 'description' => 'Manages books and book issues.',
+        'library_officer' => ['name' => 'Library Manager', 'description' => 'Runs the catalogue, digital resources, circulation, notices, fine ledger and reports; policy and overrides stay with administrators.',
+            'permissions' => ['library.view', 'library.manage_books', 'library.issue', 'library.archive', 'library.digital', 'library.reports', 'library.notices', 'library.fines']],
+        'assistant_librarian' => ['name' => 'Assistant Librarian', 'description' => 'Updates catalogue records, issues and returns books, and sends portal reminders; no policy, archive, approval or role administration.',
             'permissions' => ['library.view', 'library.manage_books', 'library.issue']],
         'live_classes_coordinator' => ['name' => 'Live Classes Coordinator', 'description' => 'Schedules and manages live classes across the school.',
             'permissions' => ['live_classes.view', 'live_classes.create', 'live_classes.manage_all']],

@@ -53,6 +53,8 @@ class RbacRouteAuthorizationTest extends TestCase
         $this->bootStaffModuleTestSchema();
         $this->withoutMiddleware(VerifyCsrfToken::class);
         (require base_path('database/migrations/2026_09_23_000003_create_rbac_tables.php'))->up();
+        (require database_path('migrations/2026_10_14_160000_upgrade_library_management.php'))->up();
+        (require database_path('migrations/2026_10_14_170000_add_library_governance_and_digital_resources.php'))->up();
         foreach ([
             'database/migrations/2026_06_24_000001_create_website_management_tables.php',
             'database/migrations/2026_06_27_000002_ensure_website_management_schema_integrity.php',

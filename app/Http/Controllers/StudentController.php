@@ -798,54 +798,12 @@ class StudentController extends Controller
      */
     public function bookList(Request $request)
     {
-        $search = $request['search'] ?? "";
-
-        if ($search != "") {
-
-            $books = Book::where(function ($query) use ($search) {
-                $query->where('name', 'LIKE', "%{$search}%")
-                    ->where('school_id', auth()->user()->school_id);
-            })->orWhere(function ($query) use ($search) {
-                $query->where('author', 'LIKE', "%{$search}%")
-                    ->where('school_id', auth()->user()->school_id);
-            })->paginate(10);
-        } else {
-            $books = Book::where('school_id', auth()->user()->school_id)->paginate(10);
-        }
-
-        return view('student.book.list', compact('books', 'search'));
+        return app(LibraryController::class)->catalogue(request());
     }
 
     public function bookIssueList(Request $request)
     {
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-
-        if (count($request->all()) > 0) {
-
-            $data = $request->all();
-
-            $date        = explode('-', $data['eDateRange']);
-            $date_from   = strtotime($date[0] . ' 00:00:00');
-            $date_to     = strtotime($date[1] . ' 23:59:59');
-            $book_issues = BookIssue::where('issue_date', '>=', $date_from)
-                ->where('issue_date', '<=', $date_to)
-                ->where('school_id', auth()->user()->school_id)
-                ->where('session_id', $active_session)
-                ->get();
-
-            return view('student.book.book_issue', ['book_issues' => $book_issues, 'date_from' => $date_from, 'date_to' => $date_to]);
-        } else {
-
-            $date_from   = strtotime(date('d-M-Y', strtotime(' -30 day')) . ' 00:00:00');
-            $date_to     = strtotime(date('d-M-Y') . ' 23:59:59');
-            $book_issues = BookIssue::where('issue_date', '>=', $date_from)
-                ->where('issue_date', '<=', $date_to)
-                ->where('school_id', auth()->user()->school_id)
-                ->where('session_id', $active_session)
-                ->get();
-
-            return view('student.book.book_issue', ['book_issues' => $book_issues, 'date_from' => $date_from, 'date_to' => $date_to]);
-        }
+        return app(LibraryController::class)->loans(request());
     }
 
     /**
