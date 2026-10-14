@@ -9,6 +9,11 @@ class StudentFeeManager extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::created(fn (self $invoice) => \App\Support\Billing\InvoiceEmail::created($invoice));
+    }
+
     /**
      * The attributes that are mass assignable.
      *

@@ -58,6 +58,7 @@
     	<!--Main Jquery-->
     <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
 
+    @include('shared.workspace_assets')
 </head>
 
 <body>
@@ -149,7 +150,7 @@
           </ul>
       </li>
 
-      @if(addon_status('hr_management')==1)
+      @if(addon_status('hr_management')==1 && Route::has('hr.list_of_attendence') && Route::has('hr.list_of_leaves') && Route::has('hr.user_list_of_payrolls'))
 
       <li class="nav-links-li {{ request()->is('hr/leave_list*') || request()->is('attendence/list*')  || request()->is('payment/list*')  ? 'showMenu':'' }}">
 

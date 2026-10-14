@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="{{ asset('assets/vendors/bootstrap-icons-1.8.1/bootstrap-icons.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/css/applicant-portal.css') }}">
     @stack('styles')
+    @include('shared.workspace_assets')
 </head>
 <body class="ap-shell">
 

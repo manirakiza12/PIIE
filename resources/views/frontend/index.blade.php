@@ -49,6 +49,7 @@
 
     @include('frontend.include_top')
 
+    @include('shared.workspace_assets')
 </head>
 
 {{--

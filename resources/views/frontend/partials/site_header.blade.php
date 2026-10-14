@@ -10,7 +10,7 @@
 
     HIERARCHY
       Row 1  a slim utility bar: email | telephone | Download Brochure
-      Row 2  logo | navigation | Apply Now | Student Portal
+      Row 2  logo | navigation | Apply Now | Login
 
     BRAND
       The official logo only. The institution name and the motto are NOT repeated
@@ -300,7 +300,7 @@
 
             <div class="piie-header__actions">
                 <a class="piie-btn piie-btn--primary" href="{{ $piieApply }}">Apply Now</a>
-                <a class="piie-btn piie-btn--ghost" href="{{ $piieLogin }}">Student Portal</a>
+                <a class="piie-btn piie-btn--ghost" href="{{ $piieLogin }}">Login</a>
             </div>
 
             {{-- Below 1024px the navigation collapses to this control. --}}
@@ -369,7 +369,7 @@
 
                 <div class="piie-btn-row">
                     <a class="piie-btn piie-btn--primary" href="{{ $piieApply }}">Apply Now</a>
-                    <a class="piie-btn piie-btn--ghost" href="{{ $piieLogin }}">Student Portal</a>
+                    <a class="piie-btn piie-btn--ghost" href="{{ $piieLogin }}">Login</a>
                 </div>
             </nav>
         </div>

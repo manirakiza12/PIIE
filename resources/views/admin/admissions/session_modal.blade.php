@@ -18,6 +18,15 @@
                 <label class="form-check-label" for="is_open">{{ get_phrase('Session is Open for Applications') }}</label>
             </div>
             <div class="fpb-7 pt-3">
+                @if(\Illuminate\Support\Facades\Schema::hasColumn('intake_sessions', 'start_date'))
+                    <fieldset class="border rounded p-3 mb-3">
+                        <legend class="h6">{{ get_phrase('Dates printed on admission letters') }}</legend>
+                        <p class="small text-muted">{{ get_phrase('These are academic dates, separate from the application opening and closing dates. Leave unknown dates blank.') }}</p>
+                        @foreach(['start_date' => 'Semester commencement', 'orientation_start_date' => 'Orientation start', 'orientation_end_date' => 'Orientation end', 'registration_deadline' => 'Registration deadline'] as $field => $label)
+                            <div class="mb-2"><label class="eForm-label" for="intake-{{ $field }}">{{ get_phrase($label) }}</label><input type="date" class="form-control" id="intake-{{ $field }}" name="{{ $field }}" value="{{ old($field, $session?->{$field}) }}"></div>
+                        @endforeach
+                    </fieldset>
+                @endif
                 <button class="btn-form" type="submit">{{ $session ? get_phrase('Update Session') : get_phrase('Create Session') }}</button>
             </div>
         </div>

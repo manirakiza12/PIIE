@@ -1,14 +1,14 @@
-<div class="offcanvas offcanvas-end eOffcanvas" data-bs-scroll="true" tabindex="-1" id="offcanvasScrollingRightBS" aria-labelledby="offcanvasScrollingRightLabel">
+<div class="offcanvas offcanvas-end eOffcanvas workspace-surface" data-bs-scroll="false" tabindex="-1" id="offcanvasScrollingRightBS" aria-labelledby="offcanvasRightLabel">
   <div class="offcanvas-header">
     <div class="eDisplay-5" id="offcanvasRightLabel">{{ get_phrase('Loading...') }}</div>
-    <a href="#" class="offcanvas-btn"
+    <button type="button" class="offcanvas-btn"
       data-bs-dismiss="offcanvas" aria-label="Close">
       <svg xmlns='http://www.w3.org/2000/svg'
         viewBox='0 0 16 16'>
         <path
           d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z' />
       </svg>
-    </a>
+    </button>
   </div>
   <div class="offcanvas-body" id="offcanvasScrollingRightLabel">
     {{ get_phrase('Loading...') }}
@@ -19,23 +19,28 @@
   "use strict";
 
   function rightModal(url, title){
-    var myOffcanvas = document.getElementById('offcanvasScrollingRightBS')
-      var bsOffcanvas = new bootstrap.Offcanvas(myOffcanvas);
+    var myOffcanvas = document.getElementById('offcanvasScrollingRightBS');
+      var bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(myOffcanvas);
+      if (window.workspaceRightRequest) window.workspaceRightRequest.abort();
+      $('#offcanvasRightLabel').text(title);
+      $('#offcanvasScrollingRightLabel').html('<div class="workspace-loading" role="status">{{ get_phrase('Loading...') }}</div>').attr('aria-busy', 'true');
       bsOffcanvas.show();
-      $('#offcanvasRightLabel').html(title);
 
-      $.ajax({
+      window.workspaceRightRequest = $.ajax({
         type:"get",
         url: url,
         success: function(response){
           $("#offcanvasScrollingRightLabel").html(response);
+          if (window.prepareWorkspaceUI) window.prepareWorkspaceUI(myOffcanvas);
         },
-        error: function(xhr){
+        error: function(xhr, status){
+          if (status === 'abort') return;
           var message = (xhr.status === 403)
             ? "{{ get_phrase('You do not have permission to do this') }}"
             : "{{ get_phrase('Something went wrong. Please try again') }}" + ' (' + xhr.status + ')';
           $("#offcanvasScrollingRightLabel").html('<div class="alert alert-danger m-3">' + message + '</div>');
-        }
+        },
+        complete: function(){ $('#offcanvasScrollingRightLabel').removeAttr('aria-busy'); }
       });
   }
 </script>
@@ -142,15 +147,21 @@ var callBackFunction;
 var callBackFunctionForGenericConfirmationModal;
 function largeModal(url, header)
 {
-  jQuery('#large-modal').modal('show', {backdrop: 'true'});
+  jQuery('#large-modal .modal-title').text(header);
+  jQuery('#large-modal .modal-body').html('<div class="workspace-loading" role="status">{{ get_phrase('Loading...') }}</div>');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('large-modal')).show();
+  if (window.workspaceLargeRequest) window.workspaceLargeRequest.abort();
   // SHOW AJAX RESPONSE ON REQUEST SUCCESS
-  $.ajax({
+  window.workspaceLargeRequest = $.ajax({
     type: 'get',
     url: url,
     success: function(response)
     {
       jQuery('#large-modal .modal-body').html(response);
-      jQuery('#large-modal .modal-title').html(header);
+      if (window.prepareWorkspaceUI) window.prepareWorkspaceUI(document.getElementById('large-modal'));
+    },
+    error: function(xhr, status) {
+      if (status !== 'abort') jQuery('#large-modal .modal-body').html('<div class="alert alert-danger" role="alert">{{ get_phrase('Something went wrong. Please try again') }}</div>');
     }
   });
 }
@@ -158,7 +169,7 @@ function largeModal(url, header)
 
 
 <!--  Large Modal -->
-<div class="modal fade" id="large-modal" tabindex="-1" role="dialog" aria-labelledby="myLargeModalLabel" aria-hidden="true">
+<div class="modal fade workspace-surface" id="large-modal" tabindex="-1" role="dialog" aria-labelledby="myLargeModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header d-print-none">
@@ -177,24 +188,28 @@ function largeModal(url, header)
   function showAjaxModal(url, header)
   {
       // SHOWING AJAX PRELOADER IMAGE
-      jQuery('#scrollable-modal .modal-body').html('<div style="text-align:center;margin-top:200px;"><img style="width: 100px; opacity: 0.4; " src="{{ asset('assets/images/straight-loader.gif') }}" /></div>');
-      jQuery('#scrollable-modal .modal-title').html('...');
+      jQuery('#scrollable-modal .modal-body').html('<div class="workspace-loading" role="status">{{ get_phrase('Loading...') }}</div>');
+      jQuery('#scrollable-modal .modal-title').text(header);
       // LOADING THE AJAX MODAL
-      jQuery('#scrollable-modal').modal('show', {backdrop: 'true'});
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('scrollable-modal')).show();
+      if (window.workspaceScrollableRequest) window.workspaceScrollableRequest.abort();
 
       // SHOW AJAX RESPONSE ON REQUEST SUCCESS
-      $.ajax({
+      window.workspaceScrollableRequest = $.ajax({
           url: url,
           success: function(response)
           {
               jQuery('#scrollable-modal .modal-body').html(response);
-              jQuery('#scrollable-modal .modal-title').html(header);
+              if (window.prepareWorkspaceUI) window.prepareWorkspaceUI(document.getElementById('scrollable-modal'));
+          },
+          error: function(xhr, status) {
+              if (status !== 'abort') jQuery('#scrollable-modal .modal-body').html('<div class="alert alert-danger" role="alert">{{ get_phrase('Something went wrong. Please try again') }}</div>');
           }
       });
   }
 </script>
 <!-- Scrollable modal -->
-<div class="modal fade" id="scrollable-modal" tabindex="-1" role="dialog" aria-labelledby="scrollableModalTitle" aria-hidden="true">
+<div class="modal fade workspace-surface" id="scrollable-modal" tabindex="-1" role="dialog" aria-labelledby="scrollableModalTitle" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable" role="document">
       <div class="modal-content">
           <div class="modal-header">

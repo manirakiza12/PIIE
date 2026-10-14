@@ -1,6 +1,7 @@
 @extends('accountant.navigation')
    
 @section('content')
+@include('shared.invoice_email_settings')
 <div class="mainSection-title">
     <div class="row">
 	    <div class="col-12">

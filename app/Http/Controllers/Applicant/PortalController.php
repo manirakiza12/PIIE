@@ -102,11 +102,9 @@ class PortalController extends BaseApplicantController
         }
 
         $admission->load(['programme', 'intakeSession']);
-        $school = School::find($admission->school_id);
-
-        $pdf = PDF::loadView('admin.admissions.offer_letter', compact('admission', 'school'));
-
-        return $pdf->download("OfferLetter_{$admission->app_number}.pdf");
+        $letter = \App\Support\Admissions\AdmissionLetterDocument::forAdmission($admission);
+        return \App\Support\Admissions\AdmissionLetterDocument::pdf($letter)->download(
+            \App\Support\Admissions\AdmissionLetterDocument::filename($letter));
     }
 
     /** Inline viewing of the applicant's own uploads. */

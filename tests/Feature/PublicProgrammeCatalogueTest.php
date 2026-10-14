@@ -31,6 +31,99 @@ class PublicProgrammeCatalogueTest extends TestCase
 
     private int $school;
     private int $otherSchool;
+    private ?string $galleryPublicDir = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->galleryPublicDir !== null) {
+            \Illuminate\Support\Facades\File::deleteDirectory($this->galleryPublicDir);
+        }
+        parent::tearDown();
+    }
+
+    private function prepareGallery(): void
+    {
+        (require base_path('database/migrations/2026_10_13_100000_create_programme_gallery_images_table.php'))->up();
+        $this->galleryPublicDir = sys_get_temp_dir().'/piie-public-gallery-'.bin2hex(random_bytes(8));
+        \Illuminate\Support\Facades\File::ensureDirectoryExists($this->galleryPublicDir.'/assets/uploads/programme-gallery');
+        \Tests\Feature\Support\FrameworkCompatibility::useTemporaryPublicPath($this->app, $this->galleryPublicDir);
+    }
+
+    private function galleryImage(Programme $programme, string $filename, int $order = 1): string
+    {
+        \App\Models\ProgrammeGalleryImage::create([
+            'school_id' => $programme->school_id, 'programme_id' => $programme->id,
+            'sort_order' => $order, 'path' => $filename,
+        ]);
+        // Valid bytes; upload and re-encoding are covered by ProgrammeGalleryImageTest.
+        $image = imagecreatetruecolor(16, 9);
+        imagejpeg($image, public_path('assets/uploads/programme-gallery/'.$filename));
+        imagedestroy($image);
+        return asset('assets/uploads/programme-gallery/'.$filename);
+    }
+
+    public function test_public_detail_shows_only_its_programme_gallery_and_cards_keep_the_cover(): void
+    {
+        $this->prepareGallery();
+        $first = $this->publish($this->programme(['name' => 'First Programme', 'code' => 'FIRST']));
+        $second = $this->publish($this->programme(['name' => 'Second Programme', 'code' => 'SECOND']));
+        $firstUrl = $this->galleryImage($first, 'first.jpg');
+        $extraUrl = $this->galleryImage($first, 'first-extra.jpg', 2);
+        $secondUrl = $this->galleryImage($second, 'second.jpg');
+        \Illuminate\Support\Facades\File::ensureDirectoryExists(public_path('assets/uploads/programme-covers'));
+        \Illuminate\Support\Facades\File::copy(public_path('assets/uploads/programme-gallery/first.jpg'), public_path('assets/uploads/programme-covers/cover.jpg'));
+        $first->forceFill(['cover_image_path' => 'cover.jpg'])->save();
+        $coverUrl = asset('assets/uploads/programme-covers/cover.jpg');
+
+        $this->get(route('website.programme.show', $first->id))->assertOk()
+            ->assertSee('public-programme-gallery')->assertSee($firstUrl, false)->assertSee($extraUrl, false)
+            ->assertSee($coverUrl, false)->assertDontSee($secondUrl, false);
+        $this->get(route('website.programme.show', $second->id))->assertOk()
+            ->assertSee($secondUrl, false)->assertDontSee($firstUrl, false)->assertDontSee($extraUrl, false);
+        foreach ([$this->cataloguePage(), $this->home()] as $html) {
+            $this->assertStringContainsString($coverUrl, $html);
+            $this->assertStringContainsString(route('website.programme.show', $first->id), $html);
+            $this->assertStringNotContainsString($firstUrl, $html);
+            $this->assertStringNotContainsString($secondUrl, $html);
+        }
+    }
+
+    public function test_public_detail_rejects_foreign_unpublished_inactive_and_missing_programmes(): void
+    {
+        $foreign = $this->publish($this->programme(['school_id' => $this->otherSchool, 'code' => 'FOREIGN']));
+        $unpublished = $this->programme(['code' => 'DRAFT']);
+        $inactive = $this->publish($this->programme(['code' => 'INACTIVE']), ['is_active' => 0]);
+        foreach ([$foreign->id, $unpublished->id, $inactive->id, 999999] as $id) {
+            $this->get(route('website.programme.show', $id))->assertNotFound();
+        }
+    }
+
+    public function test_public_detail_without_gallery_table_keeps_programme_information(): void
+    {
+        $programme = $this->publish($this->programme(['name' => 'Programme Without Gallery']));
+        $this->assertFalse(Schema::hasTable('programme_gallery_images'));
+        $this->get(route('website.programme.show', $programme->id))->assertOk()
+            ->assertSee('Programme Without Gallery')->assertDontSee('public-programme-gallery');
+    }
+
+    public function test_public_detail_hides_missing_gallery_files_and_foreign_tenant_rows(): void
+    {
+        $this->prepareGallery();
+        $programme = $this->publish($this->programme());
+        $url = $this->galleryImage($programme, 'missing.jpg');
+        \Illuminate\Support\Facades\File::delete(public_path('assets/uploads/programme-gallery/missing.jpg'));
+        $foreignUrl = $this->galleryImage($programme, 'wrong-tenant.jpg', 2);
+        DB::table('programme_gallery_images')->where('path', 'wrong-tenant.jpg')->update(['school_id' => $this->otherSchool]);
+        $this->get(route('website.programme.show', $programme->id))->assertOk()
+            ->assertDontSee('public-programme-gallery')->assertDontSee($url, false)->assertDontSee($foreignUrl, false);
+    }
+
+    public function test_public_detail_respects_the_frontend_switch(): void
+    {
+        $programme = $this->publish($this->programme());
+        DB::table('global_settings')->where('key', 'frontend_view')->update(['value' => '0']);
+        $this->get(route('website.programme.show', $programme->id))->assertRedirect(route('login'));
+    }
 
     protected function setUp(): void
     {
@@ -117,6 +210,68 @@ class PublicProgrammeCatalogueTest extends TestCase
         ], $overrides));
 
         return Programme::query()->findOrFail($id);
+    }
+
+    public function test_detail_displays_the_full_description_and_contextual_application_link(): void
+    {
+        $programme = $this->publish($this->programme());
+        $description = str_repeat('Full programme information. ', 12).'Final description sentence.';
+        $id = $this->legacyItem(['school_id' => $this->school, 'description' => $description,
+            'meta_json' => json_encode(['programme_id' => $programme->id])]);
+        $programme->forceFill(['website_item_id' => $id])->save();
+        $this->get(route('website.programme.show', $programme->id))->assertOk()
+            ->assertSee('Final description sentence.')
+            ->assertSee(route('apply.form', ['programme_id' => $programme->id]), false);
+        $detailHtml = $this->get(route('website.programme.show', $programme->id))->assertOk()->getContent();
+        $document = new \DOMDocument;
+        @$document->loadHTML($detailHtml);
+        $xpath = new \DOMXPath($document);
+        $this->assertGreaterThan(0, $xpath->query('//header//a[@aria-current="page" and contains(@href,"academic-programmes")]')->length);
+        $this->assertStringContainsString('?category=postgraduate#catalogue', $detailHtml);
+        $html = $this->cataloguePage();
+        $this->assertStringContainsString('>View programme</a>', $html);
+        $this->assertStringContainsString(route('website.programme.show', $programme->id), $html);
+    }
+
+    public function test_missing_or_invalid_public_configuration_never_selects_an_existing_school(): void
+    {
+        $programme = $this->publish($this->programme());
+        foreach ([null, '', 'invalid', '0', '999999'] as $configured) {
+            DB::table('global_settings')->where('key', 'primary_school_id')->delete();
+            if ($configured !== null) {
+                DB::table('global_settings')->insert(['key' => 'primary_school_id', 'value' => $configured]);
+            }
+            $this->assertNull(\App\Support\PublicTenantResolver::resolveSchoolId());
+            $this->assertNull($this->catalogue()->detailFor($programme->id));
+            $this->assertCount(0, $this->catalogue()->cards()->where('origin', 'academic'));
+            $this->get(route('apply.form'))->assertStatus(503);
+        }
+    }
+
+    public function test_each_programme_reads_only_its_verified_cms_link_and_description(): void
+    {
+        $this->legacyItem(['link' => 'https://example.org/unrelated']);
+        foreach (['FIRST', 'SECOND'] as $code) {
+            $programme = $this->publish($this->programme(['code' => $code, 'name' => $code]));
+            $id = $this->legacyItem([
+                'school_id' => $this->school,
+                'meta_json' => json_encode(['programme_id' => $programme->id]),
+                'link' => 'https://example.org/'.$code,
+                'description' => $code.' description',
+            ]);
+            $programme->forceFill(['website_item_id' => $id])->save();
+            $detail = $this->catalogue()->detailFor($programme->id);
+            $this->assertSame('https://example.org/'.$code, $detail['card']['link']['url']);
+            $this->assertSame($code.' description', $detail['description']);
+            DB::table('website_items')->where('id', $id)->update(['link' => '/admissions/apply?programme_id=999999']);
+            $this->assertSame(route('apply.form', ['programme_id' => $programme->id]), $this->catalogue()->detailFor($programme->id)['card']['link']['url']);
+            DB::table('website_items')->where('id', $id)->update(['school_id' => $this->otherSchool]);
+            $detail = $this->catalogue()->detailFor($programme->id);
+            $this->assertSame(route('apply.form', ['programme_id' => $programme->id]), $detail['card']['link']['url']);
+            $this->assertNull($detail['description']);
+            DB::table('website_items')->where('id', $id)->update(['school_id' => $this->school, 'meta_json' => json_encode(['programme_id' => 999999])]);
+            $this->assertNull($this->catalogue()->detailFor($programme->id)['description']);
+        }
     }
 
     private function publish(Programme $programme, array $overrides = []): Programme

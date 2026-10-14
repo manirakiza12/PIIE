@@ -32,13 +32,13 @@ class StudentImportController extends Controller
     private const COLUMNS = [
         'name', 'email', 'class', 'section', 'programme', 'department',
         'year_of_study', 'nationality', 'national_id_or_passport',
-        'next_of_kin_contact', 'next_of_kin_address', 'status',
+        'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake',
     ];
 
     private const HEADER_ROW = [
         'name', 'email', 'class_name', 'section_name', 'programme_name',
         'department_name', 'year_of_study', 'nationality',
-        'national_id_or_passport', 'next_of_kin_contact', 'next_of_kin_address', 'status',
+        'national_id_or_passport', 'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name',
     ];
 
     private function schoolId(): int
@@ -64,7 +64,7 @@ class StudentImportController extends Controller
         fputcsv($handle, [
             'Musoke Okello', 'musoke.okello@example.test', 'BITC-2026-DAY-A', '',
             'Bachelor of Business Information Technology', '', '1', 'Ugandan',
-            'CM-0000001', '+256700000000', 'Kampala', 'active',
+            'CM-0000001', '+256700000000', 'Kampala', 'active', 'May '.date('Y').' Intake',
         ]);
 
         rewind($handle);
@@ -179,6 +179,7 @@ class StudentImportController extends Controller
 
         $classes = DB::table('classes')->where('school_id', $schoolId)->get()->keyBy('name');
         $programmes = Programme::where('school_id', $schoolId)->get()->keyBy('name');
+        $intakes = \App\Models\IntakeSession::where('school_id', $schoolId)->get()->groupBy('name');
         $departments = DB::table('departments')->where('school_id', $schoolId)->get()->keyBy('name');
         // `sections` has no school_id of its own - it hangs off a class. Scope it
 // through the school's classes so a section from another tenant can never be
@@ -213,6 +214,19 @@ $sections = DB::table('sections')->whereIn('class_id', $classIds)->get()->keyBy(
                 $rowErrors[] = "class \"{$className}\" does not exist in this school";
             }
             $programmeName = trim((string) ($r['programme_name'] ?? ''));
+            $intakeName = trim((string) ($r['intake_name'] ?? ''));
+            $intake = $intakes->get($intakeName);
+            if ($programmeName !== '' && $programmes->has($programmeName)) {
+                if (!$intake || $intake->count() !== 1) {
+                    $rowErrors[] = 'Provide intake_name matching exactly one intake in this school for programme registration numbering.';
+                } else {
+                    try {
+                        \App\Support\RegistrationNumber::studentPrefix(['school_id' => $schoolId, 'programme_id' => $programmes->get($programmeName)->id, 'intake_session_id' => $intake->first()->id]);
+                    } catch (ValidationException $exception) {
+                        $rowErrors[] = implode(' ', array_merge(...array_values($exception->errors())));
+                    }
+                }
+            }
             if ($programmeName !== '' && ! $programmes->has($programmeName)) {
                 $rowErrors[] = "programme \"{$programmeName}\" does not exist in this school";
             }
@@ -257,6 +271,7 @@ $sections = DB::table('sections')->whereIn('class_id', $classIds)->get()->keyBy(
                 'email'            => $email,
                 'password_option'  => 'auto',
                 'programme_id'     => $programmeName !== '' ? $programmes->get($programmeName)->id : null,
+                'intake_session_id' => $intake && $intake->count() === 1 ? $intake->first()->id : null,
                 'department_id'    => $departmentName !== '' ? $departments->get($departmentName)->id : null,
                 'class_id'         => $class->id,
                 'section_id'       => $section ? $section->id : null,

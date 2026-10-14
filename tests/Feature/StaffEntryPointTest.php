@@ -106,7 +106,12 @@ class StaffEntryPointTest extends TestCase
         $other = $this->actingAs($this->admin)->get(route('admin.teacher'))->assertOk();
 
         $this->assertSame($this->sidebar($other->getContent()), $this->sidebar($dashboard->getContent()));
-        $this->assertContains('Roles & Permissions', $this->sidebar($dashboard->getContent()));
+        // "Roles & Permissions" is a staff access screen, so it lives in the Staff
+        // sub-menu only. It used to be rendered twice — once there and once as a
+        // top-level item — so it is asserted to appear exactly once overall and
+        // to no longer be a top-level sidebar entry.
+        $this->assertSame(1, substr_count($dashboard->getContent(), '>Roles &amp; Permissions<'));
+        $this->assertNotContains('Roles & Permissions', $this->sidebar($dashboard->getContent()));
         $dashboard->assertSee(route('admin.rbac.roles.index'), false);
 
         // Dashboard content and its Font Awesome icons are still there.

@@ -54,8 +54,14 @@
 
     @if($piieMediaSrc)
         <div class="piie-card__media">
+            @if($piieVariant === 'programme' && ! empty($detailLink))
+                <a href="{{ $detailLink }}" aria-label="{{ $title ?? 'View programme' }}">
+            @endif
             <img src="{{ $piieMediaSrc }}" alt="{{ $alt ?? ($title ?? '') }}"
                  loading="lazy" decoding="async">
+            @if($piieVariant === 'programme' && ! empty($detailLink))
+                </a>
+            @endif
         </div>
     @elseif($piieFallbackLabel)
         {{-- A designed placeholder. An empty frame reads as a broken page; this
@@ -103,7 +109,13 @@
             <span class="piie-tag">{{ $tag }}</span>
         @endif
 
-        <h3 class="piie-card__title">{{ $title ?? '' }}</h3>
+        <h3 class="piie-card__title">
+            @if($piieVariant === 'programme' && ! empty($detailLink))
+                <a href="{{ $detailLink }}">{{ $title ?? '' }}</a>
+            @else
+                {{ $title ?? '' }}
+            @endif
+        </h3>
 
         @if(! empty($role))
             <span class="piie-tag piie-tag--accent">{{ $role }}</span>
@@ -145,6 +157,9 @@
 
         @if(! empty($link) && ! empty($link['url']))
             <div class="piie-card__foot">
+                @if($piieVariant === 'programme' && ! empty($detailLink))
+                    <a class="piie-btn piie-btn--ghost" href="{{ $detailLink }}">View programme</a>
+                @endif
                 <a class="piie-btn piie-btn--ghost" href="{{ $link['url'] }}">
                     {{ $link['text'] ?? 'View Details' }}
                 </a>

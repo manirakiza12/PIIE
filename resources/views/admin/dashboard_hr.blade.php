@@ -3,7 +3,7 @@
 @section('content')
 @php
     $schoolId = auth()->user()->school_id;
-    $totalStaff = DB::table('users')->whereIn('role_id', [2,3,4,5,10,11,12,13,15,16,17,18,19])->where('school_id', $schoolId)->count();
+    $totalStaff = DB::table('users')->whereIn('role_id', [2,3,4,5,9,10,11,12,13,14,15,16,17,18,19,20])->where('school_id', $schoolId)->count();
     $pendingLeave = DB::table('leavelists')->where('school_id', $schoolId)->where('status', 'pending')->count();
     $onLeaveToday = DB::table('leavelists')->where('school_id', $schoolId)->where('status', 'approved')
         ->where('from_date', '<=', now()->toDateString())->where('to_date', '>=', now()->toDateString())->count();
@@ -101,7 +101,7 @@
                     <a href="{{ route('admin.salary_structures.index') }}" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ get_phrase('Salary Structures') }}
                     </a>
-                    <a href="{{ route('admin.department') }}" class="btn btn-outline-dark btn-sm">
+                    <a href="{{ route('admin.department_list') }}" class="btn btn-outline-dark btn-sm">
                         <i class="bi bi-building me-1"></i>{{ get_phrase('Departments') }}
                     </a>
                 </div>

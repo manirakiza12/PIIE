@@ -32,6 +32,8 @@ trait AdmissionsTestHelper
         DB::reconnect('sqlite');
         }
 
+        (require database_path('migrations/2026_10_14_100000_create_identity_sequences_table.php'))->up();
+
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name')->nullable();
@@ -781,7 +783,7 @@ trait AdmissionsTestHelper
     {
         return (int) DB::table('intake_sessions')->insertGetId(array_merge([
             'school_id' => $schoolId,
-            'name' => 'January Intake',
+            'name' => 'January '.date('Y').' Intake',
             'is_open' => 1,
             'created_at' => now(),
             'updated_at' => now(),

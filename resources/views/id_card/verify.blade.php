@@ -21,6 +21,7 @@
         .verify-field-label { display: inline-block; width: 100px; color: #8a8f9c; font-weight: 600; }
         .verify-school { margin-top: 16px; font-size: 11px; color: #8a8f9c; }
     </style>
+@include('shared.typography')
 </head>
 <body>
     <div class="verify-card">

@@ -65,6 +65,7 @@ trait CreatesPublicSiteSchema
         // These are fixture values for an institution that has configured its
         // branding. They assert nothing about the product.
         DB::table('global_settings')->insert([
+            ['key' => 'primary_school_id', 'value' => '1'],
             ['key' => 'frontend_view', 'value' => '1'],
             ['key' => 'system_title', 'value' => 'PIIE'],
             ['key' => 'navbar_title', 'value' => 'PIIE'],
@@ -90,7 +91,8 @@ trait CreatesPublicSiteSchema
         // One school on record.
         //
         // `PublicTenantResolver::resolveSchoolId()` falls back to "the first school on
-        // record" when `primary_school_id` is unset. With an EMPTY schools table it
+        // record" when `primary_school_id` was unset. The public resolver now requires
+        // the explicit primary_school_id above. With an EMPTY schools table it
         // returned null, and `/apply` correctly aborted 503 — which made the Apply
         // page untestable and hid the fact that its header was rendering empty.
         DB::table('schools')->insert([

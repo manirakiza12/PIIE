@@ -8,8 +8,8 @@
     $todayEnd = strtotime(date('Y-m-d 23:59:59'));
     $todayPayments = DB::table('payment_history')->where('school_id', $schoolId)
         ->whereBetween('timestamp', [$todayStart, $todayEnd])->count();
-    $pendingFees = DB::table('student_fee_managers')->where('school_id', $schoolId)->where('status', 0)->count();
-    $newApplications = DB::table('admissions')->where('school_id', $schoolId)->where('status', 'pending')->count();
+    $pendingFees = DB::table('student_fee_managers')->where('school_id', $schoolId)->whereIn('status', ['unpaid', 'pending'])->count();
+    $newApplications = DB::table('admissions')->where('school_id', $schoolId)->whereIn('status', ['submitted', 'under_review'])->count();
 @endphp
 
 <div class="mainSection-title">
@@ -91,16 +91,16 @@
                     <a href="{{ route('admin.student') }}" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-search me-1"></i>{{ get_phrase('Student Search') }}
                     </a>
-                    <a href="{{ route('admin.offline_admission.single') }}" class="btn btn-outline-secondary btn-sm">
+                    <a href="{{ route('admin.offline_admission.single', ['type' => 'single']) }}" class="btn btn-outline-secondary btn-sm">
                         <i class="bi bi-person-plus me-1"></i>{{ get_phrase('New Admission') }}
                     </a>
-                    <a href="{{ route('admin.fee') }}" class="btn btn-outline-success btn-sm">
+                    <a href="{{ route('admin.fee_manager.list') }}" class="btn btn-outline-success btn-sm">
                         <i class="bi bi-receipt me-1"></i>{{ get_phrase('Fee Inquiry') }}
                     </a>
-                    <a href="{{ route('admin.payment') }}" class="btn btn-outline-info btn-sm">
+                    <a href="{{ route('admin.offline_payment_pending') }}" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-credit-card me-1"></i>{{ get_phrase('Payments') }}
                     </a>
-                    <a href="{{ route('admin.noticeboard') }}" class="btn btn-outline-dark btn-sm">
+                    <a href="{{ route('admin.noticeboard.list') }}" class="btn btn-outline-dark btn-sm">
                         <i class="bi bi-megaphone me-1"></i>{{ get_phrase('Noticeboard') }}
                     </a>
                 </div>

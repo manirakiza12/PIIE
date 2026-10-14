@@ -53,7 +53,7 @@
 # `php` is 8.2.27. No Node on the host (assets are committed; any build runs in CI).
 # =============================================================================
 
-name: PIIE Deploy (disabled)
+name: PIIE Deploy
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LOCK 1: manual trigger only. There is intentionally no `push` and no
@@ -215,13 +215,14 @@ jobs:
       - name: Upload the on-server scripts and the artefact
         run: |
           ssh piie-prod "mkdir -p $REMOTE_BASE/incoming $REMOTE_BASE/bin"
-          scp -q deploy/remote/*.sh piie-prod:$REMOTE_BASE/bin/
+          scp -q deploy/remote/*.sh deploy/remote/production-inventory.php piie-prod:$REMOTE_BASE/bin/
           scp -q deploy/docroot/index.php piie-prod:$REMOTE_BASE/bin/docroot-index.php
           scp -q dist/piie-release-${SHA:0:12}.tar.gz piie-prod:$REMOTE_BASE/incoming/
           ssh piie-prod "chmod +x $REMOTE_BASE/bin/*.sh"
 
       - name: Remote preflight (read-only)
-        run: ssh piie-prod "$REMOTE_BASE/bin/preflight.sh"
+        run: |
+          ssh piie-prod "if command -v docker >/dev/null && docker inspect piie-app >/dev/null 2>&1; then bash $REMOTE_BASE/bin/container-preflight.sh; else bash $REMOTE_BASE/bin/preflight.sh; fi"
 
       - name: Install the release
         env:
@@ -231,13 +232,13 @@ jobs:
         run: |
           RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
           SUM=$(cut -d' ' -f1 dist/piie-release-${SHA:0:12}.tar.gz.sha256)
-          ssh piie-prod "EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/deploy-release.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
+          ssh piie-prod "EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
 
       - name: Public smoke check
         if: ${{ inputs.mode == 'activate' }}
         run: |
-          for u in / /login /apply /applicant/login; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://piie.ac.ug$u")
+          for u in / /login /apply /applicant/login /website/careers /assets/css/typography.css /assets/css/workspace-ui.css; do
+            code=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 20 "https://piie.ac.ug$u")
             echo "$u -> $code"; [ "$code" = 200 ] || [ "$code" = 302 ] || exit 1
           done
 

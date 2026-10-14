@@ -38,6 +38,7 @@
     <!--Main Jquery-->
     <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
 
+    @include('shared.workspace_assets')
 </head>
 
 <body>
@@ -121,7 +122,7 @@
             </li>
 
 
-            @if (addon_status('hr_management') == 1)
+            @if (addon_status('hr_management') == 1 && Route::has('hr.list_of_attendence') && Route::has('hr.list_of_leaves') && Route::has('hr.user_list_of_payrolls'))
                 <li class="nav-links-li {{ request()->is('hr/leave_list*') || request()->is('attendence/list*') || request()->is('payment/list*') ? 'showMenu' : '' }}">
 
                     <div class="iocn-link">
@@ -178,7 +179,7 @@
                 </li>
             @endif
 
-            @if (addon_status('inventory_manager') == 1)
+            @if (addon_status('inventory_manager') == 1 && Route::has('accountant.inventory.list') && Route::has('accountant.category.list') && Route::has('accountant.buy_sell_inventory'))
                 <li class="nav-links-li {{ request()->is('accountant/inventory/list') || request()->is('accountant/category/list') || request()->is('accountant/buy_sell_inventory*') ? 'showMenu' : '' }}">
                     <div class="iocn-link">
                         <a href="#">

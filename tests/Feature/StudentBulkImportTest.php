@@ -51,9 +51,9 @@ class StudentBulkImportTest extends TestCase
         $handle = fopen($path, 'w');
         fputcsv($handle, ['name', 'email', 'class_name', 'section_name', 'programme_name',
             'department_name', 'year_of_study', 'nationality', 'national_id_or_passport',
-            'next_of_kin_contact', 'next_of_kin_address', 'status']);
+            'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name']);
         foreach ($rows as $row) {
-            fputcsv($handle, array_pad($row, 12, ''));
+            fputcsv($handle, array_pad($row, 13, ''));
         }
         fclose($handle);
 
@@ -120,12 +120,13 @@ class StudentBulkImportTest extends TestCase
     public function test_import_with_a_programme_and_section_still_provisions(): void
     {
         $programmeId = $this->makeProgramme($this->school, ['name' => 'BSc Computer Science']);
+        $this->makeIntakeSession($this->school, ['name' => 'May 2026 Intake']);
         $classId = DB::table('classes')->where('school_id', $this->school)->first()->id;
         $this->section('Section A1', $classId);
 
         $path = $this->csv([[
             'Carol Auma', 'carol@x.test', 'Class A', 'Section A1', 'BSc Computer Science',
-            '', '2', 'Ugandan', 'CM-1', '+256700000000', 'Kampala', 'active',
+            '', '2', 'Ugandan', 'CM-1', '+256700000000', 'Kampala', 'active', 'May 2026 Intake',
         ]]);
 
         $this->actingAs($this->admin)
@@ -142,6 +143,16 @@ class StudentBulkImportTest extends TestCase
         $enrolment = DB::table('enrollment')->where('user_id', $student->id)->first();
         $this->assertSame($classId, (int) $enrolment->class_id);
         $this->assertNotSame(0, (int) $enrolment->section_id, 'the section must be carried across');
+    }
+
+    public function test_programme_import_without_intake_is_rejected_during_preview(): void
+    {
+        $this->makeProgramme($this->school, ['name' => 'BSc Computer Science']);
+        $path = $this->csv([['Carol Auma', 'carol@x.test', 'Class A', '', 'BSc Computer Science']]);
+        $this->actingAs($this->admin)->post(route('admin.student.import.preview'), ['file' => $this->file($path)])
+            ->assertOk()->assertSee('Provide intake_name');
+        $this->assertNull(User::where('email', 'carol@x.test')->first());
+        $this->assertSame(0, DB::table('identity_sequences')->count());
     }
 
     public function test_duplicate_emails_are_reported_and_skipped(): void

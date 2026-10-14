@@ -355,7 +355,8 @@ class AccountantController extends Controller
             $data['session_id'] = $active_session;
 
 
-            StudentFeeManager::create($data);
+            $invoice = StudentFeeManager::create($data);
+            if ($request->boolean('email_invoice')) \App\Support\Billing\InvoiceEmail::request($invoice);
 
             return redirect()->back()->with('message','You have successfully create a new invoice.');
         } else if($value == 'mass'){
@@ -390,7 +391,8 @@ class AccountantController extends Controller
                 $parent_id=User::find($data['student_id'])->toArray();
                 $parent_id=$parent_id['parent_id'];
                 $data['parent_id'] = $parent_id;
-                StudentFeeManager::create($data);
+                $invoice = StudentFeeManager::create($data);
+                if ($request->boolean('email_invoice')) \App\Support\Billing\InvoiceEmail::request($invoice);
             }
 
             if (sizeof($enrolments) > 0) {
@@ -540,6 +542,19 @@ class AccountantController extends Controller
         }
 
         $amount = $invoice->total_amount;
+
+        // Only an invoice actually awaiting review may be approved or declined, and
+        // the decision must be one of the two known values. Same guard the Admin
+        // portal applies, so the two finance roles cannot disagree about which
+        // invoices they may act on. `pending` is the discriminator that matters —
+        // see the note in AdminController::update_offline_payment.
+        if (! in_array($status, ['approve', 'decline'], true)) {
+            return redirect()->back()->with('error', 'Unknown payment decision.');
+        }
+
+        if ($invoice->status !== 'pending') {
+            return redirect()->back()->with('error', 'This invoice is not awaiting review of an offline payment.');
+        }
 
         if($status=='approve')
         {

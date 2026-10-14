@@ -5,6 +5,7 @@ namespace App\Support\ProgrammeCatalogue;
 use App\Models\Programme;
 use App\Support\Images\ImageOptimizer;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 
 /**
@@ -103,7 +104,7 @@ class ProgrammeCoverImage
      * so a failed upload cannot leave the programme with no image at all. That
      * ordering is the same one `WebsiteManagementController::saveImage()` uses.
      */
-    public function set(Programme $programme, UploadedFile $file): Programme
+    public function set(Programme $programme, UploadedFile $file, ?array $processed = null): Programme
     {
         $directory = public_path(self::DIRECTORY);
 
@@ -121,23 +122,28 @@ class ProgrammeCoverImage
         //
         // The stored name is application-generated and the extension comes from
         // what was actually produced, never from the client's filename.
-        $result = $this->optimizer->process($file);
+        $result = $processed ?? $this->optimizer->process($file);
 
         $name = bin2hex(random_bytes(16)).'.'.$result['extension'];
 
         File::put($directory.'/'.$name, $result['bytes']);
 
-        $programme->forceFill([
-            'cover_image_path'       => $name,
-            'cover_image_name'       => mb_substr((string) $file->getClientOriginalName(), 0, 191),
-            'cover_image_mime'       => mb_substr((string) $result['mime'], 0, 100),
-            'cover_image_size'       => strlen($result['bytes']),
-            'cover_image_updated_at' => now(),
-        ])->save();
+        try {
+            $programme->forceFill([
+                'cover_image_path'       => $name,
+                'cover_image_name'       => mb_substr((string) $file->getClientOriginalName(), 0, 191),
+                'cover_image_mime'       => mb_substr((string) $result['mime'], 0, 100),
+                'cover_image_size'       => strlen($result['bytes']),
+                'cover_image_updated_at' => now(),
+            ])->save();
+        } catch (\Throwable $e) {
+            File::delete($directory.'/'.$name);
+            throw $e;
+        }
 
         // Disposed only after the row and the new bytes are both safely written,
         // so a failure cannot leave the programme with no image at all.
-        $this->dispose($previous, $name);
+        $this->disposeAfterCommit($previous, $name);
 
         return $programme;
     }
@@ -161,7 +167,7 @@ class ProgrammeCoverImage
             'cover_image_updated_at' => null,
         ])->save();
 
-        $this->dispose($previous, null);
+        $this->disposeAfterCommit($previous, null);
 
         return $programme;
     }
@@ -174,6 +180,15 @@ class ProgrammeCoverImage
      * deliberately replaced, so a replacement disposes of what it replaced.
      * `$keep` guards the case where the optimiser produced the same name.
      */
+    private function disposeAfterCommit(?string $previous, ?string $keep): void
+    {
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit(fn () => $this->dispose($previous, $keep));
+        } else {
+            $this->dispose($previous, $keep);
+        }
+    }
+
     private function dispose(?string $previous, ?string $keep): void
     {
         if (! is_string($previous) || trim($previous) === '' || $previous === $keep) {

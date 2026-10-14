@@ -39,6 +39,7 @@
                 <code>next_of_kin_address</code>, <code>status</code>.</p>
             <p class="mb-0 text-muted">Classes, programmes and departments are matched by name exactly as
                 they appear in the admin screens. Every student gets a generated portal password.</p>
+            <p class="mt-2 mb-0">When a programme is supplied, also provide <code>intake_name</code> matching the intake in Admissions. The intake semester start date determines the registration year and month.</p>
         </div>
     </div>
 </div>

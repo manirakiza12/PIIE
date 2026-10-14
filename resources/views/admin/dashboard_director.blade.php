@@ -4,9 +4,9 @@
 @php
     $schoolId = auth()->user()->school_id;
     $totalStudents = DB::table('users')->where('role_id', 7)->where('school_id', $schoolId)->count();
-    $totalStaff = DB::table('users')->whereIn('role_id', [2,3,4,5,10,11,12,13,15,16,17,18,19])->where('school_id', $schoolId)->count();
+    $totalStaff = DB::table('users')->whereIn('role_id', [2,3,4,5,9,10,11,12,13,14,15,16,17,18,19,20])->where('school_id', $schoolId)->count();
     $activeProgrammes = DB::table('programmes')->where('school_id', $schoolId)->where('status', 1)->count();
-    $pendingApplications = DB::table('admissions')->where('school_id', $schoolId)->where('status', 'pending')->count();
+    $pendingApplications = DB::table('admissions')->where('school_id', $schoolId)->whereIn('status', ['submitted', 'under_review'])->count();
 @endphp
 
 <div class="mainSection-title">

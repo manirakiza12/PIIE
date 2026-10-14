@@ -116,6 +116,7 @@ class ApplicantNotifier
      */
     public static function statusChanged(Admission $admission, string $fromStatus): bool
     {
+        if ($admission->status === Admission::STATUS_ENROLLED && $fromStatus === Admission::STATUS_ENROLLED) return false;
         $copy = [
             Admission::STATUS_UNDER_REVIEW => [
                 'subject'    => get_phrase('Your application is under review'),
@@ -135,7 +136,7 @@ class ApplicantNotifier
             Admission::STATUS_ENROLLED => [
                 'subject'    => get_phrase('You are now enrolled'),
                 'heading'    => get_phrase('Your enrolment is complete'),
-                'paragraphs' => [get_phrase('Your admission has been completed and your student account has been created. You will receive your student portal login details in a separate email.')],
+                'paragraphs' => [get_phrase('Your enrolment is complete. Your personalised admission letter is attached to this email. Your student portal login details are sent separately.')],
             ],
             Admission::STATUS_WITHDRAWN => [
                 'subject'    => get_phrase('Your application has been withdrawn'),
@@ -157,6 +158,7 @@ class ApplicantNotifier
 
         return self::send($admission->email, [
             'subject'    => $message['subject'] . ' — ' . $admission->app_number,
+            'admission_letter' => $admission->status === Admission::STATUS_ENROLLED ? AdmissionLetterDocument::forAdmission($admission) : null,
             'heading'    => $message['heading'],
             'greeting'   => get_phrase('Dear') . ' ' . $admission->full_name . ',',
             'paragraphs' => $paragraphs,
@@ -166,8 +168,8 @@ class ApplicantNotifier
                 get_phrase('Previous Status')    => ucwords(str_replace('_', ' ', $fromStatus)),
                 get_phrase('Current Status')     => $admission->statusLabel(),
             ]),
-            'cta_label' => get_phrase('View My Application'),
-            'cta_url'   => route('applicant.track'),
+            'cta_label' => $admission->status === Admission::STATUS_ENROLLED ? get_phrase('Open Student Portal') : get_phrase('View My Application'),
+            'cta_url'   => $admission->status === Admission::STATUS_ENROLLED ? route('login') : route('applicant.track'),
             'school_id' => $admission->school_id,
         ]);
     }

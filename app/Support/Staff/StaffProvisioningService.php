@@ -26,7 +26,7 @@ use Illuminate\Support\Str;
  *
  * users stays the authoritative staff identity: name, email, role_id (base
  * role), school_id, department/designation, employment type, staff status,
- * staff number (STF-YYYY-XXXX-XXXX) and the user_information JSON live there
+ * staff number (YYYY/MM/ROLE/NNN/) and the user_information JSON live there
  * and are never copied elsewhere. One person = one user account; additional
  * responsibilities are RBAC custom roles, never another user.
  *
@@ -114,7 +114,7 @@ class StaffProvisioningService
                 'school_id' => $schoolId,
                 'user_information' => json_encode($info),
                 'status' => 1,
-                'code' => staff_code(),
+                'code' => \App\Support\RegistrationNumber::staff($roleId),
                 'staff_status' => $roleId === \App\Support\Roles\SystemRole::GENERIC_STAFF
                     ? ($data['staff_status'] ?? StaffStatus::ACTIVE)
                     : StaffStatus::ACTIVE,

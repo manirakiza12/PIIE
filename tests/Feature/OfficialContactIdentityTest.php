@@ -325,12 +325,12 @@ class OfficialContactIdentityTest extends TestCase
             'space-between on three children is what caused the excessive gap'
         );
 
-        // The logo, Apply Now and Student Portal survive.
+        // The logo, Apply Now and the shared Login action survive.
         $html = $this->get('/')->getContent();
 
         $this->assertStringContainsString('piie-brand__mark', $html);
         $this->assertStringContainsString('>Apply Now<', $html);
-        $this->assertStringContainsString('>Student Portal<', $html);
+        $this->assertStringContainsString('>Login<', $html);
     }
 
     // ═══ 6. NO PLACEHOLDERS ANYWHERE ══════════════════════════════════════
@@ -365,7 +365,7 @@ class OfficialContactIdentityTest extends TestCase
         );
 
         $this->assertStringContainsString('>Apply Now<', $html);
-        $this->assertStringContainsString('>Student Portal<', $html);
+        $this->assertStringContainsString('>Login<', $html);
 
         // Shared footer.
         $this->assertStringContainsString('piie-footer__name', $html);

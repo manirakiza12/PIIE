@@ -37,6 +37,7 @@
   <!--Toaster css-->
   <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/toastr.min.css') }}"/>
 
+@include('shared.typography')
 </head>
 
 <body>

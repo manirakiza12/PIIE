@@ -20,7 +20,7 @@ class IdCard
 {
     public static function cardNumber(User $student): string
     {
-        return sprintf('PIIE-ID-%06d', $student->id);
+        return (string) $student->code;
     }
 
     /**

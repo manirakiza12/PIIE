@@ -30,12 +30,7 @@
                                 <div class="title">{{ $student_details['name'] }}</div>
                                 <p class="sub-title">{{ get_phrase('Please find below the hostel fee invoice') }}</p>
                             </div>
-                            <div class="item pt-57">
-                                <div class="title">{{ get_phrase('Billing Address') }}</div>
-                                <p class="sub-title">{{ $student_details['address'] ?? 'N/A' }}<br>
-                                    <abbr title="Phone">P:</abbr> {{ $student_details['phone'] == '' ? '(' . get_phrase('Phone number not found') . ')' : $student_details['phone'] }}<br>
-                                </p>
-                            </div>
+                            @include('shared.invoice_billing')
                         </div>
                     </div>
                     <div class="col-sm-5">

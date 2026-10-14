@@ -645,10 +645,10 @@ class PublicSiteRedesignTest extends TestCase
     {
         $html = $this->home();
 
-        // Explore Programmes, Apply Now and Student Portal must all be present.
+        // Explore Programmes, Apply Now and Login must all be present.
         $this->assertStringContainsString('>Explore Programmes<', $html);
         $this->assertStringContainsString('>Apply Now<', $html);
-        $this->assertStringContainsString('>Student Portal<', $html);
+        $this->assertStringContainsString('>Login<', $html);
 
         // Apply Now must point at the REAL application route, not a second system.
         $this->assertStringContainsString(route('apply.form'), $html);

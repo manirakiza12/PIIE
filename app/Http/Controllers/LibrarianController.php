@@ -8,7 +8,7 @@ use App\Models\Book;
 use App\Models\BookIssue;
 use App\Models\Session;
 use App\Models\Classes;
-use App\Models\user;
+use App\Models\User;
 use App\Models\Noticeboard;
 use App\Models\FrontendEvent;
 use App\Models\MessageThrade;
@@ -377,6 +377,7 @@ class LibrarianController extends Controller
 
        public function allMessage(Request $request, $id)
        {
+           $this->ownedMessageThread($id);
    
                $msg_user_details = DB::table('users')
                ->join('message_thrades', function ($join) {
@@ -424,7 +425,7 @@ class LibrarianController extends Controller
                            <div class="user-item d-flex align-items-center msg_us_src_list">
                                <a href="' . route('librarian.message.messagethrades', ['id' => $user->id]).'">
                                    <img src="' . $user_image . '" alt="User Image" style="width: 50px; height: 50px; border-radius: 50%;">
-                                   <span class="ms-3">' . $user->name . '</span>
+                                   <span class="ms-3">' . e($user->name) . '</span>
                                </a>
                            </div>
                        ';
@@ -435,12 +436,12 @@ class LibrarianController extends Controller
            }
    
    
-           $chat_datas = Chat::where('school_id', auth()->user()->school_id)->get();
+           $chat_datas = Chat::where('school_id', auth()->user()->school_id)->where('message_thrade', $id)->get();
    
            $counter_condition = Chat::where('message_thrade', $id)->orderBy('id', 'desc')->first();
    
           
-          if($counter_condition->sender_id != auth()->user()->id){
+          if($counter_condition && $counter_condition->sender_id != auth()->user()->id){
                Chat::where('message_thrade', $id)->update(['read_status' => 1]);
            }
            
@@ -448,8 +449,10 @@ class LibrarianController extends Controller
        }
    
        public function messagethrades($id){
+           User::where('school_id', auth()->user()->school_id)->findOrFail($id);
    
            $exists = MessageThrade::where('reciver_id', $id)
+                               ->where('school_id', auth()->user()->school_id)
                                ->where('sender_id', auth()->user()->id)
                                ->exists();
            if( $id != auth()->user()->id){
@@ -467,6 +470,7 @@ class LibrarianController extends Controller
        
                
                $message_thrades = MessageThrade::where('reciver_id', $id)
+                                            ->where('school_id', auth()->user()->school_id)
                                             ->where('sender_id', auth()->user()->id)
                                             ->first();
                $msg_trd_id = $message_thrades->id;
@@ -477,7 +481,7 @@ class LibrarianController extends Controller
                    ->where('message_thrades.id', $msg_trd_id)
                    ->first();
        
-                   $chat_datas = Chat::where('school_id', auth()->user()->school_id)->get();
+                   $chat_datas = Chat::where('school_id', auth()->user()->school_id)->where('message_thrade', $msg_trd_id)->get();
        
                    // Combine all data into a single array
                    return view('librarian.message.all_message', ['id' => $msg_trd_id, 'msg_user_details' => $msg_user_details, 'chat_datas' => $chat_datas,]);
@@ -490,7 +494,11 @@ class LibrarianController extends Controller
    
        public function chat_save(Request $request)
        {
-           $data = $request->all();
+           $data = $request->validate(['message_thrade' => 'required|integer', 'reciver_id' => 'required|integer', 'message' => 'required|string|max:5000']);
+           $thread = $this->ownedMessageThread($data['message_thrade']);
+           $recipient = (int) $thread->sender_id === (int) auth()->id() ? $thread->reciver_id : $thread->sender_id;
+           User::where('school_id', auth()->user()->school_id)->findOrFail($recipient);
+           abort_unless((int) $data['reciver_id'] === (int) $recipient, 422, 'Recipient does not match this conversation.');
            $chat_data = [
                'message_thrade' => $data['message_thrade'],
                'reciver_id' => $data['reciver_id'],
@@ -533,7 +541,7 @@ class LibrarianController extends Controller
                        <div class="user-item d-flex align-items-center msg_us_src_list">
                            <a href="' . route('librarian.message.messagethrades', ['id' => $user->id]).'">
                                <img src="' . $user_image . '" alt="User Image" style="width: 50px; height: 50px; border-radius: 50%;">
-                               <span class="ms-3">' . $user->name . '</span>
+                               <span class="ms-3">' . e($user->name) . '</span>
                            </a>
                        </div>
                    ';
@@ -544,6 +552,13 @@ class LibrarianController extends Controller
    
            // Pass the data to the view only if msg_user_details is not null
            return view('librarian.message.chat_empty');
+       }
+
+       private function ownedMessageThread($id): MessageThrade
+       {
+           return MessageThrade::where('school_id', auth()->user()->school_id)
+               ->where(fn ($query) => $query->where('sender_id', auth()->id())->orWhere('reciver_id', auth()->id()))
+               ->findOrFail($id);
        }
       
 

@@ -349,6 +349,8 @@ return [
         'admin.fee_manager.export' => 'finance.view',
         'admin.fee_manager.pdf_print' => 'finance.view',
         'admin.studentFeeinvoice' => 'finance.view',
+        'admin.invoice_email.send' => 'finance.invoices',
+        'admin.invoice_email.preferences' => 'finance.invoices',
         'admin.fee_manager.*' => 'finance.invoices',
         'admin.create.fee_manager' => 'finance.invoices',
         'admin.edit.fee_manager' => 'finance.invoices',

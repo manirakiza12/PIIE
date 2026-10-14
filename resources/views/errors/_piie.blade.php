@@ -29,6 +29,7 @@
         .btn:focus-visible { outline: 3px solid #93b4f5; outline-offset: 2px; }
         .ref { margin-top: 22px; font-size: 12px; color: #98a2b3; }
     </style>
+@include('shared.typography')
 </head>
 <body>
     <main class="card" role="main">

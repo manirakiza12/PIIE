@@ -106,7 +106,7 @@ class StudentIdCardTest extends TestCase
         $response = $this->actingAs($student)->get(route('student.id_card'));
 
         $response->assertOk();
-        $response->assertSee('PIIE-ID-' . str_pad((string) $student->id, 6, '0', STR_PAD_LEFT));
+        $response->assertSee($student->code);
         $response->assertSee('data:image/svg+xml;base64,', false);
     }
 

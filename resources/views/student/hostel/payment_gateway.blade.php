@@ -15,6 +15,7 @@ $school_data = School::where('id', auth()->user()->school_id)->first();
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/custom.css') }}" />
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/style.css') }}" />
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/vendors/bootstrap-icons-1.8.1/bootstrap-icons.css') }}">
+@include('shared.typography')
 </head>
 
 <body>

@@ -42,14 +42,8 @@ class AdmissionsController extends Controller
         $this->middleware(function ($request, $next) {
             $this->school_id = Auth::user()->school_id;
 
-            // Admissions/Intake Sessions/Agents only apply to the one school
-            // the public Apply Now portal currently belongs to — block
-            // direct route access for every other school, not just hide the
-            // nav item (see resources/views/admin/navigation.blade.php and
-            // layouts/app.blade.php for the matching nav-level gate).
-            if (! is_primary_school($this->school_id)) {
-                return redirect()->route('admin.dashboard')->with('error', get_phrase('Admissions is not available for your school.'));
-            }
+            // Internal Admissions follows the authenticated staff tenant.
+            abort_unless($this->school_id, 403);
 
             return $next($request);
         });
@@ -708,9 +702,10 @@ class AdmissionsController extends Controller
     public function printOfferLetter($id)
     {
         $admission  = Admission::where('school_id', $this->school_id)->with(['programme', 'intakeSession'])->findOrFail($id);
-        $school     = School::find($this->school_id);
-        $pdf        = PDF::loadView('admin.admissions.offer_letter', compact('admission', 'school'));
-        return $pdf->download("OfferLetter_{$admission->app_number}.pdf");
+        abort_unless(in_array($admission->status, ['accepted', 'enrolled'], true), 403);
+        $letter = \App\Support\Admissions\AdmissionLetterDocument::forAdmission($admission);
+        return \App\Support\Admissions\AdmissionLetterDocument::pdf($letter)->download(
+            \App\Support\Admissions\AdmissionLetterDocument::filename($letter));
     }
 
     // ── Intake Sessions ────────────────────────────────────────────────────
@@ -737,6 +732,7 @@ class AdmissionsController extends Controller
             'application_fee' => 'nullable|numeric|min:0',
         ]);
         $validated['school_id'] = $this->school_id;
+        $validated = array_merge($validated, $this->admissionLetterDates($request));
         $validated['is_open']   = $request->has('is_open') ? 1 : 0;
         IntakeSession::create($validated);
         AuditLog::record('create', 'Admissions', "Created intake session: {$validated['name']}");
@@ -752,6 +748,7 @@ class AdmissionsController extends Controller
             'close_date'      => 'nullable|date',
             'application_fee' => 'nullable|numeric|min:0',
         ]);
+        $validated = array_merge($validated, $this->admissionLetterDates($request));
         $validated['is_open'] = $request->has('is_open') ? 1 : 0;
         $old = $session->only(array_keys($validated));
         $session->update($validated);
@@ -773,6 +770,17 @@ class AdmissionsController extends Controller
         ]);
         $session->delete();
         return redirect()->back()->with('success', get_phrase('Session deleted'));
+    }
+
+    private function admissionLetterDates(Request $request): array
+    {
+        $rules = [];
+        foreach (['start_date', 'orientation_start_date', 'orientation_end_date', 'registration_deadline'] as $column) {
+            if (Schema::hasColumn('intake_sessions', $column)) $rules[$column] = ['nullable', 'date'];
+        }
+        if (isset($rules['orientation_end_date']) && $request->filled('orientation_start_date')) $rules['orientation_end_date'][] = 'after_or_equal:orientation_start_date';
+        if (isset($rules['registration_deadline']) && $request->filled('start_date')) $rules['registration_deadline'][] = 'after_or_equal:start_date';
+        return $request->validate($rules);
     }
 
     // ── Agents ────────────────────────────────────────────────────────────

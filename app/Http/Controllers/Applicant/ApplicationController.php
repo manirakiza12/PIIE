@@ -81,7 +81,12 @@ class ApplicationController extends BaseApplicantController
                 ]);
 
             case ApplicationProgress::STEP_PROGRAMME:
+                $selection = session('public_programme_selection', []);
+                $selectedProgrammeId = ($selection['school_id'] ?? null) == $admission->school_id
+                    ? Programme::published()->where('school_id', $admission->school_id)
+                        ->whereKey($selection['programme_id'] ?? 0)->value('id') : null;
                 return view('applicant.application.programme', $shared + [
+                    'selectedProgrammeId' => $selectedProgrammeId,
                     'programmes'   => Programme::where('school_id', $admission->school_id)->where('is_active', 1)->orderBy('name')->get(),
                     'intakes'      => IntakeSession::where('school_id', $admission->school_id)->where('is_open', 1)->orderByDesc('id')->get(),
                     'modes'        => array_merge(Programme::MODES, Programme::MODES_LEGACY),

@@ -445,9 +445,12 @@ class ApplicantPesaPalJourneyTest extends TestCase
     public function test_foreign_admin_cannot_verify_or_send_payment_requests(): void
     {
         $payment = ApplicantPesaPalPayment::start($this->application());
+        $providerRequests = count(Http::recorded());
         $this->be($this->makeAdminUser($this->makeSchool()));
-        $this->post(route('admin.hei_admissions.payment.pesapal.check', $payment->id))->assertRedirect();
-        // Existing primary-school guard refuses access before controller lookup.
+        $this->post(route('admin.hei_admissions.payment.pesapal.check', $payment->id))->assertNotFound();
+        $this->post(route('admin.hei_admissions.payment.request', $payment->admission_id))->assertNotFound();
+        // Tenant-scoped lookups reject both actions before any provider operation.
+        $this->assertCount($providerRequests, Http::recorded());
         $this->assertSame('pending', $payment->fresh()->status);
     }
 }

@@ -28,7 +28,7 @@
                     @foreach($programmes->groupBy('level') as $level => $group)
                         <optgroup label="{{ $level ?: get_phrase('Other') }}">
                             @foreach($group as $programme)
-                                <option value="{{ $programme->id }}" {{ (int) old('programme_id', $admission->programme_id) === $programme->id ? 'selected' : '' }}>
+                                <option value="{{ $programme->id }}" {{ (int) old('programme_id', $admission->programme_id ?: ($selectedProgrammeId ?? null)) === $programme->id ? 'selected' : '' }}>
                                     {{ $programme->name }}@if($programme->duration) — {{ $programme->duration }}@endif
                                 </option>
                             @endforeach

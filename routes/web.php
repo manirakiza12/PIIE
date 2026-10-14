@@ -73,19 +73,10 @@ Route::get('/health', function () {
 */
 
 // Clear application cache:
-Route::get('/clear-cache', function () {
-    Artisan::call('cache:clear');
-
-    //Artisan::call('route:cache');
-
-    Artisan::call('config:cache');
-
-    Artisan::call('view:clear');
-
+Route::post('/clear-cache', function () {
     Artisan::call('optimize:clear');
-
-    return 'Cache cleard';
-})->name('clear.cache');
+    return 'Cache cleared';
+})->middleware(['auth', 'superAdmin', 'throttle:2,1'])->name('clear.cache');
 
 // MarzPay's server posts here directly ΓÇö no login, no CSRF token (see
 // VerifyCsrfToken::$except). Shared across every payment flow; the payload's
@@ -126,6 +117,7 @@ Route::controller(HomeController::class)->group(function () {
 
     Route::match(['get', 'post'], '/', 'home')->name('landingPage');
     Route::get('website/{slug}', 'websitePage')->name('website.page');
+    Route::get('programmes/{id}', 'programmeDetail')->whereNumber('id')->name('website.programme.show');
     Route::get('download-brochure', 'downloadBrochure')->name('download.brochure');
 
     // ΓöÇΓöÇ PUBLIC ENQUIRY SUBMISSION ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -784,6 +776,8 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::post('admin/fee_manager_list/{id}', 'feeManagerUpdate')->name('admin.fee_manager.update');
     Route::get('admin/student_fee/delete/{id}', 'studentFeeDelete')->name('admin.fee_manager.delete');
     Route::get('admin/student_fee/invoice/{id}', 'studentFeeinvoice')->name('admin.studentFeeinvoice');
+    Route::post('admin/student_fee/invoice/{id}/email', [\App\Http\Controllers\InvoiceEmailController::class, 'send'])->name('admin.invoice_email.send')->middleware('throttle:10,1');
+    Route::post('admin/invoice-email/preferences', [\App\Http\Controllers\InvoiceEmailController::class, 'preferences'])->name('admin.invoice_email.preferences');
     Route::get('admin/offline_payment/pending', 'offline_payment_pending')->name('admin.offline_payment_pending')->middleware('admin_permission');
 
     //Expense routes
@@ -1180,6 +1174,7 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
     Route::get('student/dashboard', 'studentDashboard')->name('student.dashboard')->middleware('role_id');
     Route::get('student/id-card', 'idCardGenerate')->name('student.id_card');
     Route::get('student/id-card/pdf', 'idCardPdf')->name('student.id_card.pdf');
+    Route::get('student/admission-letter', 'admissionLetter')->name('student.admission_letter');
     Route::get('student/my-courses', 'myCourses')->name('student.my_courses');
 
     // ΓöÇΓöÇ Course Assignments (student) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -1489,6 +1484,8 @@ Route::controller(AccountantController::class)->middleware('accountant', 'auth')
     Route::post('accountant/fee_manager_list/{id}', 'feeManagerUpdate')->name('accountant.fee_manager.update');
     Route::get('accountant/student_fee/delete/{id}', 'studentFeeDelete')->name('accountant.fee_manager.delete');
     Route::get('accountant/student_fee/invoice/{id}', 'studentFeeinvoice')->name('accountant.studentFeeinvoice');
+    Route::post('accountant/student_fee/invoice/{id}/email', [\App\Http\Controllers\InvoiceEmailController::class, 'send'])->name('accountant.invoice_email.send')->middleware('throttle:10,1');
+    Route::post('accountant/invoice-email/preferences', [\App\Http\Controllers\InvoiceEmailController::class, 'preferences'])->name('accountant.invoice_email.preferences');
     Route::get('accountant/student_fee_manager/sync', 'feeSyncForm')->name('accountant.fee_manager.sync');
     Route::post('accountant/student_fee_manager/sync', 'feeSyncGenerate')->name('accountant.fee_manager.sync.generate');
 
@@ -1551,6 +1548,8 @@ Route::controller(AccountantController::class)->middleware('bursar', 'auth')->gr
     Route::post('bursar/fee_manager_list/{id}', 'feeManagerUpdate')->name('bursar.fee_manager.update');
     Route::get('bursar/student_fee/delete/{id}', 'studentFeeDelete')->name('bursar.fee_manager.delete');
     Route::get('bursar/student_fee/invoice/{id}', 'studentFeeinvoice')->name('bursar.studentFeeinvoice');
+    Route::post('bursar/student_fee/invoice/{id}/email', [\App\Http\Controllers\InvoiceEmailController::class, 'send'])->name('bursar.invoice_email.send')->middleware('throttle:10,1');
+    Route::post('bursar/invoice-email/preferences', [\App\Http\Controllers\InvoiceEmailController::class, 'preferences'])->name('bursar.invoice_email.preferences');
     Route::get('bursar/student_fee_manager/sync', 'feeSyncForm')->name('bursar.fee_manager.sync');
     Route::post('bursar/student_fee_manager/sync', 'feeSyncGenerate')->name('bursar.fee_manager.sync.generate');
     Route::get('bursar/offline_payment/pending', 'offline_payment_pending')->name('bursar.offline_payment_pending');
@@ -1640,6 +1639,9 @@ Route::controller(LibrarianController::class)->middleware('librarian', 'auth')->
     Route::any('librarian/password/{action_type}', 'password')->name('librarian.password');
     Route::post('librarian/language', 'user_language')->name('librarian.language');
     Route::get('librarian/message/chat_empty', 'chat_empty')->name('librarian.message.chat_empty');
+    Route::get('librarian/message/all-message/{id}', 'allMessage')->whereNumber('id')->name('librarian.message.all_message');
+    Route::get('librarian/message/message-thrades/{id}', 'messagethrades')->whereNumber('id')->name('librarian.message.messagethrades');
+    Route::post('librarian/message/single-chat/save', 'chat_save')->middleware('throttle:60,1')->name('librarian.message.chat_save');
 });
 //Librarian routes end here
 
@@ -1691,6 +1693,17 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
     // exactly the shape of mistake not to repeat here.
     Route::post('admin/programmes/{id}/cover',        'storeCover')->whereNumber('id')->name('admin.programmes.cover.store');
     Route::post('admin/programmes/{id}/cover/remove', 'removeCover')->whereNumber('id')->name('admin.programmes.cover.remove');
+
+    // The gallery: up to TWO additional pictures beside the cover. Separate routes
+    // from the cover's own because the storage, the limit and the unit of removal
+    // are all different - one cover held as columns on `programmes`, up to two
+    // gallery rows in `programme_gallery_images`. PROGRAMMES ONLY: there is
+    // deliberately no equivalent for course units, lessons, lesson materials or
+    // examinations, whose media is private teaching material with its own
+    // authorisation rules and must never inherit a public upload path.
+    Route::get('admin/programmes/{id}/gallery',            'galleryImages')->whereNumber('id')->name('admin.programmes.gallery.index');
+    Route::post('admin/programmes/{id}/gallery',           'storeGalleryImage')->whereNumber('id')->name('admin.programmes.gallery.store');
+    Route::delete('admin/programmes/{id}/gallery/{image}', 'destroyGalleryImage')->whereNumber(['id', 'image'])->name('admin.programmes.gallery.destroy');
     Route::post('admin/programmes/{id}/publish',      'publish')->whereNumber('id')->name('admin.programmes.publish');
     Route::post('admin/programmes/{id}/unpublish',    'unpublish')->whereNumber('id')->name('admin.programmes.unpublish');
     Route::get('admin/programmes/{id}/preview',       'preview')->whereNumber('id')->name('admin.programmes.preview');

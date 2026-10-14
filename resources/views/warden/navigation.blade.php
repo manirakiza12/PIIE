@@ -38,6 +38,7 @@
     <!--Main Jquery-->
     <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
 
+    @include('shared.workspace_assets')
 </head>
 
 <body>

@@ -187,7 +187,19 @@
                 $piieLevel = trim((string) request('level'));
                 $piieFaculty = trim((string) request('faculty'));
 
-                $piieFiltered = $piieAllProgrammes->filter(function (array $p) use ($piieQuery, $piieLevel, $piieFaculty) {
+                // Award-type section. `category` is the public browsing dimension
+                // and is derived from the programme's REAL stored level (see
+                // ProgrammeCategories) — not a second classification of its own.
+                // A URL may name either the category or a specific level; both
+                // narrow the same result set, and `category` additionally drives
+                // which sections are shown below.
+                $piieCategories = \App\Support\ProgrammeCatalogue\ProgrammeCategories::all();
+                $piieCategoryParam = trim((string) request('category'));
+                $piieCategory = \App\Support\ProgrammeCatalogue\ProgrammeCategories::label($piieCategoryParam) !== null
+                    ? $piieCategoryParam
+                    : '';
+
+                $piieMatchingFilters = $piieAllProgrammes->filter(function (array $p) use ($piieQuery, $piieLevel, $piieFaculty) {
                     if ($piieQuery !== '') {
                         // Search covers the fields a candidate would actually type:
                         // the name, the code they were quoted, the level, and any
@@ -211,6 +223,9 @@
 
                     return true;
                 })->values();
+
+                $piieGrouped = \App\Support\ProgrammeCatalogue\ProgrammeCategories::group($piieMatchingFilters);
+                $piieFiltered = $piieCategory !== '' ? $piieGrouped[$piieCategory] : $piieMatchingFilters;
 
                 // Twelve to a page: three full rows of four, so the grid never ends on
                 // a ragged single card, and few enough that a phone is not a wall.
@@ -250,6 +265,9 @@
                     {{-- Filters. A plain GET form, so it works with JavaScript off and
                          the query string is shareable. --}}
                     <form class="piie-filters" method="GET" action="{{ route('website.page', 'academic-programmes') }}" role="search">
+                        @if($piieCategory !== '')
+                            <input type="hidden" name="category" value="{{ $piieCategory }}">
+                        @endif
                         <div class="piie-field">
                             <label for="piie-q">Search programmes</label>
                             <input class="piie-form-control" type="search" id="piie-q" name="q"
@@ -286,15 +304,55 @@
                         </div>
                     </form>
 
+                    {{-- Award-type sections.
+                         One section per award type PIIE offers, each grouping the
+                         programmes whose REAL stored `programmes.level` belongs to
+                         it (see ProgrammeCategories). Every category is rendered,
+                         including one with nothing in it: "we offer no Master's
+                         programmes right now" is a fact a prospective student
+                         needs, and a section that is simply missing reads as a bug.
+                         Selecting one narrows the listing and scrolls to the
+                         catalogue, including when that category has no results. --}}
+                    @php
+                        // Grouping is applied to the FILTERED set, so a category
+                        // link respects an active search/level/faculty and the
+                        // sections always agree with the results meta below.
+
+                        // With no category selected, all sections show. With one
+                        // selected, only that one — otherwise the other headings
+                        // would sit above an empty grid and imply they had been
+                        // cleared by the visitor.
+                        $piieVisibleCategories = $piieCategory !== ''
+                            ? [$piieCategory => $piieCategories[$piieCategory]]
+                            : $piieCategories;
+                    @endphp
+
+                    <nav class="piie-category-nav" aria-label="Browse programmes by award type">
+                        <a class="piie-category-nav__link{{ $piieCategory === '' ? ' is-current' : '' }}"
+                           href="{{ route('website.page', ['slug' => 'academic-programmes'] + array_filter(['q' => $piieQuery, 'level' => $piieLevel, 'faculty' => $piieFaculty])) }}#catalogue"
+                           @if($piieCategory === '') aria-current="true" @endif>All programmes</a>
+                        @foreach($piieCategories as $piieCategorySlug => $piieCategoryDefinition)
+                            @php $piieCategoryCount = $piieGrouped[$piieCategorySlug]->count(); @endphp
+                            <a class="piie-category-nav__link{{ $piieCategory === $piieCategorySlug ? ' is-current' : '' }}"
+                               href="{{ route('website.page', ['slug' => 'academic-programmes'] + array_filter(['category' => $piieCategorySlug, 'q' => $piieQuery, 'level' => $piieLevel, 'faculty' => $piieFaculty])) }}#catalogue"
+                               @if($piieCategory === $piieCategorySlug) aria-current="true" @endif>
+                                {{ $piieCategoryDefinition['label'] }} <span class="piie-category-nav__count">{{ $piieCategoryCount }}</span>
+                            </a>
+                        @endforeach
+                    </nav>
+
                     <div class="piie-results-meta">
                         <span>
-                            Showing <strong>{{ $piieFiltered->count() }}</strong>
+                            Matching <strong>{{ $piieFiltered->count() }}</strong>
                             of {{ $piieAllProgrammes->count() }} programmes
+                            @if($piieCategory !== '')
+                                &middot; in {{ $piieCategories[$piieCategory]['label'] }}
+                            @endif
                             @if($piiePageNo > 1 || $piieFiltered->count() > $piiePerPage)
                                 &middot; page {{ $piiePageNo }} of {{ $piieTotalPages }}
                             @endif
                         </span>
-                        @if($piieQuery !== '' || $piieLevel !== '' || $piieFaculty !== '')
+                        @if($piieQuery !== '' || $piieLevel !== '' || $piieFaculty !== '' || $piieCategory !== '')
                             <a href="{{ route('website.page', 'academic-programmes') }}">Clear all filters</a>
                         @endif
                     </div>
@@ -317,23 +375,52 @@
                                 </div>
                             @endif
                         @else
-                            <div class="piie-catalogue__grid">
-                                @foreach($piieOnPage as $piieProgramme)
-                                    @include('frontend.partials.blocks.card', [
-                                        'variant'      => 'programme',
-                                        'title'        => $piieProgramme['title'],
-                                        'tag'          => $piieProgramme['level'],
-                                        'image'        => $piieProgramme['image'],
-                                        'alt'          => $piieProgramme['title'],
-                                        'fallback'     => $piieProgramme['fallback'],
-                                        'fallbackTone' => $piieToneByFaculty[$piieProgramme['faculty_key']] ?? null,
-                                        'excerpt'      => $piieProgramme['excerpt'],
-                                        'price'        => $piieProgramme['price'],
-                                        'contactLabel' => $piieProgramme['contact_label'],
-                                        'link'         => $piieProgramme['link'],
-                                    ])
-                                @endforeach
-                            </div>
+                            {{-- The grid is grouped into award-type sections from the
+                                 CURRENT PAGE of results, not from the whole filtered
+                                 set. That is deliberate: pagination, search and the
+                                 level/faculty filters all operate on one result set,
+                                 so slicing a different set into the headings would
+                                 make the counts disagree with what is on screen.
+                                 A category with nothing on this page simply has no
+                                 heading here; the nav above always lists it with
+                                 its count, so an award type offered by nobody is
+                                 still visible and still clickable. --}}
+                            @foreach($piieVisibleCategories as $piieCategorySlug => $piieCategoryDefinition)
+                                @php
+                                    $piieCategoryCards = $piieOnPage
+                                        ->filter(fn (array $p) => \App\Support\ProgrammeCatalogue\ProgrammeCategories::forLevel($p['level'] ?? null) === $piieCategorySlug)
+                                        ->values();
+                                @endphp
+
+                                @if($piieCategoryCards->isNotEmpty())
+                                    <section class="piie-catalogue__group" id="piie-category-{{ $piieCategorySlug }}"
+                                             aria-labelledby="piie-category-heading-{{ $piieCategorySlug }}">
+                                        <h3 class="piie-catalogue__group-title" id="piie-category-heading-{{ $piieCategorySlug }}">
+                                            {{ $piieCategoryDefinition['label'] }}
+                                            <span class="piie-catalogue__group-count">{{ $piieCategoryCards->count() }}</span>
+                                        </h3>
+
+                                        <div class="piie-catalogue__grid">
+                                            @foreach($piieCategoryCards as $piieProgramme)
+                                                @include('frontend.partials.blocks.card', [
+                                                    'variant'      => 'programme',
+                                                    'title'        => $piieProgramme['title'],
+                                                    'detailLink'   => $piieProgramme['detail_url'] ?? null,
+                                                    'tag'          => $piieProgramme['level'],
+                                                    'image'        => $piieProgramme['image'],
+                                                    'alt'          => $piieProgramme['title'],
+                                                    'fallback'     => $piieProgramme['fallback'],
+                                                    'fallbackTone' => $piieToneByFaculty[$piieProgramme['faculty_key']] ?? null,
+                                                    'excerpt'      => $piieProgramme['excerpt'],
+                                                    'price'        => $piieProgramme['price'],
+                                                    'contactLabel' => $piieProgramme['contact_label'],
+                                                    'link'         => $piieProgramme['link'],
+                                                ])
+                                            @endforeach
+                                        </div>
+                                    </section>
+                                @endif
+                            @endforeach
 
                         @if($piieTotalPages > 1)
                             <nav class="piie-pagination" aria-label="Catalogue pages">
