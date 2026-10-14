@@ -7,6 +7,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\IdCardVerificationController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\LibrarianController;
+use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\ParentController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SuperAdminController;
@@ -490,6 +491,36 @@ Route::controller(SuperAdminController::class)->middleware('auth', 'superAdmin')
 //Superadmin routes end here
 
 //Admin routes are here
+// Library workspaces use the existing portal gates and tenant-bound permissions.
+foreach (['admin' => ['auth', 'admin', 'rbac'], 'librarian' => ['auth', 'librarian'], 'student' => ['auth', 'student']] as $portal => $gates) {
+    Route::prefix($portal.'/library')->name($portal.'.library.')->middleware($gates)->controller(LibraryController::class)->group(function () use ($portal) {
+        Route::get('/', 'dashboard')->name('dashboard');
+        Route::get('/catalogue', 'catalogue')->name('catalogue');
+        Route::get('/loans', 'loans')->name('loans');
+        Route::get('/reservations', 'reservations')->name('reservations');
+        Route::post('/loans/{id}/renew', 'renew')->name('loans.renew');
+        Route::post('/books/{id}/reserve', 'reserve')->name('books.reserve');
+        Route::post('/reservations/{id}/cancel', 'cancel')->name('reservations.cancel');
+        if ($portal !== 'student') {
+            Route::get('/books/create', 'bookForm')->name('books.create');
+            Route::post('/books', 'saveBook')->name('books.store');
+            Route::get('/books/{id}/edit', 'bookForm')->name('books.edit');
+            Route::post('/books/{id}', 'saveBook')->name('books.update');
+            Route::post('/copies/{id}', 'updateCopy')->name('copies.update');
+            Route::get('/checkout', 'checkoutForm')->name('checkout');
+            Route::post('/checkout', 'checkout')->name('checkout.store');
+            Route::post('/checkout/reserve', 'reserveSelected')->name('checkout.reserve');
+            Route::get('/loans/{id}/return', 'returnForm')->name('loans.return');
+            Route::post('/loans/{id}/return', 'returnLoan')->name('loans.return.store');
+            Route::get('/reports', 'reports')->name('reports');
+            Route::get('/export', 'export')->name('export');
+            Route::get('/settings', 'settings')->name('settings');
+            Route::post('/settings', 'saveSettings')->name('settings.update');
+        }
+        Route::get('/books/{id}', 'bookDetails')->name('books.show');
+    });
+}
+
 Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->group(function () {
 
     Route::get('admin/dashboard', 'adminDashboard')->name('admin.dashboard')->middleware('role_id');

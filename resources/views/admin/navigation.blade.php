@@ -699,9 +699,9 @@
 
             <!-- Library -->
             @if($showLibrary)
-            <li class="nav-links-li {{ request()->is('admin/book*') ? 'showMenu' : '' }}">
+            <li class="nav-links-li {{ (request()->is('admin/book*') || request()->is('admin/library*')) ? 'showMenu' : '' }}">
                 <div class="iocn-link">
-                    <a href="{{ route('admin.book.book_list') }}" class="{{ request()->is('admin/book*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.library.dashboard') }}" class="{{ (request()->is('admin/book*') || request()->is('admin/library*')) ? 'active' : '' }}">
                         <div class="sidebar_icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>

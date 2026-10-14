@@ -1,0 +1,17 @@
+@extends('library.shell')
+@section('library_content')
+<div class="library-grid">
+    <div class="library-stat"><span>Catalogue titles</span><strong>{{ number_format($stats['titles']) }}</strong><a href="{{ route($prefix.'.library.catalogue') }}">Browse collection →</a></div>
+    <div class="library-stat"><span>Registered copies</span><strong>{{ number_format($stats['copies']) }}</strong><small>Includes reference and unavailable stock</small></div>
+    <div class="library-stat"><span>{{ $student ? 'My active loans' : 'Active loans' }}</span><strong>{{ number_format($stats['loans']) }}</strong><a href="{{ route($prefix.'.library.loans') }}">View loans →</a></div>
+    <div class="library-stat overdue"><span>{{ $student ? 'My overdue loans' : 'Overdue loans' }}</span><strong>{{ number_format($stats['overdue']) }}</strong><a href="{{ route($prefix.'.library.loans',['state'=>'overdue']) }}">Review overdue →</a></div>
+</div>
+@if($stats['legacy'])<div class="library-help">{{ $stats['legacy'] }} open loan(s) have no recorded due date. @if(!$student)Review these under <a href="{{ route($prefix.'.library.loans',['state'=>'legacy']) }}">legacy loans</a>; return and reissue where appropriate. @else Ask the librarian to review your due dates. @endif</div>@endif
+<div class="library-columns">
+    <section class="library-panel"><h2>{{ $student ? 'Your next returns' : 'Return desk' }}</h2>
+        @if($recent->isEmpty())<div class="library-empty"><i class="bi bi-book" aria-hidden="true"></i><h3>No active loans</h3><p>{{ $student ? 'Explore the catalogue and reserve a title you would like to borrow.' : 'Issued books will appear here with their accession records and due dates.' }}</p><a class="btn btn-outline-primary" href="{{ route($prefix.'.library.catalogue') }}">Explore catalogue</a></div>
+        @else<div class="table-responsive"><table class="library-table"><thead><tr><th>Book / borrower</th><th>Due</th><th>Status</th>@if($canIssue)<th>Action</th>@endif</tr></thead><tbody>@foreach($recent as $loan)<tr><td><strong>{{ $loan->book?->name ?? 'Removed title #'.$loan->book_id }}</strong><small>{{ $loan->copy?->accession ?? 'Legacy copy' }} · {{ $loan->borrower?->name ?? 'Member #'.$loan->student_id }}</small></td><td>{{ $loan->due_date?->format('d M Y') ?? 'Not recorded' }}</td><td><span class="library-badge {{ $loan->due_date && $loan->due_date->toDateString() < $today ? 'warning' : '' }}">{{ $loan->due_date && $loan->due_date->toDateString() < $today ? 'Overdue' : 'On loan' }}</span></td>@if($canIssue)<td><a class="btn btn-outline-primary" href="{{ route($prefix.'.library.loans.return',['id'=>$loan->id]) }}">Return</a></td>@endif</tr>@endforeach</tbody></table></div>@endif
+    </section>
+    <aside class="library-panel"><h2>Borrowing guide</h2><p>Borrow up to <strong>{{ $policy->max_loans }} books</strong> for <strong>{{ $policy->loan_days }} days</strong>.</p><p>Each loan permits <strong>{{ $policy->max_renewals }} renewal(s)</strong> when it is current and no reservation is waiting.</p><p>Reservations remain valid for <strong>{{ $policy->reservation_days }} days</strong> and are served in order.</p><p class="library-muted">{{ $policy->block_overdue ? 'Return overdue books before borrowing another title.' : 'Overdue loans remain visible to the return desk.' }} Reference, damaged, lost and withdrawn copies are unavailable for checkout.</p>@if($canManage)<a href="{{ route($prefix.'.library.settings') }}">Configure borrowing rules →</a>@endif</aside>
+</div>
+@endsection

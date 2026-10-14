@@ -1,0 +1,14 @@
+@extends('library.shell')
+@section('library_content')
+<section class="library-panel"><h2>{{ $book->exists ? 'Edit catalogue title' : 'Add catalogue title' }}</h2><p class="library-muted">Catalogue the title once, then track each physical copy by accession. Fields marked * are required.</p>
+<form method="post" action="{{ $book->exists ? route($prefix.'.library.books.update',['id'=>$book->id]) : route($prefix.'.library.books.store') }}">@csrf
+<div class="library-form-grid">
+@foreach(['name'=>['Title *',255],'author'=>['Author / editor *',255],'isbn'=>['ISBN',32],'category'=>['Subject / category',100],'publisher'=>['Publisher',255],'edition'=>['Edition',80],'language'=>['Language *',80],'shelf_location'=>['Shelf / call number',100]] as $field=>$definition)<div><label for="{{ $field }}">{{ $definition[0] }}</label><input class="form-control" id="{{ $field }}" name="{{ $field }}" maxlength="{{ $definition[1] }}" value="{{ old($field,$book->$field) }}" @if(in_array($field,['name','author','language'])) required @endif></div>@endforeach
+<div><label for="publication_year">Publication year</label><input class="form-control" id="publication_year" name="publication_year" type="number" min="1000" max="{{ now()->year+1 }}" value="{{ old('publication_year',$book->publication_year) }}"></div>
+<div><label for="copies">Registered copies *</label><input class="form-control" id="copies" name="copies" type="number" min="{{ $book->exists ? $book->copies : 0 }}" max="{{ $book->exists ? 100000 : 1000 }}" required value="{{ old('copies',$book->copies) }}"><small>Increase to add copies. Manage damaged, reference or withdrawn stock in the copy register.</small></div>
+<div class="wide"><label for="resource_url">Digital resource link</label><input class="form-control" id="resource_url" name="resource_url" type="url" maxlength="1000" placeholder="https://…" value="{{ old('resource_url',$book->resource_url) }}"><small>Use an authorised HTTPS resource; access may require the publisher’s subscription.</small></div>
+<div class="wide"><label for="description">Description / catalogue notes</label><textarea class="form-control" id="description" name="description" rows="4" maxlength="10000">{{ old('description',$book->description) }}</textarea></div>
+<div><label for="is_active">Catalogue status *</label><select class="form-select" id="is_active" name="is_active"><option value="1" @selected(old('is_active',$book->is_active)==1)>Active</option><option value="0" @selected(old('is_active',$book->is_active)==0)>Archived</option></select><small>Archiving retains catalogue and circulation history. Close loans and reservations first.</small></div>
+</div><div class="library-actions mt-4"><button class="btn btn-primary" type="submit">Save title & copies</button><a class="btn btn-light" href="{{ route($prefix.'.library.catalogue') }}">Cancel</a></div>
+</form></section>
+@endsection

@@ -383,6 +383,18 @@ return [
         'admin.reject.offline.payment.hostel' => 'hostel.payments',
 
         // Library
+        'admin.library.books.create' => 'library.manage_books',
+        'admin.library.books.store' => 'library.manage_books',
+        'admin.library.books.edit' => 'library.manage_books',
+        'admin.library.books.update' => 'library.manage_books',
+        'admin.library.copies.update' => 'library.manage_books',
+        'admin.library.settings*' => 'library.manage_books',
+        'admin.library.checkout*' => 'library.issue',
+        'admin.library.loans.return*' => 'library.issue',
+        'admin.library.loans.renew' => 'library.issue',
+        'admin.library.books.reserve' => 'library.issue',
+        'admin.library.reservations.cancel' => 'library.issue',
+        'admin.library.*' => 'library.view',
         'admin.book.book_list' => 'library.view',
         'admin.book_issue.list' => 'library.view',
         'admin.book.*' => 'library.manage_books',

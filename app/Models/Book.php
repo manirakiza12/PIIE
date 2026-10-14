@@ -15,6 +15,13 @@ class Book extends Model
      * @var array
      */
     protected $fillable = [
-        'name', 'author', 'copies', 'school_id', 'session_id', 'timestamp'
+        'name', 'author', 'copies', 'school_id', 'session_id', 'timestamp',
+        'isbn', 'category', 'publisher', 'edition', 'publication_year', 'language',
+        'shelf_location', 'description', 'resource_url', 'is_active'
     ];
+
+    protected $casts = ['is_active' => 'boolean'];
+
+    public function holdings() { return $this->hasMany(LibraryCopy::class); }
+    public function loans() { return $this->hasMany(BookIssue::class); }
 }

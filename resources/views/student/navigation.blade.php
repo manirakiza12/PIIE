@@ -367,7 +367,7 @@
                 </div>
             </li>
             <li
-                class="nav-links-li {{ request()->is('student/book*') || request()->is('student/book_issue*') || request()->is('student/noticeboard*') || request()->is('student/club/list*')|| request()->is('student/club/notices*')  || request()->is('student/events/list*') ? 'showMenu' : '' }}">
+                class="nav-links-li {{ (request()->is('student/book*') || request()->is('student/library*')) || request()->is('student/book_issue*') || request()->is('student/noticeboard*') || request()->is('student/club/list*')|| request()->is('student/club/notices*')  || request()->is('student/events/list*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="#">
                         <div class="sidebar_icon">
@@ -409,7 +409,7 @@
                 </div>
                 <ul class="sub-menu">
                     <li><a class="{{ request()->is('student/book/list') ? 'active' : '' }}"
-                            href="{{ route('student.book.book_list') }}"><span>{{ get_phrase('List Of Books') }}</span></a>
+                            href="{{ route('student.library.dashboard') }}"><span>{{ get_phrase('Library') }}</span></a>
                     </li>
                     <li><a class="{{ request()->is('student/book_issue') ? 'active' : '' }}"
                             href="{{ route('student.book.issued_list') }}"><span>{{ get_phrase('Issued Book') }}</span></a>

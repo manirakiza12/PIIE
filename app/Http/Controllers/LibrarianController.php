@@ -31,86 +31,32 @@ class LibrarianController extends Controller
      */
     public function bookList(Request $request)
     {
-        $search = $request['search'] ?? "";
-
-        if($search != "") {
-
-            $books = Book::where(function ($query) use($search) {
-                    $query->where('name', 'LIKE', "%{$search}%")
-                        ->where('school_id', auth()->user()->school_id);
-                })->orWhere(function ($query) use($search) {
-                    $query->where('author', 'LIKE', "%{$search}%")
-                        ->where('school_id', auth()->user()->school_id);
-                })->paginate(10);
-
-        } else {
-            $books = Book::where('school_id', auth()->user()->school_id)->paginate(10);
-        }
-
-        return view('librarian.book.list', compact('books', 'search'));
+        return app(LibraryController::class)->catalogue(request());
     }
 
     public function createBook()
     {
-        return view('librarian.book.create');
+        return app(LibraryController::class)->bookForm();
     }
 
     public function bookCreate(Request $request)
     {
-        $data = $request->all();
-
-        $duplicate_book_check = Book::get()->where('name', $data['name']);
-
-        if(count($duplicate_book_check) == 0) {
-
-            $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-
-            $data['school_id'] = auth()->user()->school_id;
-            $data['session_id'] = $active_session;
-            $data['timestamp'] = strtotime(date('d-M-Y'));
-
-            Book::create($data);
-
-            return redirect()->back()->with('message','You have successfully create a book.');
-
-        } else {
-            return back()
-            ->with('error','Sorry this book already exists');
-        }
+        return app(LibraryController::class)->saveBook(request());
     }
 
     public function editBook($id="")
     {
-        $book_details = Book::where('school_id', auth()->user()->school_id)->findOrFail($id);
-        return view('librarian.book.edit', ['book_details' => $book_details]);
+        return app(LibraryController::class)->bookForm((int) $id);
     }
 
     public function bookUpdate(Request $request, $id='')
     {
-        $data = $request->all();
-
-        $duplicate_book_check = Book::get()->where('name', $data['name']);
-
-        if(count($duplicate_book_check) == 0) {
-            Book::where('id', $id)->where('school_id', auth()->user()->school_id)->update([
-                'name' => $data['name'],
-                'author' => $data['author'],
-                'copies' => $data['copies'],
-                'timestamp' => strtotime(date('d-M-Y')),
-            ]);
-            
-            return redirect()->back()->with('message','You have successfully update book.');
-        } else {
-            return back()
-            ->with('error','Sorry this book already exists');
-        }
+        return app(LibraryController::class)->saveBook(request(), (int) $id);
     }
 
     public function bookDelete($id)
     {
-        $book = Book::where('school_id', auth()->user()->school_id)->findOrFail($id);
-        $book->delete();
-        return redirect()->back()->with('message','You have successfully delete book.');
+        return app(LibraryController::class)->legacyBookDelete((int) $id);
     }
 
 
@@ -121,102 +67,37 @@ class LibrarianController extends Controller
      */
     public function bookIssueList(Request $request)
     {
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-
-        if(count($request->all()) > 0) {
-
-            $data = $request->all();
-
-            $date = explode('-', $data['eDateRange']);
-            $date_from = strtotime($date[0].' 00:00:00');
-            $date_to  = strtotime($date[1].' 23:59:59');
-            $book_issues = BookIssue::where('issue_date', '>=', $date_from)
-                                ->where('issue_date', '<=', $date_to)
-                                ->where('school_id', auth()->user()->school_id)
-                                ->where('session_id', $active_session)
-                                ->get();
-
-            return view('librarian.book_issue.book_issue', ['book_issues' => $book_issues, 'date_from' => $date_from, 'date_to' => $date_to]);
-        } else {
-
-            $date_from = strtotime(date('d-m-Y',strtotime('first day of this month')).' 00:00:00');
-            $date_to = strtotime(date('d-m-Y',strtotime('last day of this month')).' 23:59:59');
-            $book_issues = BookIssue::where('issue_date', '>=', $date_from)
-                                ->where('issue_date', '<=', $date_to)
-                                ->where('school_id', auth()->user()->school_id)
-                                ->where('session_id', $active_session)
-                                ->get();
-
-            return view('librarian.book_issue.book_issue', ['book_issues' => $book_issues, 'date_from' => $date_from, 'date_to' => $date_to]);
-
-        }
+        return app(LibraryController::class)->loans(request());
     }
 
     public function createBookIssue()
     {
-        $classes = Classes::get()->where('school_id', auth()->user()->school_id);
-        $books = Book::get()->where('school_id', auth()->user()->school_id);
-        return view('librarian.book_issue.create', ['classes' => $classes, 'books' => $books]);
+        return app(LibraryController::class)->checkoutForm(request());
     }
 
     public function bookIssueCreate(Request $request)
     {
-        $data = $request->all();
-
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-
-        $data['status'] = 0;
-        $data['issue_date'] = strtotime($data['issue_date']);
-        $data['school_id'] = auth()->user()->school_id;
-        $data['session_id'] = $active_session;
-        $data['timestamp'] = strtotime(date('d-M-Y'));
-
-        BookIssue::create($data);
-
-        return redirect()->back()->with('message','You have successfully issued a book.');
+        return app(LibraryController::class)->checkout(request());
     }
 
     public function editBookIssue($id="")
     {
-        $book_issue_details = BookIssue::where('school_id', auth()->user()->school_id)->findOrFail($id);
-        $classes = Classes::get()->where('school_id', auth()->user()->school_id);
-        $books = Book::get()->where('school_id', auth()->user()->school_id);
-        return view('librarian.book_issue.edit', ['book_issue_details' => $book_issue_details, 'classes' => $classes, 'books' => $books]);
+        return app(LibraryController::class)->legacyLoanEdit((int) $id);
     }
 
     public function bookIssueUpdate(Request $request, $id="")
     {
-        $data = $request->all();
-
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-
-        $data['issue_date'] = strtotime($data['issue_date']);
-        $data['school_id'] = auth()->user()->school_id;
-        $data['session_id'] = $active_session;
-        $data['timestamp'] = strtotime(date('d-M-Y'));
-
-        unset($data['_token']);
-
-        BookIssue::where('id', $id)->where('school_id', auth()->user()->school_id)->update($data);
-
-        return redirect()->back()->with('message','Updated successfully.');
+        return app(LibraryController::class)->legacyLoanUpdate();
     }
 
     public function bookIssueReturn($id)
     {
-        BookIssue::where('id', $id)->where('school_id', auth()->user()->school_id)->update([
-            'status' => 1,
-            'timestamp' => strtotime(date('d-M-Y')),
-        ]);
-
-        return redirect()->back()->with('message','Return successfully.');
+        return app(LibraryController::class)->returnForm((int) $id);
     }
 
     public function bookIssueDelete($id)
     {
-        $book_issue = BookIssue::where('school_id', auth()->user()->school_id)->findOrFail($id);
-        $book_issue->delete();
-        return redirect()->back()->with('message','You have successfully delete a issued book.');
+        return app(LibraryController::class)->legacyLoanEdit((int) $id);
     }
 
     function profile(){

@@ -96,7 +96,7 @@
         </div>
       </li>
 			<!-- Sidebar menu -->
-			<li class="nav-links-li {{ request()->is('librarian/book*') || request()->is('librarian/book_issue*') || request()->is('librarian/noticeboard*') || request()->is('librarian/events/list*') ? 'showMenu':'' }}">
+			<li class="nav-links-li {{ (request()->is('librarian/book*') || request()->is('librarian/library*')) || request()->is('librarian/book_issue*') || request()->is('librarian/noticeboard*') || request()->is('librarian/events/list*') ? 'showMenu':'' }}">
           <div class="iocn-link">
               <a href="#">
                   <div class="sidebar_icon">
@@ -124,8 +124,8 @@
           </div>
           <ul class="sub-menu">
               <li>
-                <a class="{{ (request()->is('librarian/book/list')) ? 'active' : '' }}" href="{{ route('librarian.book.book_list') }}">
-                  <span>{{ get_phrase('Book List Manager') }}</span>
+                <a class="{{ (request()->is('librarian/book/list')) ? 'active' : '' }}" href="{{ route('librarian.library.dashboard') }}">
+                  <span>{{ get_phrase('Library') }}</span>
                 </a>
               </li>
 
