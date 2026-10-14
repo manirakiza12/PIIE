@@ -990,11 +990,19 @@ class LiveClassController extends Controller
                 $jitsiConfigured = JitsiTokenService::isConfigured();
                 $isModerator = $piiAuthorisedHost && $jitsiConfigured;
                 $jitsiJwt = JitsiTokenService::generate($liveClass, Auth::user(), $isModerator);
+                $jitsiConfigured = $jitsiJwt !== null;
+                $isModerator = $piiAuthorisedHost && $jitsiConfigured;
                 $meetingUrl = $liveClass->safe_meeting_url;
+                // Opening the provider in a new tab must retain this user's
+                // signed identity; the bare room URL loses moderator access.
+                $externalMeetingUrl = $jitsiJwt
+                    ? (string) \GuzzleHttp\Psr7\Uri::withQueryValue(new \GuzzleHttp\Psr7\Uri($meetingUrl), 'jwt', $jitsiJwt)
+                    : $meetingUrl;
 
                 return view('admin.live_class.meeting_room', [
                     'liveClass' => $liveClass,
                     'meetingUrl' => $meetingUrl,
+                    'externalMeetingUrl' => $externalMeetingUrl,
                     'attendanceId' => $attendance?->id,
                     'isModerator' => $isModerator,
                     // Kept separately so the room can say the truthful thing:

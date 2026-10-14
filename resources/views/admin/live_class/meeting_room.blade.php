@@ -19,8 +19,8 @@
                         <li><a href="#">{{ $liveClass->title }}</a></li>
                     </ul>
                 </div>
-                <div class="d-flex gap-2">
-                    <a href="{{ $meetingUrl }}" target="_blank" rel="noopener" class="eBtn eBtn-primary">{{ get_phrase('Open External') }}</a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{{ $externalMeetingUrl }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="eBtn eBtn-primary">{{ get_phrase('Open External') }}</a>
                     @if($routePrefix !== 'student')
                         <a href="{{ route($routePrefix . '.live_classes.show', $liveClass->id) }}" class="eBtn eBtn-dark">{{ get_phrase('Class Details') }}</a>
                     @endif
@@ -35,95 +35,45 @@
         <div class="eSection-wrap p-3">
             @if($jitsiConfigured)
                 <div class="alert alert-success mb-3">
-                    {{ get_phrase('Signed moderator token active') }} — {{ get_phrase('the host has full moderator rights here.') }}
+                    @if($isModerator)
+                        {{ get_phrase('You are joining with the lecturer or administrator identity for this meeting.') }}
+                    @else
+                        {{ get_phrase('You are joining as a participant. Your lecturer manages the meeting.') }}
+                    @endif
                 </div>
             @else
                 <div class="alert alert-warning mb-3">
                     <strong>{{ get_phrase('If you see "Waiting for a moderator"') }}:</strong>
-                    {{ get_phrase('this meeting has no moderator token configured yet.') }}
-                    {{ get_phrase('Click "I am the host" and sign in when Jitsi prompts you.') }}
-                    {{ get_phrase('For a permanent fix, see LIVE_CLASS_JITSI_JWT_SETUP.md.') }}
+                    @if($piiAuthorisedHost)
+                        {{ get_phrase('Open the meeting in a new tab and sign in with the meeting provider when prompted to start the room.') }}
+                    @else
+                        {{ get_phrase('Please wait for your lecturer to start the room. You do not need to sign in as the host.') }}
+                    @endif
                 </div>
             @endif
 
-            <div id="jitsi-meet-container" style="height: calc(100vh - 260px); min-height: 520px; border-radius: 8px; overflow: hidden; background: #111;"></div>
+            <div id="jitsi-meet-container" style="height: clamp(240px, calc(100vh - 260px), 900px); height: clamp(240px, calc(100dvh - 260px), 900px); border-radius: 8px; overflow: hidden; background: #111;"></div>
             <noscript>
-                <div class="alert alert-danger mt-3">{{ get_phrase('JavaScript is required to join this meeting. You can also') }} <a href="{{ $meetingUrl }}" target="_blank" rel="noopener">{{ get_phrase('open it in a new tab') }}</a>.</div>
+                <div class="alert alert-danger mt-3">{{ get_phrase('JavaScript is required to join this meeting. You can also') }} <a href="{{ $externalMeetingUrl }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">{{ get_phrase('open it in a new tab') }}</a>.</div>
             </noscript>
         </div>
     </div>
 </div>
 
+@php
+$piieRoomConfig = [
+    'domain' => $jitsiDomain,
+    'roomName' => $jitsiRoomPath,
+    'displayName' => $displayName,
+    'isModerator' => $isModerator,
+    'jwt' => $jitsiJwt,
+    'attendanceId' => $attendanceId,
+    'leaveUrl' => route($routePrefix . '.live_classes.attendance_leave', $liveClass->id),
+    'csrfToken' => csrf_token(),
+    'loadError' => get_phrase('Could not load the meeting. Try "Open External" above instead.'),
+];
+@endphp
+<script id="piie-live-class-room-config" type="application/json">@json($piieRoomConfig)</script>
 <script src="https://{{ $jitsiDomain }}/external_api.js"></script>
-<script>
-(function () {
-    var container = document.getElementById('jitsi-meet-container');
-    if (!container) {
-        return;
-    }
-    if (typeof JitsiMeetExternalAPI === 'undefined') {
-        container.innerHTML = '<div class="alert alert-danger m-3">{{ get_phrase('Could not load the meeting. Try "Open External" above instead.') }}</div>';
-        return;
-    }
-
-    var options = {
-        roomName: @json($jitsiRoomPath),
-        parentNode: container,
-        width: '100%',
-        height: '100%',
-        userInfo: {
-            displayName: @json($displayName)
-        },
-        configOverwrite: {
-            prejoinPageEnabled: false,
-            startWithAudioMuted: {{ $isModerator ? 'false' : 'true' }},
-            disableDeepLinking: true
-        },
-        interfaceConfigOverwrite: {
-            MOBILE_APP_PROMO: false
-        }
-    };
-
-    @if($jitsiJwt)
-        options.jwt = @json($jitsiJwt);
-    @endif
-
-    var api = new JitsiMeetExternalAPI(@json($jitsiDomain), options);
-
-    @if(!empty($attendanceId))
-        // Fires when this attendee actually leaves the embedded room — the
-        // only platform this app can observe a departure from at all
-        // (Zoom/Google Meet/BigBlueButton open in a separate tab this app
-        // never hears from again). The IFrame API's own leave events fire
-        // immediately; pagehide/visibilitychange stay as a fallback for
-        // tab closes the API sometimes misses.
-        var attendanceId = @json($attendanceId);
-        var leaveUrl = "{{ route($routePrefix . '.live_classes.attendance_leave', $liveClass->id) }}";
-        var csrfToken = "{{ csrf_token() }}";
-        var leaveSent = false;
-
-        function sendLeaveBeacon() {
-            if (leaveSent) return;
-            leaveSent = true;
-
-            var data = new FormData();
-            data.append('_token', csrfToken);
-            data.append('attendance_id', attendanceId);
-
-            if (navigator.sendBeacon) {
-                navigator.sendBeacon(leaveUrl, data);
-            } else {
-                fetch(leaveUrl, { method: 'POST', body: data, keepalive: true });
-            }
-        }
-
-        api.addEventListener('videoConferenceLeft', sendLeaveBeacon);
-        api.addEventListener('readyToClose', sendLeaveBeacon);
-        window.addEventListener('pagehide', sendLeaveBeacon);
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'hidden') sendLeaveBeacon();
-        });
-    @endif
-})();
-</script>
+<script src="{{ asset('assets/js/live-class-room.js') }}?v=20261014-live-room-1"></script>
 @endsection
