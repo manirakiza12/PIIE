@@ -90,4 +90,24 @@ class CustomProgrammeLevelsTest extends TestCase
         ])->assertSessionHasNoErrors();
         $this->assertDatabaseHas('admission_document_requirements', ['school_id' => $school, 'key' => 'hec_results']);
     }
+
+    public function test_mysql_migration_preview_emits_the_column_widening_without_query_results(): void
+    {
+        $database = DB::getFacadeRoot();
+        $schema = \Illuminate\Support\Facades\Schema::getFacadeRoot();
+        $connection = new \Illuminate\Database\MySqlConnection(DB::connection()->getPdo(), 'preview', '', ['driver' => 'mysql']);
+        DB::swap($connection);
+        \Illuminate\Support\Facades\Schema::swap($connection->getSchemaBuilder());
+        try {
+            $queries = $connection->pretend(function () {
+                (require database_path('migrations/2026_10_14_180000_add_custom_programme_levels.php'))->up();
+            });
+            $sql = implode("\n", array_column($queries, 'query'));
+            $this->assertStringContainsString('MODIFY `level` VARCHAR(100)', $sql);
+            $this->assertStringContainsString('create table `programme_levels`', $sql);
+        } finally {
+            DB::swap($database);
+            \Illuminate\Support\Facades\Schema::swap($schema);
+        }
+    }
 }

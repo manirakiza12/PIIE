@@ -10,8 +10,9 @@ return new class extends Migration
     public function up(): void
     {
         if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
-            $column = DB::select("SHOW COLUMNS FROM `programmes` WHERE Field = 'level'")[0];
-            if (str_starts_with(strtolower($column->Type), 'enum(')) {
+            // Pretend mode records the query but intentionally returns no rows.
+            $column = DB::select("SHOW COLUMNS FROM `programmes` WHERE Field = 'level'")[0] ?? null;
+            if ($column === null || str_starts_with(strtolower($column->Type), 'enum(')) {
                 DB::statement("ALTER TABLE `programmes` MODIFY `level` VARCHAR(100) NOT NULL DEFAULT 'Degree'");
             }
         }
