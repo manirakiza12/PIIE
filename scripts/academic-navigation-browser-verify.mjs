@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 const directory=path.resolve('output/academic-navigation-browser'),root=path.resolve('public');
 const server=createServer((req,res)=>{
  const url=new URL(req.url,'http://127.0.0.1:8774');
- const fixture=/^\/(years|semesters|curricula|curriculum|create-curriculum|registrations)$/.exec(url.pathname);
+ const fixture=/^\/(years|semesters|curricula|curriculum|draft-curriculum|create-curriculum|registrations|teaching-groups|lecturer-access)$/.exec(url.pathname);
  const file=fixture?path.join(directory,fixture[1]+'.html'):path.resolve(root,'.'+url.pathname);
  if(req.method!=='GET'||(!fixture&&!file.startsWith(root+path.sep))||!existsSync(file)){res.writeHead(404);res.end();return;}
  const mime={'.html':'text/html','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2'};
@@ -29,7 +29,7 @@ try{
  const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},sessionId);if(r.exceptionDetails)throw new Error(r.exceptionDetails.text);return r.result.value;};
  await send('Page.enable',{},sessionId);await send('Runtime.enable',{},sessionId);
  await send('Emulation.setFocusEmulationEnabled',{enabled:true},sessionId);
- for(const page of ['years','semesters','curricula','curriculum','create-curriculum','registrations']){
+ for(const page of ['years','semesters','curricula','curriculum','draft-curriculum','create-curriculum','registrations','teaching-groups','lecturer-access']){
   await send('Page.navigate',{url:'http://127.0.0.1:8774/'+page},sessionId);
   for(let i=0;i<150;i++){if(await evaluate('document.readyState==="complete" && !!document.querySelector(".mainSection-title")'))break;await pause(100);}await pause(400);
   for(const width of [320,375,768,1366]){
@@ -43,6 +43,11 @@ try{
    // body.scrollWidth includes content of horizontally scrollable tables in
    // Chromium. Check the document viewport and actual controls instead.
    assert(geometry.document<=width+1&&clippedControls.length===0,`${page} ${width} clips content ${JSON.stringify({geometry,clippedControls})}`);
+   if(page==='draft-curriculum'){
+    assert(await evaluate(`(()=>{const d=[...document.querySelectorAll('#stages details')];return d.length===2&&d.every(el=>el.querySelectorAll('form input[name="label"]').length===1);})()`),'Stage editors duplicated');
+    await evaluate(`document.querySelectorAll('#stages details').forEach(el=>el.open=true)`);
+    assert(await evaluate(`document.querySelector('#stages input[name="label"]').getBoundingClientRect().width>0`),'Stage fields not accessible');
+   }
    if(page==='years'||page==='semesters'){
     for(const id of [page==='years'?'createAcademicYear':'createAcademicPeriod']){
      await evaluate(`document.querySelector('[data-bs-target="#${id}"]').click()`);

@@ -8,7 +8,7 @@
             </div>
 
             <div class="fpb-7 pt-2">
-                <button class="btn-form" type="submit">{{ get_phrase('Update class') }}</button>
+                <button class="btn-form" type="submit">{{ get_phrase('Update').' '.academic_term('class', auth()->user()->school_id) }}</button>
             </div>
         </div>
     </form>

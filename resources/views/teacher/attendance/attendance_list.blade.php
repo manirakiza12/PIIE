@@ -106,7 +106,7 @@
                         </div>
                         <div class="att-filter-option">
                             <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove" onchange="classWiseSection(this.value)" required>
-                                <option value="">{{ get_phrase('Select a class') }}</option>
+                                <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
                                 <?php foreach($classes as $class): ?>
                                 <option value="{{ $class['id'] }}" {{ $page_data['class_id'] == $class['id'] ? 'selected' : '' }}>{{ $class['name'] }}</option>
                                 <?php endforeach; ?>
@@ -154,8 +154,8 @@
                     <div class="att-report-banner d-flex justify-content-center justify-content-md-between align-items-center flex-wrap">
                         <div class="att-report-summary order-1">
                             <h4 class="title">{{ get_phrase('Attendance Report Of') . ' ' . date('F', $page_data['attendance_date']) . ', ' . date('Y', $page_data['attendance_date']) }}</h4>
-                            <p class="summary-item">{{ get_phrase('Class') }}: <span>{{ $class_name }}</span></p>
-                            <p class="summary-item">{{ get_phrase('Section') }}: <span>{{ $section_name }}</span></p>
+                            <p class="summary-item">{{ academic_term('class', auth()->user()->school_id) }}: <span>{{ $class_name }}</span></p>
+                            <p class="summary-item">{{ academic_term('section', auth()->user()->school_id) }}: <span>{{ $section_name }}</span></p>
                             <p class="summary-item">
                                 {{ get_phrase('Last Update at') }}:
                                 <?php $last_row = array_slice($attendance_of_students, -1, 1, true);

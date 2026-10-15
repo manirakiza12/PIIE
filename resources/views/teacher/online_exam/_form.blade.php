@@ -159,7 +159,7 @@
         <div class="col-md-6">
             <label class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
             <select class="form-select eForm-select" name="class_id" {{ !empty($structureLocked) ? 'disabled' : '' }}>
-                <option value="">{{ get_phrase('Select class') }}</option>
+                <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
                 @foreach($classes as $class)
                     <option value="{{ $class->id }}" {{ (string) old('class_id', $exam->class_id ?? '') === (string) $class->id ? 'selected' : '' }}>{{ $class->name }}</option>
                 @endforeach

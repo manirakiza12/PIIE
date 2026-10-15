@@ -67,7 +67,8 @@ class AcademicAssignmentIntegrationTest extends TestCase
         $this->assertSame('Lecturer', academic_term('teacher', 1));
         // Course Units are the catalogue; Programme Cohorts are a separate domain.
         $this->assertSame('Course Units', academic_term('subjects', 1));
-        $this->assertSame('Classes', academic_term('classes', 1));
+        $this->assertSame('Teaching Groups', academic_term('classes', 1));
+        $this->assertSame('Subgroup', academic_term('section', 1));
 
         DB::table('schools')->insert([
             'id' => 2,

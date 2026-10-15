@@ -51,7 +51,7 @@
         @endif
         @if(!$isHigherEducation)
             <div class="col-12 col-md-6 col-lg-3">
-                <label for="catalogue-class" class="form-label">{{ get_phrase('Class') }}</label>
+                <label for="catalogue-class" class="form-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
                 <select name="class_id" id="catalogue-class" class="form-select">
                     <option value="">{{ get_phrase('All Classes') }}</option>
                     @foreach($classes as $class)
@@ -79,7 +79,7 @@
                         @elseif($isMixed)
                             <th scope="col">{{ get_phrase('Catalogue Association') }}</th>
                         @else
-                            <th scope="col">{{ get_phrase('Class') }}</th>
+                            <th scope="col">{{ academic_term('class', auth()->user()->school_id) }}</th>
                         @endif
                         <th scope="col" class="text-end">{{ get_phrase('Actions') }}</th>
                     </tr>
@@ -104,7 +104,7 @@
                                     @if($subject->programme)
                                         {{ get_phrase('Programme') }}: {{ $subject->programme->code }} — {{ $subject->programme->name }}
                                     @elseif($subject->classes)
-                                        {{ get_phrase('Class') }}: {{ $subject->classes->name }}
+                                        {{ academic_term('class', auth()->user()->school_id) }}: {{ $subject->classes->name }}
                                     @else
                                         <span class="text-muted">—</span>
                                     @endif

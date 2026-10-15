@@ -57,7 +57,7 @@
           </div>
           <div class="att-filter-option">
             <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove" onchange="classWiseSection(this.value)" required>
-              <option value="">{{ get_phrase('Select a class') }}</option>
+              <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
               @foreach($classes as $class)
                   <option value="{{ $class['id'] }}">{{ $class['name'] }}</option>
               @endforeach
@@ -66,7 +66,7 @@
 
           <div class="att-filter-option">
             <select name="section_id" id="section_id" class="form-select eForm-select eChoice-multiple-with-remove" required>
-              <option value="">{{ get_phrase('Select section') }}</option>
+              <option value="">{{ get_phrase('Select').' '.academic_term('section', auth()->user()->school_id) }}</option>
             </select>
           </div>
           <div class="att-filter-btn">

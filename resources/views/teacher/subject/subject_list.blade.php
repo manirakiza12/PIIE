@@ -33,7 +33,7 @@
                 <div class="row mt-3">
                     <div class="col-lg-6 col-md-6 col-sm-6">
                         <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove" required>
-                            <option value="">{{ get_phrase('Select a class') }}</option>
+                            <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
                             @foreach($classes as $class)
                                 <option value="{{ $class->id }}" {{ $class_id == $class->id ?  'selected':'' }}>{{ $class->name }}</option>
                             @endforeach
@@ -51,7 +51,7 @@
                     <tr>
                         <th>#</th>
                         <th>{{ get_phrase('Name') }}</th>
-                        <th>{{ get_phrase('Class') }}</th>
+                        <th>{{ academic_term('class', auth()->user()->school_id) }}</th>
                     </tr>
                 </thead>
                 <tbody>

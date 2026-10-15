@@ -11,6 +11,9 @@
         >
           <div class="d-flex flex-column">
             <h4>{{ academic_term('classes', auth()->user()->school_id) }}</h4>
+            @if(academic_education_level(auth()->user()->school_id) === 'tertiary')
+            <p class="text-muted">Organise students into teaching groups and subgroups for attendance and exam eligibility. Programme Student Groups manage admissions-intake membership separately.</p>
+            @endif
             <ul class="d-flex align-items-center eBreadcrumb-2">
               <li><a href="#">{{ get_phrase('Home') }}</a></li>
               <li><a href="#">{{ get_phrase('Academic') }}</a></li>
@@ -18,14 +21,14 @@
             </ul>
           </div>
           <div class="export-btn-area">
-            <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.class.open_modal') }}', '{{ get_phrase('Create Class') }}')">{{ get_phrase('Add class') }}</a>
+            <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.class.open_modal') }}', '{{ get_phrase('Create').' '.academic_term('class', auth()->user()->school_id) }}')">{{ get_phrase('Add').' '.academic_term('class', auth()->user()->school_id) }}</a>
           </div>
         </div>
       </div>
     </div>
 </div>
 <div class="row">
-    <div class="col-7 offset-md-2">
+    <div class="col-12 col-lg-10 offset-lg-1">
         <div class="eSection-wrap">
             <div class="search-filter-area d-flex justify-content-md-between justify-content-center align-items-center flex-wrap gr-15">
               <form action="{{ route('admin.class_list') }}">
@@ -52,7 +55,7 @@
                     id="search"
                     name="search"
                     value="{{ $search }}"
-                    placeholder="Search Class"
+                    placeholder="{{ get_phrase('Search').' '.academic_term('classes', auth()->user()->school_id) }}"
                     class="form-control"
                   />
                 </div>
@@ -96,13 +99,13 @@
                                           class="dropdown-menu dropdown-menu-end eDropdown-menu-2 eDropdown-table-action"
                                         >
                                           <li>
-                                            <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.edit.section', ['id' => $class_list->id]) }}', '{{ get_phrase('Edit Section') }}')">{{ get_phrase('Edit Section') }}</a>
+                                            <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.edit.section', ['id' => $class_list->id]) }}', '{{ get_phrase('Edit').' '.academic_term('section', auth()->user()->school_id) }}')">{{ get_phrase('Edit').' '.academic_term('section', auth()->user()->school_id) }}</a>
                                           </li>
                                           <li>
-                                            <a class="dropdown-item" href="{{ route('admin.teacher.permission', ['class_id' => $class_list->id]) }}">{{ get_phrase('Assign Teachers') }}</a>
+                                            <a class="dropdown-item" href="{{ route('admin.teacher.permission', ['class_id' => $class_list->id]) }}">{{ get_phrase('Assign').' '.academic_term('teachers', auth()->user()->school_id) }}</a>
                                           </li>
                                           <li>
-                                            <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.edit.class', ['id' => $class_list->id]) }}', '{{ get_phrase('Edit Class') }}')">{{ get_phrase('Edit Class') }}</a>
+                                            <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.edit.class', ['id' => $class_list->id]) }}', '{{ get_phrase('Edit').' '.academic_term('class', auth()->user()->school_id) }}')">{{ get_phrase('Edit').' '.academic_term('class', auth()->user()->school_id) }}</a>
                                           </li>
                                           <li>
                                             <a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.class.delete', ['id' => $class_list->id]) }}', 'undefined');">{{ get_phrase('Delete') }}</a>

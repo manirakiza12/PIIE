@@ -14,7 +14,7 @@
             <tr>
                 <th>{{ get_phrase('Title') }}</th>
                 <th>{{ get_phrase('Subject') }}</th>
-                <th>{{ get_phrase('Class') }}</th>
+                <th>{{ academic_term('class', auth()->user()->school_id) }}</th>
                 <th>{{ get_phrase('Ends') }}</th>
                 <th>{{ get_phrase('Students Sitting Now') }}</th>
                 <th>{{ get_phrase('Actions') }}</th>
@@ -53,7 +53,7 @@
             <tr>
                 <th>{{ get_phrase('Title') }}</th>
                 <th>{{ get_phrase('Subject') }}</th>
-                <th>{{ get_phrase('Class') }}</th>
+                <th>{{ academic_term('class', auth()->user()->school_id) }}</th>
                 <th>{{ get_phrase('Starts') }}</th>
                 <th>{{ get_phrase('Starts In') }}</th>
                 <th>{{ get_phrase('Actions') }}</th>

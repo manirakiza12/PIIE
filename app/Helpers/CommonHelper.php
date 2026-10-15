@@ -790,8 +790,8 @@ if (!function_exists('academic_term')) {
             ],
             'tertiary' => [
                 'teacher' => 'Lecturer', 'teachers' => 'Lecturers',
-                'class' => 'Class', 'classes' => 'Classes',
-                'section' => 'Group', 'sections' => 'Groups',
+                'class' => 'Teaching Group', 'classes' => 'Teaching Groups',
+                'section' => 'Subgroup', 'sections' => 'Subgroups',
                 'subject' => 'Course Unit', 'subjects' => 'Course Units',
                 'programme' => 'Programme', 'programmes' => 'Programmes',
                 'department' => 'Department', 'departments' => 'Departments',
