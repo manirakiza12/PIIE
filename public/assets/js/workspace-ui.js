@@ -115,6 +115,7 @@
       document.querySelectorAll('form[data-workspace-steps]').forEach(function (form) { form.workspaceResize(); });
     });
     document.querySelectorAll('.modal:not(.workspace-surface)').forEach(function (modal) {
+      if (modal.hasAttribute('data-compact-dialog')) return;
       if (modal.id === 'large-scrollable-modal' || modal.querySelector('form ' + editable)) modal.classList.add('workspace-surface');
     });
     const surfaces = document.querySelectorAll('.workspace-surface');

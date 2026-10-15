@@ -262,6 +262,7 @@
          <style> block in the markup. Rendered last so it wins on order. --}}
     @yield('page_styles')
     @include('shared.workspace_assets')
+    <link rel="stylesheet" href="{{ asset('assets/css/academic-ui.css') }}?v=20261015-1">
 </head>
 
 <body>
@@ -378,118 +379,13 @@
 
             <!-- ============================================ -->
             <!-- ACADEMIC                                      -->
-            <!-- Split into what is taught, how it is delivered -->
-            <!-- and how it is assessed. Fifteen links in one   -->
-            <!-- flat block made the module unusable.            -->
+            <!-- Direct entries use the institution's academic vocabulary. -->
             <!-- ============================================ -->
-            @if($showAcademicStructureAny || $showTeachingAny || $showAssessmentAny)
+            @if($showAcademicStructureAny || $showTeachingAny || $showAssessmentAny || $navCan('admin.department_list') || $navCan('admin.settings.academic'))
             <li class="nav-section-header">ACADEMIC</li>
             @endif
 
-            {{-- Academic Structure — the catalogue: what exists and who may take it. --}}
-            @if($showAcademicStructureAny)
-            <li class="nav-links-li {{ $onAny(['admin/academic-structure*', 'admin/session_manager*', 'admin/programmes*', 'admin/subject*', 'admin/course-unit*', 'admin/curricula*', 'admin/programme-cohorts*']) ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="#" class="has-submenu">
-                        <div class="sidebar_icon"><i class="bi bi-diagram-3"></i></div>
-                        <span class="link_name">{{ get_phrase('Academic Structure') }}</span>
-                    </a>
-                    <span class="arrow">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 4.743 7.773">
-                            <path d="M1.466.247,4.5,3.277a.793.793,0,0,1,.189.288.92.92,0,0,1,0,.643A.793.793,0,0,1,4.5,4.5l-3.03,3.03a.828.828,0,0,1-.609.247.828.828,0,0,1-.609-.247.875.875,0,0,1,0-1.219L2.668,3.886.247,1.466A.828.828,0,0,1,0,.856.828.828,0,0,1,.247.247.828.828,0,0,1,.856,0,.828.828,0,0,1,1.466.247Z" fill="#fff" opacity="1"/>
-                        </svg>
-                    </span>
-                </div>
-                <ul class="sub-menu">
-                    @if($showAcademicYears)
-                    <li><a class="{{ request()->is('admin/academic-structure*') ? 'active' : '' }}" href="{{ route('admin.academic_structure.index') }}"><span>{{ get_phrase('Academic Years & Periods') }}</span></a></li>
-                    @endif
-                    @if($showLegacySessions)
-                    <li><a class="{{ request()->is('admin/session_manager*') ? 'active' : '' }}" href="{{ route('admin.settings.session_manager') }}"><span>{{ get_phrase('Academic Sessions') }}</span></a></li>
-                    @endif
-                    @if($showProgrammes)
-                    <li><a class="{{ request()->is('admin/programmes*') ? 'active' : '' }}" href="{{ route('admin.programmes.index') }}"><span>{{ get_phrase('Programmes') }}</span></a></li>
-                    @endif
-                    @if($showCourseUnits)
-                    <li><a class="{{ request()->is('admin/subject*', 'admin/course-unit*') ? 'active' : '' }}" href="{{ route('admin.subject_list') }}"><span>{{ academic_term('subjects', $user->school_id) }}</span></a></li>
-                    @endif
-                    @if($showStudyPlans)
-                    <li><a class="{{ request()->is('admin/curricula*') ? 'active' : '' }}" href="{{ route('admin.curricula.index') }}"><span>{{ get_phrase('Study Plans') }}</span></a></li>
-                    @endif
-                    @if($showCohorts)
-                    <li><a class="{{ request()->is('admin/programme-cohorts*') ? 'active' : '' }}" href="{{ route('admin.programme_cohorts.index') }}"><span>{{ get_phrase('Cohorts') }}</span></a></li>
-                    @endif
-                </ul>
-            </li>
-            @endif
-
-            {{-- Teaching & Delivery — an offering, who teaches it, when and where. --}}
-            @if($showTeachingAny)
-            <li class="nav-links-li {{ $onAny(['admin/course-offerings*', 'admin/permission*', 'admin/class_list', 'admin/class/*', 'admin/class_create', 'admin/routine*', 'admin/live-classes*', 'admin/attendance*', 'admin/assignments*']) ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="#" class="has-submenu">
-                        <div class="sidebar_icon"><i class="bi bi-mortarboard"></i></div>
-                        <span class="link_name">{{ get_phrase('Teaching & Delivery') }}</span>
-                    </a>
-                    <span class="arrow">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 4.743 7.773">
-                            <path d="M1.466.247,4.5,3.277a.793.793,0,0,1,.189.288.92.92,0,0,1,0,.643A.793.793,0,0,1,4.5,4.5l-3.03,3.03a.828.828,0,0,1-.609.247.828.828,0,0,1-.609-.247.875.875,0,0,1,0-1.219L2.668,3.886.247,1.466A.828.828,0,0,1,0,.856.828.828,0,0,1,.247.247.828.828,0,0,1,.856,0,.828.828,0,0,1,1.466.247Z" fill="#fff" opacity="1"/>
-                        </svg>
-                    </span>
-                </div>
-                <ul class="sub-menu">
-                    @if($showOfferings)
-                    <li><a class="{{ request()->is('admin/course-offerings*') ? 'active' : '' }}" href="{{ route('admin.course_offerings.index') }}"><span>{{ get_phrase('Course Offerings') }}</span></a></li>
-                    @endif
-                    @if($showLecturers)
-                    <li><a class="{{ request()->is('admin/permission*') ? 'active' : '' }}" href="{{ route('admin.teacher.permission') }}"><span>{{ academic_term('teacher_assignment', $user->school_id) }}</span></a></li>
-                    @endif
-                    @if($showTimetable)
-                    <li><a class="{{ request()->is('admin/routine*') ? 'active' : '' }}" href="{{ route('admin.routine') }}"><span>{{ get_phrase('Timetable') }}</span></a></li>
-                    @endif
-                    @if($showLiveClasses)
-                    <li><a class="{{ request()->is('admin/live-classes*') ? 'active' : '' }}" href="{{ route('admin.live_classes.index') }}"><span>{{ get_phrase('Live Classes') }}</span></a></li>
-                    @endif
-                    @if($showAttendance)
-                    <li><a class="{{ request()->is('admin/attendance*') ? 'active' : '' }}" href="{{ route('admin.daily_attendance') }}"><span>{{ get_phrase('Attendance') }}</span></a></li>
-                    @endif
-                    @if($showClasses)
-                    <li><a class="{{ request()->is('admin/class_list') || request()->is('admin/class/*') || request()->is('admin/class_create') ? 'active' : '' }}" href="{{ route('admin.class_list') }}"><span>{{ get_phrase('Classes') }}</span></a></li>
-                    @endif
-                    @if($showAssignments)
-                    <li><a class="{{ request()->is('admin/assignments*') ? 'active' : '' }}" href="{{ route('admin.assignments.index') }}"><span>{{ get_phrase('Assignments') }}</span></a></li>
-                    @endif
-                </ul>
-            </li>
-            @endif
-
-            {{-- Assessment & Results — how learning is evidenced and reported. --}}
-            @if($showAssessmentAny)
-            <li class="nav-links-li {{ $onAny(['admin/online-exams*', 'admin/gradebook*', 'admin/question-bank*']) ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="#" class="has-submenu">
-                        <div class="sidebar_icon"><i class="bi bi-clipboard-check"></i></div>
-                        <span class="link_name">{{ get_phrase('Assessment & Results') }}</span>
-                    </a>
-                    <span class="arrow">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 4.743 7.773">
-                            <path d="M1.466.247,4.5,3.277a.793.793,0,0,1,.189.288.92.92,0,0,1,0,.643A.793.793,0,0,1,4.5,4.5l-3.03,3.03a.828.828,0,0,1-.609.247.828.828,0,0,1-.609-.247.875.875,0,0,1,0-1.219L2.668,3.886.247,1.466A.828.828,0,0,1,0,.856.828.828,0,0,1,.247.247.828.828,0,0,1,.856,0,.828.828,0,0,1,1.466.247Z" fill="#fff" opacity="1"/>
-                        </svg>
-                    </span>
-                </div>
-                <ul class="sub-menu">
-                    @if($showOnlineExams)
-                    <li><a class="{{ request()->is('admin/online-exams*') ? 'active' : '' }}" href="{{ route('admin.online_exams.index') }}"><span>{{ get_phrase('Online Exams') }}</span></a></li>
-                    @endif
-                    @if($showResults)
-                    <li><a class="{{ request()->is('admin/gradebook*') ? 'active' : '' }}" href="{{ route('admin.gradebook') }}"><span>{{ get_phrase('Marks & Results') }}</span></a></li>
-                    @endif
-                    @if($showQuestionBank)
-                    <li><a class="{{ request()->is('admin/question-bank*') ? 'active' : '' }}" href="{{ route('admin.question_bank.index') }}"><span>{{ get_phrase('Question Bank') }}</span></a></li>
-                    @endif
-                </ul>
-            </li>
-            @endif
+            @include('admin.partials.academic_navigation')
 
             <!-- ============================================ -->
             <!-- STUDENT AFFAIRS                                -->
@@ -946,7 +842,7 @@
                         </div>
                     </div>
 
-                    <div class="col-auto d-flex ">
+                    <div class="col-auto d-flex admin-header-actions">
                         @include('notifications._bell')
                         @include('messaging._header')
                         @php
@@ -958,7 +854,7 @@
                             $userlanguage = $usersinfo->language;
 
                         @endphp
-                        <div class="adminTable-action" style="margin-right: 20px; margin-top: 14px;">
+                        <div class="adminTable-action admin-language" style="margin-right: 20px; margin-top: 14px;">
                             <button type="button" class="eBtn eBtn-black dropdown-toggle table-action-btn-2"
                                 data-bs-toggle="dropdown" aria-expanded="false"
                                 style="width: 91px; height: 29px; padding: 0;">
@@ -996,7 +892,7 @@
                                     <div class="btn-group">
                                         <button class="btn btn-secondary dropdown-toggle" type="button"
                                             id="defaultDropdown" data-bs-toggle="dropdown" data-bs-auto-close="true"
-                                            aria-expanded="false">
+                                            aria-expanded="false" aria-label="Account menu">
                                             <div class="">
                                                 <img src="{{ get_user_image(auth()->user()->id) }}"
                                                     height="42px" />

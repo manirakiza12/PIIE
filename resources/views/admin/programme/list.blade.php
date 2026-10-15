@@ -188,7 +188,7 @@
 
                                                     <td class="d-flex flex-wrap gap-1">
                                                         @if($canSeeProgrammes && auth()->user()->hasPermission('academic.curriculum.view'))
-                                                            <a href="{{ route('admin.curricula.index', ['programme_id' => $prog->id]) }}" class="eBtn eBtn-sm eBtn-info" title="{{ get_phrase('Manage Programme Study Plans') }}">{{ get_phrase('Study Plans') }}</a>
+                                                            <a href="{{ route('admin.curricula.index', ['programme_id' => $prog->id]) }}" class="eBtn eBtn-sm eBtn-info" title="{{ get_phrase('Manage Programme Curricula') }}">{{ get_phrase('Curricula') }}</a>
                                                         @endif
                                                         @if($canSeeProgrammes && app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'academic.course_offering.view'))
                                                             <a href="{{ route('admin.course_offerings.index', ['programme_id' => $prog->id]) }}" class="eBtn eBtn-sm eBtn-info">{{ get_phrase('Offerings') }}</a>

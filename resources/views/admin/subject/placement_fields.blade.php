@@ -18,24 +18,24 @@
     ] : null;
 @endphp
 <section class="border rounded p-3 my-3" data-unit-placement>
-    <h5>{{ get_phrase('Study Plan placement') }}</h5>
-    <p class="text-muted">{{ get_phrase('Select an existing draft Study Plan to save its credits, stage and prerequisites together with this Course Unit. Other placements remain unchanged.') }}</p>
-    <div class="mb-3"><label class="form-label">{{ get_phrase('Programme Study Plan') }}</label>
+    <h5>{{ get_phrase('Curriculum placement') }}</h5>
+    <p class="text-muted">{{ get_phrase('Select an existing draft Curriculum to save its credits, stage and prerequisites together with this Course Unit. Other placements remain unchanged.') }}</p>
+    <div class="mb-3"><label class="form-label">{{ get_phrase('Programme Curriculum') }}</label>
         <select name="placement_curriculum_id" class="form-select" data-plan>
             <option value="">{{ get_phrase('Catalogue only — leave placements unchanged') }}</option>
             @foreach($unitSetup['plans'] as $plan)<option value="{{ $plan->id }}" @selected((string)$initialPlan === (string)$plan->id)>{{ $plan->programme->name }} — {{ $plan->version }}</option>@endforeach
         </select>
     </div>
-    @if($unitSetup['plans']->isEmpty())<p class="text-muted">{{ get_phrase('Create a draft Programme Study Plan and its stages before assigning a placement. You can save the Course Unit catalogue record now.') }} <a href="{{ route('admin.curricula.create') }}">{{ get_phrase('Create Programme Study Plan') }}</a></p>@endif
+    @if($unitSetup['plans']->isEmpty())<p class="text-muted">{{ get_phrase('Create a draft Programme Curriculum and its stages before assigning a placement. You can save the Course Unit catalogue record now.') }} <a href="{{ route('admin.curricula.create') }}">{{ get_phrase('Create Programme Curriculum') }}</a></p>@endif
     <fieldset data-placement-fields disabled>
         <div class="row g-3">
-            <div class="col-md-6"><label class="form-label">{{ get_phrase('Stage') }}</label><select class="form-select" name="placement_stage_id" required data-stage></select></div>
+            <div class="col-md-6"><label class="form-label">{{ get_phrase('Programme Year / Stage') }}</label><select class="form-select" name="placement_stage_id" required data-stage></select></div>
             <div class="col-md-6"><label class="form-label">{{ get_phrase('Classification') }}</label><select class="form-select" name="placement_classification"><option value="compulsory">{{ get_phrase('Compulsory') }}</option><option value="elective">{{ get_phrase('Elective') }}</option></select></div>
             <div class="col-md-6"><label class="form-label">{{ get_phrase('Credit Units') }}</label><input type="number" class="form-control" name="placement_credits" min="0" max="9999.99" step="0.01" required></div>
             <div class="col-md-6"><label class="form-label">{{ get_phrase('Order') }}</label><input type="number" class="form-control" name="placement_sequence" min="0" max="65535" required></div>
-            <div class="col-md-6"><label class="form-label">{{ get_phrase('Relative period type') }}</label><select class="form-select" name="placement_period_type"><option value="">{{ get_phrase('Not assigned') }}</option><option value="semester">{{ get_phrase('Semester') }}</option><option value="term">{{ get_phrase('Term') }}</option></select></div>
-            <div class="col-md-6"><label class="form-label">{{ get_phrase('Relative period number') }}</label><input type="number" class="form-control" name="placement_period_sequence" min="1" max="65535"></div>
-            <div class="col-12"><label class="form-label">{{ get_phrase('Prerequisite Course Units') }}</label><input type="hidden" name="placement_prerequisites_present" value="1"><select multiple class="form-select" name="placement_prerequisites[]" data-prerequisites size="5"></select><p class="form-text">{{ get_phrase('Choose existing Course Units in the selected Study Plan. Leave empty when there are no prerequisites.') }}</p></div>
+            <div class="col-md-6"><label class="form-label">{{ get_phrase('Semester / Term') }}</label><select class="form-select" name="placement_period_type"><option value="">{{ get_phrase('Not assigned') }}</option><option value="semester">{{ get_phrase('Semester') }}</option><option value="term">{{ get_phrase('Term') }}</option></select></div>
+            <div class="col-md-6"><label class="form-label">{{ get_phrase('Semester / Term Number') }}</label><input type="number" class="form-control" name="placement_period_sequence" min="1" max="65535"></div>
+            <div class="col-12"><label class="form-label">{{ get_phrase('Prerequisite Course Units') }}</label><input type="hidden" name="placement_prerequisites_present" value="1"><select multiple class="form-select" name="placement_prerequisites[]" data-prerequisites size="5"></select><p class="form-text">{{ get_phrase('Choose existing Course Units in the selected Curriculum. Leave empty when there are no prerequisites.') }}</p></div>
         </div>
     </fieldset>
 </section>

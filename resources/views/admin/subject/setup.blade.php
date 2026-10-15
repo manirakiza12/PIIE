@@ -18,7 +18,7 @@
     @include($formView)
 </div>
 @if(isset($subject) && $unitSetup)
-    <div class="eSection-wrap mt-3"><h5>{{ get_phrase('Existing Study Plan placements') }}</h5>
+    <div class="eSection-wrap mt-3"><h5>{{ get_phrase('Existing Curriculum placements') }}</h5>
         @foreach($unitSetup['plans'] as $plan)
             @foreach($plan->memberships->where('subject_id', $subject->id) as $placement)
                 <div class="d-flex justify-content-between flex-wrap gap-2 border-bottom py-2">
