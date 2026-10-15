@@ -222,27 +222,12 @@
                                 <path d="M19,6H14.321A3.95,3.95,0,0,0,13,5.388V5l3.53-1.652a1,1,0,0,0,0-1.7l-3.2-1.5A1.637,1.637,0,0,0,11,1.636V5.388A3.937,3.937,0,0,0,9.68,6H5a5.006,5.006,0,0,0-5,5V21a3,3,0,0,0,3,3H21a3,3,0,0,0,3-3V11A5.006,5.006,0,0,0,19,6Zm2.816,4H19.657a3.017,3.017,0,0,1-2.121-.879L16.414,8H19A3,3,0,0,1,21.816,10ZM5,8H7.586L6.464,9.121A3.017,3.017,0,0,1,4.343,10H2.184A3,3,0,0,1,5,8Zm8,14H11V19a1,1,0,0,1,2,0Zm8,0H15V19a3,3,0,0,0-6,0v3H3a1,1,0,0,1-1-1V12H4.343a4.968,4.968,0,0,0,3.535-1.465l2.708-2.707a2,2,0,0,1,2.828,0l2.708,2.707A4.968,4.968,0,0,0,19.657,12H22v9A1,1,0,0,1,21,22ZM7,15a1,1,0,0,1-1,1H5a1,1,0,0,1,0-2H6A1,1,0,0,1,7,15Zm0,4a1,1,0,0,1-1,1H5a1,1,0,0,1,0-2H6A1,1,0,0,1,7,19Zm13-4a1,1,0,0,1-1,1H18a1,1,0,0,1,0-2h1A1,1,0,0,1,20,15Zm0,4a1,1,0,0,1-1,1H18a1,1,0,0,1,0-2h1A1,1,0,0,1,20,19Zm-6-7a2,2,0,1,1-2-2A2,2,0,0,1,14,12Z"/>
                             </svg>
                         </div>
-                        <span class="link_name">{{ get_phrase('Schools') }}</span>
+                        <span class="link_name">{{ get_phrase('Institutions') }}</span>
                     </a>
                 </div>
             </li>
 
-            <!-- ============================================ -->
-            <!-- MAIN - Create School                         -->
-            <!-- ============================================ -->
-            <li class="nav-links-li {{ request()->is('superadmin/school/add*') ? 'showMenu' : '' }}">
-                <div class="iocn-link">
-                    <a href="{{ route('superadmin.school.add') }}" class="{{ request()->is('superadmin/school/add*') ? 'active' : '' }}">
-                        <div class="sidebar_icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" id="Layer_1" data-name="Layer 1" viewBox="0 0 24 24" width="48" height="48">
-                                <path d="M24,8.5c0-.524-.274-1.012-.724-1.283L13.864,1.521c-1.15-.695-2.578-.697-3.728,0L.724,7.217c-.449,.271-.724,.759-.724,1.283s.274,1.012,.724,1.283l9.412,5.696c.575,.348,1.22,.522,1.864,.522s1.289-.174,1.863-.522l9.413-5.696c.449-.271,.724-.759,.724-1.283Zm-11.69,4.413c-.19,.114-.428,.114-.62,0l-7.292-4.413,7.292-4.413h0c.189-.115,.427-.116,.62,0l7.292,4.413-7.293,4.413Zm11.69,6.587c0,.828-.671,1.5-1.5,1.5h-1.5v1.5c0,.828-.671,1.5-1.5,1.5s-1.5-.672-1.5-1.5v-1.5h-1.5c-.829,0-1.5-.672-1.5-1.5s.671-1.5,1.5-1.5h1.5v-1.5c0-.828,.671-1.5,1.5-1.5s1.5,.672,1.5,1.5v1.5h1.5c.829,0,1.5,.672,1.5,1.5Zm-11.214,1.771c-.281,.469-.778,.729-1.288,.729-.263,0-.529-.068-.771-.214L.822,15.843c-.71-.426-.94-1.348-.514-2.058,.426-.711,1.348-.942,2.058-.515l9.906,5.943c.71,.426,.94,1.348,.514,2.058Z"/>
-                            </svg>
-                        </div>
-                        <span class="link_name">{{ get_phrase('Create School') }}</span>
-                    </a>
-                </div>
-            </li>
-
+            @if(\App\Support\SuperAdminWorkspace::showsSubscriptions())
             <!-- ============================================ -->
             <!-- SUBSCRIPTION SECTION HEADER                  -->
             <!-- ============================================ -->
@@ -322,6 +307,9 @@
                 </div>
             </li>
 
+            @endif
+
+            @if(\App\Support\SuperAdminWorkspace::showsAddons())
             <!-- ============================================ -->
             <!-- ADDONS SECTION HEADER                        -->
             <!-- ============================================ -->
@@ -345,6 +333,8 @@
                     </a>
                 </div>
             </li>
+
+            @endif
 
             <!-- ============================================ -->
             <!-- AUDIT LOGS SECTION HEADER                    -->
@@ -399,20 +389,17 @@
                 </div>
                 <ul class="sub-menu">
                     <li><a class="{{ request()->is('superadmin/settings/system*') ? 'active' : '' }}" href="{{ route('superadmin.system_settings') }}"><span>{{ get_phrase('System Settings') }}</span></a></li>
-                    <li><a class="{{ request()->is('superadmin/settings/website*') ? 'active' : '' }}" href="{{ route('superadmin.website_settings') }}"><span>{{ get_phrase('Website Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/website-management*') ? 'active' : '' }}" href="{{ route('superadmin.website.index') }}"><span>{{ get_phrase('Website Management') }}</span></a></li>
                     {{-- Public website enquiries. Placed beside Website Management because
                          they arrive from the public site those pages configure, and both
                          are institution-level rather than per-school concerns — which is
                          why these routes sit behind `superAdmin` and not `admin`. --}}
                     <li><a class="{{ request()->is('superadmin/enquiries*') ? 'active' : '' }}" href="{{ route('superadmin.enquiries.index') }}"><span>{{ get_phrase('Website Enquiries') }}</span></a></li>
-                    <li><a class="{{ request()->is('superadmin/settings/faq*') ? 'active' : '' }}" href="{{ route('superadmin.faq_views') }}"><span>{{ get_phrase('Manage FAQ') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/payment/settings*') ? 'active' : '' }}" href="{{ route('superadmin.payment_settings') }}"><span>{{ get_phrase('Payment Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/language*') ? 'active' : '' }}" href="{{ route('superadmin.language.manage') }}"><span>{{ get_phrase('Language Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/smtp*') ? 'active' : '' }}" href="{{ route('superadmin.smtp_settings') }}"><span>{{ get_phrase('SMTP Settings') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/settings/google-meet*') ? 'active' : '' }}" href="{{ route('superadmin.google_meet.settings') }}"><span>{{ get_phrase('Google Meet Setup') }}</span></a></li>
                     <li><a class="{{ request()->is('superadmin/library*') ? 'active' : '' }}" href="{{ route('superadmin.library.institutions') }}"><span>{{ get_phrase('Library Administration') }}</span></a></li>
-                    <li><a class="{{ request()->is('superadmin/settings/about*') ? 'active' : '' }}" href="{{ route('superadmin.about') }}"><span>{{ get_phrase('About') }}</span></a></li>
                 </ul>
             </li>
 

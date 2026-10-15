@@ -1,5 +1,6 @@
 @extends('superadmin.navigation')
 @section('content')   
+@if(\App\Support\SuperAdminWorkspace::showsSubscriptions())
 @php
 
 $month_wise_payment = array('Jan' => 0, 'Feb' => 0, 'Mar' => 0, 'Apr' => 0, 'May' => 0, 'Jun' => 0, 'Jul' => 0, 'Aug' => 0, 'Sep' => 0, 'Oct' => 0, 'Nov' => 0, 'Dec' => 0);
@@ -237,4 +238,7 @@ $month_wise_payment = $month_wise_payment_for_json;
 	}); // end am5.ready()
 </script>
 <!-- HTML -->
+@else
+    @include('superadmin.partials.institution_dashboard')
+@endif
 @endsection
