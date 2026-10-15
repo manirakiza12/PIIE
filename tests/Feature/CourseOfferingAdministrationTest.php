@@ -1197,7 +1197,7 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
             ->assertDontSee('>Start Course Offering</button>', false)
             ->assertDontSee('>Complete Course Offering</button>', false)
             ->assertDontSee('>Cancel Offering</button>', false)
-            ->assertDontSee('Link Study Plan</button>', false)
+            ->assertDontSee('Link Curriculum</button>', false)
             ->assertDontSee('>Save</button>', false);
     }
 
@@ -1225,7 +1225,7 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
             ->assertDontSee('>Complete Course Offering</button>', false)
             ->assertDontSee('>Cancel Offering</button>', false)
             ->assertDontSee('>Save</button>', false)
-            ->assertDontSee('Link Study Plan</button>', false)
+            ->assertDontSee('Link Curriculum</button>', false)
             ->assertDontSee('>Remove</button>', false);
         $this->assertStringNotContainsString('action="'.route('admin.course_offerings.update', $offering->id).'"', $page->getContent());
         $this->assertStringNotContainsString('action="'.route('admin.course_offerings.open', $offering->id).'"', $page->getContent());
