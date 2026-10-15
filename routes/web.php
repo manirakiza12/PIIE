@@ -1,5 +1,25 @@
 <?php
 
+// Shared messaging endpoints. Actor policy, school and participant checks are
+// enforced in MessagingController and MessagingService for every portal alias.
+Route::middleware(['auth', 'school_subscription'])->prefix('messages')->name('messaging.')
+    ->controller(\App\Http\Controllers\MessagingController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/unread', 'unread')->middleware('throttle:60,1,messaging-unread')->name('unread');
+        Route::post('/conversations', 'start')->middleware('throttle:15,1,messaging-start')->name('start');
+        Route::get('/review', 'moderation')->name('moderation');
+        Route::get('/review/{id}', 'moderation')->whereNumber('id')->name('moderation.show');
+        Route::post('/review/{id}', 'review')->whereNumber('id')->middleware('throttle:20,1,messaging-review')->name('review');
+        Route::get('/threads/{id}', 'show')->whereNumber('id')->name('show');
+        Route::get('/threads/{id}/updates', 'poll')->whereNumber('id')->middleware('throttle:60,1,messaging-poll')->name('poll');
+        Route::post('/threads/{id}', 'send')->whereNumber('id')->middleware('throttle:30,1,messaging-send')->name('send');
+        Route::post('/threads/{id}/read', 'read')->whereNumber('id')->middleware('throttle:60,1,messaging-read')->name('read');
+        Route::post('/threads/{id}/typing', 'typing')->whereNumber('id')->middleware('throttle:30,1,messaging-typing')->name('typing');
+        Route::post('/threads/{id}/archive', 'archive')->whereNumber('id')->name('archive');
+        Route::post('/threads/{id}/block', 'block')->whereNumber('id')->middleware('throttle:10,1,messaging-block')->name('block');
+        Route::post('/threads/{id}/report', 'report')->whereNumber('id')->middleware('throttle:5,1,messaging-report')->name('report');
+    });
+
 use App\Http\Controllers\AccountantController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CommonController;
@@ -1015,7 +1035,7 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     // Message
     Route::get('admin/message/all-message/{id}', 'allMessage')->name('admin.message.all_message');
     Route::get('admin/message/message-thrades/{id}', 'messagethrades')->name('admin.message.messagethrades');
-    Route::post('admin/message/single-chat/save', 'chat_save')->name('admin.message.chat_save');
+    Route::post('admin/message/single-chat/save', 'chat_save')->middleware('throttle:30,1,messaging-send')->name('admin.message.chat_save');
     Route::get('admin/message/chat_empty', 'chat_empty')->name('admin.message.chat_empty');
 
     // hostel
@@ -1151,7 +1171,7 @@ Route::controller(TeacherController::class)->middleware('teacher', 'auth')->grou
     // Message
     Route::get('teacher/message/all-message/{id}', 'allMessage')->name('teacher.message.all_message');
     Route::get('teacher/message/message-thrades/{id}', 'messagethrades')->name('teacher.message.messagethrades');
-    Route::post('teacher/message/single-chat/save', 'chat_save')->name('teacher.message.chat_save');
+    Route::post('teacher/message/single-chat/save', 'chat_save')->middleware('throttle:30,1,messaging-send')->name('teacher.message.chat_save');
     Route::get('teacher/message/chat_empty', 'chat_empty')->name('teacher.message.chat_empty');
 });
 //Teacher routes end here
@@ -1224,7 +1244,7 @@ Route::controller(ParentController::class)->middleware('parent', 'auth')->group(
     // Message
     Route::get('parent/message/all-message/{id}', 'allMessage')->name('parent.message.all_message');
     Route::get('parent/message/message-thrades/{id}', 'messagethrades')->name('parent.message.messagethrades');
-    Route::post('parent/message/single-chat/save', 'chat_save')->name('parent.message.chat_save');
+    Route::post('parent/message/single-chat/save', 'chat_save')->middleware('throttle:30,1,messaging-send')->name('parent.message.chat_save');
     Route::get('parent/message/chat_empty', 'chat_empty')->name('parent.message.chat_empty');
 });
 //Parent routes end here
@@ -1446,7 +1466,7 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
     // Message
     Route::get('student/message/all-message/{id}', 'allMessage')->name('student.message.all_message');
     Route::get('student/message/message-thrades/{id}', 'messagethrades')->name('student.message.messagethrades');
-    Route::post('student/message/single-chat/save', 'chat_save')->name('student.message.chat_save');
+    Route::post('student/message/single-chat/save', 'chat_save')->middleware('throttle:30,1,messaging-send')->name('student.message.chat_save');
     Route::get('student/message/chat_empty', 'chat_empty')->name('student.message.chat_empty');
 
     // Hostel
@@ -1587,7 +1607,7 @@ Route::controller(AccountantController::class)->middleware('accountant', 'auth')
     // Message
     Route::get('accountant/message/all-message/{id}', 'allMessage')->name('accountant.message.all_message');
     Route::get('accountant/message/message-thrades/{id}', 'messagethrades')->name('accountant.message.messagethrades');
-    Route::post('accountant/message/single-chat/save', 'chat_save')->name('accountant.message.chat_save');
+    Route::post('accountant/message/single-chat/save', 'chat_save')->middleware('throttle:30,1,messaging-send')->name('accountant.message.chat_save');
     Route::get('accountant/message/chat_empty', 'chat_empty')->name('accountant.message.chat_empty');
 });
 
@@ -1660,7 +1680,7 @@ Route::controller(WardenController::class)->middleware('warden', 'auth')->group(
     // Message
     Route::get('warden/message/all-message/{id}', 'allMessage')->name('warden.message.all_message');
     Route::get('warden/message/message-thrades/{id}', 'messagethrades')->name('warden.message.messagethrades');
-    Route::post('warden/message/single-chat/save', 'chat_save')->name('warden.message.chat_save');
+    Route::post('warden/message/single-chat/save', 'chat_save')->middleware('throttle:30,1,messaging-send')->name('warden.message.chat_save');
     Route::get('warden/message/chat_empty', 'chat_empty')->name('warden.message.chat_empty');
 });
 //Accountant routes end here
@@ -1702,7 +1722,7 @@ Route::controller(LibrarianController::class)->middleware('librarian', 'auth')->
     Route::get('librarian/message/chat_empty', 'chat_empty')->name('librarian.message.chat_empty');
     Route::get('librarian/message/all-message/{id}', 'allMessage')->whereNumber('id')->name('librarian.message.all_message');
     Route::get('librarian/message/message-thrades/{id}', 'messagethrades')->whereNumber('id')->name('librarian.message.messagethrades');
-    Route::post('librarian/message/single-chat/save', 'chat_save')->middleware('throttle:60,1')->name('librarian.message.chat_save');
+    Route::post('librarian/message/single-chat/save', 'chat_save')->middleware('throttle:30,1,messaging-send')->name('librarian.message.chat_save');
 });
 //Librarian routes end here
 

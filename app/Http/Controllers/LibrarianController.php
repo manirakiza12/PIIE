@@ -258,182 +258,23 @@ class LibrarianController extends Controller
 
        public function allMessage(Request $request, $id)
        {
-           $this->ownedMessageThread($id);
-   
-               $msg_user_details = DB::table('users')
-               ->join('message_thrades', function ($join) {
-                   // Join where the user is the sender
-                   $join->on('users.id', '=', 'message_thrades.sender_id')
-                       ->orWhere(function ($query) {
-                           // Join where the user is the receiver
-                           $query->on('users.id', '=', 'message_thrades.reciver_id');
-                       });
-               })
-               ->select('users.id as user_id', 'message_thrades.id as thread_id', 'users.*', 'message_thrades.*')
-               ->where('message_thrades.id', $id)
-               ->where('message_thrades.school_id', auth()->user()->school_id)
-               ->where('users.id', '<>', auth()->user()->id) // Exclude the authenticated user
-               ->first();
-   
-               
-               
-           if ($request->ajax()) {
-               $query = $request->input('query');
-               
-               // Search users by name or any other criteria
-               $users = User::where('name', 'LIKE', "%{$query}%")
-                   ->where('school_id', auth()->user()->school_id)
-                   ->get();
-   
-               // Prepare HTML response
-               $html = '';
-   
-               // Check if any users were found
-               if ($users->isEmpty()) {
-                   return response()->json('No User found');
-               }
-   
-               foreach ($users as $user) {
-                   
-                   if (!empty($user)) {
-                       $userInfo = json_decode($user->user_information);
-                       
-                       $user_image = !empty($userInfo->photo) 
-                           ? asset('assets/uploads/user-images/' . $userInfo->photo) 
-                           : asset('assets/uploads/user-images/thumbnail.png');
-   
-                       $html .= '
-                           <div class="user-item d-flex align-items-center msg_us_src_list">
-                               <a href="' . route('librarian.message.messagethrades', ['id' => $user->id]).'">
-                                   <img src="' . $user_image . '" alt="User Image" style="width: 50px; height: 50px; border-radius: 50%;">
-                                   <span class="ms-3">' . e($user->name) . '</span>
-                               </a>
-                           </div>
-                       ';
-                   }
-               }
-   
-               return response()->json($html);
-           }
-   
-   
-           $chat_datas = Chat::where('school_id', auth()->user()->school_id)->where('message_thrade', $id)->get();
-   
-           $counter_condition = Chat::where('message_thrade', $id)->orderBy('id', 'desc')->first();
-   
-          
-          if($counter_condition && $counter_condition->sender_id != auth()->user()->id){
-               Chat::where('message_thrade', $id)->update(['read_status' => 1]);
-           }
-           
-           return view('librarian.message.all_message', ['msg_user_details' => $msg_user_details], ['chat_datas' => $chat_datas]);
-       }
+        return app(\App\Http\Controllers\MessagingController::class)->legacyShow($request, $id);
+    }
    
        public function messagethrades($id){
-           User::where('school_id', auth()->user()->school_id)->findOrFail($id);
-   
-           $exists = MessageThrade::where('reciver_id', $id)
-                               ->where('school_id', auth()->user()->school_id)
-                               ->where('sender_id', auth()->user()->id)
-                               ->exists();
-           if( $id != auth()->user()->id){
-               if (!$exists) {
-                   $message_thrades_data = [
-                       'reciver_id' => $id,
-                       'sender_id' => auth()->user()->id,
-                       'school_id' => auth()->user()->school_id,
-                   ];
-           
-                   MessageThrade::create($message_thrades_data);
-           
-                   //return redirect()->back()->with('message', 'User added successfully');
-               }
-       
-               
-               $message_thrades = MessageThrade::where('reciver_id', $id)
-                                            ->where('school_id', auth()->user()->school_id)
-                                            ->where('sender_id', auth()->user()->id)
-                                            ->first();
-               $msg_trd_id = $message_thrades->id;
-               
-               $msg_user_details = DB::table('users')
-                   ->join('message_thrades', 'users.id', '=', 'message_thrades.reciver_id')
-                   ->select('users.id as user_id', 'message_thrades.id as thread_id', 'users.*', 'message_thrades.*')
-                   ->where('message_thrades.id', $msg_trd_id)
-                   ->first();
-       
-                   $chat_datas = Chat::where('school_id', auth()->user()->school_id)->where('message_thrade', $msg_trd_id)->get();
-       
-                   // Combine all data into a single array
-                   return view('librarian.message.all_message', ['id' => $msg_trd_id, 'msg_user_details' => $msg_user_details, 'chat_datas' => $chat_datas,]);
-           }
-           return redirect()->back()->with('error', 'You can not add you');
-           
-                           
-       }
+        return app(\App\Http\Controllers\MessagingController::class)->legacyStart($id);
+    }
    
    
        public function chat_save(Request $request)
        {
-           $data = $request->validate(['message_thrade' => 'required|integer', 'reciver_id' => 'required|integer', 'message' => 'required|string|max:5000']);
-           $thread = $this->ownedMessageThread($data['message_thrade']);
-           $recipient = (int) $thread->sender_id === (int) auth()->id() ? $thread->reciver_id : $thread->sender_id;
-           User::where('school_id', auth()->user()->school_id)->findOrFail($recipient);
-           abort_unless((int) $data['reciver_id'] === (int) $recipient, 422, 'Recipient does not match this conversation.');
-           $chat_data = [
-               'message_thrade' => $data['message_thrade'],
-               'reciver_id' => $data['reciver_id'],
-               'message' => $data['message'],
-               'school_id' => auth()->user()->school_id,
-               'sender_id' => auth()->user()->id,
-               'read_status' => 0,
-   
-           ];
-       
-           // Create feedback entry
-           Chat::create($chat_data);
-   
-           return redirect()->back();
-       }
+        return app(\App\Http\Controllers\MessagingController::class)->legacySend($request);
+    }
    
        public function chat_empty(Request $request)
        {
-   
-           if ($request->ajax()) {
-               $query = $request->input('query');
-   
-               $users = User::where('name', 'LIKE', "%{$query}%")
-                   ->where('school_id', auth()->user()->school_id)
-                   ->get();
-   
-               $html = '';
-   
-               if ($users->isEmpty()) {
-                   return response()->json('No User found');
-               }
-   
-               foreach ($users as $user) {
-                   $userInfo = json_decode($user->user_information);
-                   $user_image = !empty($userInfo->photo) 
-                       ? asset('assets/uploads/user-images/' . $userInfo->photo) 
-                       : asset('assets/uploads/user-images/thumbnail.png');
-   
-                   $html .= '
-                       <div class="user-item d-flex align-items-center msg_us_src_list">
-                           <a href="' . route('librarian.message.messagethrades', ['id' => $user->id]).'">
-                               <img src="' . $user_image . '" alt="User Image" style="width: 50px; height: 50px; border-radius: 50%;">
-                               <span class="ms-3">' . e($user->name) . '</span>
-                           </a>
-                       </div>
-                   ';
-               }
-   
-               return response()->json($html);
-           }
-   
-           // Pass the data to the view only if msg_user_details is not null
-           return view('librarian.message.chat_empty');
-       }
+        return app(\App\Http\Controllers\MessagingController::class)->index($request);
+    }
 
        private function ownedMessageThread($id): MessageThrade
        {

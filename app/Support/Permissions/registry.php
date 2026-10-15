@@ -48,6 +48,8 @@ return [
     ],
 
     'permissions' => [
+        'messaging.use' => $p('communications', 'Use portal messaging', 'Contact students, guardians and staff within this institution.'),
+        'messaging.moderate' => $p('communications', 'Review reported conversations', 'Access reported conversation history and record moderation decisions.', true),
         // Students & parents
         'students.view' => $p('students', 'View students', 'Student lists, profiles, ID cards and exports.'),
         'students.create' => $p('students', 'Create students', 'Add student records.'),
@@ -285,10 +287,10 @@ return [
 
     /* Capabilities a base role has through its own portal (outside the admin navigation map). */
     'portal_grants' => [
-        3 => ['academic.syllabus', 'clubs.view', 'clubs.manage', 'clubs.members', 'clubs.notices', 'academic.feedback'],   // teacher portal
-        4 => ['finance.view', 'finance.invoices', 'finance.payments', 'finance.expenses', 'communications.noticeboard'],   // accountant portal
-        5 => ['library.view', 'library.manage_books', 'library.issue', 'library.archive', 'library.digital', 'library.reports', 'library.notices', 'library.fines', 'communications.noticeboard'], // librarian portal
-        10 => ['hostel.view', 'hostel.allocate', 'hostel.applications', 'hostel.payments', 'communications.noticeboard'],  // warden portal
+        3 => ['messaging.use', 'academic.syllabus', 'clubs.view', 'clubs.manage', 'clubs.members', 'clubs.notices', 'academic.feedback'],   // teacher portal
+        4 => ['messaging.use', 'finance.view', 'finance.invoices', 'finance.payments', 'finance.expenses', 'communications.noticeboard'],   // accountant portal
+        5 => ['messaging.use', 'library.view', 'library.manage_books', 'library.issue', 'library.archive', 'library.digital', 'library.reports', 'library.notices', 'library.fines', 'communications.noticeboard'], // librarian portal
+        10 => ['messaging.use', 'hostel.view', 'hostel.allocate', 'hostel.applications', 'hostel.payments', 'communications.noticeboard'],  // warden portal
     ],
 
     /*
@@ -299,6 +301,7 @@ return [
     | shared AJAX helpers (admin.class_wise_*), dashboard, profile and chat.
     */
     'routes' => [
+        'admin.message.*' => 'messaging.use',
         'admin.course_offerings.index' => 'academic.course_offering.view',
         'admin.course_offerings.create' => 'academic.course_offering.manage',
         'admin.course_offerings.show' => 'academic.course_offering.view',

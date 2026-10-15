@@ -501,45 +501,7 @@
             
             <div class="col-auto d-flex ">
               @include('notifications._bell')
-              <div class="message">
-                @php
-                $last_message = DB::table('message_thrades')
-                        ->where(function ($query) {
-                            $query->where('reciver_id', auth()->user()->id)
-                                  ->orWhere('sender_id', auth()->user()->id);
-                        })
-                        ->orderBy('id', 'desc')
-                        ->first(); 
-                        
-                        $countUnreadThreads = DB::table('chats')
-                            ->where('read_status', 0)
-                            ->where('reciver_id', auth()->user()->id)
-                            ->distinct('message_thrade')
-                            ->count('message_thrade');
-
-                        
-                  @endphp
-                  @if(!empty($last_message))
-                    <a href="{{route('teacher.message.all_message', ['id' => $last_message->id])}}" class="message_ico">
-                        <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                            <path fill-rule="evenodd" d="M4 3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h1v2a1 1 0 0 0 1.707.707L9.414 13H15a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H4Z" clip-rule="evenodd"/>
-                            <path fill-rule="evenodd" d="M8.023 17.215c.033-.03.066-.062.098-.094L10.243 15H15a3 3 0 0 0 3-3V8h2a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-1v2a1 1 0 0 1-1.707.707L14.586 18H9a1 1 0 0 1-.977-.785Z" clip-rule="evenodd"/>
-                        </svg>
-                      @if($countUnreadThreads != 0)
-                        <div class="countUnread">
-                            <span class="countUnreadThreads">{{$countUnreadThreads}}</span>
-                        </div>
-                        @endif
-                    </a>
-                  @else
-                    <a href="{{route('teacher.message.chat_empty')}}" class="message_ico">
-                        <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                            <path fill-rule="evenodd" d="M4 3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h1v2a1 1 0 0 0 1.707.707L9.414 13H15a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H4Z" clip-rule="evenodd"/>
-                            <path fill-rule="evenodd" d="M8.023 17.215c.033-.03.066-.062.098-.094L10.243 15H15a3 3 0 0 0 3-3V8h2a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-1v2a1 1 0 0 1-1.707.707L14.586 18H9a1 1 0 0 1-.977-.785Z" clip-rule="evenodd"/>
-                        </svg>
-                    </a>
-                  @endif
-              </div>
+              @include('messaging._header')
               @php
                 $all_languages = get_all_language();
                 $usersinfo = DB::table('users')->where('id', auth()->user()->id)->first();

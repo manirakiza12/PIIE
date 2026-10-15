@@ -15,7 +15,7 @@ class Chat extends Model
      */
 
     protected $fillable = [
-        'message_thrade', 'reciver_id', 'sender_id', 'message', 'reply_id', 'school_id', 'read_status', 'created_at', 'created_at'
+        'client_message_id', 'message_thrade', 'reciver_id', 'sender_id', 'message', 'reply_id', 'school_id', 'read_status', 'created_at', 'created_at'
     ];
 
 
