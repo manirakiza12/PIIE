@@ -55,6 +55,8 @@ try {
   if(state.credit!=='2.00'||state.stage!=='Foundation year'||!state.programme.includes('Business Administration')||!state.enabled)throw Error('Existing selection not restored: '+JSON.stringify(state));
   const toggles=await evaluate(`(()=>{const root=document.querySelector('[data-unit-placement]'),plan=root.querySelector('[data-plan]'),previous=plan.value;plan.value='';plan.dispatchEvent(new Event('change'));const disabled=root.querySelector('fieldset').disabled;plan.value=previous;plan.dispatchEvent(new Event('change'));return disabled&&!root.querySelector('fieldset').disabled&&root.querySelector('[name="placement_credits"]').value==='2.00';})()`);
   if(!toggles)throw Error('Optional placement toggle failed');
+  const dialogInitialization=await evaluate(`(()=>{const original=document.querySelector('[data-unit-placement]');const copy=original.cloneNode(true);delete copy.dataset.unitInitialized;copy.querySelector('[name="placement_credits"]').value='';document.body.append(copy);const script=document.createElement('script');script.textContent=original.nextElementSibling.textContent;document.head.append(script);const pass=copy.dataset.unitInitialized==='true'&&copy.querySelector('[name="placement_credits"]').value==='2.00';copy.remove();script.remove();return pass;})()`);
+  if(!dialogInitialization)throw Error('Dialog-loaded form initialization failed');
   for(const width of [320,375,768,1366]){
     await send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600},sessionId);await pause(200);
     const metrics=await evaluate('({viewport:innerWidth,width:document.documentElement.scrollWidth,body:document.body.scrollWidth})');
@@ -62,7 +64,7 @@ try {
     const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true},sessionId);
     writeFileSync(path.join(directory,'edit-'+width+'.png'),Buffer.from(shot.data,'base64'));
   }
-  const report={state,toggles,results,exceptions,failedDocuments,formSubmissions:0};writeFileSync(path.join(directory,'report.json'),JSON.stringify(report,null,2));
+  const report={state,toggles,dialogInitialization,results,exceptions,failedDocuments,formSubmissions:0};writeFileSync(path.join(directory,'report.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify(report));
   if(results.some(r=>!r.pass)||exceptions.length)process.exitCode=1;
 } finally {if(ws)ws.close();chrome.kill();server.close();}

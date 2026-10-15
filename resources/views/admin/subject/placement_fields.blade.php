@@ -41,7 +41,9 @@
 </section>
 <script>
 (() => {
-    const root = document.currentScript.previousElementSibling;
+    const root = document.querySelector('[data-unit-placement]:not([data-unit-initialized])');
+    if (!root) return;
+    root.dataset.unitInitialized = 'true';
     const plans = @json($setupPlans);
     const recovered = @json($recovered);
     const plan = root.querySelector('[data-plan]');
