@@ -16,7 +16,7 @@ final class RegistrationNumber
         // Older class-only admissions have no HEI programme or intake.
         if (empty($data['programme_id'])) return student_code();
 
-        return self::next(self::studentPrefix($data));
+        return rtrim(self::next(self::studentPrefix($data)), '/');
     }
 
     public static function studentPrefix(array $data): string
@@ -66,7 +66,7 @@ final class RegistrationNumber
             $number = (int) $counter->last_number;
             // Seed from existing/imported identifiers and skip occupied values.
             foreach (DB::table('users')->where('code', 'like', $prefix.'%')->pluck('code') as $code) {
-                if (preg_match('#^'.preg_quote($prefix, '#').'(\d+)/$#', $code, $match)) $number = max($number, (int) $match[1]);
+                if (preg_match('#^'.preg_quote($prefix, '#').'(\d+)/?$#', $code, $match)) $number = max($number, (int) $match[1]);
             }
             ++$number;
             DB::table('identity_sequences')->where('prefix', $prefix)->update(['last_number' => $number]);

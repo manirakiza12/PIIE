@@ -41,7 +41,7 @@
             </div>
             <div class="user-info-edit-items">
             <div class="item">
-                <p class="title">{{ get_phrase('Student Code') }}</p>
+                <p class="title">{{ get_phrase('Registration Number') }}</p>
                 <p class="info">{{ auth()->user()->code }}</p>
                 </div>
                 <div class="item">
@@ -95,6 +95,7 @@
                 <div class="eForm-layouts">
                 <form action="{{route('student.profile.update')}}" method="post" enctype="multipart/form-data">
                     @CSRF
+                    <p class="form-text">{{ get_phrase('Your name, email, date of birth and registration number are maintained by the institution. Contact the Registrar for corrections.') }}</p>
                     @if ($errors->any())
                         <div class="alert alert-danger" role="alert">
                             <ul class="mb-0">
@@ -111,8 +112,8 @@
                         type="text"
                         class="form-control eForm-control"
                         id="eInputName"
-                        name="name"
-                        value="{{ old('name', auth()->user()->name) }}"
+                        readonly
+                        value="{{ auth()->user()->name }}"
                         placeholder="Your Name"
                         aria-label="Your Name"
                     />
@@ -125,8 +126,8 @@
                         type="email"
                         class="form-control eForm-control"
                         id="eInputEmail"
-                        name="email"
-                        value="{{ old('email', auth()->user()->email) }}"
+                        readonly
+                        value="{{ auth()->user()->email }}"
                         placeholder="example@email.com"
                         aria-label="example@email.com"
                     />
@@ -134,21 +135,18 @@
 
                     
                     <div class="fpb-7">
-                    <label for="eBrithDay" class="eForm-label"
-                        >{{ get_phrase('Birthday') }}</label
+                    <label for="studentDateOfBirth" class="eForm-label"
+                        >{{ get_phrase('Date of Birth') }}</label
                     >
                     @php
                         $birthday = $user_information['birthday'];
-                        if(empty($birthday)){
-                            $birthday = time();
-                        }
                     @endphp
                     <input
                         type="text"
                         class="form-control eForm-control"
-                        id="eInputDate"
-                        name="eDefaultDateRange"
-                        value="{{ old('eDefaultDateRange', date('m/d/Y', $birthday)) }}"
+                        id="studentDateOfBirth"
+                        readonly
+                        value="{{ $birthday ? date('m/d/Y', $birthday) : '' }}"
                     />
                     </div>
                     <div class="fpb-7">

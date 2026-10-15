@@ -54,7 +54,7 @@ class AdmissionLetterDeliveryTest extends TestCase
         $snapshot = $letter->snapshot;
         $student = User::findOrFail($letter->student_id);
         $this->assertSame($student->code, $snapshot['registration_number']);
-        $this->assertSame('2027/01/MPAM/001/', $student->code);
+        $this->assertSame('2027/01/MPAM/001', $student->code);
         $this->assertSame('info@piie.ac.ug', $snapshot['email']);
         $this->assertSame('https://piie.ac.ug/', $snapshot['website']);
         $this->assertSame('Online Distance Learning', $snapshot['mode']);
