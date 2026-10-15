@@ -19,7 +19,7 @@
     <strong>{{ get_phrase('Exam eligibility setup') }}</strong>:
     {{ get_phrase('Create classes, assign teachers, and place students into their class before publishing class-targeted exams.') }}
     <a class="ms-2" href="{{ route('admin.class_list') }}">{{ get_phrase('Manage Classes') }}</a>
-    <a class="ms-2" href="{{ route('admin.teacher.permission') }}">{{ get_phrase('Assign Teachers') }}</a>
+    <a class="ms-2" href="{{ route('admin.teacher.permission') }}">{{ get_phrase('Assign').' '.academic_term('teachers', auth()->user()->school_id) }}</a>
     <a class="ms-2" href="{{ route('admin.student') }}">{{ get_phrase('Assign Students') }}</a>
 </div>
 <div class="row"><div class="col-12"><div class="eSection-wrap">

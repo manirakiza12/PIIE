@@ -17,7 +17,7 @@
                     <p class="form-text mb-0">{{ get_phrase('Choose either a Class for a school Subject or a Programme for a higher-education Course Unit.') }} <span class="text-danger">{{ get_phrase('Required') }}</span></p>
                 </div>
                 <div class="mb-3">
-                    <label for="class_id_on_create" class="eForm-label">{{ get_phrase('Class') }}</label>
+                    <label for="class_id_on_create" class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
                     <select name="class_id" id="class_id_on_create" class="form-select eForm-select eChoice-multiple-with-remove">
                         <option value="">{{ get_phrase('No Class association') }}</option>
                         @foreach($classes as $class)<option value="{{ $class->id }}" @selected((string)old('class_id') === (string)$class->id)>{{ $class->name }}</option>@endforeach
@@ -32,7 +32,7 @@
                 </div>
             @else
                 <div class="mb-3">
-                    <label for="class_id_on_create" class="eForm-label">{{ get_phrase('Class') }} <span class="text-danger" aria-hidden="true">*</span></label>
+                    <label for="class_id_on_create" class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }} <span class="text-danger" aria-hidden="true">*</span></label>
                     <select name="class_id" id="class_id_on_create" class="form-select eForm-select eChoice-multiple-with-remove" required>
                         <option value="">{{ get_phrase('Select a Class') }}</option>
                         @foreach($classes as $class)<option value="{{ $class->id }}" @selected((string)old('class_id') === (string)$class->id)>{{ $class->name }}</option>@endforeach

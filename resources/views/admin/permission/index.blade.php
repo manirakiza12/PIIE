@@ -1,6 +1,10 @@
 @extends('admin.navigation')
    
 @section('content')
+@php
+    $tertiaryGroups = academic_education_level(auth()->user()->school_id) === 'tertiary';
+    $wholeGroupLabel = $tertiaryGroups ? 'Whole Teaching Group (no subgroup)' : 'Whole class (no section)';
+@endphp
 <div class="mainSection-title">
     <div class="row">
       <div class="col-12">
@@ -8,7 +12,7 @@
           class="d-flex justify-content-between align-items-center flex-wrap gr-15"
         >
           <div class="d-flex flex-column">
-            <h4>{{ get_phrase('Assigned Permission For Teacher') }}</h4>
+            <h4>{{ academic_term('teacher_assignment', auth()->user()->school_id) }}</h4>
             <ul class="d-flex align-items-center eBreadcrumb-2">
               <li><a href="#">{{ get_phrase('Home') }}</a></li>
               <li><a href="#">{{ get_phrase('Users') }}</a></li>
@@ -19,7 +23,8 @@
       </div>
     </div>
 </div>
-<!-- Start Teacher Permission area -->
+<!-- Existing teaching-group permissions remain separate from programme access. -->
+<details open class="mb-3"><summary class="fw-bold mb-3">{{ academic_term('class', auth()->user()->school_id) }} {{ get_phrase('Access') }}</summary>
 <div class="row">
     <div class="col-10 offset-md-1">
         <div class="eSection-wrap-2">
@@ -30,7 +35,7 @@
 
                     <div class="col-md-3">
                         <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove" required onchange="classWiseSection(this.value)">
-                            <option value="">{{ get_phrase('Select a class') }}</option>
+                            <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
                             @foreach($classes as $class)
                                 <option value="{{ $class->id }}" {{ (string)$class->id === (string)$default_class_id ? 'selected' : '' }}>{{ $class->name }}</option>
                             @endforeach
@@ -40,12 +45,12 @@
                     <div class="col-md-3">
                         <select name="section_id" id="section_id" class="form-select eForm-select" >
                             @if(count($sections) > 0)
-                                <option value="0" {{ (int)$default_section_id === 0 ? 'selected' : '' }}>{{ get_phrase('Whole class (no section)') }}</option>
+                                <option value="0" {{ (int)$default_section_id === 0 ? 'selected' : '' }}>{{ get_phrase($wholeGroupLabel) }}</option>
                                 @foreach($sections as $section)
                                     <option value="{{ $section->id }}" {{ (string)$section->id === (string)$default_section_id ? 'selected' : '' }}>{{ $section->name }}</option>
                                 @endforeach
                             @else
-                                <option value="0" selected>{{ get_phrase('Whole class (no section)') }}</option>
+                                <option value="0" selected>{{ get_phrase($wholeGroupLabel) }}</option>
                             @endif
                         </select>
                     </div>
@@ -70,16 +75,20 @@
     </div>
 </div>
 <div class="row mt-3"><div class="col-10 offset-md-1"><div class="alert alert-info mb-0">
+    @if($tertiaryGroups)
+    Lecturer access here follows the assigned Teaching Group and its Course Units. Select a Teaching Group and Subgroup, or choose Whole Teaching Group, then enable Marks or Attendance as required.
+    @else
     {{ get_phrase('Teacher/Lecturer subject access is derived from the assigned class and its Subjects/Courses. Select a class, choose Whole class (no section) when sections are not used, then enable Marks for the teacher.') }}
+    @endif
 </div></div></div>
-<!-- End Teacher Permission area -->
+</details>
 
 @if($programmes->count() > 0)
-<!-- Start Teacher Programme Permission area -->
+<details class="mb-3" @if(request()->filled('programme_id')) open @endif><summary class="fw-bold mb-3">{{ get_phrase('Programme Access') }}</summary>
 <div class="row mt-4">
     <div class="col-10 offset-md-1">
         <div class="eSection-wrap-2">
-            <h4 class="mb-3">{{ get_phrase('Assigned Permission For Teacher (Programme-Based)') }}</h4>
+            <p class="text-muted">{{ get_phrase('Assign marks and attendance access for a whole programme. This is separate from teaching-group access above.') }}</p>
             <form method="GET" class="d-block ajaxForm">
                 <div class="row mt-3">
 
@@ -112,7 +121,7 @@
         </div>
     </div>
 </div>
-<!-- End Teacher Programme Permission area -->
+</details>
 <script type="text/javascript">
     "use strict";
 
@@ -144,7 +153,7 @@
 
     function classWiseSection(classId, callback) {
         if (classId == "") {
-            $('#section_id').html('<option value="0">{{ get_phrase('Whole class (no section)') }}</option>');
+            $('#section_id').html('<option value="0">{{ get_phrase($wholeGroupLabel) }}</option>');
             if (typeof callback === 'function') callback('0');
             return;
         }
@@ -175,7 +184,7 @@
         var section_id = $('#section_id').val();
 
         if(class_id == ""){
-            toastr.error('{{ get_phrase('Please select a class and section') }}');
+            toastr.error('{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id).' / '.academic_term('section', auth()->user()->school_id) }}');
             return;
         }
 

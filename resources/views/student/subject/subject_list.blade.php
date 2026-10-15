@@ -30,7 +30,7 @@
         			<thead>
 						<tr>
 							<th>{{ get_phrase('Name') }}</th>
-                            <th>{{ get_phrase('Class') }}</th>
+                            <th>{{ academic_term('class', auth()->user()->school_id) }}</th>
 						</tr>
 					</thead>
 					<tbody>

@@ -78,7 +78,7 @@ class SubjectCatalogueAlignmentTest extends TestCase
     public function test_higher_education_catalogue_uses_course_unit_terms_and_tenant_programme_filter(): void
     {
         $this->assertSame('Course Units', academic_term('subjects', 1));
-        $this->assertSame('Class', academic_term('class', 1));
+        $this->assertSame('Teaching Group', academic_term('class', 1));
 
         $subject = Subject::create(['name' => 'Business Systems', 'code' => 'BBIT1101', 'school_id' => 1, 'programme_id' => 10]);
         Subject::create(['name' => 'Other Tenant Unit', 'code' => 'OTHER1', 'school_id' => 2, 'class_id' => 30, 'session_id' => 40]);

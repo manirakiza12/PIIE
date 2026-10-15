@@ -12,9 +12,9 @@ $active_session = Session::where('school_id', auth()->user()->school_id)->where(
     @csrf 
     <div class="form-row">
         <div class="fpb-7">
-            <label for="class_id_on_routine_creation" class="eForm-label">{{ get_phrase('Class') }}</label>
+            <label for="class_id_on_routine_creation" class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
             <select name="class_id" id="class_id_on_routine_creation" class="form-select eForm-select eChoice-multiple-with-remove"  required onchange="classWiseSectionForRoutineCreate(this.value)">
-                <option value="">{{ get_phrase('Select a class') }}</option>
+                <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
                 <?php foreach($classes as $class): ?>
                     <option value="{{ $class['id'] }}" {{ $routine->class_id == $class['id'] ?  'selected':'' }}>{{ $class['name'] }}</option>
                 <?php endforeach; ?>
@@ -22,7 +22,7 @@ $active_session = Session::where('school_id', auth()->user()->school_id)->where(
         </div>
 
         <div class="fpb-7">
-            <label for="section_id_on_routine_creation" class="eForm-label">{{ get_phrase('Section') }}</label>
+            <label for="section_id_on_routine_creation" class="eForm-label">{{ academic_term('section', auth()->user()->school_id) }}</label>
             <select name="section_id" id = "section_id_on_routine_creation" class="form-select eForm-select eChoice-multiple-with-remove" required>
                 <option value="">{{ get_phrase('Select a section') }}</option>
                 <?php $sections = Section::where(['class_id' => $routine['class_id']])->get(); ?>

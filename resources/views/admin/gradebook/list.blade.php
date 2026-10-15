@@ -10,7 +10,7 @@ use App\Models\Section;
 	            <th>#</th>
 	            <th>{{ get_phrase('Image') }}</th>
 	            <th>{{ get_phrase('Student Name') }}</th>
-	            <th>{{ get_phrase('Section') }}</th>
+	            <th>{{ academic_term('section', auth()->user()->school_id) }}</th>
 	            <th class="text-center">{{ get_phrase('Action') }}</th>
 	        </tr>
 		</thead>

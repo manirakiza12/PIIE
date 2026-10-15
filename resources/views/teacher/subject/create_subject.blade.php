@@ -27,9 +27,9 @@
                 @csrf
 
                 <div class="mb-3">
-                    <label for="class_id" class="eForm-label">{{ get_phrase('Class') }}</label>
+                    <label for="class_id" class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
                     <select name="class_id" id="class_id" class="form-select eForm-select" required>
-                        <option value="">{{ get_phrase('Select a class') }}</option>
+                        <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
                         @foreach($classes as $class)
                             <option value="{{ $class->id }}" {{ old('class_id') == $class->id ? 'selected' : '' }}>{{ $class->name }}</option>
                         @endforeach

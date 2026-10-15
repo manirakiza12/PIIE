@@ -143,7 +143,7 @@
             </select>
         </div>
         <div class="col-md-2">
-            <label class="eForm-label">{{ get_phrase('Class') }}</label>
+            <label class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
             <select class="form-select eForm-select" name="class_id">
                 <option value="">{{ get_phrase('All Classes') }}</option>
                 @foreach($classes as $class)

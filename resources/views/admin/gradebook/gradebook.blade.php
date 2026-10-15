@@ -38,9 +38,9 @@ $index = 0;
                     <div class="col-md-2"></div>
 
                     <div class="col-md-2">
-                        <label for="class_id" class="eForm-label">{{ get_phrase('Class') }}</label>
+                        <label for="class_id" class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
                         <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove" required onchange="classWiseSection(this.value)">
-                            <option value="">{{ get_phrase('Select a class') }}</option>
+                            <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
                             @foreach($classes as $class)
                                 <option value="{{ $class->id }}" {{ $class_id == $class->id ?  'selected':'' }}>{{ $class->name }}</option>
                             @endforeach
@@ -52,7 +52,7 @@ $index = 0;
                     @else
                     <div class="col-md-2">
                     @endif
-                        <label for="section_id" class="eForm-label">{{ get_phrase('Section') }}</label>
+                        <label for="section_id" class="eForm-label">{{ academic_term('section', auth()->user()->school_id) }}</label>
                         <select name="section_id" id="section_id" class="form-select eForm-select eChoice-multiple-with-remove" required >
                             <?php if($class_id !=""){
                                 $sections = Section::get()->where('class_id', $class_id); ?>

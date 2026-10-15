@@ -13,9 +13,11 @@ class AcademicNavigationBrowserFixtures extends \Tests\Feature\CourseOfferingAdm
         $this->actingAs($admin);
         \Illuminate\Support\Facades\DB::table('schools')->where('id',1)->update(['current_academic_year_id'=>1,'current_academic_period_id'=>1]);
         $directory=base_path('output/academic-navigation-browser');if(!is_dir($directory))mkdir($directory,0777,true);
-        foreach(['years'=>route('admin.academic_structure.index'),'semesters'=>route('admin.academic_structure.index',['section'=>'semesters']),'curricula'=>route('admin.curricula.index'),'curriculum'=>route('admin.curricula.show',1),'create-curriculum'=>route('admin.curricula.create'),'registrations'=>route('admin.course_offerings.index')] as $name=>$url){
+        foreach(['years'=>route('admin.academic_structure.index'),'semesters'=>route('admin.academic_structure.index',['section'=>'semesters']),'curricula'=>route('admin.curricula.index'),'curriculum'=>route('admin.curricula.show',1),'create-curriculum'=>route('admin.curricula.create'),'registrations'=>route('admin.course_offerings.index'),'teaching-groups'=>route('admin.class_list'),'lecturer-access'=>route('admin.teacher.permission')] as $name=>$url){
             $response=$this->get($url);if($response->getStatusCode()!==200)throw new \RuntimeException('Fixture failed: '.$name.' HTTP '.$response->getStatusCode().' '.substr(strip_tags($response->getContent()),0,800));file_put_contents($directory.'/'.$name.'.html',$response->getContent());
         }
+        \Illuminate\Support\Facades\DB::table('curricula')->where('id',1)->update(['status'=>'draft']);
+        $draft=$this->get(route('admin.curricula.show',1));if($draft->getStatusCode()!==200)throw new \RuntimeException('Draft curriculum failed');file_put_contents($directory.'/draft-curriculum.html',$draft->getContent());
         echo json_encode(['directory'=>$directory]).PHP_EOL;
     }
 }

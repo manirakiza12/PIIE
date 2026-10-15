@@ -4221,10 +4221,10 @@ class AdminController extends Controller
                 'class_id' => $id,
             ]);
 
-            return redirect()->back()->with('message', 'You have successfully create a new class.');
+            return redirect()->back()->with('message', get_phrase('Created').' '.academic_term('class', (int) auth()->user()->school_id).'.');
         } else {
             return back()
-                ->with('error', 'Sorry this class already exists');
+                ->with('error', academic_term('class', (int) auth()->user()->school_id).' '.get_phrase('already exists').'.');
         }
     }
 
@@ -4247,10 +4247,10 @@ class AdminController extends Controller
                 'name' => $data['name'],
             ]);
 
-            return redirect()->back()->with('message', 'You have successfully update class.');
+            return redirect()->back()->with('message', get_phrase('Updated').' '.academic_term('class', (int) auth()->user()->school_id).'.');
         } else {
             return back()
-                ->with('error', 'Sorry this class already exists');
+                ->with('error', academic_term('class', (int) auth()->user()->school_id).' '.get_phrase('already exists').'.');
         }
     }
 
@@ -4292,7 +4292,7 @@ class AdminController extends Controller
             }
         }
 
-        return redirect()->back()->with('message', 'You have successfully update sections.');
+        return redirect()->back()->with('message', get_phrase('Updated').' '.academic_term('sections', (int) auth()->user()->school_id).'.');
     }
 
     public function classDelete($id)
@@ -4303,7 +4303,7 @@ class AdminController extends Controller
         $sections->map->delete();
         $subjects = Subject::get()->where('class_id', $id);
         $subjects->map->delete();
-        return redirect()->back()->with('message', 'You have successfully delete class.');
+        return redirect()->back()->with('message', get_phrase('Deleted').' '.academic_term('class', (int) auth()->user()->school_id).'.');
     }
 
     /**

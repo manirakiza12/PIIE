@@ -664,6 +664,38 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $this->get(route('admin.academic_structure.index'))->assertForbidden();
     }
 
+    public function test_academic_navigation_follows_setup_dependencies_without_duplicate_destinations(): void
+    {
+        $admin = $this->staff(1, [], ['role_id' => 2]);
+        $page = $this->actingAs($admin)->get(route('admin.course_offerings.index'))->assertOk();
+        $dom = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $dom->loadHTML($page->getContent());
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        $xpath = new \DOMXPath($dom);
+        $destinations = [];
+        foreach ($xpath->query('//div[contains(concat(" ",normalize-space(@class)," ")," sidebar ")]//a[@href]') as $link) {
+            $destinations[] = $link->getAttribute('href');
+        }
+        $previousPosition = -1;
+        foreach ([
+            route('admin.department_list'), route('admin.programmes.index'),
+            route('admin.academic_structure.index'), route('admin.academic_structure.index', ['section'=>'semesters']),
+            route('admin.settings.academic'), route('admin.curricula.index'), route('admin.subject_list'),
+            route('admin.class_list'), route('admin.programme_cohorts.index'), route('admin.teacher.permission'),
+            route('admin.course_offerings.index'), route('admin.routine'), route('admin.live_classes.index'),
+            route('admin.daily_attendance'), route('admin.question_bank.index'), route('admin.online_exams.index'),
+            route('admin.gradebook'),
+        ] as $destination) {
+            $positions = array_keys($destinations, $destination, true);
+            $this->assertCount(1, $positions, 'Academic destination must appear once: '.$destination);
+            $this->assertGreaterThan($previousPosition, $positions[0], 'Academic dependency order: '.$destination);
+            $previousPosition = $positions[0];
+        }
+        $page->assertSee('>Teaching Groups</span>', false)->assertDontSee('>Classes</span>', false);
+    }
+
     public function test_academic_context_http_workflow_feedback_tenant_validation_and_clear_period(): void
     {
         $tenantA = $this->tenants[1];

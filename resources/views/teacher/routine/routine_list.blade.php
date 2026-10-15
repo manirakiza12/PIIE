@@ -34,7 +34,7 @@ $active_session = get_school_settings(auth()->user()->school_id)->value('running
 
                     <div class="col-md-2">
                         <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove" required onchange="classWiseSection(this.value)">
-                            <option value="">{{ get_phrase('Select a class') }}</option>
+                            <option value="">{{ get_phrase('Select').' '.academic_term('class', auth()->user()->school_id) }}</option>
                             @foreach($classes as $class)
                                  <option value="{{ $class->id }}" {{ $class_id == $class->id ?  'selected':'' }}>{{ $class->name }}</option>
                             @endforeach

@@ -46,12 +46,11 @@
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5>{{ get_phrase('Programme Years & Stages') }}</h5><small class="text-muted">{{ get_phrase('Arrange Year 1, Year 2 or foundation stages here. Student progression is managed separately.') }}</small></div>
     @if($isDraft && $canManage)
         <details class="border rounded p-3 mb-3 bg-light"><summary class="fw-bold">{{ get_phrase('Add Programme Year / Stage') }}</summary>
-            <h6 id="add-stage-heading">{{ get_phrase('Add Programme Year / Stage') }}</h6>
             <p class="text-muted">{{ get_phrase('Create a separate stage in this Curriculum. Existing stages will not be changed.') }}</p>
             <form method="POST" action="{{ route('admin.curricula.stages.store', $curriculum->id) }}" class="row g-2">@csrf
-                <div class="col-md-7"><label class="form-label">{{ get_phrase('Year / Year / Stage Name') }}</label><input class="form-control" name="label" required maxlength="100" placeholder="{{ get_phrase('Foundation, Year 1, Stage 1…') }}"></div>
+                <div class="col-md-7"><label class="form-label">{{ get_phrase('Year / Stage Name') }}</label><input class="form-control" name="label" required maxlength="100" placeholder="{{ get_phrase('Foundation, Year 1, Stage 1…') }}"></div>
                 <div class="col-md-2"><label class="form-label">{{ get_phrase('Display Order') }}</label><input class="form-control" type="number" name="sequence" min="1" max="65535" required value="{{ $curriculum->stages->count() + 1 }}"></div>
-                <div class="col-md-3 d-flex align-items-end"><button class="eBtn eBtn-primary" type="submit">{{ get_phrase('Add Programme Year / Stage') }}</button></div>
+                <div class="col-md-3 d-flex align-items-end"><button class="eBtn eBtn-primary" type="submit">{{ get_phrase('Add Year / Stage') }}</button></div>
             </form>
         </details>
     @endif
@@ -59,8 +58,8 @@
         <div class="border rounded p-3 mb-2">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2"><strong>{{ get_phrase('Stage') }} {{ $stage->sequence }} — {{ $stage->label }}</strong><span class="badge bg-light text-dark">{{ $stage->memberships->count() }} {{ $courseUnitLabel }}(s)</span></div>
             @if($isDraft && $canManage)
-                <div class="border-top mt-3 pt-3" aria-labelledby="edit-stage-heading-{{ $stage->id }}">
-                    <h6 id="edit-stage-heading-{{ $stage->id }}">{{ get_phrase('Edit Programme Year / Stage') }}: {{ $stage->label }}</h6>
+                <details class="border-top mt-3 pt-3">
+                    <summary class="fw-bold mb-2">{{ get_phrase('Edit Programme Year / Stage') }}: {{ $stage->label }}</summary>
                     <form method="POST" action="{{ route('admin.curricula.stages.update', [$curriculum->id, $stage->id]) }}" class="row g-2 mb-2">@csrf @method('PUT')
                         <div class="col-md-6"><label class="form-label">{{ get_phrase('Year / Stage Name') }}</label><input class="form-control form-control-sm" name="label" value="{{ $stage->label }}" maxlength="100" required></div>
                         <div class="col-md-2"><label class="form-label">{{ get_phrase('Position') }}</label><input class="form-control form-control-sm" type="number" name="sequence" value="{{ $stage->sequence }}" min="1" max="65535" required></div>
@@ -70,7 +69,7 @@
                     @foreach(['up' => 'Move up', 'down' => 'Move down'] as $direction => $label)<form method="POST" action="{{ route('admin.curricula.stages.move', [$curriculum->id, $stage->id]) }}">@csrf<input type="hidden" name="direction" value="{{ $direction }}"><button class="btn btn-sm btn-outline-secondary" aria-label="{{ $label }} {{ $stage->label }}">{{ $label }}</button></form>@endforeach
                     <form method="POST" action="{{ route('admin.curricula.stages.destroy', [$curriculum->id, $stage->id]) }}" onsubmit="return confirm('{{ get_phrase('Remove this empty stage?') }}')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove empty stage') }}</button></form>
                     </div>
-                </div>
+                </details>
             @endif
         </div>
     @empty<p class="text-muted">{{ get_phrase('No stages yet. An empty draft is allowed but cannot be approved.') }}</p>@endforelse
