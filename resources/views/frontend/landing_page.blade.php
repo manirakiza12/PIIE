@@ -171,11 +171,11 @@
     // supplied media folder. These are ILLUSTRATIONS, not programme records -
     // the programme records themselves are the catalogue items above.
     $piieLevels = [
-        ['title' => 'Masters Degrees', 'photo' => $piieMedia('16_future_leader.jpg'), 'anchor' => 'graduate_school'],
-        ['title' => 'Postgraduate Diplomas', 'photo' => $piieMedia('05_professional_online_student.jpg'), 'anchor' => 'graduate_school'],
-        ['title' => "Bachelor's Degrees", 'photo' => $piieMedia('03_female_online_learning.jpg'), 'anchor' => 'business_management'],
-        ['title' => 'Diplomas', 'photo' => $piieMedia('08_graduation_books.jpg'), 'anchor' => 'business_management'],
-        ['title' => 'Certificates', 'photo' => $piieMedia('18_student_notes.jpg'), 'anchor' => 'humanities'],
+        ['title' => 'Masters Degrees', 'photo' => $piieMedia('16_future_leader.jpg'), 'filters' => ['category' => 'postgraduate']],
+        ['title' => 'Postgraduate Diplomas', 'photo' => $piieMedia('05_professional_online_student.jpg'), 'filters' => ['category' => 'diploma', 'level' => 'PGD']],
+        ['title' => "Bachelor's Degrees", 'photo' => $piieMedia('03_female_online_learning.jpg'), 'filters' => ['category' => 'bachelors']],
+        ['title' => 'Diplomas', 'photo' => $piieMedia('08_graduation_books.jpg'), 'filters' => ['category' => 'diploma', 'level' => 'Diploma']],
+        ['title' => 'Certificates', 'photo' => $piieMedia('18_student_notes.jpg'), 'filters' => ['category' => 'certificate']],
     ];
 
     // ODeL stages. Four, as specified.
@@ -314,7 +314,7 @@
 
                 <div class="piie-grid piie-grid--5" style="margin-top:2.5rem;">
                     @foreach($piieLevels as $level)
-                        <a class="piie-card" href="{{ $piieProgramsUrl }}#{{ $level['anchor'] }}">
+                        <a class="piie-card" href="{{ $piieProgramsUrl }}?{{ http_build_query($level['filters']) }}#catalogue">
                             <span class="piie-card__media">
                                 <img src="{{ $level['photo'] }}"
                                      alt="PIIE {{ $level['title'] }} study"

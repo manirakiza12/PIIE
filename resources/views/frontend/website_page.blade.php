@@ -1242,4 +1242,8 @@
     @include('frontend.partials.site_footer')
 </div>
 
+@if (($websitePage->slug ?? '') === 'academic-programmes')
+    <script src="{{ asset('assets/js/programme-category-links.js') }}" defer></script>
+@endif
+
 @endsection

@@ -115,6 +115,39 @@ class PublicProgrammeCategoriesTest extends TestCase
             ->assertOk()->getContent();
     }
 
+    public function test_homepage_award_cards_open_only_the_selected_programme_group(): void
+    {
+        $names = ['Masters' => 'AWARD MASTER', 'PGD' => 'AWARD PGD', 'Bachelors' => 'AWARD BACHELOR', 'Degree' => 'AWARD LEGACY DEGREE', 'Diploma' => 'AWARD DIPLOMA', 'Certificate' => 'AWARD CERTIFICATE'];
+        foreach ($names as $level => $name) {
+            $this->publishedProgramme($name, $level);
+        }
+        $document = new \DOMDocument();
+        @$document->loadHTML($this->get('/')->assertOk()->getContent());
+        $xpath = new \DOMXPath($document);
+        foreach ([
+            'Masters Degrees' => ['AWARD MASTER'],
+            'Postgraduate Diplomas' => ['AWARD PGD'],
+            "Bachelor's Degrees" => ['AWARD BACHELOR', 'AWARD LEGACY DEGREE'],
+            'Diplomas' => ['AWARD DIPLOMA'],
+            'Certificates' => ['AWARD CERTIFICATE'],
+        ] as $label => $expected) {
+            $links = $xpath->query('//a[contains(@class,"piie-card")][.//span[contains(@class,"piie-card__title") and normalize-space(.)='.json_encode($label).']]');
+            $link = $links->item(0);
+            $this->assertNotNull($link, $label);
+            $url = $link->getAttribute('href');
+            $this->assertSame('catalogue', parse_url($url, PHP_URL_FRAGMENT));
+            $html = $this->get($url)->assertOk()->getContent();
+            $resultDocument = new \DOMDocument();
+            @$resultDocument->loadHTML($html);
+            $resultXpath = new \DOMXPath($resultDocument);
+            $titles = [];
+            foreach ($resultXpath->query('//*[@id="catalogue"]//h3') as $heading) $titles[] = trim($heading->textContent);
+            foreach ($names as $name) {
+                $this->assertSame(in_array($name, $expected, true), in_array($name, $titles, true), $label.': '.$name);
+            }
+        }
+    }
+
     public function test_selected_category_survives_the_filter_form_and_other_category_counts_remain_available(): void
     {
         $this->publishedProgramme('MASTER ONE', 'Masters');
