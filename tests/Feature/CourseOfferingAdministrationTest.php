@@ -88,7 +88,7 @@ $table->timestamps();
             ->assertSee('A-OWN')->assertSee('CORE-1 — Core 1')
             ->assertSee('Offering Reference:')->assertSee('Academic Year:')->assertSee('2026')
             ->assertSee('Semester:')->assertSee('Semester 1')
-            ->assertSee('No Study Plan has been linked yet. Add the applicable Study Plan before opening this Course Offering.')
+            ->assertSee('No Curriculum has been linked yet. Add the applicable Curriculum before opening this Course Offering.')
             ->assertSee('No lecturers have been assigned yet.')
             ->assertSee('No students are registered for this Course Offering yet.')
             ->assertSee('A Programme Study Plan must be linked before this Course Offering can be opened.')
@@ -433,8 +433,8 @@ app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
         $empty->assertOk()
             ->assertSee('Manage the Course Units being taught in each Academic Year and Semester, including teaching teams and student registration.')
             ->assertSee('Create Course Offering')
-            ->assertSee('All Programme Study Plans')
-            ->assertSee('Applicable Programme Study Plans')
+            ->assertSee('All Programme Curricula')
+            ->assertSee('Applicable Programme Curricula')
             ->assertSee('Semester')
             ->assertSee('No Course Offerings have been created yet.');
 
@@ -600,7 +600,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $viewer = $this->staff(1, ['academic.course_offering.view', 'academic.structure.manage']);
         $this->actingAs($viewer);
 
-        $structure = $this->get(route('admin.academic_structure.index'));
+        $structure = $this->get(route('admin.academic_structure.index', ['section'=>'semesters']));
         $structure->assertOk()->assertSee(route('admin.course_offerings.index', ['year_id' => $tenant['year'], 'period_id' => $tenant['period']]));
         $this->get(route('admin.course_offerings.index', ['year_id' => $tenant['year'], 'period_id' => $tenant['period']]))
             ->assertOk()->assertSee('YEAR-PERIOD-ONE')->assertDontSee('YEAR-PERIOD-TWO');
@@ -611,7 +611,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
     {
         $viewer = $this->staff(1, ['academic.course_offering.view']);
         $response = $this->actingAs($viewer)->get(route('admin.course_offerings.index'));
-        $response->assertOk()->assertSee('>Course Offerings</span>', false);
+        $response->assertOk()->assertSee('>Course Registrations</span>', false);
         $response->assertSee(route('admin.course_offerings.index'), false);
     }
 
@@ -627,7 +627,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $this->get(route('admin.course_offerings.index'))->assertOk()->assertSee('Course Offerings');
         $this->get(route('admin.course_offerings.create'))->assertOk()
             ->assertSee('<h4>Create Course Offering</h4>', false)
-            ->assertSee('Choose the Course Unit, Academic Year and Semester for this teaching period. Programme Study Plans can be linked after the Offering is created.')
+            ->assertSee('Choose the Course Unit, Academic Year and Semester for this teaching period. Programme Curricula can be linked after the Offering is created.')
             ->assertSee('<label class="form-label" for="period">Semester</label>', false)
             ->assertSee('>Create Course Offering</button>', false)
             ->assertDontSee('Create Course Offering draft')
@@ -640,7 +640,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         // Render the shared admin shell on a simple authorized page and assert the K12 sidebar does not expose Offerings.
         $k12manager = $this->staffForSchool($k12school, ['academic.course_offering.view','academic.course_offering.manage']);
         $this->actingAs($k12manager)
-            ->get(route('admin.course_offerings.index'))->assertOk()->assertDontSee('>Course Offerings</span>', false);
+            ->get(route('admin.course_offerings.index'))->assertOk()->assertDontSee('>Course Registrations</span>', false);
         $this->get(route('admin.course_offerings.create'))->assertOk()
             ->assertSee('Academic Year and Term for this teaching period.')
             ->assertSee('<label class="form-label" for="period">Term</label>', false);
@@ -652,7 +652,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $this->actingAs($authorized)->get(route('admin.course_offerings.index'))
             ->assertOk()
             ->assertSee(route('admin.academic_structure.index'), false)
-            ->assertSee('Academic Years &amp; Periods', false);
+            ->assertSee('Academic Years', false);
 
         $restricted = $this->staff(1, ['academic.course_offering.view'], [
             'menu_permission' => json_encode(['admin.course_offerings.index']),
@@ -660,7 +660,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $this->actingAs($restricted)->get(route('admin.course_offerings.index'))
             ->assertOk()
             ->assertDontSee(route('admin.academic_structure.index'), false)
-            ->assertDontSee('Academic Years &amp; Periods', false);
+            ->assertDontSee('>Academic Years</span>', false);
         $this->get(route('admin.academic_structure.index'))->assertForbidden();
     }
 
@@ -688,10 +688,10 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $this->get(route('admin.academic_structure.index'))
             ->assertOk()
             ->assertSee('Current academic context updated.')
-            ->assertSee('2026 — Semester 1')
+            ->assertSee('2026 (2026-01-01) — Semester 1')
             ->assertSee('Semester 1')
             ->assertDontSee('Academic year 2026-2027')
-            ->assertSee('class="eBtn eBtn-primary" type="submit">Save current context</button>', false);
+            ->assertSee('class="eBtn eBtn-primary" type="submit">Save current selection</button>', false);
 
         $this->post(route('admin.academic_structure.current'), [
             'current_academic_year_id' => $tenantA['year'],
@@ -771,13 +771,13 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $showResponse
             ->assertOk()
             ->assertSee('Stage added.')
-            ->assertSee('Add New Stage')
-            ->assertSee('Create a separate stage in this Study Plan. Existing stages will not be changed.')
+            ->assertSee('Add Programme Year / Stage')
+            ->assertSee('Create a separate stage in this Curriculum. Existing stages will not be changed.')
             ->assertSee('Stage 1 — Year 1')
-            ->assertSee('Edit Stage: Year 1')
-            ->assertSee('Stage Name')
+            ->assertSee('Edit Programme Year / Stage: Year 1')
+            ->assertSee('Year / Stage Name')
             ->assertSee('Position')
-            ->assertSee('Save Stage Changes')
+            ->assertSee('Save Changes')
             ->assertDontSee('The subject ids field is required.');
 
         $dom = new \DOMDocument();
@@ -1121,7 +1121,7 @@ app(CourseOfferingService::class)->start($a['school'], $completed->id);
             ->assertSee('Academic Year:')
             ->assertSee('Semester 1')
             // Study Plan applicability and Stage / Year of Study
-            ->assertSee('Study Plan Applicability:')
+            ->assertSee('Curriculum Applicability:')
             ->assertSee('Stage / Year of Study:')
             ->assertSee('Year 1')
             // Status and teaching team
@@ -1217,7 +1217,7 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         $page->assertOk()
             // A viewer may read the whole page...
             ->assertSee('VIEW-ONLY-UI')
-            ->assertSee('Study Plan Applicability:')
+            ->assertSee('Curriculum Applicability:')
             ->assertSee('Teaching Team')
             // ...but sees no mutation control anywhere on it.
             ->assertDontSee('>Open Offering</button>', false)

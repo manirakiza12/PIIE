@@ -56,7 +56,7 @@ class CurriculumController extends Controller
         $curriculumRows = $query->orderBy('programmes.name')->orderByDesc('curricula.created_at')->paginate(20)->withQueryString();
         $programmes = Programme::where('school_id', $schoolId)->orderBy('name')->get(['id', 'code', 'name', 'department_id']);
         $departments = DB::table('departments')->where('school_id', $schoolId)->orderBy('name')->get(['id', 'name']);
-        $academicYears = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label']);
+        $academicYears = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label', 'start_date', 'end_date']);
         $selectedProgramme = $request->filled('programme_id')
             ? $programmes->firstWhere('id', (int) $request->query('programme_id'))
             : null;
@@ -68,7 +68,7 @@ class CurriculumController extends Controller
     {
         $schoolId = (int) $request->user()->school_id;
         $programmes = Programme::where('school_id', $schoolId)->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
-        $academicYears = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label']);
+        $academicYears = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label', 'start_date', 'end_date']);
         $selectedProgrammeId = $request->integer('programme_id') ?: null;
 
         return view('admin.curricula.create', compact('programmes', 'academicYears', 'selectedProgrammeId'));
@@ -104,7 +104,7 @@ class CurriculumController extends Controller
         $schoolId = (int) $request->user()->school_id;
         $school = DB::table('schools')->where('id', $schoolId)->first(['academic_calendar_pattern', 'school_type']);
         $calendarPattern = $school->academic_calendar_pattern ?: ($school->school_type === 'higher_ed' ? 'semester' : 'term');
-        $academicYears = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label']);
+        $academicYears = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label', 'start_date', 'end_date']);
         $canManage = $request->user()->hasPermission('academic.curriculum.manage');
         $canApprove = $request->user()->hasPermission('academic.curriculum.approve');
         $reviewBlockers = array_values($this->curricula->approvalBlockers($curriculum));

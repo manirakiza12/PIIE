@@ -3,7 +3,7 @@
 <div class="mainSection-title"><div class="row"><div class="col-12">
     <div class="d-flex justify-content-between align-items-center flex-wrap gr-15">
         <div class="d-flex flex-column">
-            <h4>{{ get_phrase('Academic Settings') }}</h4>
+            <h4>{{ get_phrase('Grading Scales') }}</h4>
             <ul class="d-flex align-items-center eBreadcrumb-2">
                 <li><a href="{{ route('admin.dashboard') }}">{{ get_phrase('Home') }}</a></li>
                 <li><a href="{{ route('admin.settings.school') }}">{{ get_phrase('Settings') }}</a></li>

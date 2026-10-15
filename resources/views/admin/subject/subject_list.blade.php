@@ -15,7 +15,7 @@
                 <li aria-current="page">{{ get_phrase($pageLabel) }}</li>
             </ul>
             @if($isHigherEducation)
-                <p class="text-muted mb-0">{{ get_phrase("Add and edit Course Units together with their Study Plan placements, credits and prerequisites.") }}</p>
+                <p class="text-muted mb-0">{{ get_phrase("Add and edit Course Units together with their Curriculum placements, credits and prerequisites.") }}</p>
             @elseif($isMixed)
                 <p class="text-muted mb-0">{{ get_phrase('Maintain the shared catalogue. Choose a Class for a school subject or a Programme for a higher-education Course Unit.') }}</p>
             @endif
@@ -131,7 +131,7 @@
         <div class="text-center py-5" role="status">
             <h5>{{ get_phrase($search || $classId || $programmeId ? 'No matching catalogue records' : 'No catalogue records yet') }}</h5>
             @if($isHigherEducation)
-                <p class="text-muted mx-auto" style="max-width: 42rem">{{ get_phrase('Create Course Units here, then add each one to the appropriate Programme Study Plan stage and define its credits and classification there.') }}</p>
+                <p class="text-muted mx-auto" style="max-width: 42rem">{{ get_phrase('Create Course Units here, then add each one to the appropriate Programme Curriculum stage and define its credits and classification there.') }}</p>
             @elseif($isMixed)
                 <p class="text-muted">{{ get_phrase('Create a Subject for a Class or a Course Unit for a Programme.') }}</p>
             @else

@@ -1,6 +1,7 @@
 @extends('admin.navigation')
    
 @section('content')
+@php($divisionTitle = \App\Models\School::query()->find(auth()->user()->school_id)?->school_type === 'higher_ed' ? 'Schools, Faculties & Departments' : 'Departments')
 <div class="mainSection-title">
     <div class="row">
       <div class="col-12">
@@ -8,11 +9,12 @@
           class="d-flex justify-content-between align-items-center flex-wrap gr-15"
         >
           <div class="d-flex flex-column">
-            <h4>{{ get_phrase('Departments') }}</h4>
+            <h4>{{ get_phrase($divisionTitle) }}</h4>
+            <p class="text-muted">{{ get_phrase('Manage academic divisions here. Use the official school, faculty or department name; each division has one record.') }}</p>
             <ul class="d-flex align-items-center eBreadcrumb-2">
               <li><a href="#">{{ get_phrase('Home') }}</a></li>
               <li><a href="#">{{ get_phrase('Academic') }}</a></li>
-              <li><a href="#">{{ get_phrase('Departments') }}</a></li>
+              <li><a href="#">{{ get_phrase($divisionTitle) }}</a></li>
             </ul>
           </div>
           <div class="export-btn-area">
@@ -24,7 +26,7 @@
 </div>
 
 <div class="row">
-    <div class="col-7 offset-md-2">
+            <div class="col-12 col-lg-10 offset-lg-1">
         <div class="eSection-wrap">
             <div class="search-filter-area d-flex justify-content-md-between justify-content-center align-items-center flex-wrap gr-15">
               <form action="{{ route('admin.department_list') }}">

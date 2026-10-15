@@ -1,0 +1,13 @@
+/* Academic setup uses compact dialogs and direct, readable navigation. */
+.sidebar .nav-links-li > .iocn-link > a .link_name { white-space:normal; overflow-wrap:break-word; }
+.academic-calendar-page .eBtn { width:auto; max-width:100%; white-space:normal; }
+.academic-calendar-page .modal-content { max-width:100%; }
+.home-section .main_content { max-width:100%; }
+.home-section .main_content .table-responsive { display:block; width:100%; max-width:100%; overflow-x:auto; }
+@media (max-width:575px) {
+  .home-header .admin-header-actions { max-width:calc(100% - 40px); padding-inline:0; gap:3px; align-items:center; }
+  .home-header .admin-header-actions .admin-language { margin-right:3px !important; }
+  .home-header .admin-language > button { width:48px !important; }
+  .home-header .header-menu > ul > .user-profile > .btn-group > button { padding-inline:0; }
+  .home-header .header-menu > ul > .user-profile > .btn-group > button > .text-start { display:none; }
+}

@@ -1,6 +1,6 @@
 @extends('admin.navigation')
 @section('content')
-<div class="mainSection-title"><h4>Create Course Offering</h4><p class="text-muted">Choose the {{ $courseUnitLabel }}, Academic Year and {{ $periodLabel }} for this teaching period. Programme Study Plans can be linked after the Offering is created.</p></div>
+<div class="mainSection-title"><h4>Create Course Offering</h4><p class="text-muted">Choose the {{ $courseUnitLabel }}, Academic Year and {{ $periodLabel }} for this teaching period. Programme Curricula can be linked after the Offering is created.</p></div>
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 <div class="eSection-wrap"><form method="POST" action="{{ route('admin.course_offerings.store') }}">@csrf
 <div class="mb-3"><label class="form-label" for="subject">{{ $courseUnitLabel }}</label><select class="form-select" name="subject_id" id="subject" required><option value="">Choose</option>@foreach($subjects as $subject)<option value="{{ $subject->id }}" data-code="{{ $subject->code }}" @selected(old('subject_id')==$subject->id)>{{ $subject->code ? $subject->code.' — ' : '' }}{{ $subject->name }}</option>@endforeach</select></div>

@@ -11,7 +11,7 @@
 <div class="mainSection-title" id="overview">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div><h4>{{ $curriculum->programme->code }} — {{ $curriculum->programme->name }}</h4>
-            <p class="mb-1">{{ get_phrase('Study Plan Version') }} <strong>{{ $curriculum->version }}</strong> · {{ get_phrase('Effective Academic Year') }}: <strong>{{ $curriculum->effectiveAcademicYear->label ?? '—' }}</strong></p>
+            <p class="mb-1">{{ get_phrase('Curriculum Version') }} <strong>{{ $curriculum->version }}</strong> · {{ get_phrase('Applies From Academic Year') }}: <strong>{{ $curriculum->effectiveAcademicYear->label ?? '—' }}</strong></p>
             <span class="badge {{ $curriculum->status === 'approved' ? 'bg-success' : ($curriculum->status === 'retired' ? 'bg-secondary' : 'bg-warning text-dark') }}">{{ strtoupper($curriculum->status) }}</span>
         </div>
         <a class="eBtn eBtn-secondary" href="{{ route('admin.curricula.index', ['programme_id' => $curriculum->programme_id]) }}">{{ get_phrase('All versions for this Programme') }}</a>
@@ -23,48 +23,48 @@
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger"><strong>{{ get_phrase('Please correct the following:') }}</strong><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 @if($isDraft)<div class="alert alert-warning"><strong>{{ get_phrase('Draft — not official') }}.</strong> {{ get_phrase('Changes are editable until approval. Approval makes the structure immutable.') }}</div>
-@elseif($curriculum->status === 'approved')<div class="alert alert-success"><strong>{{ get_phrase('Official approved Study Plan') }}.</strong> {{ get_phrase('This academic structure is read-only. Material changes require a successor version.') }}</div>
-@else<div class="alert alert-secondary"><strong>{{ get_phrase('Retired historical Study Plan') }}.</strong> {{ get_phrase('This record is preserved and read-only.') }}</div>@endif
+@elseif($curriculum->status === 'approved')<div class="alert alert-success"><strong>{{ get_phrase('Official approved Curriculum') }}.</strong> {{ get_phrase('This academic structure is read-only. Material changes require a successor version.') }}</div>
+@else<div class="alert alert-secondary"><strong>{{ get_phrase('Retired historical Curriculum') }}.</strong> {{ get_phrase('This record is preserved and read-only.') }}</div>@endif
 
-<nav class="nav nav-pills flex-wrap gap-2 mb-3" aria-label="Study Plan sections">
-    <a class="nav-link" href="#overview">{{ get_phrase('Overview') }}</a><a class="nav-link" href="#stages">{{ get_phrase('Stages') }}</a><a class="nav-link" href="#course-units">{{ $courseUnitLabel }}s</a><a class="nav-link" href="#prerequisites">{{ get_phrase('Prerequisites') }}</a><a class="nav-link" href="#review">{{ get_phrase('Review') }}</a>
+<nav class="nav nav-pills flex-wrap gap-2 mb-3" aria-label="Curriculum sections">
+    <a class="nav-link" href="#overview">{{ get_phrase('Overview') }}</a><a class="nav-link" href="#stages">{{ get_phrase('Programme Years & Stages') }}</a><a class="nav-link" href="#course-units">{{ $courseUnitLabel }}s</a><a class="nav-link" href="#prerequisites">{{ get_phrase('Prerequisites') }}</a><a class="nav-link" href="#review">{{ get_phrase('Review') }}</a>
 </nav>
 
 <section class="eSection-wrap mb-3" aria-labelledby="metadata-heading">
-    <h5 id="metadata-heading">{{ get_phrase('Study Plan Details') }}</h5>
+    <h5 id="metadata-heading">{{ get_phrase('Curriculum Details') }}</h5>
     @if($isDraft && $canManage)
     <form method="POST" action="{{ route('admin.curricula.update', $curriculum->id) }}" class="row g-2">@csrf @method('PUT')
         <div class="col-md-4"><label class="form-label">{{ get_phrase('Programme') }}</label><input class="form-control" readonly value="{{ $curriculum->programme->code }} — {{ $curriculum->programme->name }}"></div>
         <div class="col-md-3"><label class="form-label">{{ get_phrase('Version') }}</label><input class="form-control" name="version" maxlength="50" required value="{{ old('version', $curriculum->version) }}"></div>
-        <div class="col-md-3"><label class="form-label">{{ get_phrase('Effective Academic Year') }}</label><select class="form-select" name="effective_academic_year_id"><option value="">{{ get_phrase('Choose later') }}</option>@foreach($academicYears as $year)<option value="{{ $year->id }}" @selected((string)$curriculum->effective_academic_year_id === (string)$year->id)>{{ $year->label }}</option>@endforeach</select></div>
+        <div class="col-md-3"><label class="form-label">{{ get_phrase('Applies From Academic Year') }}</label><select class="form-select" name="effective_academic_year_id"><option value="">{{ get_phrase('Choose later') }}</option>@foreach($academicYears as $year)<option value="{{ $year->id }}" @selected((string)$curriculum->effective_academic_year_id === (string)$year->id)>{{ $year->label }} ({{ $year->start_date->format('Y-m-d') }} — {{ $year->end_date->format('Y-m-d') }})</option>@endforeach</select></div>
         <div class="col-md-2 d-flex align-items-end"><button class="eBtn eBtn-primary" type="submit">{{ get_phrase('Save draft') }}</button></div>
     </form>
     @else<p class="mb-0">{{ get_phrase('Programme') }}: {{ $curriculum->programme->code }} — {{ $curriculum->programme->name }} · {{ get_phrase('Department') }}: {{ $curriculum->programme->department->name ?? '—' }} · {{ get_phrase('Version') }}: {{ $curriculum->version }}</p>@endif
 </section>
 
 <section class="eSection-wrap mb-3" id="stages">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5>{{ get_phrase('Stages') }}</h5><small class="text-muted">{{ get_phrase('Flexible labels and relative order; not student progression.') }}</small></div>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5>{{ get_phrase('Programme Years & Stages') }}</h5><small class="text-muted">{{ get_phrase('Arrange Year 1, Year 2 or foundation stages here. Student progression is managed separately.') }}</small></div>
     @if($isDraft && $canManage)
-        <div class="border rounded p-3 mb-3 bg-light" aria-labelledby="add-stage-heading">
-            <h6 id="add-stage-heading">{{ get_phrase('Add New Stage') }}</h6>
-            <p class="text-muted">{{ get_phrase('Create a separate stage in this Study Plan. Existing stages will not be changed.') }}</p>
+        <details class="border rounded p-3 mb-3 bg-light"><summary class="fw-bold">{{ get_phrase('Add Programme Year / Stage') }}</summary>
+            <h6 id="add-stage-heading">{{ get_phrase('Add Programme Year / Stage') }}</h6>
+            <p class="text-muted">{{ get_phrase('Create a separate stage in this Curriculum. Existing stages will not be changed.') }}</p>
             <form method="POST" action="{{ route('admin.curricula.stages.store', $curriculum->id) }}" class="row g-2">@csrf
-                <div class="col-md-7"><label class="form-label">{{ get_phrase('New Stage Name') }}</label><input class="form-control" name="label" required maxlength="100" placeholder="{{ get_phrase('Foundation, Year 1, Stage 1…') }}"></div>
-                <div class="col-md-2"><label class="form-label">{{ get_phrase('New Stage Position') }}</label><input class="form-control" type="number" name="sequence" min="1" max="65535" required value="{{ $curriculum->stages->count() + 1 }}"></div>
-                <div class="col-md-3 d-flex align-items-end"><button class="eBtn eBtn-primary" type="submit">{{ get_phrase('Add New Stage') }}</button></div>
+                <div class="col-md-7"><label class="form-label">{{ get_phrase('Year / Year / Stage Name') }}</label><input class="form-control" name="label" required maxlength="100" placeholder="{{ get_phrase('Foundation, Year 1, Stage 1…') }}"></div>
+                <div class="col-md-2"><label class="form-label">{{ get_phrase('Display Order') }}</label><input class="form-control" type="number" name="sequence" min="1" max="65535" required value="{{ $curriculum->stages->count() + 1 }}"></div>
+                <div class="col-md-3 d-flex align-items-end"><button class="eBtn eBtn-primary" type="submit">{{ get_phrase('Add Programme Year / Stage') }}</button></div>
             </form>
-        </div>
+        </details>
     @endif
     @forelse($curriculum->stages as $stage)
         <div class="border rounded p-3 mb-2">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2"><strong>{{ get_phrase('Stage') }} {{ $stage->sequence }} — {{ $stage->label }}</strong><span class="badge bg-light text-dark">{{ $stage->memberships->count() }} {{ $courseUnitLabel }}(s)</span></div>
             @if($isDraft && $canManage)
                 <div class="border-top mt-3 pt-3" aria-labelledby="edit-stage-heading-{{ $stage->id }}">
-                    <h6 id="edit-stage-heading-{{ $stage->id }}">{{ get_phrase('Edit Stage') }}: {{ $stage->label }}</h6>
+                    <h6 id="edit-stage-heading-{{ $stage->id }}">{{ get_phrase('Edit Programme Year / Stage') }}: {{ $stage->label }}</h6>
                     <form method="POST" action="{{ route('admin.curricula.stages.update', [$curriculum->id, $stage->id]) }}" class="row g-2 mb-2">@csrf @method('PUT')
-                        <div class="col-md-6"><label class="form-label">{{ get_phrase('Stage Name') }}</label><input class="form-control form-control-sm" name="label" value="{{ $stage->label }}" maxlength="100" required></div>
+                        <div class="col-md-6"><label class="form-label">{{ get_phrase('Year / Stage Name') }}</label><input class="form-control form-control-sm" name="label" value="{{ $stage->label }}" maxlength="100" required></div>
                         <div class="col-md-2"><label class="form-label">{{ get_phrase('Position') }}</label><input class="form-control form-control-sm" type="number" name="sequence" value="{{ $stage->sequence }}" min="1" max="65535" required></div>
-                        <div class="col-md-4 d-flex align-items-end"><button class="btn btn-sm btn-outline-primary" type="submit">{{ get_phrase('Save Stage Changes') }}</button></div>
+                        <div class="col-md-4 d-flex align-items-end"><button class="btn btn-sm btn-outline-primary" type="submit">{{ get_phrase('Save Changes') }}</button></div>
                     </form>
                     <div class="d-flex flex-wrap gap-2">
                     @foreach(['up' => 'Move up', 'down' => 'Move down'] as $direction => $label)<form method="POST" action="{{ route('admin.curricula.stages.move', [$curriculum->id, $stage->id]) }}">@csrf<input type="hidden" name="direction" value="{{ $direction }}"><button class="btn btn-sm btn-outline-secondary" aria-label="{{ $label }} {{ $stage->label }}">{{ $label }}</button></form>@endforeach
@@ -77,7 +77,7 @@
 </section>
 
 <section class="eSection-wrap mb-3" id="course-units">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5>{{ $courseUnitLabel }} / {{ get_phrase('Study Plan placement') }}</h5><small class="text-muted">{{ get_phrase('Manage credits, classification and prerequisites from Course Unit setup. Placements remain part of this Study Plan.') }}</small></div>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5>{{ $courseUnitLabel }} / {{ get_phrase('Curriculum placement') }}</h5><small class="text-muted">{{ get_phrase('Manage credits, classification and prerequisites from Course Unit setup. Placements remain part of this Curriculum.') }}</small></div>
     @if($useUnifiedUnitSetup)
         <div class="d-flex flex-wrap gap-2 my-3">
             <a class="eBtn eBtn-primary" href="{{ route('admin.subject.setup', ['curriculum_id' => $curriculum->id, 'programme_id' => $curriculum->programme_id]) }}">{{ get_phrase('Add Course Unit') }}</a>
@@ -110,7 +110,7 @@
     @empty<p class="text-muted">{{ get_phrase('Add a stage before placing Course Units.') }}</p>@endforelse
 </section>
 
-<section class="eSection-wrap mb-3" id="prerequisites"><h5>{{ get_phrase('Prerequisites') }}</h5><p class="text-muted">{{ get_phrase('Prerequisites are relationships between Course Units in this Study Plan only.') }}</p>
+<section class="eSection-wrap mb-3" id="prerequisites"><h5>{{ get_phrase('Prerequisites') }}</h5><p class="text-muted">{{ get_phrase('Prerequisites are relationships between Course Units in this Curriculum only.') }}</p>
     @if($isDraft && $canManage && !$useUnifiedUnitSetup && $curriculum->memberships->count() > 1)
     <form method="POST" action="{{ route('admin.curricula.prerequisites.store', $curriculum->id) }}" class="row g-2 mb-3">@csrf
         <div class="col-md-5"><label class="form-label">{{ get_phrase('Course Unit') }}</label><select class="form-select" name="membership_id" required>@foreach($curriculum->memberships as $membership)<option value="{{ $membership->id }}">{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }}</option>@endforeach</select></div>
@@ -129,27 +129,27 @@
 </section>
 
 <section class="eSection-wrap mb-3" id="review"><h5>{{ get_phrase('Review before approval') }}</h5>
-    <div class="row g-2 mb-3"><div class="col-md-3"><strong>{{ get_phrase('Programme') }}</strong><br>{{ $curriculum->programme->code }} — {{ $curriculum->programme->name }}</div><div class="col-md-2"><strong>{{ get_phrase('Version') }}</strong><br>{{ $curriculum->version }}</div><div class="col-md-3"><strong>{{ get_phrase('Effective Academic Year') }}</strong><br>{{ $curriculum->effectiveAcademicYear->label ?? '—' }}</div><div class="col-md-2"><strong>{{ get_phrase('Stages / Course Units') }}</strong><br>{{ $curriculum->stages->count() }} / {{ $curriculum->memberships->count() }}</div><div class="col-md-2"><strong>{{ get_phrase('Total credits') }}</strong><br>{{ number_format($totalCredits, 2) }}</div></div>
+    <div class="row g-2 mb-3"><div class="col-md-3"><strong>{{ get_phrase('Programme') }}</strong><br>{{ $curriculum->programme->code }} — {{ $curriculum->programme->name }}</div><div class="col-md-2"><strong>{{ get_phrase('Version') }}</strong><br>{{ $curriculum->version }}</div><div class="col-md-3"><strong>{{ get_phrase('Applies From Academic Year') }}</strong><br>{{ $curriculum->effectiveAcademicYear->label ?? '—' }}</div><div class="col-md-2"><strong>{{ get_phrase('Stages / Course Units') }}</strong><br>{{ $curriculum->stages->count() }} / {{ $curriculum->memberships->count() }}</div><div class="col-md-2"><strong>{{ get_phrase('Total credits') }}</strong><br>{{ number_format($totalCredits, 2) }}</div></div>
     <h6>{{ get_phrase('Hard blockers') }}</h6>
     @if($reviewBlockers)<ul class="text-danger">@foreach($reviewBlockers as $blocker)<li>{{ $blocker }}</li>@endforeach</ul>@else<p class="text-success">{{ get_phrase('No known approval blockers. The server will revalidate all domain rules at approval time.') }}</p>@endif
-    <h6>{{ get_phrase('Warnings') }}</h6><ul><li>{{ get_phrase('Confirm the version, stages, relative periods and credit values with the institution before approval.') }}</li><li>{{ get_phrase('Relative periods are Study Plan positions, not dated or scheduled Academic Period instances.') }}</li></ul>
+    <h6>{{ get_phrase('Warnings') }}</h6><ul><li>{{ get_phrase('Confirm the version, stages, relative periods and credit values with the institution before approval.') }}</li><li>{{ get_phrase('Relative periods are Curriculum positions, not dated or scheduled Academic Period instances.') }}</li></ul>
     @foreach($curriculum->stages as $stage)<h6>{{ $stage->sequence }}. {{ $stage->label }}</h6><ul>@forelse($stage->memberships as $membership)<li>{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }} · {{ ucfirst($membership->classification) }} · {{ number_format((float)$membership->credits,2) }} credits · {{ $periodLabel }} {{ $membership->period_sequence ?: '—' }} · {{ $membership->prerequisites->count() }} prerequisite(s)</li>@empty<li class="text-muted">{{ get_phrase('No Course Units') }}</li>@endforelse</ul>@endforeach
     @if($isDraft && $canApprove)
-        <form method="POST" action="{{ route('admin.curricula.approve', $curriculum->id) }}" onsubmit="return confirm('{{ get_phrase('Approve this Study Plan? It becomes official and immutable. Material changes will require a successor version.') }}')">@csrf<button class="eBtn eBtn-success" @disabled($reviewBlockers)>{{ get_phrase('Approve Study Plan') }}</button></form>
-    @elseif($isDraft)<p class="text-muted">{{ get_phrase('Approval is available to users with Study Plan approval permission.') }}</p>@endif
+        <form method="POST" action="{{ route('admin.curricula.approve', $curriculum->id) }}" onsubmit="return confirm('{{ get_phrase('Approve this Curriculum? It becomes official and immutable. Material changes will require a successor version.') }}')">@csrf<button class="eBtn eBtn-success" @disabled($reviewBlockers)>{{ get_phrase('Approve Curriculum') }}</button></form>
+    @elseif($isDraft)<p class="text-muted">{{ get_phrase('Approval is available to users with Curriculum approval permission.') }}</p>@endif
 </section>
 
 @if($curriculum->status === 'approved' && $canApprove)
-<section class="eSection-wrap mb-3"><h5>{{ get_phrase('Retirement') }}</h5><p>{{ get_phrase('Retirement preserves this official Study Plan and does not delete Subjects or rewrite history.') }}</p><form method="POST" action="{{ route('admin.curricula.retire', $curriculum->id) }}" onsubmit="return confirm('{{ get_phrase('Retire this official Study Plan? The historical record will remain read-only.') }}')">@csrf<button class="eBtn eBtn-danger">{{ get_phrase('Retire Study Plan') }}</button></form></section>
+<section class="eSection-wrap mb-3"><h5>{{ get_phrase('Retirement') }}</h5><p>{{ get_phrase('Retirement preserves this official Curriculum and does not delete Subjects or rewrite history.') }}</p><form method="POST" action="{{ route('admin.curricula.retire', $curriculum->id) }}" onsubmit="return confirm('{{ get_phrase('Retire this official Curriculum? The historical record will remain read-only.') }}')">@csrf<button class="eBtn eBtn-danger">{{ get_phrase('Retire Curriculum') }}</button></form></section>
 @endif
 
 @if(in_array($curriculum->status, ['approved', 'retired'], true) && $canManage)
 <section class="eSection-wrap"><h5>{{ get_phrase('Create successor version') }}</h5><p>{{ get_phrase('A successor is a new draft. This historical version remains unchanged; students are not assigned automatically.') }}</p>
     <form method="POST" action="{{ route('admin.curricula.successor', $curriculum->id) }}" class="row g-2">@csrf
         <div class="col-md-3"><label class="form-label">{{ get_phrase('New version identifier') }}</label><input class="form-control" name="version" maxlength="50" required></div>
-        <div class="col-md-3"><label class="form-label">{{ get_phrase('Effective Academic Year') }}</label><select class="form-select" name="effective_academic_year_id"><option value="">{{ get_phrase('Choose later') }}</option>@foreach($academicYears as $year)<option value="{{ $year->id }}">{{ $year->label }}</option>@endforeach</select></div>
+        <div class="col-md-3"><label class="form-label">{{ get_phrase('Applies From Academic Year') }}</label><select class="form-select" name="effective_academic_year_id"><option value="">{{ get_phrase('Choose later') }}</option>@foreach($academicYears as $year)<option value="{{ $year->id }}">{{ $year->label }} ({{ $year->start_date->format('Y-m-d') }} — {{ $year->end_date->format('Y-m-d') }})</option>@endforeach</select></div>
         <div class="col-md-3"><label class="form-label">{{ get_phrase('Starting structure') }}</label><select class="form-select" name="mode"><option value="clone">{{ get_phrase('Clone previous version') }}</option><option value="blank">{{ get_phrase('Start blank') }}</option></select></div>
-        <div class="col-md-3 d-flex align-items-end"><button class="eBtn eBtn-primary">{{ get_phrase('Create successor Study Plan') }}</button></div>
+        <div class="col-md-3 d-flex align-items-end"><button class="eBtn eBtn-primary">{{ get_phrase('Create successor Curriculum') }}</button></div>
     </form>
 </section>
 @endif

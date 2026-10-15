@@ -22,7 +22,7 @@
         <div class="col-12 col-md-6 col-xl-4"><div class="text-muted small">Course Unit</div><div class="fw-semibold">{{ $offering->subject?->code ? $offering->subject->code.' — ' : '' }}{{ $offering->subject?->name }}</div><div class="small text-muted">{{ $offering->reference ?: '' }}</div></div>
         <div class="col-6 col-md-3 col-xl-2"><div class="text-muted small">Academic Year</div><div>{{ $offering->academicYear?->label }}</div></div>
         <div class="col-6 col-md-3 col-xl-2"><div class="text-muted small">Academic Period</div><div>{{ $offering->academicPeriod?->label }}</div></div>
-        <div class="col-6 col-md-6 col-xl-2"><div class="text-muted small">Study Plan Stage</div><div>{{ $stageLabels->isNotEmpty() ? $stageLabels->implode(', ') : 'Not linked yet' }}</div></div>
+        <div class="col-6 col-md-6 col-xl-2"><div class="text-muted small">Curriculum Stage</div><div>{{ $stageLabels->isNotEmpty() ? $stageLabels->implode(', ') : 'Not linked yet' }}</div></div>
         <div class="col-6 col-md-6 col-xl-2"><div class="text-muted small">Offering Status</div><span class="badge bg-{{ $isOpen ? 'success' : 'secondary' }}">{{ ucfirst(str_replace('_', ' ', $offering->status)) }}</span></div>
     </div>
     <div class="row g-2 mt-3" aria-label="Student registration summary">
@@ -53,7 +53,7 @@
 
 <section class="eSection-wrap">
 @if($mode === 'eligible')
-    <p class="text-muted">Eligibility is checked against each student's academic placement: Programme, Study Plan, Year of Study (Study Plan Stage), Academic Year and current Programme Cohort. It is checked again when you register, so a student whose record changed in the meantime will be skipped with a reason.</p>
+    <p class="text-muted">Eligibility is checked against each student's academic placement: Programme, Curriculum, Year of Study (Curriculum Stage), Academic Year and current Programme Student Group. It is checked again when you register, so a student whose record changed in the meantime will be skipped with a reason.</p>
     @if(!$isOpen)
         <div class="alert alert-info">Students can be registered only while the Course Offering is open.</div>
     @endif
@@ -61,7 +61,7 @@
     @if($cohorts->isNotEmpty())
         <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
             <form method="GET" action="{{ route('admin.course_offerings.eligible_students', $offering->id) }}" class="d-flex flex-wrap gap-2 align-items-end">
-                <div><label class="form-label small mb-1" for="cohort-filter">Programme Cohort</label>
+                <div><label class="form-label small mb-1" for="cohort-filter">Programme Student Group</label>
                     <select id="cohort-filter" name="cohort_id" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">All relevant cohorts</option>
                         @foreach($cohorts as $cohort)<option value="{{ $cohort->id }}" @selected($cohortId === (int) $cohort->id)>{{ $cohort->name }}</option>@endforeach
@@ -69,7 +69,7 @@
                 <noscript><button class="btn btn-sm btn-outline-secondary">Filter</button></noscript>
             </form>
             @if($canManage && $isOpen && $cohortId !== null)
-                <form method="POST" action="{{ route('admin.course_offerings.registrations.bulk', $offering->id) }}" data-single-submit onsubmit="return confirm('Register every eligible current member of this Programme Cohort? Each student is checked individually; ineligible students are skipped.')">
+                <form method="POST" action="{{ route('admin.course_offerings.registrations.bulk', $offering->id) }}" data-single-submit onsubmit="return confirm('Register every eligible current member of this Programme Student Group? Each student is checked individually; ineligible students are skipped.')">
                     @csrf<input type="hidden" name="mode" value="cohort"><input type="hidden" name="programme_cohort_id" value="{{ $cohortId }}">
                     <button class="btn btn-sm btn-primary">Register Eligible Cohort Students</button>
                 </form>
@@ -80,8 +80,8 @@
     @if($students->isEmpty())
         <div class="alert alert-info mb-0">
             @if(!$isOpen) This Course Offering is not open for registration.
-            @elseif($stageLabels->isEmpty()) No Programme Study Plan is linked to this Course Offering yet, so no students can be eligible. Link a Study Plan from the Course Offering page.
-            @else No students are currently eligible to register{{ $cohortId ? ' from this Programme Cohort' : '' }}. @if($ineligible->isNotEmpty()) See the students who are not eligible below. @endif
+            @elseif($stageLabels->isEmpty()) No Programme Curriculum is linked to this Course Offering yet, so no students can be eligible. Link a Curriculum from the Course Offering page.
+            @else No students are currently eligible to register{{ $cohortId ? ' from this Programme Student Group' : '' }}. @if($ineligible->isNotEmpty()) See the students who are not eligible below. @endif
             @endif
         </div>
     @else
@@ -94,7 +94,7 @@
                 </div>
             @endif
             <div class="table-responsive"><table class="table align-middle">
-                <thead><tr>@if($canManage && $isOpen)<th scope="col"><span class="visually-hidden">Select</span></th>@endif<th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Cohort</th><th scope="col">Year of Study (Stage)</th><th scope="col">Registration Status</th>@if($canManage && $isOpen)<th scope="col"><span class="visually-hidden">Action</span></th>@endif</tr></thead>
+                <thead><tr>@if($canManage && $isOpen)<th scope="col"><span class="visually-hidden">Select</span></th>@endif<th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Student Group</th><th scope="col">Year of Study (Stage)</th><th scope="col">Registration Status</th>@if($canManage && $isOpen)<th scope="col"><span class="visually-hidden">Action</span></th>@endif</tr></thead>
                 <tbody>
                 @foreach($students as $student)
                     <tr>
@@ -119,9 +119,9 @@
 
     @if($ineligible->isNotEmpty())
         <h6 class="mt-4">Not eligible ({{ $ineligible->count() }})</h6>
-        <p class="text-muted small">These students follow a Study Plan linked to this Course Offering, or belong to a relevant Programme Cohort, but cannot register yet.</p>
+        <p class="text-muted small">These students follow a Curriculum linked to this Course Offering, or belong to a relevant Programme Student Group, but cannot register yet.</p>
         <div class="table-responsive"><table class="table table-sm align-middle">
-            <thead><tr><th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Cohort</th><th scope="col">Year of Study (Stage)</th><th scope="col">Reason</th></tr></thead>
+            <thead><tr><th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Student Group</th><th scope="col">Year of Study (Stage)</th><th scope="col">Reason</th></tr></thead>
             <tbody>@foreach($ineligible as $student)<tr><td>{{ $student->code ?: '—' }}</td><td>{{ $student->name }}</td><td>{{ $student->roster_cohort ?: '—' }}</td><td>{{ $student->roster_stage ?: '—' }}</td><td>{{ $student->roster_reason }}</td></tr>@endforeach</tbody>
         </table></div>
     @endif
