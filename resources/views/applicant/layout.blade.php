@@ -1,7 +1,7 @@
 @php
     $applicant = auth('applicant')->user();
     $logoAsset = asset('assets/uploads/logo/logo.png');
-    $institution = get_settings('system_title') ?: 'Prime International Institute of Excellence';
+    $institution = institution_name();
     $supportPhone = get_settings('system_phone') ?: get_settings('phone');
     $supportEmail = get_settings('system_email') ?: get_settings('smtp_user');
 @endphp

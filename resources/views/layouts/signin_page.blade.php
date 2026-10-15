@@ -3,7 +3,7 @@
 
 <head>
 
-  <title>{{ get_phrase('Login').' | '.get_settings('system_title') }}</title>
+  <title>{{ get_phrase('Login').' | '.institution_name() }}</title>
   <!-- all the meta tags -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

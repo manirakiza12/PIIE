@@ -1,6 +1,6 @@
 @php
     $printTarget = $printTarget ?? 'page-print-area';
-    $institutionName = trim((string) (get_settings('navbar_title') ?: get_settings('system_title') ?: 'PIIE'));
+    $institutionName = institution_name();
 @endphp
 
 <div class="page-toolbar print-hidden d-flex flex-wrap justify-content-end gap-2 mb-3">

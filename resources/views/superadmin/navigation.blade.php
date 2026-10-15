@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>{{ get_phrase('Superadmin') . ' | ' . get_settings('system_title') }}</title>
+    <title>{{ get_phrase('Superadmin') . ' | ' . institution_name() }}</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta content="" name="description" />
@@ -175,7 +175,7 @@
             <div class="img_wrapper">
                 <img height="40px" class="" src="{{ asset('assets/uploads/logo/'.get_settings('white_logo')) }}" alt="" />
             </div>
-            <span class="logo_name">{{ get_settings('navbar_title') ?: 'PIIE' }}</span>
+            <span class="logo_name">{{ institution_name() }}</span>
         </div>
 
         <div class="closeIcon">

@@ -3,7 +3,7 @@
 
 <head>
 	<!-- New -->
-    <title>{{ academic_term('teacher', auth()->user()->school_id).' | '.get_settings('system_title') }}</title>
+    <title>{{ academic_term('teacher', auth()->user()->school_id).' | '.institution_name() }}</title>
     <!-- all the meta tags -->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -88,7 +88,7 @@
             <div class="img_wrapper">
                 <img height="40px" class="" src="{{ asset('assets/uploads/logo/'.get_settings('white_logo')) }}" alt="" />
             </div>
-            <span class="logo_name">{{ get_settings('navbar_title') }}</span>
+            <span class="logo_name">{{ institution_name() }}</span>
         </div>
         <div class="closeIcon">
           <span>
