@@ -36,6 +36,7 @@ class ReleaseSmokeTest extends TestCase
         Schema::table('chats', function (Blueprint $schema) {
             $schema->unsignedBigInteger('school_id')->nullable(); $schema->unsignedBigInteger('sender_id')->nullable(); $schema->text('message')->nullable();
         });
+        (require database_path('migrations/2026_10_15_050000_add_messaging_safety_and_delivery_tables.php'))->up();
     }
 
     private function actor(int $role, ?int $school = null): User
@@ -59,7 +60,9 @@ class ReleaseSmokeTest extends TestCase
     public function test_librarian_can_open_an_empty_conversation_and_send_a_message(): void
     {
         $librarian = $this->actor(5); $recipient = $this->actor(3);
-        $this->actingAs($librarian)->get(route('librarian.message.messagethrades', $recipient->id))->assertOk();
+        $this->actingAs($librarian)->get(route('librarian.message.messagethrades', $recipient->id))->assertRedirect();
+        $this->assertSame(0, MessageThrade::count(), 'GET links must not create conversations');
+        $this->post(route('messaging.start'), ['recipient_id' => $recipient->id])->assertRedirect();
         $thread = MessageThrade::firstOrFail();
         $this->get(route('librarian.message.all_message', $thread->id))->assertOk();
         $this->post(route('librarian.message.chat_save'), ['message_thrade' => $thread->id, 'reciver_id' => $recipient->id, 'message' => 'Example message'])->assertRedirect();
