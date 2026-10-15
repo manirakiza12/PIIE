@@ -20,9 +20,7 @@
     CONTACT DATA
       Every channel comes from `website_settings` via
       `App\Support\Website\PublicContactChannels`. Nothing is hardcoded and nothing
-      is invented. The CMS currently publishes only an address — there is no
-      telephone number and no email address — so this bar renders with the brochure
-      alone and each missing item is simply absent rather than left blank. The moment
+      is invented. Unconfigured channels are omitted rather than left blank. When
       Super Admin fills `contact_phone` or `contact_email` (a plain string, or a JSON
       array for several) the item appears here, on the contact page and in the
       footer with no code change.
@@ -169,7 +167,7 @@
                         @endforeach
 
                         @foreach($piiePhones as $piieIndex => $piiePhone)
-                            <li>
+                            <li class="piie-utility__phone">
                                 <a href="{{ PublicContactChannels::telHref($piiePhone) }}">
                                     <span class="piie-utility__label">
                                         {{ $piieIndex === 0 ? 'Telephone' : 'Official Line' }}
@@ -339,8 +337,8 @@
                     @endif
                 </ul>
 
-                {{-- The utility-bar channels are repeated here, because on a phone the
-                     utility bar is hidden and these are the only ways to reach the
+                {{-- The utility-bar channels are repeated here, because on a phone only
+                     telephone links remain in the top strip. These provide access to the
                      institution. Rendered only when configured, like the bar. --}}
                 @if($piieUtilityLinks > 0)
                     <ul class="piie-mobile-nav__utility">

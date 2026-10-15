@@ -661,9 +661,9 @@ input:checked+.sl2::before{transform:translateX(16px)}
           <div class="row">
             <div class="c6"><div class="fg"><label class="fl">Institution Name</label><input class="fc" value="TWINEHS DIVINE INTEGRATED INSTITUTE OF BUSINESS AND TECHNOLOGY"></div></div>
             <div class="c6"><div class="fg"><label class="fl">Short Name</label><input class="fc" value="TDIIBT"></div></div>
-            <div class="c6"><div class="fg"><label class="fl">Email</label><input class="fc" value="info@tdiibt.ac.ug"></div></div>
+            <div class="c6"><div class="fg"><label class="fl">Email</label><input class="fc" value="info@piie.ac.ug"></div></div>
             <div class="c6"><div class="fg"><label class="fl">Phone</label><input class="fc" value="0788099193"></div></div>
-            <div class="c6"><div class="fg"><label class="fl">Website</label><input class="fc" value="https://www.tdiibt.ac.ug"></div></div>
+            <div class="c6"><div class="fg"><label class="fl">Website</label><input class="fc" value="https://piie.ac.ug"></div></div>
             <div class="c6"><div class="fg"><label class="fl">City</label><input class="fc" value="Kampala"></div></div>
             <div class="c6"><div class="fg"><label class="fl">Country</label><select class="fs"><option selected>Uganda</option><option>Kenya</option><option>Tanzania</option></select></div></div>
             <div class="c6"><div class="fg"><label class="fl">Currency</label><select class="fs"><option selected>UGX — Uganda Shilling</option><option>KES</option><option>USD</option></select></div></div>

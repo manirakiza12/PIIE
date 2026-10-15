@@ -434,14 +434,10 @@ html {
 }
 
 /* ── Utility bar ────────────────────────────────────────────────────────────
-   The slim strip above the main bar. Hidden below 992px, where the same
-   channels are repeated inside the mobile panel instead - a phone-width strip
-   of email addresses and a telephone number would wrap onto three lines and
-   push the navigation off the screen. */
+   The slim strip above the main bar. On phones, keep the telephone visible;
+   the other channels remain available inside the mobile panel. */
 .piie-utility {
-    /* Mobile-first: the strip is hidden by default and restored at 992px. Its
-       channels are repeated inside the mobile panel, so nothing is lost. */
-    display: none;
+    display: block;
     background: var(--piie-primary-dark);
     color: #fff;
     font-size: .8125rem;
@@ -483,6 +479,12 @@ html {
     opacity: .7;
 }
 .piie-utility__value { font-weight: 600; }
+@media (max-width: 991.98px) {
+    .piie-utility__list > li:not(.piie-utility__phone) { display: none; }
+    .piie-utility__list { justify-content: center; }
+    .piie-utility__nav { width: 100%; }
+    .piie-utility:not(:has(.piie-utility__phone)) { display: none; }
+}
 
 /* ── Main bar ───────────────────────────────────────────────────────────────
    `grid-template-columns: auto 1fr auto` with the navigation centred inside the
@@ -955,8 +957,8 @@ html {
     .piie-split--reverse .piie-split__media { order: 2; }
     .piie-footer__grid { grid-template-columns: 1.6fr 1fr 1fr 1.2fr; }
 
-    /* The utility bar appears only once there is room for it beside a single row of
-       channels. Below this the same links are inside the mobile panel. */
+    /* Desktop displays every channel; smaller screens keep telephone links above
+       the ribbon and the remaining channels inside the mobile panel. */
     .piie-utility { display: block; }
 }
 

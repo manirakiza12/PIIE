@@ -5,7 +5,8 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 
 const origin = 'https://piie.ac.ug';
-const directory = path.resolve('output/website-responsive-2026-10-15');
+const verifyContacts = process.argv.includes('--contacts');
+const directory = path.resolve(verifyContacts ? 'output/public-contact-browser' : 'output/website-responsive-2026-10-15');
 mkdirSync(directory, {recursive:true});
 const profile = mkdtempSync(path.join(tmpdir(),'piie-responsive-'));
 const chrome = spawn('C:/Program Files/Google/Chrome/Application/chrome.exe',[
@@ -50,7 +51,7 @@ try {
     if(navigation.errorText) throw new Error(`${route}: ${navigation.errorText}`);
     let loaded=false;
     for(let i=0;i<200;i++){
-      if(await evaluate(`location.origin===${JSON.stringify(origin)} && document.readyState==='complete' && document.body.innerText.length>100`)){loaded=true;break;}
+      if(await evaluate(`location.origin===${JSON.stringify(origin)} && document.readyState==='complete' && document.body.innerText.trim().length>10 && !!document.querySelector('main,form,.piie-site')`)){loaded=true;break;}
       await pause(100);
     }
     if(!loaded) throw new Error(`Public page failed to load: ${route}`);
@@ -83,7 +84,8 @@ try {
       const dropdowns=await evaluate(`(()=>{return [...document.querySelectorAll('[data-pii-dropdown]')].filter(e=>getComputedStyle(e).display!=='none'&&e.getBoundingClientRect().width>0).map(e=>{const b=e.querySelector('button');b.click();const opens=b.getAttribute('aria-expanded')==='true';document.body.dispatchEvent(new MouseEvent('click',{bubbles:true}));return {opens,outsideCloses:b.getAttribute('aria-expanded')==='false'};});})()`);
       let passwordToggleWorks=true;
       if(route==='/login')passwordToggleWorks=await evaluate(`(()=>{const b=document.getElementById('togglePasswordBtn'),p=document.getElementById('passwordInput');if(!b||!p)return false;b.click();const shown=p.type==='text';b.click();return shown&&p.type==='password';})()`);
-      const row={route,width,...geometry,menu,dropdowns,passwordToggleWorks,pass:geometry.hasViewport&&geometry.scrollWidth<=width+1&&geometry.bodyWidth<=width+1&&passwordToggleWorks&&dropdowns.every(d=>d.opens&&d.outsideCloses)&&(!menu.visible||(menu.opens&&menu.escapeCloses&&menu.openScrollWidth<=width+1))};
+      const contacts = verifyContacts ? await evaluate(`(()=>{const ribbon=document.querySelector('.piie-utility');if(!ribbon)return {pass:true,applicable:false};const phone=ribbon.querySelector('a[href="tel:+256788099193"]');const visible=!!phone&&phone.getBoundingClientRect().width>0&&phone.getBoundingClientRect().height>0;const email=!!ribbon.querySelector('a[href="mailto:info@piie.ac.ug"]');const website=!!ribbon.querySelector('a[href="https://piie.ac.ug"]');const noOldDomain=!document.documentElement.outerHTML.toLowerCase().includes('tdiibt.ac.ug');return {applicable:true,visible,email,website,noOldDomain,pass:visible&&email&&website&&noOldDomain};})()`) : {pass:true};
+      const row={route,width,...geometry,menu,dropdowns,passwordToggleWorks,contacts,pass:contacts.pass&&geometry.hasViewport&&geometry.scrollWidth<=width+1&&geometry.bodyWidth<=width+1&&passwordToggleWorks&&dropdowns.every(d=>d.opens&&d.outsideCloses)&&(!menu.visible||(menu.opens&&menu.escapeCloses&&menu.openScrollWidth<=width+1))};
       results.push(row);
       if([375,1366].includes(width)||!row.pass){
         const name=(route==='/'?'home':route.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,''));
