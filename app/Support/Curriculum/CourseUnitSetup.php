@@ -47,6 +47,9 @@ final class CourseUnitSetup
         ]);
         // Approval and structural changes serialize on the same existing parent row.
         $plan = Curriculum::where('school_id', $schoolId)->lockForUpdate()->findOrFail($data['placement_curriculum_id']);
+        if ($plan->status !== 'draft') {
+            throw \Illuminate\Validation\ValidationException::withMessages(['curriculum' => 'Only draft Curricula may be structurally changed.']);
+        }
         $attributes = [
             'curriculum_stage_id' => (int) $data['placement_stage_id'],
             'classification' => $data['placement_classification'], 'credits' => $data['placement_credits'],
