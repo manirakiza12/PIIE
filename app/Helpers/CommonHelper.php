@@ -213,6 +213,45 @@ if (!function_exists('institution_name')) {
     }
 }
 
+if (!function_exists('branding_image_url')) {
+    function branding_image_url(string $key, bool $school = false): ?string
+    {
+        $schoolId = auth()->user()?->school_id;
+        $name = $school
+            ? (DB::table('schools')->where('id', $schoolId)->first()?->{$key} ?? null)
+            : get_settings($key);
+        $directory = $school ? 'school_logo' : (in_array($key, ['email_logo', 'socialLogo1', 'socialLogo2', 'socialLogo3'], true) ? 'email_logo' : 'logo');
+        $name = trim((string) $name);
+        $path = 'assets/uploads/'.$directory.'/'.$name;
+
+        return $name !== '' && basename($name) === $name && is_file(public_path($path)) ? asset($path) : null;
+    }
+}
+
+if (!function_exists('institution_logo_url')) {
+    function institution_logo_url(string $variant = 'sidebar'): string
+    {
+        $user = auth()->user();
+        $schoolId = $user && (int) $user->role_id !== 1 ? $user->school_id
+            : (!$user ? get_settings('primary_school_id') : null);
+        if ($schoolId && $variant !== 'favicon') {
+            $name = (string) (DB::table('schools')->where('id', $schoolId)->first()?->school_logo ?? '');
+            $path = 'assets/uploads/school_logo/'.$name;
+            if ($name !== '' && basename($name) === $name && is_file(public_path($path))) {
+                return asset($path);
+            }
+        }
+        $keys = $variant === 'favicon' ? ['favicon']
+            : ($variant === 'login' ? ['dark_logo', 'front_logo', 'white_logo', 'light_logo'] : ['white_logo', 'light_logo', 'dark_logo', 'front_logo']);
+        foreach ($keys as $key) {
+            if ($url = branding_image_url($key)) {
+                return $url;
+            }
+        }
+        return asset('assets/uploads/logo/'.($variant === 'favicon' ? 'favicon.png' : ($variant === 'login' ? 'dark-logo.png' : 'logo1.png')));
+    }
+}
+
 // School Settings
 if (!function_exists('get_school_settings')) {
     function get_school_settings($school_id = '')

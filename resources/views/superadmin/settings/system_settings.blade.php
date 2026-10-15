@@ -1,6 +1,9 @@
 @extends('superadmin.navigation')
    
 @section('content')
+@if ($errors->any())
+<div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+@endif
 <div class="mainSection-title">
     <div class="row">
         <div class="col-12">
@@ -26,9 +29,9 @@
             <div class="eMain">
                 <div class="row">
                     <div class="col-md-11 pb-3">
-                        <div class="eForm-layouts">
+                        <div class="eForm-layouts"><p class="text-muted">PNG, JPG, JPEG, GIF or WebP; up to 2 MB per image.</p>
                             <p class="column-title">{{ get_phrase('SYSTEM SETTINGS') }}</p>
-                            <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('superadmin.system.update') }}">
+                            <form method="POST" enctype="multipart/form-data" class="d-block" action="{{ route('superadmin.system.update') }}">
                                 @csrf 
                                 <div class="fpb-7">
                                     <label for="system_name" class="eForm-label">{{ get_phrase('System Name') }}</label>
@@ -126,7 +129,7 @@
                                 @CSRF
                                 <div class="mb-3">
                                     <label for="formFileSm" class="eForm-label">{{ get_phrase('File') }}</label>
-                                    <input class="form-control eForm-control-file" id="formFileSm" type="file" name="file">
+                                    <input class="form-control eForm-control-file" id="file" type="file" accept=".png,.jpg,.jpeg,.gif,.webp" name="file">
                                 </div>
                                 <button type="submit" class="btn-form float-end">{{ get_phrase('Update') }}</button>
                             </form>
@@ -148,46 +151,42 @@
                 <div class="col-md-12 pb-3">
                     <p class="column-title">{{ get_phrase('SYSTEM LOGO') }}</p>
                     <div class="eForm-file">
-                        <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('superadmin.logo.update') }}">
+                        <form method="POST" enctype="multipart/form-data" class="d-block" action="{{ route('superadmin.logo.update') }}">
                             @csrf 
                             <div class="row">
                                 <div class="col-md-3 text-center">
                                     <label class="col-form-label" for="example-fileinput">{{ get_phrase('Dark logo') }}</label>
                                     <div class="eCard d-block text-center bg-light">
-                                        <img src="{{ asset('assets/uploads/logo/'.get_settings('dark_logo')) }}" class="mx-4 my-5" width="200px"
-                                            alt="...">
+                                        @include('shared.branding_preview', ['imageUrl' => branding_image_url('dark_logo'), 'imageLabel' => get_phrase('dark_logo')])
                                         <div class="eCard-body">
-                                            <input class="form-control eForm-control-file" id="formFileSm" type="file" name="dark_logo">
+                                            <input class="form-control eForm-control-file" id="dark_logo" type="file" accept=".png,.jpg,.jpeg,.gif,.webp" name="dark_logo">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-3 text-center">
                                     <label class="col-form-label" for="example-fileinput">{{ get_phrase('Light logo') }}</label>
                                     <div class="eCard d-block text-center bg-secondary">
-                                        <img src="{{ asset('assets/uploads/logo/'.get_settings('light_logo')) }}" class="mx-4 my-5" width="200px"
-                                            alt="...">
+                                        @include('shared.branding_preview', ['imageUrl' => branding_image_url('light_logo'), 'imageLabel' => get_phrase('light_logo')])
                                         <div class="eCard-body">
-                                        <input class="form-control eForm-control-file" id="formFileSm" type="file" name="light_logo">
+                                        <input class="form-control eForm-control-file" id="light_logo" type="file" accept=".png,.jpg,.jpeg,.gif,.webp" name="light_logo">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-3 text-center">
                                     <label class="col-form-label" for="example-fileinput">{{ get_phrase('Favicon') }}</label>
                                     <div class="eCard d-block text-center bg-light">
-                                        <img src="{{ asset('assets/uploads/logo/'.get_settings('favicon')) }}" class="mx-4 my-5" width="53px" height="60px"
-                                            alt="...">
+                                        @include('shared.branding_preview', ['imageUrl' => branding_image_url('favicon'), 'imageLabel' => get_phrase('favicon')])
                                         <div class="eCard-body">
-                                        <input class="form-control eForm-control-file" id="formFileSm" type="file" name="favicon">
+                                        <input class="form-control eForm-control-file" id="favicon" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.ico" name="favicon">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-3 text-center">
                                     <label class="col-form-label" for="example-fileinput">{{ get_phrase('Nav Bar Logo') }}</label>
                                     <div class="eCard d-block text-center bg-secondary">
-                                        <img src="{{ asset('assets/uploads/logo/'.get_settings('white_logo')) }}" class="mx-4 my-5" width="53px" height="60px"
-                                            alt="...">
+                                        @include('shared.branding_preview', ['imageUrl' => branding_image_url('white_logo'), 'imageLabel' => get_phrase('white_logo')])
                                         <div class="eCard-body">
-                                        <input class="form-control eForm-control-file" id="formFileSm" type="file" name="white_logo">
+                                        <input class="form-control eForm-control-file" id="white_logo" type="file" accept=".png,.jpg,.jpeg,.gif,.webp" name="white_logo">
                                         </div>
                                     </div>
                                 </div>
@@ -206,9 +205,9 @@
             <div class="eMain">
                 <div class="row">
                     <div class="col-md-11 pb-3">
-                        <div class="eForm-layouts">
+                        <div class="eForm-layouts"><p class="text-muted">PNG, JPG, JPEG, GIF or WebP; up to 2 MB per image.</p>
                             <p class="column-title">{{ get_phrase('Email Template Settings') }}</p>
-                            <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('superadmin.system.update') }}">
+                            <form method="POST" enctype="multipart/form-data" class="d-block" action="{{ route('superadmin.system.update') }}">
                                 @csrf
                                 <div class="fpb-7">
                                     <label for="system_title" class="eForm-label">{{ get_phrase('Email Title') }}</label>
@@ -232,40 +231,36 @@
                                 <div class="col-md-4 text-center">
                                     <label class="eForm-label" for="example-fileinput">{{ get_phrase('Email logo') }}</label>
                                     <div class="eCard d-block text-center bg-light">
-                                        <img src="{{ asset('assets/uploads/email_logo/'.get_settings('email_logo')) }}" class="mx-4 my-5" width="80px" height="80px"
-                                            alt="...">
+                                        @include('shared.branding_preview', ['imageUrl' => branding_image_url('email_logo'), 'imageLabel' => get_phrase('email_logo')])
                                         <div class="eCard-body">
-                                            <input class="form-control eForm-control-file" id="formFileSm" type="file" name="email_logo">
+                                            <input class="form-control eForm-control-file" id="email_logo" type="file" accept=".png,.jpg,.jpeg,.gif,.webp" name="email_logo">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <label class="eForm-label" for="example-fileinput">{{ get_phrase('Social logo-1') }}</label>
                                     <div class="eCard d-block text-center bg-light">
-                                        <img src="{{ asset('assets/uploads/email_logo/'.get_settings('socialLogo1')) }}" class="mx-4 my-5" width="80px" height="80px"
-                                            alt="...">
+                                        @include('shared.branding_preview', ['imageUrl' => branding_image_url('socialLogo1'), 'imageLabel' => get_phrase('socialLogo1')])
                                         <div class="eCard-body">
-                                            <input class="form-control eForm-control-file" id="formFileSm" type="file" name="socialLogo1">
+                                            <input class="form-control eForm-control-file" id="socialLogo1" type="file" accept=".png,.jpg,.jpeg,.gif,.webp" name="socialLogo1">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <label class="eForm-label" for="example-fileinput">{{ get_phrase('Social logo-2') }}</label>
                                     <div class="eCard d-block text-center bg-light">
-                                        <img src="{{ asset('assets/uploads/email_logo/'.get_settings('socialLogo2')) }}" class="mx-4 my-5" width="80px" height="80px"
-                                            alt="...">
+                                        @include('shared.branding_preview', ['imageUrl' => branding_image_url('socialLogo2'), 'imageLabel' => get_phrase('socialLogo2')])
                                         <div class="eCard-body">
-                                            <input class="form-control eForm-control-file" id="formFileSm" type="file" name="socialLogo2">
+                                            <input class="form-control eForm-control-file" id="socialLogo2" type="file" accept=".png,.jpg,.jpeg,.gif,.webp" name="socialLogo2">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <label class="eForm-label" for="example-fileinput">{{ get_phrase('Social logo-3') }}</label>
                                     <div class="eCard d-block text-center bg-light">
-                                        <img src="{{ asset('assets/uploads/email_logo/'.get_settings('socialLogo3')) }}" class="mx-4 my-5" width="80px" height="80px"
-                                            alt="...">
+                                        @include('shared.branding_preview', ['imageUrl' => branding_image_url('socialLogo3'), 'imageLabel' => get_phrase('socialLogo3')])
                                         <div class="eCard-body">
-                                            <input class="form-control eForm-control-file" id="formFileSm" type="file" name="socialLogo3">
+                                            <input class="form-control eForm-control-file" id="socialLogo3" type="file" accept=".png,.jpg,.jpeg,.gif,.webp" name="socialLogo3">
                                         </div>
                                     </div>
                                 </div>

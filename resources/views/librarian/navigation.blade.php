@@ -66,7 +66,7 @@
 	<div class="sidebar">
 		<div class="logo-details mt-4 mb-3">
       <div class="img_wrapper">
-          <img height="40px" class="" src="{{ asset('assets/uploads/logo/'.get_settings('white_logo')) }}" alt="" />
+          <img height="40px" class="" src="{{ institution_logo_url() }}" alt="" />
       </div>
       <span class="logo_name">{{ institution_name() }}</span>
     </div>

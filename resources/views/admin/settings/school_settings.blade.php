@@ -1,6 +1,9 @@
 @extends('admin.navigation')
    
 @section('content')
+@if ($errors->any())
+<div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+@endif
 <div class="mainSection-title">
     <div class="row">
         <div class="col-12">
@@ -17,8 +20,8 @@
             <div class="eMain">
                 <div class="row">
 
-                        <div class="eForm-layouts">
-                            <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.school.update') }}">
+                        <div class="eForm-layouts"><p class="text-muted">PNG, JPG, JPEG, GIF or WebP; up to 2 MB per image.</p>
+                            <form method="POST" enctype="multipart/form-data" class="d-block" action="{{ route('admin.school.update') }}">
                                 @csrf 
 
                                 <div class="fpb-7">
@@ -75,10 +78,9 @@
                                     <div class="col-md-4 text-center ">
                                         <label class="eForm-label" for="school_logo">{{ get_phrase('school Logo') }}</label>
                                         <div class="eCard d-block text-center bg-light">
-                                            <img src="{{ asset('assets/uploads/school_logo/'.DB::table('schools')->where('id', auth()->user()->school_id)->value('school_logo') ) }}" class="mx-4 my-5" width="80px" height="80px"
-                                                alt="...">
+                                            @include('shared.branding_preview', ['imageUrl' => branding_image_url('school_logo', true), 'imageLabel' => get_phrase('school_logo')])
                                             <div class="eCard-body">
-                                                <input class="form-control eForm-control-file" type="file" id="school_logo" name="school_logoo" accept="image/*">
+                                                <input class="form-control eForm-control-file" type="file" id="school_logo" name="school_logoo" accept=".png,.jpg,.jpeg,.gif,.webp">
                                             </div>
                                         </div>
                                     </div>
@@ -86,10 +88,9 @@
                                     <div class="col-md-4 text-center">
                                         <label class="eForm-label" for="socialLogo2">{{ get_phrase('Social Logo-1') }}</label>
                                         <div class="eCard d-block text-center bg-light">
-                                            <img src="{{ asset('assets/uploads/school_logo/'.DB::table('schools')->where('id', auth()->user()->school_id)->value('socialLogo1') ) }}" class="mx-4 my-5" width="80px" height="80px"
-                                                alt="...">
+                                            @include('shared.branding_preview', ['imageUrl' => branding_image_url('socialLogo1', true), 'imageLabel' => get_phrase('socialLogo1')])
                                             <div class="eCard-body">
-                                                <input class="form-control eForm-control-file" type="file" id="socialLogo1" name="socialLogo1" accept="image/*">
+                                                <input class="form-control eForm-control-file" type="file" id="socialLogo1" name="socialLogo1" accept=".png,.jpg,.jpeg,.gif,.webp">
                                             </div>
                                         </div>
                                     </div>
@@ -97,10 +98,9 @@
                                     <div class="col-md-4 text-center">
                                         <label class="eForm-label" for="socialLogo2">{{ get_phrase('Social Logo-2') }}</label>
                                         <div class="eCard d-block text-center bg-light">
-                                            <img src="{{ asset('assets/uploads/school_logo/'.DB::table('schools')->where('id', auth()->user()->school_id)->value('socialLogo2') ) }}" class="mx-4 my-5" width="80px" height="80px"
-                                                alt="...">
+                                            @include('shared.branding_preview', ['imageUrl' => branding_image_url('socialLogo2', true), 'imageLabel' => get_phrase('socialLogo2')])
                                             <div class="eCard-body">
-                                                <input class="form-control eForm-control-file" type="file" id="socialLogo2" name="socialLogo2" accept="image/*">
+                                                <input class="form-control eForm-control-file" type="file" id="socialLogo2" name="socialLogo2" accept=".png,.jpg,.jpeg,.gif,.webp">
                                             </div>
                                         </div>
                                     </div>
@@ -108,10 +108,9 @@
                                     <div class="col-md-4 text-center">
                                         <label class="eForm-label" for="socialLogo3">{{ get_phrase('Social Logo-3') }}</label>
                                         <div class="eCard d-block text-center bg-light">
-                                            <img src="{{ asset('assets/uploads/school_logo/'.DB::table('schools')->where('id', auth()->user()->school_id)->value('socialLogo3') ) }}" class="mx-4 my-5" width="80px" height="80px"
-                                                alt="...">
+                                            @include('shared.branding_preview', ['imageUrl' => branding_image_url('socialLogo3', true), 'imageLabel' => get_phrase('socialLogo3')])
                                             <div class="eCard-body">
-                                                <input class="form-control eForm-control-file" type="file" id="socialLogo3" name="socialLogo3" accept="image/*">
+                                                <input class="form-control eForm-control-file" type="file" id="socialLogo3" name="socialLogo3" accept=".png,.jpg,.jpeg,.gif,.webp">
                                             </div>
                                         </div>
                                     </div>
@@ -119,10 +118,9 @@
                                     <div class="col-md-4 text-center">
                                         <label class="eForm-label" for="email_logo">{{ get_phrase('Email template Logo') }}</label>
                                         <div class="eCard d-block text-center bg-light">
-                                            <img src="{{ asset('assets/uploads/school_logo/'.DB::table('schools')->where('id', auth()->user()->school_id)->value('email_logo') ) }}" class="mx-4 my-5" width="80px" height="80px"
-                                                alt="...">
+                                            @include('shared.branding_preview', ['imageUrl' => branding_image_url('email_logo', true), 'imageLabel' => get_phrase('email_logo')])
                                             <div class="eCard-body">
-                                                <input class="form-control eForm-control-file" type="file" id="email_logo" name="email_logo" accept="image/*">
+                                                <input class="form-control eForm-control-file" type="file" id="email_logo" name="email_logo" accept=".png,.jpg,.jpeg,.gif,.webp">
                                             </div>
                                         </div>
                                     </div>
