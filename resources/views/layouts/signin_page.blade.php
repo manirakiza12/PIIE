@@ -53,8 +53,9 @@
     <!--Bootstrap bundle with popper-->
     <script src="{{ asset('assets/vendors/bootstrap-5.1.3/js/bootstrap.bundle.min.js') }}"></script>
 
-    <!--Custom Script-->
-    <script src="{{ asset('assets/js/script.js') }}"></script>
+    {{-- Sign-in pages have no admin sidebar, carousels or date-picker widgets.
+         Their form controls are provided by each page; loading the admin script
+         here throws on missing Swiper and other optional admin plugins. --}}
     <script src="{{ asset('assets/js/custom.js') }}"></script>
 
     <!--Toaster Script-->

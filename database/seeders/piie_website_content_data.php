@@ -170,9 +170,9 @@ return [
         [
             'page_key' => 'about',
             'section_key' => 'strategic_plan',
-            'title' => 'Strategic Plan (2026 - 2033)',
+            'title' => 'Strategic Plan (2026 - 2031)',
             'subtitle' => 'Our Strategic Direction',
-            'content' => "PIIE's seven-year strategic framework is built around six objectives: academic excellence and programme quality; research, knowledge creation, and innovation; strategic partnerships and institutional networks; technology, digital infrastructure, and learning innovation; institutional sustainability and governance excellence; and student success, graduate impact, and community engagement.",
+            'content' => "PIIE's five-year strategic framework is built around six objectives: academic excellence and programme quality; research, knowledge creation, and innovation; strategic partnerships and institutional networks; technology, digital infrastructure, and learning innovation; institutional sustainability and governance excellence; and student success, graduate impact, and community engagement.",
             'status' => 1,
             'sort_order' => 12,
         ],
