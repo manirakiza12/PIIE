@@ -1,5 +1,10 @@
 <div class="eoff-form">
     <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.student.create') }}">
+        <div class="alert alert-info">Add an existing student using their current registration number. No enrolment or fee invoice will be created. The student must change their temporary password on first login.</div>
+        <div class="fpb-7">
+            <label for="registration_number" class="eForm-label">Existing registration number</label>
+            <input type="text" class="form-control eForm-control" id="registration_number" name="registration_number" maxlength="255" required>
+        </div>
         @csrf 
         <div class="form-row">
             <div class="fpb-7">
@@ -83,41 +88,6 @@
                 <label for="additional_photo" class="eForm-label">{{ get_phrase('Additional Image') }}</label>
                 <input class="form-control eForm-control-file" id="additional_photo" name="additional_photo" accept="image/*" type="file">
             </div>
-
-            <div class="fpb-7">
-                <label for="class_id" class="eForm-label">{{ get_phrase("Class") }}</label>
-                <small class="text-muted d-block">{{ get_phrase('Students enrolled in this class can access matching class-targeted online exams.') }}</small>
-                <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove" required onchange="classWiseSection(this.value)">
-                    <option value="">{{ get_phrase("Select a class") }}</option>
-                    @foreach($classes as $class)
-                        <option value="{{ $class->id }}">{{ $class->name }}</option>
-                    @endforeach
-                </select>
-            </div>
-
-            <div class="fpb-7">
-                <label for="section_id"  class="eForm-label">{{ get_phrase("Class Section (optional)") }}</label>
-                <select name="section_id" id="section_id" class="form-select eForm-select eChoice-multiple-with-remove" >
-                    <option value="">{{ get_phrase("No section / whole class") }}</option>
-                </select>
-            </div>
-
-            <div class="fpb-7">
-                <label for="session_id" class="eForm-label">{{ academic_term('session', auth()->user()->school_id) }}</label>
-                <select name="session_id" id="session_id" class="form-select eForm-select">
-                    <option value="">{{ get_phrase('Use current running session') }}</option>
-                    @foreach($sessions as $session)<option value="{{ $session->id }}">{{ $session->name ?? $session->session_title ?? ('Session '.$session->id) }}</option>@endforeach
-                </select>
-            </div>
-            @if($departments->count())
-            <div class="fpb-7">
-                <label for="department_id" class="eForm-label">{{ get_phrase('Department (optional)') }}</label>
-                <select name="department_id" id="department_id" class="form-select eForm-select">
-                    <option value="">{{ get_phrase('No department') }}</option>
-                    @foreach($departments as $department)<option value="{{ $department->id }}">{{ $department->name }}</option>@endforeach
-                </select>
-            </div>
-            @endif
 
             <div class="fpb-7">
                 <label for="birthdatepicker" class="eForm-label">{{ get_phrase('Birthday') }}<span class="required"></span></label>

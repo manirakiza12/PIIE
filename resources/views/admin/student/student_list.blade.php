@@ -30,7 +30,8 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
             <a href="{{ route('admin.student.export', ['search' => $search, 'class_id' => $class_id, 'section_id' => $section_id]) }}" class="export_btn bg-secondary"><i class="bi bi-download"></i> {{ get_phrase('Export CSV') }}</a>
             <a href="{{ route('admin.student.export_excel', ['search' => $search, 'class_id' => $class_id, 'section_id' => $section_id]) }}" class="export_btn bg-secondary"><i class="bi bi-file-earmark-excel"></i> {{ get_phrase('Export Excel') }}</a>
             @if(empty($user->menu_permission) || in_array('admin.offline_admission.single', $menu_permission))
-            <a href="{{ route('admin.offline_admission.single', ['type' => 'single']) }}" class="export_btn">{{ get_phrase('Create Student') }}</a>
+            <a href="{{ route('admin.student.open_modal') }}" class="export_btn">{{ get_phrase('Add Existing Student') }}</a>
+            <a href="{{ route('admin.student.import.index') }}" class="export_btn">{{ get_phrase('Import Existing Students') }}</a>
             @endif
           </div>
         </div>
@@ -288,6 +289,8 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                               </li>
                               <li>
                                 <a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.student.reset_password', ['id' => $student->id]) }}', 'undefined');">{{ get_phrase('Reset Password') }}</a>
+                              </li>
+                              <li><a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.student.resend_activation', ['id' => $student->id]) }}', 'undefined');">{{ get_phrase('Send Portal Activation') }}</a>
                               </li>
                               @if(!empty($student->account_status == 'disable'))
                               <li>

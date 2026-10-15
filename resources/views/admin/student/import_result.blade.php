@@ -8,12 +8,13 @@
         @if($failed) <strong class="text-danger">{{ count($failed) }}</strong> failed. @endif
     </div>
 
+    @if($notificationFailures ?? 0)<div class="alert alert-warning">{{ $notificationFailures }} activation email(s) were not sent. Check mail settings and resend activation from the existing student account.</div>@endif
     @if($accounts)
     <div class="card mb-3">
         <div class="card-header">Created accounts</div>
         <div class="table-responsive">
             <table class="table table-sm mb-0 align-middle">
-                <thead><tr><th>Email</th><th>Student code</th></tr></thead>
+                <thead><tr><th>Email</th><th>Registration number</th></tr></thead>
                 <tbody>
                 @foreach($accounts as $a)
                     <tr><td>{{ $a[0] }}</td><td><code>{{ $a[1] }}</code></td></tr>

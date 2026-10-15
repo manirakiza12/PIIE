@@ -562,6 +562,42 @@ class StudentPortalActivationTest extends TestCase
         Mail::assertSent(StudentPortalActivationEmail::class, 2); // initial activation + resend
     }
 
+    public function test_existing_student_activation_preserves_registration_and_enrolments(): void
+    {
+        Mail::fake();
+        $schoolId = $this->makeSchool();
+        $this->enableSmtpSettings();
+        $admin = $this->makeAdminUser($schoolId);
+        $student = $this->studentAwaitingPasswordSetup($schoolId);
+        $student->update(['code' => 'PIIE/LEGACY/2019/0042', 'force_password_change' => false]);
+        $classId = $this->makeClass($schoolId);
+        \Illuminate\Support\Facades\DB::table('enrollment')->insert([
+            'user_id' => $student->id, 'school_id' => $schoolId, 'class_id' => $classId,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $tables = ['enrollment', 'student_profiles', 'student_fee_managers', 'admissions', 'identity_sequences'];
+        $before = [];
+        foreach ($tables as $table) {
+            $before[$table] = \Illuminate\Support\Facades\DB::table($table)->orderBy('id')->get()->toJson();
+        }
+
+        $this->actingAs($admin)->get(route('admin.student.resend_activation', $student->id))
+            ->assertRedirect();
+
+        $student->refresh();
+        $this->assertSame('PIIE/LEGACY/2019/0042', $student->code);
+        $this->assertTrue((bool) $student->force_password_change);
+        foreach ($tables as $table) {
+            $this->assertSame($before[$table], \Illuminate\Support\Facades\DB::table($table)->orderBy('id')->get()->toJson(), $table.' must remain unchanged');
+        }
+        Mail::assertSent(StudentPortalActivationEmail::class, function ($mail) use ($student) {
+            return $mail->hasTo($student->email)
+                && $mail->data['code'] === 'PIIE/LEGACY/2019/0042'
+                && Hash::check($mail->data['password'], $student->password);
+        });
+    }
+
     public function test_audit_logs_never_contain_the_plaintext_password(): void
     {
         Mail::fake();

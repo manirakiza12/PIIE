@@ -12,7 +12,7 @@ use Tests\TestCase;
  * Bulk import of students who are already studying.
  *
  * These students never pass through admissions, so the import must provision
- * exactly what the single-add form provisions — and must not be able to create a
+ * the same portal account and profile as the single-add form — and must not be able to create a
  * student belonging to another school, in a section that is not part of the
  * chosen class, or with an email that already exists.
  */
@@ -51,9 +51,9 @@ class StudentBulkImportTest extends TestCase
         $handle = fopen($path, 'w');
         fputcsv($handle, ['name', 'email', 'class_name', 'section_name', 'programme_name',
             'department_name', 'year_of_study', 'nationality', 'national_id_or_passport',
-            'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name']);
+            'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name', 'registration_number']);
         foreach ($rows as $row) {
-            fputcsv($handle, array_pad($row, 13, ''));
+            fputcsv($handle, array_merge(array_pad($row, 13, ''), ['LEGACY/' . strtoupper(strtok($row[1], '@')) . '/0042']));
         }
         fclose($handle);
 
@@ -63,6 +63,65 @@ class StudentBulkImportTest extends TestCase
     private function file(string $path): UploadedFile
     {
         return new UploadedFile($path, 'students.csv', 'text/csv', null, true);
+    }
+
+    public function test_preview_confirmation_imports_without_reupload_and_cannot_be_replayed(): void
+    {
+        $path = $this->csv([['Preview Student', 'preview@x.test', '']]);
+        $this->actingAs($this->admin)->post(route('admin.student.import.preview'), ['file' => $this->file($path)])
+            ->assertOk()->assertSee('LEGACY/PREVIEW/0042');
+        $this->post(route('admin.student.import.run'))->assertOk();
+        $this->assertSame('LEGACY/PREVIEW/0042', User::where('email', 'preview@x.test')->value('code'));
+        $this->post(route('admin.student.import.run'))->assertStatus(422);
+        $this->assertSame(0, DB::table('enrollment')->count());
+        $this->assertSame(0, DB::table('identity_sequences')->count());
+    }
+
+    public function test_single_add_uses_legacy_number_and_the_shared_activation_journey(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->enableSmtpSettings();
+        $this->actingAs($this->admin)->post(route('admin.student.create'), [
+            'name' => 'Continuing Student', 'email' => 'continuing@x.test',
+            'registration_number' => 'PIIE/2018/0007', 'password_option' => 'auto',
+            'gender' => 'Female', 'blood_group' => '', 'birthday' => '2000-01-01',
+            'phone' => '0700000000', 'address' => 'Kampala',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $student = User::where('email', 'continuing@x.test')->firstOrFail();
+        $this->assertSame('PIIE/2018/0007', $student->code);
+        $this->assertTrue((bool) $student->force_password_change);
+        $this->assertSame(0, DB::table('enrollment')->count());
+        $this->assertSame(0, DB::table('student_fee_managers')->count());
+        $this->assertSame(0, DB::table('admissions')->count());
+        $this->assertSame(0, DB::table('identity_sequences')->count());
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\StudentPortalActivationEmail::class, function ($mail) use ($student) {
+            return $mail->hasTo($student->email) && $mail->data['code'] === $student->code
+                && \Illuminate\Support\Facades\Hash::check($mail->data['password'], $student->password);
+        });
+        $this->actingAs($student)->get(route('student.dashboard'))->assertRedirect(route('student.password', 'edit'));
+    }
+
+    public function test_missing_and_duplicate_registration_numbers_are_rejected(): void
+    {
+        $this->actingAs($this->admin)->post(route('admin.student.create'), [
+            'name' => 'No Number', 'email' => 'missing@x.test',
+        ])->assertSessionHasErrors('registration_number');
+        User::factory()->create(['school_id' => $this->school, 'role_id' => 7, 'code' => 'legacy/DUP/0042']);
+        $path = $this->csv([['Duplicate', 'dup@x.test', '']]);
+        $this->post(route('admin.student.import.preview'), ['file' => $this->file($path)])
+            ->assertOk()->assertSee('registration number is already registered');
+        $this->assertFalse(User::where('email', 'dup@x.test')->exists());
+    }
+
+    public function test_confirmation_rechecks_registration_numbers_added_since_preview(): void
+    {
+        $path = $this->csv([['Raced Student', 'raced@x.test', '']]);
+        $this->actingAs($this->admin)->post(route('admin.student.import.preview'), ['file' => $this->file($path)])->assertOk();
+        $existing = User::factory()->create(['school_id' => $this->school, 'role_id' => 7, 'code' => 'LEGACY/RACED/0042']);
+        $before = $existing->fresh()->getRawOriginal();
+        $this->post(route('admin.student.import.run'))->assertRedirect()->assertSessionHas('error');
+        $this->assertFalse(User::where('email', 'raced@x.test')->exists());
+        $this->assertSame($before, $existing->fresh()->getRawOriginal());
     }
 
     public function test_template_downloads_with_a_header_and_example_row(): void
@@ -85,7 +144,7 @@ class StudentBulkImportTest extends TestCase
         $this->assertSame(0, User::where('email', 'alice@x.test')->count(), 'preview must not write');
     }
 
-    public function test_import_creates_a_student_profile_and_enrolment(): void
+    public function test_import_creates_a_student_profile_without_enrolment(): void
     {
         $path = $this->csv([['Alice Okello', 'alice@x.test', 'Class A', '', '', '', '1', 'Ugandan', '', '', '', 'active']]);
 
@@ -97,10 +156,11 @@ class StudentBulkImportTest extends TestCase
         $this->assertNotNull($student);
         $this->assertSame('7', (string) $student->role_id);
         $this->assertSame($this->school, (int) $student->school_id);
-        $this->assertNotEmpty($student->code);
+        $this->assertSame('LEGACY/ALICE/0042', $student->code);
+        $this->assertTrue((bool) $student->force_password_change);
 
         $this->assertSame(1, DB::table('student_profiles')->where('user_id', $student->id)->count());
-        $this->assertSame(1, DB::table('enrollment')->where('user_id', $student->id)->count());
+        $this->assertSame(0, DB::table('enrollment')->where('user_id', $student->id)->count());
     }
 
     /** The whole point of this feature: continuing students are not applicants. */
@@ -117,7 +177,7 @@ class StudentBulkImportTest extends TestCase
         $this->assertSame(0, DB::table('application_payments')->count(), 'and must not be charged a fee');
     }
 
-    public function test_import_with_a_programme_and_section_still_provisions(): void
+    public function test_programme_profile_import_does_not_create_placement_or_invoice(): void
     {
         $programmeId = $this->makeProgramme($this->school, ['name' => 'BSc Computer Science']);
         $this->makeIntakeSession($this->school, ['name' => 'May 2026 Intake']);
@@ -140,17 +200,16 @@ class StudentBulkImportTest extends TestCase
         $this->assertSame($programmeId, (int) $profile->programme_id);
         $this->assertSame(2, (int) $profile->year_of_study);
 
-        $enrolment = DB::table('enrollment')->where('user_id', $student->id)->first();
-        $this->assertSame($classId, (int) $enrolment->class_id);
-        $this->assertNotSame(0, (int) $enrolment->section_id, 'the section must be carried across');
+        $this->assertSame(0, DB::table('enrollment')->count());
+        $this->assertSame(0, DB::table('student_fee_managers')->count());
     }
 
-    public function test_programme_import_without_intake_is_rejected_during_preview(): void
+    public function test_programme_import_without_intake_can_preserve_legacy_number(): void
     {
         $this->makeProgramme($this->school, ['name' => 'BSc Computer Science']);
         $path = $this->csv([['Carol Auma', 'carol@x.test', 'Class A', '', 'BSc Computer Science']]);
         $this->actingAs($this->admin)->post(route('admin.student.import.preview'), ['file' => $this->file($path)])
-            ->assertOk()->assertSee('Provide intake_name');
+            ->assertOk()->assertSee('LEGACY/CAROL/0042');
         $this->assertNull(User::where('email', 'carol@x.test')->first());
         $this->assertSame(0, DB::table('identity_sequences')->count());
     }
@@ -222,20 +281,19 @@ class StudentBulkImportTest extends TestCase
         $this->assertSame(0, User::where('email', 'not-an-email')->count());
     }
 
-    /** A failure part-way must not leave a user without its enrolment. */
-    public function test_a_row_failing_mid_write_leaves_no_half_created_student(): void
+    /** A failure part-way must not leave a user without its profile. */
+    public function test_profile_write_failure_rolls_back_the_portal_account(): void
     {
         $path = $this->csv([['Rollback Me', 'rollback@x.test', 'Class A', '', '', '', '1', '', '', '', '', '']]);
 
-        DB::statement('DROP TABLE enrollment');
+        DB::statement('DROP TABLE student_profiles');
 
         $this->actingAs($this->admin)
             ->post(route('admin.student.import.run'), ['file' => $this->file($path)])
             ->assertOk();
 
         $this->assertSame(0, User::where('email', 'rollback@x.test')->count(),
-            'the user row must roll back with the failed enrolment');
-        $this->assertSame(0, DB::table('student_profiles')->where('user_id', '>', 0)->count(),
-            'and no orphan profile may survive');
+            'the user row must roll back with the failed profile');
+        $this->assertSame(0, DB::table('enrollment')->count());
     }
 }

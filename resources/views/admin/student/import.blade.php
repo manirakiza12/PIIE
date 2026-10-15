@@ -10,7 +10,7 @@
 
     <div class="alert alert-info">
         <strong>These students are already studying, so they are added directly as students.</strong>
-        They do <em>not</em> go through admissions and are never asked for an application fee.
+        Their existing registration numbers are retained. No admissions, enrolments or fee invoices are created. They receive the same portal activation email and first-login password setup as admitted students.
     </div>
 
     <div class="card">
@@ -32,14 +32,14 @@
     <div class="card mt-3">
         <div class="card-header">Expected columns</div>
         <div class="card-body">
-            <p class="mb-2">Required: <code>name</code>, <code>email</code>, <code>class_name</code>.</p>
-            <p class="mb-2">Optional: <code>section_name</code>, <code>programme_name</code>,
+            <p class="mb-2">Required: <code>name</code>, <code>email</code>, <code>registration_number</code>.</p>
+            <p class="mb-2">Optional: <code>class_name</code>, <code>section_name</code>, <code>programme_name</code>,
                 <code>department_name</code>, <code>year_of_study</code>, <code>nationality</code>,
                 <code>national_id_or_passport</code>, <code>next_of_kin_contact</code>,
                 <code>next_of_kin_address</code>, <code>status</code>.</p>
             <p class="mb-0 text-muted">Classes, programmes and departments are matched by name exactly as
                 they appear in the admin screens. Every student gets a generated portal password.</p>
-            <p class="mt-2 mb-0">When a programme is supplied, also provide <code>intake_name</code> matching the intake in Admissions. The intake semester start date determines the registration year and month.</p>
+            <p class="mt-2 mb-0">Optional <code>intake_name</code> must match an existing intake. Programme and intake are profile details only; registration numbers are never generated or reformatted. Class and section columns do not create enrolments.</p>
         </div>
     </div>
 </div>
