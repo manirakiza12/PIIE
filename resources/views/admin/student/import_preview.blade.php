@@ -3,6 +3,7 @@
 <div class="container-fluid">
     <h4 class="mb-3">Import preview &mdash; nothing has been saved yet</h4>
 
+    <p>Existing registration numbers will be retained. No enrolments or fee invoices will be created.</p>
     <div class="alert alert-secondary">
         <strong>{{ $total }}</strong> row(s) read &middot;
         <strong class="text-success">{{ count($importable) }}</strong> ready to import &middot;
@@ -35,10 +36,10 @@
         <div class="card-header text-success">Rows that will be created</div>
         <div class="table-responsive">
             <table class="table table-sm mb-0 align-middle">
-                <thead><tr><th>Row</th><th>Name</th><th>Email</th></tr></thead>
+                <thead><tr><th>Row</th><th>Name</th><th>Email</th><th>Registration number</th></tr></thead>
                 <tbody>
                 @foreach($ready as $r)
-                    <tr><td>{{ $r['line'] }}</td><td>{{ $r['name'] }}</td><td>{{ $r['email'] }}</td></tr>
+                    <tr><td>{{ $r['line'] }}</td><td>{{ $r['name'] }}</td><td>{{ $r['email'] }}</td><td>{{ $r['data']['registration_number'] }}</td></tr>
                 @endforeach
                 </tbody>
             </table>

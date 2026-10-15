@@ -2,31 +2,15 @@
 
 namespace App\Support\Students;
 
-use App\Helpers\CommonController;
-use App\Models\Enrollment;
-use App\Models\Programme;
 use App\Models\Section;
-use App\Models\Session;
 use App\Models\StudentProfile;
 use App\Models\User;
-use App\Support\EnrollmentDefaults;
-use App\Support\StudentFeeInvoiceGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Creates a student account, its academic profile and its enrolment.
- *
- * Extracted from AdminController@studentCreate so the single-add form and the
- * CSV bulk import provision students identically. Duplicating this logic across
- * the two entry points is how a student added by hand ends up with different
- * columns from one imported from a spreadsheet.
- *
- * Every row is written in one transaction: a student without its enrolment, or
- * an enrolment without its student, is never left behind.
- */
+/** Creates existing-student portal accounts and profiles without academic placement or billing. */
 final class StudentProvisioner
 {
     /**
@@ -44,7 +28,17 @@ final class StudentProvisioner
             throw ValidationException::withMessages(['email' => 'Email was already taken.']);
         }
 
-        return DB::transaction(function () use ($data, $schoolId, $email, $sendWelcomeEmail) {
+        return DB::transaction(function () use ($data, $schoolId, $email) {
+            // Serialize registration checks for concurrent onboarding in this school.
+            \App\Models\School::whereKey($schoolId)->lockForUpdate()->firstOrFail();
+            self::assertAcademicScope($data, $schoolId);
+            $registrationNumber = trim((string) ($data['registration_number'] ?? ''));
+            if ($registrationNumber === '' || strlen($registrationNumber) > 255) {
+                throw ValidationException::withMessages(['registration_number' => 'Provide the existing registration number (maximum 255 characters).']);
+            }
+            if (User::where('school_id', $schoolId)->whereRaw('LOWER(code) = ?', [strtolower($registrationNumber)])->exists()) {
+                throw ValidationException::withMessages(['registration_number' => 'This registration number is already registered in this school. Use the existing account activation action.']);
+            }
             // Portal password: administrator either chooses one, or it is
             // generated. Never logged or exported.
             $passwordOption = $data['password_option'] ?? 'manual';
@@ -56,11 +50,13 @@ final class StudentProvisioner
                 'name'             => $data['name'],
                 'email'            => $email,
                 'password'         => Hash::make($plainPassword),
-                'code'             => \App\Support\RegistrationNumber::student($data + ['school_id' => $schoolId]),
+                'code'             => $registrationNumber,
                 'role_id'          => '7',
                 'school_id'        => $schoolId,
                 'user_information' => $data['user_information'] ?? json_encode([]),
                 'status'           => 1,
+                'account_status'   => 'active',
+                'force_password_change' => true,
             ]);
 
             StudentProfile::updateOrCreate(
@@ -78,24 +74,6 @@ final class StudentProvisioner
                 ]
             );
 
-            if (! empty($data['programme_id'])) {
-                StudentFeeInvoiceGenerator::generateForStudent($student, (int) $data['programme_id'], $schoolId);
-            }
-
-            $runningSession = $data['session_id'] ?? get_school_settings($schoolId)->value('running_session')
-                ?: Session::where('school_id', $schoolId)->where('status', 1)->value('id');
-
-            Enrollment::create([
-                'user_id'       => $student->id,
-                'class_id'      => (int) $data['class_id'],
-                'section_id'    => (int) ($data['section_id'] ?? 0),
-                'school_id'     => $schoolId,
-                'department_id' => (int) ($data['department_id'] ?? 0),
-                'session_id'    => (int) ($runningSession ?? 0),
-            ]);
-
-            EnrollmentDefaults::ensureRow($student->id, $schoolId);
-
             return ['user' => $student, 'password' => $plainPassword];
         });
     }
@@ -105,18 +83,12 @@ final class StudentProvisioner
      * configured — a mail transport failure must never roll back a created
      * student or abort a bulk import half way.
      */
-    public static function sendWelcomeEmail(User $student, string $plainPassword): void
+    public static function sendWelcomeEmail(User $student, string $plainPassword): bool
     {
-        if (! get_settings('smtp_user') || ! get_settings('smtp_pass')
-            || ! get_settings('smtp_host') || ! get_settings('smtp_port')) {
-            return;
-        }
-
-        \App\Support\Mail\SafeMail::send($student->email, new \App\Mail\NewUserEmail([
-            'name'     => $student->name,
-            'email'    => $student->email,
-            'password' => $plainPassword,
-        ]));
+        $profile = StudentProfile::where('user_id', $student->id)->first();
+        return \App\Support\StudentPortalActivation::sendActivationEmail(
+            $student, $plainPassword, $profile?->programme_id, $profile?->intake_session_id, true
+        );
     }
 
     /**

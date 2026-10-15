@@ -12,31 +12,19 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
 use Throwable;
 
-/**
- * CSV bulk import for students who are already studying.
- *
- * These people never went through admissions, so they have no application fee.
- * The import therefore provisions exactly what the single-add form provisions —
- * user, profile, enrolment and fee invoice — and never touches admissions.
- *
- * Import is deliberately two-step: a preview validates every row and reports
- * problems without writing anything, and only a confirmed import creates
- * students. Each row is its own transaction, so one bad row cannot abort or
- * half-apply the rest.
- */
+/** CSV portal onboarding for existing students; preserves supplied numbers and defers enrolment and billing. */
 class StudentImportController extends Controller
 {
     private const COLUMNS = [
-        'name', 'email', 'class', 'section', 'programme', 'department',
+        'name', 'email', 'registration_number', 'class', 'section', 'programme', 'department',
         'year_of_study', 'nationality', 'national_id_or_passport',
         'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake',
     ];
 
     private const HEADER_ROW = [
-        'name', 'email', 'class_name', 'section_name', 'programme_name',
+        'name', 'email', 'registration_number', 'class_name', 'section_name', 'programme_name',
         'department_name', 'year_of_study', 'nationality',
         'national_id_or_passport', 'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name',
     ];
@@ -62,7 +50,7 @@ class StudentImportController extends Controller
         $handle = fopen('php://temp', 'r+');
         fputcsv($handle, self::HEADER_ROW);
         fputcsv($handle, [
-            'Musoke Okello', 'musoke.okello@example.test', 'BITC-2026-DAY-A', '',
+            'Musoke Okello', 'musoke.okello@example.test', 'PIIE/2019/0042', '', '',
             'Bachelor of Business Information Technology', '', '1', 'Ugandan',
             'CM-0000001', '+256700000000', 'Kampala', 'active', 'May '.date('Y').' Intake',
         ]);
@@ -86,6 +74,7 @@ class StudentImportController extends Controller
     {
         $rows = $this->readCsv($request);
         $resolved = $this->resolveAll($rows);
+        $request->session()->put('existing_student_import', ['school_id' => $this->schoolId(), 'user_id' => Auth::id(), 'rows' => $rows]);
 
         return view('admin.student.import_preview', [
             'columns' => self::COLUMNS,
@@ -99,7 +88,13 @@ class StudentImportController extends Controller
 
     public function import(Request $request)
     {
-        $rows = $this->readCsv($request);
+        if ($request->hasFile('file')) {
+            $rows = $this->readCsv($request);
+        } else {
+            $preview = $request->session()->pull('existing_student_import');
+            abort_unless($preview && (int) $preview['school_id'] === $this->schoolId() && (int) $preview['user_id'] === (int) Auth::id(), 422, 'Upload and preview the CSV again.');
+            $rows = $preview['rows'];
+        }
         $resolved = $this->resolveAll($rows);
 
         if ($resolved['importable'] === []) {
@@ -110,11 +105,14 @@ class StudentImportController extends Controller
         $created = 0;
         $failed = [];
         $passwords = [];
+        $notificationFailures = 0;
 
         foreach ($resolved['importable'] as $row) {
             try {
                 $result = StudentProvisioner::provision($row['data'], $schoolId, false);
-                StudentProvisioner::sendWelcomeEmail($result['user'], $result['password']);
+                if (! StudentProvisioner::sendWelcomeEmail($result['user'], $result['password'])) {
+                    $notificationFailures++;
+                }
                 $created++;
                 $passwords[] = [$result['user']->email, $result['user']->code];
             } catch (Throwable $exception) {
@@ -129,6 +127,7 @@ class StudentImportController extends Controller
 
         return view('admin.student.import_result', [
             'created' => $created,
+            'notificationFailures' => $notificationFailures,
             'failed' => $failed,
             'accounts' => $passwords,
         ]);
@@ -182,12 +181,13 @@ class StudentImportController extends Controller
         $intakes = \App\Models\IntakeSession::where('school_id', $schoolId)->get()->groupBy('name');
         $departments = DB::table('departments')->where('school_id', $schoolId)->get()->keyBy('name');
         // `sections` has no school_id of its own - it hangs off a class. Scope it
-// through the school's classes so a section from another tenant can never be
-// matched by name alone.
-$classIds = $classes->pluck('id')->all();
-$sections = DB::table('sections')->whereIn('class_id', $classIds)->get()->keyBy('name');
+        // through the school's classes so a section from another tenant can never be
+        // matched by name alone.
+        $classIds = $classes->pluck('id')->all();
+        $sections = DB::table('sections')->whereIn('class_id', $classIds)->get()->keyBy('name');
 
         $seenEmails = [];
+        $seenNumbers = [];
         $ready = $errors = $importable = [];
 
         foreach ($rows as $row) {
@@ -199,11 +199,11 @@ $sections = DB::table('sections')->whereIn('class_id', $classIds)->get()->keyBy(
             $validator = Validator::make([
                 'name'  => $r['name'] ?? '',
                 'email' => $r['email'] ?? '',
-                'class_name' => $r['class_name'] ?? '',
+                'registration_number' => trim((string) ($r['registration_number'] ?? '')),
             ], [
                 'name'  => 'required|max:255',
                 'email' => 'required|email|max:255',
-                'class_name' => 'required',
+                'registration_number' => 'required|string|max:255',
             ]);
             if ($validator->fails()) {
                 $rowErrors[] = implode(' ', $validator->errors()->all());
@@ -216,16 +216,8 @@ $sections = DB::table('sections')->whereIn('class_id', $classIds)->get()->keyBy(
             $programmeName = trim((string) ($r['programme_name'] ?? ''));
             $intakeName = trim((string) ($r['intake_name'] ?? ''));
             $intake = $intakes->get($intakeName);
-            if ($programmeName !== '' && $programmes->has($programmeName)) {
-                if (!$intake || $intake->count() !== 1) {
-                    $rowErrors[] = 'Provide intake_name matching exactly one intake in this school for programme registration numbering.';
-                } else {
-                    try {
-                        \App\Support\RegistrationNumber::studentPrefix(['school_id' => $schoolId, 'programme_id' => $programmes->get($programmeName)->id, 'intake_session_id' => $intake->first()->id]);
-                    } catch (ValidationException $exception) {
-                        $rowErrors[] = implode(' ', array_merge(...array_values($exception->errors())));
-                    }
-                }
+            if ($intakeName !== '' && (!$intake || $intake->count() !== 1)) {
+                $rowErrors[] = 'intake_name must match exactly one intake in this school.';
             }
             if ($programmeName !== '' && ! $programmes->has($programmeName)) {
                 $rowErrors[] = "programme \"{$programmeName}\" does not exist in this school";
@@ -249,6 +241,15 @@ $sections = DB::table('sections')->whereIn('class_id', $classIds)->get()->keyBy(
                 }
             }
 
+            $number = trim((string) ($r['registration_number'] ?? ''));
+            $numberKey = strtolower($number);
+            if ($number !== '') {
+                if (isset($seenNumbers[$numberKey]) || User::where('school_id', $schoolId)->whereRaw('LOWER(code) = ?', [$numberKey])->exists()) {
+                    $rowErrors[] = 'registration number is already registered or duplicated in the file';
+                }
+                $seenNumbers[$numberKey] = true;
+            }
+
             $class = $className !== '' && $classes->has($className) ? $classes->get($className) : null;
             $section = $sectionName !== '' && $sections->has($sectionName) ? $sections->get($sectionName) : null;
             if ($class && $section && (int) $section->class_id !== (int) $class->id) {
@@ -268,14 +269,15 @@ $sections = DB::table('sections')->whereIn('class_id', $classIds)->get()->keyBy(
 
             $data = [
                 'name'             => trim((string) $r['name']),
+                'registration_number' => $number,
                 'email'            => $email,
                 'password_option'  => 'auto',
                 'programme_id'     => $programmeName !== '' ? $programmes->get($programmeName)->id : null,
                 'intake_session_id' => $intake && $intake->count() === 1 ? $intake->first()->id : null,
                 'department_id'    => $departmentName !== '' ? $departments->get($departmentName)->id : null,
-                'class_id'         => $class->id,
+                'class_id'         => $class?->id,
                 'section_id'       => $section ? $section->id : null,
-                'year_of_study'    => $r['year_of_study'] !== '' && $r['year_of_study'] !== null
+                'year_of_study'    => ($r['year_of_study'] ?? '') !== ''
                                         ? (int) $r['year_of_study'] : null,
                 'nationality'      => ($r['nationality'] ?? '') !== '' ? $r['nationality'] : null,
                 'national_id_or_passport' => ($r['national_id_or_passport'] ?? '') !== '' ? $r['national_id_or_passport'] : null,

@@ -1998,6 +1998,7 @@ class AdminController extends Controller
 
         $request->validate([
             'name'             => 'required|max:255',
+            'registration_number' => 'required|string|max:255',
             'email'            => 'required|email|max:255',
             'password_option'  => 'nullable|in:auto,manual',
             'password'         => 'nullable|min:6',
@@ -2010,13 +2011,13 @@ class AdminController extends Controller
             'next_of_kin_contact'  => 'nullable|max:30',
             'status'           => 'nullable|in:active,suspended,graduated,withdrawn,deferred',
             'additional_photo' => 'nullable|mimes:jpg,jpeg,png|max:4096',
-            'class_id'         => 'required|integer|exists:classes,id',
+            'class_id'         => 'nullable|integer|exists:classes,id',
             'section_id'       => 'nullable|integer|exists:sections,id',
             'session_id'       => 'nullable|integer|exists:sessions,id',
             'department_id'    => 'nullable|integer|exists:departments,id',
         ]);
 
-        $this->validateStudentAcademicScope($data);
+        \App\Support\Students\StudentProvisioner::assertAcademicScope($data, (int) auth()->user()->school_id);
 
         if (!empty($data['section_id']) && !Section::where('id', $data['section_id'])->where('class_id', $data['class_id'])->exists()) {
             throw ValidationException::withMessages(['section_id' => 'The selected section does not belong to the selected class.']);
@@ -2050,14 +2051,16 @@ class AdminController extends Controller
         ];
 
         $data['user_information'] = json_encode($info);
+        // Existing-student onboarding defers academic placement.
+        unset($data['class_id'], $data['section_id'], $data['session_id'], $data['department_id']);
 
-        // Provisioning (user + profile + enrolment + fee invoice) is shared with
+        // Portal provisioning (user and profile only) is shared with
         // the CSV bulk import so a student added by hand and one added from a
         // spreadsheet end up with identical records.
         $result = \App\Support\Students\StudentProvisioner::provision($data, auth()->user()->school_id, false);
-        \App\Support\Students\StudentProvisioner::sendWelcomeEmail($result['user'], $result['password']);
+        $sent = \App\Support\Students\StudentProvisioner::sendWelcomeEmail($result['user'], $result['password']);
 
-        return redirect()->back()->with('message', 'You have successfully add student.');
+        return redirect()->back()->with('message', $sent ? 'Existing student portal account created. Activation email sent; registration number preserved and enrolment unchanged.' : 'Existing student portal account created; registration number preserved and enrolment unchanged. Activation email was not sent. Check mail settings and resend activation.');
     }
 
     public function studentIdCardGenerate($id)
