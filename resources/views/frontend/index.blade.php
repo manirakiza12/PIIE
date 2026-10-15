@@ -46,7 +46,7 @@
     {{-- The redesign's design system. Loaded AFTER the existing stylesheets so it
          wins without editing them; the originals still apply to everything the
          redesign does not touch. --}}
-    <link rel="stylesheet" href="{{ asset('css/piie-site.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/piie-site.css') }}?v=20261015-contact-ribbon">
     <link rel="stylesheet" href="{{ asset('css/piie-blocks.css') }}">
 
     @include('frontend.include_top')
