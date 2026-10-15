@@ -27,14 +27,21 @@ class EnhancedSettingsController extends Controller
     public function academic()
     {
         $grades = Grade::where('school_id', $this->school_id)->orderByDesc('mark_from')->get();
+        return view('admin.settings.academic', compact('grades'));
+    }
+
+    public function teachingPlatforms()
+    {
         $platform_settings = $this->getLiveClassPlatformSettings();
-        return view('admin.settings.academic', compact('grades', 'platform_settings'));
+        return view('admin.settings.teaching_platforms', compact('platform_settings'));
     }
 
     public function saveAcademic(Request $request)
     {
+        $request->validate(['_settings_section' => ['nullable', 'in:grading,platforms']]);
         // Delete existing and re-insert grading scale from posted data
-        if ($request->has('grade')) {
+        $section = $request->input('_settings_section');
+        if ($section !== 'platforms' && $request->has('grade')) {
             Grade::where('school_id', $this->school_id)->delete();
             foreach ($request->grade as $g) {
                 if (!empty($g['name'])) {
@@ -59,16 +66,16 @@ class EnhancedSettingsController extends Controller
             'live_class_platform_custom',
         ];
 
-        foreach ($platformKeys as $key) {
-            GlobalSettings::updateOrCreate(['key' => $key], ['value' => $request->has($key) ? '1' : '0']);
+        if ($section !== 'grading') {
+            foreach ($platformKeys as $key) {
+                GlobalSettings::updateOrCreate(['key' => $key], ['value' => $request->has($key) ? '1' : '0']);
+            }
+            GlobalSettings::updateOrCreate(
+                ['key' => 'live_class_jitsi_base_url'],
+                ['value' => trim((string) $request->input('live_class_jitsi_base_url', 'https://meet.jit.si')) ?: 'https://meet.jit.si']
+            );
         }
-
-        GlobalSettings::updateOrCreate(
-            ['key' => 'live_class_jitsi_base_url'],
-            ['value' => trim((string) $request->input('live_class_jitsi_base_url', 'https://meet.jit.si')) ?: 'https://meet.jit.si']
-        );
-
-        return redirect()->back()->with('success', get_phrase('Grading scale updated'));
+        return redirect()->back()->with('success', get_phrase($section === 'platforms' ? 'Teaching platform settings saved' : 'Grading scale updated'));
     }
 
     // ── Notifications ─────────────────────────────────────────

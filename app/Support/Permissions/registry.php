@@ -593,6 +593,7 @@ return [
         'admin.settings.school' => 'settings.school',
         'admin.school.update' => 'settings.school',
         'admin.settings.academic*' => 'settings.school',
+        'admin.settings.teaching_platforms' => 'settings.school',
         'admin.settings.notifications*' => 'settings.school',
         'admin.settings.backup*' => 'settings.backup',
         'admin.settings.api*' => 'settings.api',

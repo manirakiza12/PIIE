@@ -6,15 +6,14 @@
             <h4>{{ get_phrase('Grading Scales') }}</h4>
             <ul class="d-flex align-items-center eBreadcrumb-2">
                 <li><a href="{{ route('admin.dashboard') }}">{{ get_phrase('Home') }}</a></li>
-                <li><a href="{{ route('admin.settings.school') }}">{{ get_phrase('Settings') }}</a></li>
-                <li><a href="#">{{ get_phrase('Academic / Grading') }}</a></li>
+                <li>{{ get_phrase('Academics') }}</li>
+                <li><a href="#">{{ get_phrase('Grading Scales') }}</a></li>
             </ul>
         </div>
     </div>
 </div></div></div>
 
-{{-- Settings sub-nav --}}
-@include('admin.settings.partials.settings_nav', ['active' => 'academic'])
+
 
 @if(session('success'))<div class="alert alert-success"><i class="bi bi-check-circle"></i> {{ session('success') }}</div>@endif
 
@@ -25,6 +24,7 @@
     <div class="p-4">
     <form action="{{ route('admin.settings.academic.save') }}" method="POST" id="gradeForm">
         @csrf
+        <input type="hidden" name="_settings_section" value="grading">
         <div class="table-responsive">
             <table class="table eTable" style="font-size:12px" id="gradeTable">
                 <thead>
@@ -58,56 +58,6 @@
             <button type="submit" class="eBtn eBtn-primary"><i class="bi bi-save"></i> {{ get_phrase('Save Grading Scale') }}</button>
         </div>
 
-        <hr class="my-4">
-        <div class="mb-2"><strong>{{ get_phrase('Live Class Platform Configuration') }}</strong></div>
-        <div class="row g-2 mb-3">
-            <div class="col-md-4">
-                <label class="d-flex align-items-center gap-2">
-                    <input type="checkbox" name="live_class_platform_jitsi" value="1" {{ $platform_settings['live_class_platform_jitsi'] ? 'checked' : '' }}>
-                    {{ get_phrase('Enable Jitsi Meet') }}
-                </label>
-            </div>
-            <div class="col-md-4">
-                <label class="d-flex align-items-center gap-2">
-                    <input type="checkbox" name="live_class_platform_google_meet" value="1" {{ $platform_settings['live_class_platform_google_meet'] ? 'checked' : '' }}>
-                    {{ get_phrase('Enable Google Meet') }}
-                </label>
-            </div>
-            <div class="col-md-4">
-                <label class="d-flex align-items-center gap-2">
-                    <input type="checkbox" name="live_class_platform_zoom" value="1" {{ $platform_settings['live_class_platform_zoom'] ? 'checked' : '' }}>
-                    {{ get_phrase('Enable Zoom') }}
-                </label>
-            </div>
-            <div class="col-md-4">
-                <label class="d-flex align-items-center gap-2">
-                    <input type="checkbox" name="live_class_platform_bigbluebutton" value="1" {{ $platform_settings['live_class_platform_bigbluebutton'] ? 'checked' : '' }}>
-                    {{ get_phrase('Enable BigBlueButton') }}
-                </label>
-            </div>
-            <div class="col-md-4">
-                <label class="d-flex align-items-center gap-2">
-                    <input type="checkbox" name="live_class_platform_custom" value="1" {{ $platform_settings['live_class_platform_custom'] ? 'checked' : '' }}>
-                    {{ get_phrase('Enable Custom Platform') }}
-                </label>
-            </div>
-            <div class="col-md-8">
-                <label class="eForm-label">{{ get_phrase('Jitsi Base URL') }}</label>
-                <input type="url" class="form-control eForm-control" name="live_class_jitsi_base_url" value="{{ $platform_settings['live_class_jitsi_base_url'] }}" placeholder="https://meet.jit.si">
-                <small class="d-block mt-1">
-                    {{ get_phrase('Moderator token (JWT)') }}:
-                    @if($platform_settings['jitsi_jwt_configured'])
-                        <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ get_phrase('Configured — hosts get real moderator rights.') }}</span>
-                    @else
-                        <span class="text-danger"><i class="bi bi-exclamation-triangle-fill"></i> {{ get_phrase('Not configured — see LIVE_CLASS_JITSI_JWT_SETUP.md.') }}</span>
-                    @endif
-                </small>
-            </div>
-        </div>
-
-        <div class="d-flex gap-3 align-items-center">
-            <button type="submit" class="eBtn eBtn-primary"><i class="bi bi-save"></i> {{ get_phrase('Save Academic and Platform Settings') }}</button>
-        </div>
     </form>
     </div>
 </div></div></div>
