@@ -5094,66 +5094,24 @@ class AdminController extends Controller
     public function schoolUpdate(Request $request)
     {
 
-        $data = $request->all();
-
-        unset($data['_token']);
-
-        $school_data = School::where('id', auth()->user()->school_id)->first();
-        if ($request->school_logoo) {
-
-            $old_image = $school_data->school_logo;
-
-            $newFileName = SafeUpload::store($request->school_logoo, public_path() . '/assets/uploads/school_logo', SafeUpload::IMAGES) ?? abort(422, 'This file type is not allowed.');
-            $school_data->school_logo = $newFileName;
-            $school_data->save();
+        $rules = ['school_name' => ['required', 'string', 'max:255']];
+        foreach (['school_logoo', 'email_logo', 'socialLogo1', 'socialLogo2', 'socialLogo3'] as $field) {
+            $rules[$field] = ['nullable', 'image', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'];
         }
-
-        if ($request->email_logo) {
-
-            $old_image = $school_data->email_logo;
-
-            $newFileName = SafeUpload::store($request->email_logo, public_path() . '/assets/uploads/school_logo', SafeUpload::IMAGES) ?? abort(422, 'This file type is not allowed.');
-            $school_data->email_logo = $newFileName;
-            $school_data->save();
+        foreach (['phone', 'address', 'school_info', 'email_title', 'email_details', 'warning_text', 'socialLink1', 'socialLink2', 'socialLink3'] as $field) {
+            $rules[$field] = ['nullable', 'string'];
         }
-        if ($request->socialLogo1) {
-
-            $old_image = $school_data->socialLogo1;
-
-            $newFileName = SafeUpload::store($request->socialLogo1, public_path() . '/assets/uploads/school_logo', SafeUpload::IMAGES) ?? abort(422, 'This file type is not allowed.');
-            $school_data->socialLogo1 = $newFileName;
-            $school_data->save();
-        }
-        if ($request->socialLogo2) {
-
-            $old_image = $school_data->socialLogo2;
-
-            $newFileName = SafeUpload::store($request->socialLogo2, public_path() . '/assets/uploads/school_logo', SafeUpload::IMAGES) ?? abort(422, 'This file type is not allowed.');
-            $school_data->socialLogo2 = $newFileName;
-            $school_data->save();
-        }
-        if ($request->socialLogo3) {
-
-            $old_image = $school_data->socialLogo3;
-
-            $newFileName = SafeUpload::store($request->socialLogo3, public_path() . '/assets/uploads/school_logo', SafeUpload::IMAGES) ?? abort(422, 'This file type is not allowed.');
-            $school_data->socialLogo3 = $newFileName;
-            $school_data->save();
-        }
-
-        School::where('id', auth()->user()->school_id)->update([
-            'title'         => $data['school_name'],
-            'phone'         => $data['phone'],
-            'address'       => $data['address'],
-            'email_title'   => $data['email_title'],
-            'email_details' => $data['email_details'],
-            'warning_text'  => $data['warning_text'],
-            'socialLink1'   => $data['socialLink1'],
-            'socialLink2'   => $data['socialLink2'],
-            'socialLink3'   => $data['socialLink3'],
-
-        ]);
-
+        $data = $request->validate($rules);
+        $school = School::where('id', auth()->user()->school_id)->firstOrFail();
+        $directories = array_fill_keys(['school_logoo', 'email_logo', 'socialLogo1', 'socialLogo2', 'socialLogo3'], 'assets/uploads/school_logo');
+        \App\Support\BrandingUploads::persist($request, $directories, function (array $stored) use ($data, $school) {
+            $attributes = \Illuminate\Support\Arr::except($data, ['school_name', 'school_logoo', 'email_logo', 'socialLogo1', 'socialLogo2', 'socialLogo3']);
+            $attributes['title'] = $data['school_name'];
+            foreach ($stored as $field => $name) {
+                $attributes[$field === 'school_logoo' ? 'school_logo' : $field] = $name;
+            }
+            School::whereKey($school->id)->update($attributes);
+        });
         return redirect()->back()->with('message', 'School details updated successfully.');
     }
 

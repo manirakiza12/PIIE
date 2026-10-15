@@ -599,70 +599,20 @@ class SuperAdminController extends Controller
             'front_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'],
             'off_pay_ins_file' => ['nullable', 'file', 'mimes:jpg,png,pdf', 'max:10240'],
         ]);
-        $data = $request->all();
-
-        unset($data['_token']);
-        foreach ($data as $key => $value) {
-            if(DB::table('global_settings')->where('key', $key)->get()->count() > 0) {
-                GlobalSettings::where('key', $key)->update([
-                    'key' => $key,
-                    'value' => $value,
-                ]);
-            } else {
-               GlobalSettings::create([
-                    'key' => $key,
-                    'value' => $value,
-                ]); 
+        $directories = [
+            'email_logo' => 'assets/uploads/email_logo',
+            'socialLogo1' => 'assets/uploads/email_logo',
+            'socialLogo2' => 'assets/uploads/email_logo',
+            'socialLogo3' => 'assets/uploads/email_logo',
+            'front_logo' => 'assets/uploads/logo',
+            'off_pay_ins_file' => 'assets/uploads/offline_payment',
+        ];
+        \App\Support\BrandingUploads::persist($request, $directories, function (array $stored) use ($request, $directories) {
+            $data = $request->except(array_merge(['_token'], array_keys($directories)));
+            foreach (array_merge($data, $stored) as $key => $value) {
+                GlobalSettings::updateOrCreate(['key' => $key], ['value' => $value]);
             }
-        }
-        $file = $request->file('off_pay_ins_file');
-
-        if ($file) {
-            $extension = $file->getClientOriginalExtension();
-
-            if ($extension == 'jpg' || $extension == 'png') {
-                $off_pay_ins_file = time().'6.png';
-
-            } else {
-                $off_pay_ins_file = time().'6.pdf';
-            }
-        } else {
-            
-        }
-
-        $email_logo = time().'1.png';
-        $socialLogo1 = time().'2.png';
-        $socialLogo2 = time().'3.png';
-        $socialLogo3 = time().'4.png';
-        $front_logo = time().'5.png';
-        
-       
-
-        if(!empty($request->email_logo)){
-            $request->email_logo->move(public_path('assets/uploads/email_logo/'), $email_logo);
-            GlobalSettings::where('key', 'email_logo')->update(['value' => $email_logo]);
-        }
-        if(!empty($request->socialLogo1)){
-            $request->socialLogo1->move(public_path('assets/uploads/email_logo/'), $socialLogo1);
-            GlobalSettings::where('key', 'socialLogo1')->update(['value' => $socialLogo1]);
-        }
-        if(!empty($request->socialLogo2)){
-            $request->socialLogo2->move(public_path('assets/uploads/email_logo/'), $socialLogo2);
-            GlobalSettings::where('key', 'socialLogo2')->update(['value' => $socialLogo2]);
-        }
-        if(!empty($request->socialLogo3)){
-            $request->socialLogo3->move(public_path('assets/uploads/email_logo/'), $socialLogo3);
-            GlobalSettings::where('key', 'socialLogo3')->update(['value' => $socialLogo3]);
-        }
-        if(!empty($request->front_logo)){
-            $request->front_logo->move(public_path('assets/uploads/logo/'), $front_logo);
-            GlobalSettings::where('key', 'front_logo')->update(['value' => $front_logo]);
-        }
-        if (!empty($request->off_pay_ins_file)) {
-            $request->off_pay_ins_file->move(public_path('assets/uploads/offline_payment/'), $off_pay_ins_file);
-            GlobalSettings::where('key', 'off_pay_ins_file')->update(['value' => $off_pay_ins_file]);
-        }
-
+        });
         return redirect()->back()->with('message', 'System settings updated successfully.');
     }
 
@@ -1203,28 +1153,16 @@ class SuperAdminController extends Controller
             'dark_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'light_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'white_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'],
             'favicon' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp,ico', 'max:1024'],
         ]);
-        $dark_logo = time().'1.png';
-        $light_logo = time().'2.png';
-        $favicon = time().'3.png';
-        $white_logo = time().'4.png';
-
-        if(!empty($request->dark_logo)){
-            $request->dark_logo->move(public_path('assets/uploads/logo/'), $dark_logo);
-            GlobalSettings::where('key', 'dark_logo')->update(['value' => $dark_logo]);
+        if (!array_filter(['dark_logo', 'light_logo', 'white_logo', 'favicon'], fn ($field) => $request->hasFile($field))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['logo' => 'Choose at least one logo image before saving.']);
         }
-        if(!empty($request->light_logo)){
-            $request->light_logo->move(public_path('assets/uploads/logo/'), $light_logo);
-            GlobalSettings::where('key', 'light_logo')->update(['value' => $light_logo]);
-        }
-        if(!empty($request->favicon)){
-            $request->favicon->move(public_path('assets/uploads/logo/'), $favicon);
-            GlobalSettings::where('key', 'favicon')->update(['value' => $favicon]);
-        }
-        if(!empty($request->white_logo)){
-            $request->white_logo->move(public_path('assets/uploads/logo/'), $white_logo);
-            GlobalSettings::where('key', 'white_logo')->update(['value' => $white_logo]);
-        }
-
+        \App\Support\BrandingUploads::persist($request, array_fill_keys(
+            ['dark_logo', 'light_logo', 'white_logo', 'favicon'], 'assets/uploads/logo'
+        ), function (array $stored) {
+            foreach ($stored as $key => $name) {
+                GlobalSettings::updateOrCreate(['key' => $key], ['value' => $name]);
+            }
+        });
         return redirect('superadmin/settings/system')->with('message', "Logo updated successfully");
 
     }

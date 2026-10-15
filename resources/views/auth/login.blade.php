@@ -288,7 +288,7 @@
     @endphp
     <div class="login-logo">
       <div class="logo-circle">
-        <img src="{{ asset('assets/uploads/logo/'.$piieLoginLogoFile) }}" alt="PIIE logo"
+        <img src="{{ institution_logo_url('login') }}" alt="PIIE logo"
              onerror="this.src='{{ asset('assets/uploads/logo/dark-logo.png') }}';">
       </div>
       <h4>{{ institution_name() }}</h4>

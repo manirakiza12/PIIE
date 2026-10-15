@@ -31,11 +31,7 @@
         ? asset('assets/uploads/logo/' . $faviconSetting)
         : asset('assets/uploads/logo/favicon.png');
         
-    $logoAsset = $whiteLogoSetting !== ''
-        ? asset('assets/uploads/logo/' . $whiteLogoSetting)
-        : ($darkLogoSetting !== ''
-            ? asset('assets/uploads/logo/' . $darkLogoSetting)
-            : asset('assets/uploads/logo/logo1.png'));
+    $logoAsset = institution_logo_url();
             
     $menu_permission =
         empty($user->menu_permission) || $user->menu_permission == 'null'
