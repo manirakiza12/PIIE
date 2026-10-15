@@ -160,4 +160,27 @@ class StudentProfileUpdateTest extends TestCase
         ])->assertRedirect(route('student.profile'));
         $this->assertSame('existing.jpg', json_decode($student->fresh()->user_information, true)['photo']);
     }
+
+    public function test_student_cannot_change_institutional_identity_even_with_a_forged_request(): void
+    {
+        $birthday = strtotime('2000-05-12');
+        $student = $this->makeStudent($this->makeSchool(), 'identity@example.com', ['birthday' => $birthday]);
+        $originalName = $student->name;
+        $originalCode = $student->code;
+        $this->actingAs($student)->post(route('student.profile.update'), [
+            'name' => 'Forged Name', 'email' => 'forged@example.com', 'eDefaultDateRange' => '01/01/2010',
+            'birthday' => '2010-01-01', 'code' => '2026/05/MPAM/999',
+            'user_information' => ['birthday' => 1], 'phone' => '0700999888',
+        ])->assertRedirect(route('student.profile'));
+        $saved = $student->fresh();
+        $this->assertSame($originalName, $saved->name);
+        $this->assertSame('identity@example.com', $saved->email);
+        $this->assertSame($originalCode, $saved->code);
+        $this->assertSame($birthday, json_decode($saved->user_information, true)['birthday']);
+        $this->assertSame('0700999888', json_decode($saved->user_information, true)['phone']);
+        $this->get(route('student.profile'))->assertOk()
+            ->assertSee('Contact the Registrar for corrections.')
+            ->assertDontSee('name="name"', false)->assertDontSee('name="email"', false)
+            ->assertDontSee('name="eDefaultDateRange"', false);
+    }
 }

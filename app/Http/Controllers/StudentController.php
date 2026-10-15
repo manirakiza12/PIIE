@@ -1120,27 +1120,18 @@ class StudentController extends Controller
     public function profile_update(Request $request)
     {
         $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|max:255',
-            'eDefaultDateRange' => 'sometimes|nullable|date',
             'gender' => 'sometimes|nullable|string',
             'phone' => 'sometimes|nullable|string',
             'address' => 'sometimes|nullable|string',
             'blood_group' => 'sometimes|nullable|string',
             'photo' => 'sometimes|nullable|file|image|mimes:jpg,jpeg,png|max:4096',
         ]);
-        $data = $request->only(['name', 'email']);
-        // Security Phase 2F: a self-service profile edit must not claim another account's login email.
-        if ($request->has('email') && User::where('email', $request->email)->where('id', '!=', auth()->user()->id)->exists()) {
-            return redirect()->back()->with('error', 'Email was already taken.');
-        }
+        // Institutional identity fields are maintained by authorized staff only.
+        $data = [];
 
         $user_info = (array) (json_decode(auth()->user()->user_information ?? '', true) ?: []);
         foreach ($request->only(['gender', 'phone', 'address', 'blood_group']) as $field => $value) {
             $user_info[$field] = $value;
-        }
-        if ($request->has('eDefaultDateRange')) {
-            $user_info['birthday'] = $request->filled('eDefaultDateRange') ? strtotime($request->eDefaultDateRange) : null;
         }
 
         if ($request->hasFile('photo')) {

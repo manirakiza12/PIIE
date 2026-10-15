@@ -282,8 +282,9 @@ class FinalSecurityHardeningTest extends TestCase
             $this->assertSame(1, User::where('email', $victim->email)->count(), "{$route}: no duplicate login email");
 
             // Keeping your own existing email while editing the rest of the profile still works.
+            $expectedName = $roleId === 7 ? $actor->name : "Renamed {$roleId}";
             $this->selfProfile($actor, $route, ['email' => $original, 'name' => "Renamed {$roleId}"]);
-            $this->assertSame("Renamed {$roleId}", $actor->fresh()->name, "{$route}: own email kept, profile saved");
+            $this->assertSame($expectedName, $actor->fresh()->name, "{$route}: identity policy respected");
             $this->assertSame($original, $actor->fresh()->email, "{$route}: own email unchanged");
         }
 
