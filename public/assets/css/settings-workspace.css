@@ -1,0 +1,22 @@
+.settings-navigation { display:flex; flex-wrap:wrap; gap:8px; padding:10px; background:#fff; border:1px solid #dce3ee; border-radius:12px; }
+.settings-navigation__link { display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:8px; color:#334155; font-size:14px; text-decoration:none; }
+.settings-navigation__link:hover, .settings-navigation__link:focus-visible { background:#edf3fc; color:#174f93; }
+.settings-navigation__link.is-active { background:#e6effc; color:#144c93; font-weight:700; }
+.settings-preferences { max-width:1200px; }
+.settings-preferences__card { background:#fff; border:1px solid #dce3ee; border-radius:12px; padding:22px; height:100%; }
+.settings-preferences__card h5 { margin-bottom:6px; font-size:17px; }
+.settings-preferences__intro { color:#64748b; font-size:14px; margin-bottom:14px; }
+.settings-preference { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 0; border-bottom:1px solid #edf0f5; }
+.settings-preference__label { font-weight:600; font-size:14px; display:block; margin-bottom:4px; cursor:pointer; }
+.settings-preference__description { font-size:13px; color:#64748b; margin:0; }
+.settings-preference__switch { flex-shrink:0; display:flex; align-items:center; gap:10px; }
+.settings-preference__switch .form-check-input { float:none; margin:0; width:2.5em; height:1.35em; border-radius:2em; cursor:pointer; }
+.settings-preference__state { font-size:13px; color:#475569; min-width:24px; }
+.settings-preferences__actions { display:flex; justify-content:flex-end; margin-top:20px; }
+.settings-preferences__actions .eBtn { width:auto; min-height:44px; }
+@media(max-width:575px) {
+ .settings-navigation__link { flex:1 1 calc(50% - 8px); padding:10px; font-size:13px; }
+ .settings-preferences__card { padding:16px; }
+ .settings-preference { gap:12px; }
+ .settings-preferences__actions .eBtn { width:100%; }
+}

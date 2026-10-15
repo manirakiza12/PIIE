@@ -8,14 +8,16 @@
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
-                <h4>{{ get_phrase('School Settings') }}</h4>
+                <h4>{{ get_phrase('General Settings') }}</h4>
             </div>
         </div>
     </div>
 </div>
 
+@include('admin.settings.partials.settings_nav', ['active'=>'general'])
+
 <div class="row">
-    <div class="col-7">
+    <div class="col-12 col-xl-8">
         <div class="eSection-wrap">
             <div class="eMain">
                 <div class="row">
@@ -135,7 +137,7 @@
             </div>
         </div>
     </div>
-    <div class="col-5">
+    <div class="col-12 col-xl-4">
         <div class="card">
             <div class="card-body">
               <h4 class="header-title mb-3"><?php echo get_phrase('instruction'); ?></h4>

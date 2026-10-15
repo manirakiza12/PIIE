@@ -3,7 +3,7 @@
 <div class="mainSection-title"><div class="row"><div class="col-12">
     <div class="d-flex justify-content-between align-items-center flex-wrap gr-15">
         <div class="d-flex flex-column">
-            <h4>{{ get_phrase('Role Permissions') }}</h4>
+            <h4>{{ get_phrase('Advanced Permissions') }}</h4>
             <ul class="d-flex align-items-center eBreadcrumb-2">
                 <li><a href="{{ route('admin.settings.school') }}">{{ get_phrase('Settings') }}</a></li>
                 <li><a href="#">{{ get_phrase('Permissions') }}</a></li>

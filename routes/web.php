@@ -2670,6 +2670,7 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\R
 // ΓöÇΓöÇ Enhanced Settings ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\EnhancedSettingsController::class)->group(function () {
     Route::get('admin/settings/academic',        'academic')->name('admin.settings.academic');
+    Route::get('admin/settings/teaching-platforms', 'teachingPlatforms')->name('admin.settings.teaching_platforms');
     Route::post('admin/settings/academic/save',  'saveAcademic')->name('admin.settings.academic.save');
     Route::get('admin/settings/notifications',   'notifications')->name('admin.settings.notifications');
     Route::post('admin/settings/notifications/save', 'saveNotifications')->name('admin.settings.notifications.save');
