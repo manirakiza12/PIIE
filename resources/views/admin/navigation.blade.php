@@ -388,7 +388,7 @@
 
             {{-- Academic Structure — the catalogue: what exists and who may take it. --}}
             @if($showAcademicStructureAny)
-            <li class="nav-links-li {{ $onAny(['admin/academic-structure*', 'admin/session_manager*', 'admin/programmes*', 'admin/subject*', 'admin/curricula*', 'admin/programme-cohorts*']) ? 'showMenu' : '' }}">
+            <li class="nav-links-li {{ $onAny(['admin/academic-structure*', 'admin/session_manager*', 'admin/programmes*', 'admin/subject*', 'admin/course-unit*', 'admin/curricula*', 'admin/programme-cohorts*']) ? 'showMenu' : '' }}">
                 <div class="iocn-link">
                     <a href="#" class="has-submenu">
                         <div class="sidebar_icon"><i class="bi bi-diagram-3"></i></div>
@@ -411,7 +411,7 @@
                     <li><a class="{{ request()->is('admin/programmes*') ? 'active' : '' }}" href="{{ route('admin.programmes.index') }}"><span>{{ get_phrase('Programmes') }}</span></a></li>
                     @endif
                     @if($showCourseUnits)
-                    <li><a class="{{ request()->is('admin/subject*') ? 'active' : '' }}" href="{{ route('admin.subject_list') }}"><span>{{ academic_term('subjects', $user->school_id) }}</span></a></li>
+                    <li><a class="{{ request()->is('admin/subject*', 'admin/course-unit*') ? 'active' : '' }}" href="{{ route('admin.subject_list') }}"><span>{{ academic_term('subjects', $user->school_id) }}</span></a></li>
                     @endif
                     @if($showStudyPlans)
                     <li><a class="{{ request()->is('admin/curricula*') ? 'active' : '' }}" href="{{ route('admin.curricula.index') }}"><span>{{ get_phrase('Study Plans') }}</span></a></li>

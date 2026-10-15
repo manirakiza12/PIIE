@@ -15,16 +15,22 @@
                 <li aria-current="page">{{ get_phrase($pageLabel) }}</li>
             </ul>
             @if($isHigherEducation)
-                <p class="text-muted mb-0">{{ get_phrase("Maintain the institution's Course Unit catalogue. Course Units can then be placed into Programme Study Plans by stage and credit value.") }}</p>
+                <p class="text-muted mb-0">{{ get_phrase("Add and edit Course Units together with their Study Plan placements, credits and prerequisites.") }}</p>
             @elseif($isMixed)
                 <p class="text-muted mb-0">{{ get_phrase('Maintain the shared catalogue. Choose a Class for a school subject or a Programme for a higher-education Course Unit.') }}</p>
             @endif
         </div>
         <div class="export-btn-area">
-            <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.subject.open_modal') }}', '{{ get_phrase($createLabel) }}')"><span class="me-1" aria-hidden="true">+</span>{{ get_phrase($createLabel) }}</a>
+            <a href="{{ ($isHigherEducation || $isMixed) ? route('admin.subject.setup', request()->only(['curriculum_id', 'programme_id'])) : 'javascript:;' }}" class="export_btn" @if(!$isHigherEducation && !$isMixed) onclick="rightModal('{{ route('admin.subject.open_modal') }}', '{{ get_phrase($createLabel) }}')" @endif><span class="me-1" aria-hidden="true">+</span>{{ get_phrase($createLabel) }}</a>
         </div>
     </div>
 </div>
+
+@if($placementPlan ?? null)
+<div class="eSection-wrap mt-3"><h5>{{ $placementPlan->programme->name }} ? {{ $placementPlan->version }}</h5>
+@include('admin.subject.study_plan_picker', ['curriculum' => $placementPlan, 'isDraft' => $placementPlan->status === 'draft', 'canManage' => true])
+</div>
+@endif
 
 <div class="eSection-wrap mt-3">
     <form method="GET" class="row g-3 align-items-end" action="{{ route('admin.subject_list') }}" aria-label="{{ get_phrase('Filter catalogue') }}">
@@ -110,7 +116,7 @@
                                 <div class="adminTable-action">
                                     <button type="button" class="eBtn eBtn-black dropdown-toggle table-action-btn-2" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ get_phrase('Actions for') }} {{ $subject->name }}">{{ get_phrase('Actions') }}</button>
                                     <ul class="dropdown-menu dropdown-menu-end eDropdown-menu-2 eDropdown-table-action">
-                                        <li><a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.edit.subject', ['id' => $subject->id]) }}', '{{ get_phrase($isHigherEducation ? 'Edit Course Unit' : 'Edit Subject') }}')">{{ get_phrase('Edit') }}</a></li>
+                                        <li><a class="dropdown-item" href="{{ ($isHigherEducation || $isMixed) ? route('admin.subject.setup', ['id' => $subject->id] + request()->only('curriculum_id')) : 'javascript:;' }}" @if(!$isHigherEducation && !$isMixed) onclick="rightModal('{{ route('admin.edit.subject', ['id' => $subject->id]) }}', '{{ get_phrase('Edit Subject') }}')" @endif>{{ get_phrase('Edit') }}</a></li>
                                         <li><a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.subject.delete', ['id' => $subject->id]) }}', 'undefined');">{{ get_phrase('Delete') }}</a></li>
                                     </ul>
                                 </div>
@@ -134,7 +140,7 @@
             @if($search || $classId || $programmeId)
                 <a class="btn btn-outline-secondary" href="{{ route('admin.subject_list') }}">{{ get_phrase('Clear filters') }}</a>
             @else
-                <a href="javascript:;" class="eBtn eBtn-primary" onclick="rightModal('{{ route('admin.subject.open_modal') }}', '{{ get_phrase($createLabel) }}')">{{ get_phrase($createLabel) }}</a>
+                <a href="{{ ($isHigherEducation || $isMixed) ? route('admin.subject.setup', request()->only(['curriculum_id', 'programme_id'])) : 'javascript:;' }}" class="eBtn eBtn-primary" @if(!$isHigherEducation && !$isMixed) onclick="rightModal('{{ route('admin.subject.open_modal') }}', '{{ get_phrase($createLabel) }}')" @endif>{{ get_phrase($createLabel) }}</a>
             @endif
         </div>
     @endif

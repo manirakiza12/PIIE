@@ -5,6 +5,7 @@
     $courseUnitLabel = app(\App\Support\TenantConfiguration::class)->terminology($curriculum->school)['course_unit'] ?? 'Course Unit';
     $periodLabel = $calendarPattern === 'semester' ? 'Semester' : 'Term';
     $isDraft = $curriculum->status === 'draft';
+    $useUnifiedUnitSetup = $isDraft && $canManage && auth()->user()->hasPermission('academic.structure');
     $totalCredits = $curriculum->memberships->sum(fn ($membership) => (float) $membership->credits);
 @endphp
 <div class="mainSection-title" id="overview">
@@ -76,39 +77,14 @@
 </section>
 
 <section class="eSection-wrap mb-3" id="course-units">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5>{{ $courseUnitLabel }} / {{ get_phrase('Study Plan placement') }}</h5><small class="text-muted">{{ get_phrase('Credits and classifications recorded here do not overwrite Subject catalogue fields.') }}</small></div>
-    @if($isDraft && $canManage && $curriculum->stages->isNotEmpty())
-        <form method="GET" action="{{ route('admin.curricula.subjects.search', $curriculum->id) }}" class="row g-2 mb-2" id="subject-search-form"><div class="col-md-8"><label class="form-label" for="study-plan-course-unit-search">{{ get_phrase('Search Course Units') }}</label><input id="study-plan-course-unit-search" class="form-control" name="search" placeholder="{{ get_phrase('Search by Course Unit name or code') }}"></div><div class="col-md-4 d-flex align-items-end"><button class="eBtn eBtn-outline-primary" type="submit">{{ get_phrase('Search Course Units') }}</button></div></form>
-        <form method="POST" action="{{ route('admin.curricula.memberships.store', $curriculum->id) }}" id="subject-picker-form" class="border rounded p-3 mb-3">@csrf
-            <label class="form-label">{{ get_phrase('Add Course Units to stage') }}</label><select name="curriculum_stage_id" class="form-select mb-2" required>@foreach($curriculum->stages as $stage)<option value="{{ $stage->id }}">{{ $stage->sequence }}. {{ $stage->label }}</option>@endforeach</select>
-            <div id="subject-results" class="row g-2 mb-2" aria-live="polite"><p class="text-muted">{{ get_phrase('Search the shared Course Unit catalogue. A catalogue Programme association is legacy metadata; adding a unit here creates the separate Study Plan membership.') }}</p></div>
-            <button class="eBtn eBtn-primary" type="submit">{{ get_phrase('Add selected as draft memberships') }}</button>
-        </form>
-        <script>
-        (() => {
-            const form = document.getElementById('subject-search-form');
-            const results = document.getElementById('subject-results');
-            form.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                const url = new URL(form.action, window.location.origin);
-                url.search = new URLSearchParams(new FormData(form));
-                const response = await fetch(url, {headers: {'Accept': 'application/json'}});
-                if (!response.ok) { results.textContent = 'Unable to search Subjects.'; return; }
-                const payload = await response.json();
-                results.replaceChildren();
-                if (!payload.data.length) { results.textContent = 'No available Course Units found.'; return; }
-                payload.data.forEach((subject) => {
-                    const wrapper = document.createElement('label'); wrapper.className = 'col-lg-6';
-                    const box = document.createElement('span'); box.className = 'd-block border rounded p-2';
-                    const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.name = 'subject_ids[]'; checkbox.value = subject.id; checkbox.className = 'me-2';
-                    const legacyLabel = subject.programme_id ? (subject.programme_id == {{ (int)$curriculum->programme_id }} ? ' · catalogue association: this Programme' : ' · catalogue association: another Programme') : '';
-                    const text = document.createTextNode(`${subject.code || '—'} · ${subject.name}${legacyLabel}`);
-                    box.append(checkbox, text); wrapper.append(box); results.append(wrapper);
-                });
-                if (payload.next_page_url) { const more = document.createElement('a'); more.href = payload.next_page_url; more.textContent = 'Next results'; more.className = 'd-block mt-2'; more.addEventListener('click', async (event) => { event.preventDefault(); const next = await (await fetch(more.href, {headers: {'Accept':'application/json'}})).json(); next.data.forEach((subject) => { const label=document.createElement('label'); label.className='d-block'; const checkbox=document.createElement('input'); checkbox.type='checkbox'; checkbox.name='subject_ids[]'; checkbox.value=subject.id; checkbox.className='me-2'; label.append(checkbox, document.createTextNode(`${subject.code || '—'} · ${subject.name}`)); results.append(label); }); if (next.next_page_url) more.href=next.next_page_url; else more.remove(); }); results.append(more); }
-            });
-        })();
-        </script>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5>{{ $courseUnitLabel }} / {{ get_phrase('Study Plan placement') }}</h5><small class="text-muted">{{ get_phrase('Manage credits, classification and prerequisites from Course Unit setup. Placements remain part of this Study Plan.') }}</small></div>
+    @if($useUnifiedUnitSetup)
+        <div class="d-flex flex-wrap gap-2 my-3">
+            <a class="eBtn eBtn-primary" href="{{ route('admin.subject.setup', ['curriculum_id' => $curriculum->id, 'programme_id' => $curriculum->programme_id]) }}">{{ get_phrase('Add Course Unit') }}</a>
+            <a class="btn btn-outline-primary" href="{{ route('admin.subject_list', ['curriculum_id' => $curriculum->id]) }}">{{ get_phrase('Add existing Course Units') }}</a>
+        </div>
+    @else
+        @include('admin.subject.study_plan_picker')
     @endif
 
     @forelse($curriculum->stages as $stage)
@@ -116,8 +92,10 @@
             @forelse($stage->memberships as $membership)
                 <div class="border-top p-3">
                     <div class="d-flex justify-content-between"><div><strong>{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }}</strong><div class="small text-muted">{{ $periodLabel }} {{ $membership->period_sequence ?: '—' }} · {{ ucfirst($membership->classification) }} · {{ number_format((float)$membership->credits, 2) }} credits</div></div>
-                    @if($isDraft && $canManage)<form method="POST" action="{{ route('admin.curricula.memberships.destroy', [$curriculum->id, $membership->id]) }}" onsubmit="return confirm('{{ get_phrase('Remove this Course Unit from the draft? Its prerequisite edges will also be removed.') }}')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove') }}</button></form>@endif</div>
-                    @if($isDraft && $canManage)
+                    @if($isDraft && $canManage && !$useUnifiedUnitSetup)<form method="POST" action="{{ route('admin.curricula.memberships.destroy', [$curriculum->id, $membership->id]) }}" onsubmit="return confirm('{{ get_phrase('Remove this Course Unit from the draft? Its prerequisite edges will also be removed.') }}')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove') }}</button></form>@endif</div>
+                    @if($useUnifiedUnitSetup)
+                        <a class="btn btn-sm btn-outline-primary mt-2" href="{{ route('admin.subject.setup', ['id' => $membership->subject_id, 'curriculum_id' => $curriculum->id]) }}">{{ get_phrase('Edit Course Unit setup') }}</a>
+                    @elseif($isDraft && $canManage)
                     <form method="POST" action="{{ route('admin.curricula.memberships.update', [$curriculum->id, $membership->id]) }}" class="row g-2 mt-1">@csrf @method('PUT')
                         <div class="col-lg-3"><label class="form-label small">{{ get_phrase('Stage') }}</label><select class="form-select form-select-sm" name="curriculum_stage_id">@foreach($curriculum->stages as $choice)<option value="{{ $choice->id }}" @selected($choice->id === $stage->id)>{{ $choice->sequence }}. {{ $choice->label }}</option>@endforeach</select></div>
                         <div class="col-lg-2"><label class="form-label small">{{ $periodLabel }} (relative)</label><input class="form-control form-control-sm" type="number" name="period_sequence" min="1" max="65535" value="{{ $membership->period_sequence }}" placeholder="—" onchange="this.form.elements.period_type.value=this.value ? '{{ $calendarPattern }}' : ''"><input type="hidden" name="period_type" value="{{ $membership->period_sequence ? $calendarPattern : '' }}"></div>
@@ -133,7 +111,7 @@
 </section>
 
 <section class="eSection-wrap mb-3" id="prerequisites"><h5>{{ get_phrase('Prerequisites') }}</h5><p class="text-muted">{{ get_phrase('Prerequisites are relationships between Course Units in this Study Plan only.') }}</p>
-    @if($isDraft && $canManage && $curriculum->memberships->count() > 1)
+    @if($isDraft && $canManage && !$useUnifiedUnitSetup && $curriculum->memberships->count() > 1)
     <form method="POST" action="{{ route('admin.curricula.prerequisites.store', $curriculum->id) }}" class="row g-2 mb-3">@csrf
         <div class="col-md-5"><label class="form-label">{{ get_phrase('Course Unit') }}</label><select class="form-select" name="membership_id" required>@foreach($curriculum->memberships as $membership)<option value="{{ $membership->id }}">{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }}</option>@endforeach</select></div>
         <div class="col-md-5"><label class="form-label">{{ get_phrase('Requires first') }}</label><select class="form-select" name="prerequisite_membership_id" required>@foreach($curriculum->memberships as $membership)<option value="{{ $membership->id }}">{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }}</option>@endforeach</select></div>
@@ -144,7 +122,7 @@
         @foreach($membership->prerequisites as $required)
             @php $edgeCount++; @endphp
             <div class="d-flex justify-content-between border rounded p-2 mb-1"><span>{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }} <span class="text-muted">{{ get_phrase('requires') }}</span> {{ $required->subject->code ?: '—' }} — {{ $required->subject->name }}</span>
-            @if($isDraft && $canManage)<form method="POST" action="{{ route('admin.curricula.prerequisites.destroy', $curriculum->id) }}">@csrf @method('DELETE')<input type="hidden" name="membership_id" value="{{ $membership->id }}"><input type="hidden" name="prerequisite_membership_id" value="{{ $required->id }}"><button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove') }}</button></form>@endif</div>
+            @if($isDraft && $canManage && !$useUnifiedUnitSetup)<form method="POST" action="{{ route('admin.curricula.prerequisites.destroy', $curriculum->id) }}">@csrf @method('DELETE')<input type="hidden" name="membership_id" value="{{ $membership->id }}"><input type="hidden" name="prerequisite_membership_id" value="{{ $required->id }}"><button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove') }}</button></form>@endif</div>
         @endforeach
     @endforeach
     @if(!$edgeCount)<p class="text-muted">{{ get_phrase('No prerequisites defined.') }}</p>@endif
