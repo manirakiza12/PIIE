@@ -291,8 +291,8 @@
         <img src="{{ asset('assets/uploads/logo/'.$piieLoginLogoFile) }}" alt="PIIE logo"
              onerror="this.src='{{ asset('assets/uploads/logo/dark-logo.png') }}';">
       </div>
-      <h4>{{ get_settings('system_title') ?: 'PIIE' }}</h4>
-      <p>{{ get_settings('school_name') ?: 'Management System' }}</p>
+      <h4>{{ institution_name() }}</h4>
+      <p>{{ get_phrase('Student and Staff Portal') }}</p>
     </div>
 
     {{-- Validation errors --}}

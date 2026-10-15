@@ -3,7 +3,7 @@
 
 <head>
     <!-- New -->
-    <title>{{ get_phrase('Student') . ' | ' . get_settings('system_title') }}</title>
+    <title>{{ get_phrase('Student') . ' | ' . institution_name() }}</title>
     <!-- all the meta tags -->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -62,7 +62,7 @@
                 <img height="40px" class=""
                     src="{{ asset('assets/uploads/logo/' . get_settings('white_logo')) }}" alt="" />
             </div>
-            <span class="logo_name">{{ get_settings('navbar_title') }}</span>
+            <span class="logo_name">{{ institution_name() }}</span>
         </div>
         <div class="closeIcon">
             <span>

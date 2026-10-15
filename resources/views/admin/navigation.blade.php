@@ -237,7 +237,7 @@
 <html lang="en">
 
 <head>
-    <title>{{ get_phrase('Admin') . ' | ' . get_settings('system_title') }}</title>
+    <title>{{ get_phrase('Admin') . ' | ' . institution_name() }}</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta content="" name="description" />
@@ -274,9 +274,9 @@
         <div class="logo-details mt-4 mb-3">
             <div class="img_wrapper">
                 <img height="45px" class=""
-                    src="{{ $logoAsset }}" alt="{{ get_settings('navbar_title') ?: 'PIIE' }}" />
+                    src="{{ $logoAsset }}" alt="{{ institution_name() }}" />
             </div>
-            <span class="logo_name">{{ get_settings('navbar_title') ?: 'HEMS Portal' }}</span>
+            <span class="logo_name">{{ institution_name() }}</span>
         </div>
         <div class="closeIcon">
             <span>

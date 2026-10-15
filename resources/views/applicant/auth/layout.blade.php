@@ -1,6 +1,6 @@
 @php
     $logoAsset   = asset('assets/uploads/logo/logo.png');
-    $institution = get_settings('system_title') ?: 'Prime International Institute of Excellence';
+    $institution = institution_name();
 @endphp
 <!DOCTYPE html>
 <html lang="en">

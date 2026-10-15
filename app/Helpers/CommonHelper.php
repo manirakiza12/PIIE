@@ -199,6 +199,20 @@ if (!function_exists('get_settings')) {
     }
 }
 
+// Resolve branding from the signed-in institution, or the configured public school.
+if (!function_exists('institution_name')) {
+    function institution_name(): string
+    {
+        $user = auth()->user();
+        $schoolId = $user && (int) $user->role_id !== 1
+            ? $user->school_id
+            : get_settings('primary_school_id');
+        $name = $schoolId ? trim((string) DB::table('schools')->where('id', $schoolId)->value('title')) : '';
+
+        return $name !== '' ? $name : 'Institution Portal';
+    }
+}
+
 // School Settings
 if (!function_exists('get_school_settings')) {
     function get_school_settings($school_id = '')
