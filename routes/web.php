@@ -803,6 +803,7 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     //Subject routes
     Route::get('admin/subject', 'subjectList')->name('admin.subject_list')->middleware('admin_permission');
     Route::get('admin/subject_create', 'createSubject')->name('admin.subject.open_modal');
+    Route::get('admin/course-unit/setup/{id?}', 'courseUnitSetup')->whereNumber('id')->name('admin.subject.setup');
     Route::post('admin/subject', 'subjectCreate')->name('admin.create.subject');
     Route::get('admin/subject/{id}', 'editSubject')->name('admin.edit.subject');
     Route::post('admin/subject/{id}', 'subjectUpdate')->name('admin.subject.update');

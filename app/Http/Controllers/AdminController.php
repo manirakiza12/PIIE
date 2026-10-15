@@ -3754,10 +3754,15 @@ class AdminController extends Controller
         }
 
         $subjects = $query->orderBy('name')->paginate(15)->appends($request->query());
+        $placementPlan = null;
+        if ($request->filled('curriculum_id') && $request->user()->hasPermission('academic.curriculum.manage')) {
+            $placementPlan = \App\Models\Curriculum::where('school_id', $schoolId)->with(['programme', 'stages'])
+                ->findOrFail($request->query('curriculum_id'));
+        }
 
         return view('admin.subject.subject_list', compact(
             'subjects', 'classes', 'programmes', 'classId', 'programmeId', 'search',
-            'isHigherEducation', 'isMixed'
+            'isHigherEducation', 'isMixed', 'placementPlan'
         ));
     }
 
@@ -3770,7 +3775,14 @@ class AdminController extends Controller
         $classes = Classes::where('school_id', $schoolId)->orderBy('name')->get();
         $programmes = Programme::where('school_id', $schoolId)->where('is_active', 1)->orderBy('name')->get();
 
-        return view('admin.subject.add_subject', compact('classes', 'programmes', 'isHigherEducation', 'isMixed'));
+        $unitSetup = ($isHigherEducation || $isMixed) ? app(\App\Support\Curriculum\CourseUnitSetup::class)->formData() : null;
+        return view('admin.subject.add_subject', compact('classes', 'programmes', 'isHigherEducation', 'isMixed', 'unitSetup'));
+    }
+
+    public function courseUnitSetup(?int $id = null)
+    {
+        $form = $id === null ? $this->createSubject() : $this->editSubject($id);
+        return view('admin.subject.setup', $form->getData() + ['formView' => $form->name()]);
     }
 
     public function subjectCreate(Request $request)
@@ -3807,7 +3819,10 @@ class AdminController extends Controller
         }
 
         try {
-            Subject::create($subject_data);
+            DB::transaction(function () use ($request, $subject_data): void {
+                $subject = Subject::create($subject_data);
+                app(\App\Support\Curriculum\CourseUnitSetup::class)->savePlacement($request, $subject);
+            });
         } catch (\Illuminate\Database\QueryException $e) {
             if ($e->getCode() == 23000) {
                 return redirect()->back()->withErrors(['code' => get_phrase('A Course Unit or Subject with this code already exists in this institution.')])->withInput();
@@ -3817,7 +3832,7 @@ class AdminController extends Controller
             return redirect()->back()->with('error', get_phrase('The catalogue record could not be saved. Check the Programme or Class selection and try again.'))->withInput();
         }
 
-        return redirect()->route('admin.subject_list')->with('message', get_phrase('Course Unit or Subject created successfully. Add it separately to the appropriate Programme Study Plan stage if needed.'));
+        return redirect()->route('admin.subject_list')->with('message', get_phrase('Course Unit or Subject created successfully.'));
     }
 
     public function editSubject($id)
@@ -3828,9 +3843,10 @@ class AdminController extends Controller
         $isMixed = $educationLevel === 'mixed';
         $subject = Subject::where('school_id', $schoolId)->findOrFail($id);
         $classes = Classes::where('school_id', $schoolId)->orderBy('name')->get();
-        $programmes = Programme::where('school_id', $schoolId)->where('is_active', 1)->orderBy('name')->get();
-
-        return view('admin.subject.edit_subject', compact('subject', 'classes', 'programmes', 'isHigherEducation', 'isMixed'));
+        $programmes = Programme::where('school_id', $schoolId)
+            ->where(fn ($q) => $q->where('is_active', 1)->orWhere('id', $subject->programme_id))->orderBy('name')->get();
+        $unitSetup = ($isHigherEducation || $isMixed) ? app(\App\Support\Curriculum\CourseUnitSetup::class)->formData($subject) : null;
+        return view('admin.subject.edit_subject', compact('subject', 'classes', 'programmes', 'isHigherEducation', 'isMixed', 'unitSetup'));
     }
 
     public function subjectUpdate(Request $request, $id)
@@ -3859,7 +3875,10 @@ class AdminController extends Controller
         }
 
         try {
-            $subject->update($subject_data);
+            DB::transaction(function () use ($request, $subject, $subject_data): void {
+                $subject->update($subject_data);
+                app(\App\Support\Curriculum\CourseUnitSetup::class)->savePlacement($request, $subject);
+            });
         } catch (\Illuminate\Database\QueryException $e) {
             if ($e->getCode() == 23000) {
                 return redirect()->back()->withErrors(['code' => get_phrase('A Course Unit or Subject with this code already exists in this institution.')])->withInput();
