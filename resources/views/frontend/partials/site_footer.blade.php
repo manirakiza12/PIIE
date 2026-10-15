@@ -241,7 +241,7 @@
                     <li><a href="{{ $piieProgramsUrl }}?category=postgraduate#catalogue">Master's Degrees</a></li>
                     <li><a href="{{ $piieProgramsUrl }}?category=diploma&amp;level=PGD#catalogue">Postgraduate Diplomas</a></li>
                     <li><a href="{{ $piieProgramsUrl }}?category=bachelors#catalogue">Bachelor's Degrees</a></li>
-                    <li><a href="{{ $piieProgramsUrl }}?category=diploma#catalogue">Diplomas</a></li>
+                    <li><a href="{{ $piieProgramsUrl }}?category=diploma&amp;level=Diploma#catalogue">Diplomas</a></li>
                     <li><a href="{{ $piieProgramsUrl }}?category=certificate#catalogue">Certificates</a></li>
                 </ul>
             </nav>
