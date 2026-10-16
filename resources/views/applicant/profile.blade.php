@@ -1,7 +1,7 @@
 @extends('applicant.layout')
 
 @section('title', get_phrase('Account Settings'))
-@section('subtitle', get_phrase('Your sign-in details and contact information.'))
+@section('subtitle', get_phrase('Manage your password. Contact the admissions office for corrections to your particulars.'))
 
 @section('content')
 
@@ -12,33 +12,17 @@
                 <h2 class="ap-card-title"><i class="bi bi-person-gear"></i> {{ get_phrase('Your Details') }}</h2>
             </div>
 
-            <form action="{{ route('applicant.profile.update') }}" method="POST">
-                @csrf
-
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label">{{ get_phrase('First Name') }} <span class="req">*</span></label>
-                        <input type="text" name="first_name" class="form-control" value="{{ old('first_name', $applicant->first_name) }}" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">{{ get_phrase('Last Name') }} <span class="req">*</span></label>
-                        <input type="text" name="last_name" class="form-control" value="{{ old('last_name', $applicant->last_name) }}" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">{{ get_phrase('Email Address') }} <span class="req">*</span></label>
-                        <input type="email" name="email" class="form-control" value="{{ old('email', $applicant->email) }}" required>
-                        <div class="ap-hint">{{ get_phrase('You sign in with this address and we send application updates to it.') }}</div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">{{ get_phrase('Phone Number') }} <span class="req">*</span></label>
-                        <input type="text" name="phone" class="form-control" value="{{ old('phone', $applicant->phone) }}" required>
-                    </div>
-                </div>
-
-                <div class="d-flex justify-content-end mt-4">
-                    <button type="submit" class="ap-btn ap-btn-primary"><i class="bi bi-save"></i> {{ get_phrase('Save Changes') }}</button>
-                </div>
-            </form>
+            <p class="ap-hint mb-3">{{ get_phrase('Your account particulars are read-only. Contact the admissions office if any details need correcting.') }}</p>
+            <dl class="row mb-0">
+                <dt class="col-sm-4">{{ get_phrase('First Name') }}</dt>
+                <dd class="col-sm-8">{{ $applicant->first_name }}</dd>
+                <dt class="col-sm-4">{{ get_phrase('Last Name') }}</dt>
+                <dd class="col-sm-8">{{ $applicant->last_name }}</dd>
+                <dt class="col-sm-4">{{ get_phrase('Login Email') }}</dt>
+                <dd class="col-sm-8 text-break">{{ $applicant->email }}</dd>
+                <dt class="col-sm-4">{{ get_phrase('Phone Number') }}</dt>
+                <dd class="col-sm-8">{{ $applicant->phone }}</dd>
+            </dl>
         </div>
     </div>
 
@@ -54,7 +38,7 @@
                 <div class="mb-3">
                     <label class="form-label">{{ get_phrase('Current Password') }} <span class="req">*</span></label>
                     <div class="input-group">
-                        <input type="password" name="current_password" id="current_password" class="form-control" required>
+                        <input type="password" name="current_password" id="current_password" class="form-control" autocomplete="current-password" required>
                         <button type="button" class="btn btn-outline-secondary" onclick="togglePasswordVisibility('current_password', this)" tabindex="-1" aria-label="{{ get_phrase('Show password') }}">
                             <i class="bi bi-eye"></i>
                         </button>
@@ -63,7 +47,7 @@
                 <div class="mb-3">
                     <label class="form-label">{{ get_phrase('New Password') }} <span class="req">*</span></label>
                     <div class="input-group">
-                        <input type="password" name="password" id="password" class="form-control" required>
+                        <input type="password" name="password" id="password" class="form-control" autocomplete="new-password" required>
                         <button type="button" class="btn btn-outline-secondary" onclick="togglePasswordVisibility('password', this)" tabindex="-1" aria-label="{{ get_phrase('Show password') }}">
                             <i class="bi bi-eye"></i>
                         </button>
@@ -73,7 +57,7 @@
                 <div class="mb-3">
                     <label class="form-label">{{ get_phrase('Confirm New Password') }} <span class="req">*</span></label>
                     <div class="input-group">
-                        <input type="password" name="password_confirmation" id="password_confirmation" class="form-control" required>
+                        <input type="password" name="password_confirmation" id="password_confirmation" class="form-control" autocomplete="new-password" required>
                         <button type="button" class="btn btn-outline-secondary" onclick="togglePasswordVisibility('password_confirmation', this)" tabindex="-1" aria-label="{{ get_phrase('Show password') }}">
                             <i class="bi bi-eye"></i>
                         </button>
