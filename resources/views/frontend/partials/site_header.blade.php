@@ -103,7 +103,7 @@
      *
      * It previously held "everything published except About and Programmes", which
      * at the time meant Admissions, Research, Contact and Careers - four pages that
-     * are ALSO top-level navigation items. A visitor opening "About PIIE" was shown
+     * are ALSO top-level navigation items. A visitor opening "About" was shown
      * pages that were not about PIIE, and that were one click away in the bar above.
      *
      * So: subtract every slug already used as a top-level entry. With the CMS as it
@@ -236,10 +236,10 @@
                                 <button type="button" class="piie-nav__link"
                                         aria-expanded="false" aria-haspopup="true"
                                         @if($piieCurrentSlug === 'about-us') aria-current="page" @endif>
-                                    About PIIE <span class="piie-nav__caret" aria-hidden="true">&#9662;</span>
+                                    About <span class="piie-nav__caret" aria-hidden="true">&#9662;</span>
                                 </button>
                                 <ul class="piie-nav__dropdown">
-                                    <li><a href="{{ $piieAbout }}">About PIIE</a></li>
+                                    <li><a href="{{ $piieAbout }}">About</a></li>
                                     @foreach($piieAboutDropdown as $child)
                                         <li>
                                             <a href="{{ $piiePageUrl($child->slug) }}"
@@ -251,7 +251,7 @@
                         @else
                             <li>
                                 <a class="piie-nav__link" href="{{ $piieAbout }}"
-                                   @if($piieCurrentSlug === 'about-us') aria-current="page" @endif>About PIIE</a>
+                                   @if($piieCurrentSlug === 'about-us') aria-current="page" @endif>About</a>
                             </li>
                         @endif
                     @endif
@@ -316,7 +316,7 @@
                 <ul>
                     <li><a href="{{ $piieHome }}">Home</a></li>
                     @if($piieAbout)
-                        <li><a href="{{ $piieAbout }}">About PIIE</a></li>
+                        <li><a href="{{ $piieAbout }}">About</a></li>
                     @endif
                     @if($piieProgrammes)
                         <li><a href="{{ $piieProgrammes }}#catalogue">Programmes</a></li>

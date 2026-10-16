@@ -1047,7 +1047,7 @@ class PublicSiteRedesignTest extends TestCase
         if (preg_match('/<ul class="piie-nav__dropdown">(.*?)<\/ul>/s', $html, $m)) {
             $children = $m[1];
 
-            // "About PIIE" is deliberately NOT in this list. Its dropdown trigger is a
+            // "About" is deliberately NOT in this list. Its dropdown trigger is a
             // <button>, not a link, so without the self-link at the top of the menu
             // there would be no way to reach the About page from a desktop browser.
             foreach (['Admissions', 'Contact Us', 'Research', 'Careers',
@@ -1068,7 +1068,7 @@ class PublicSiteRedesignTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/<a[^>]*\bhref=""\b/', $html);
 
         // About is always reachable.
-        $this->assertStringContainsString('>About PIIE<', $html);
+        $this->assertStringContainsString('>About<', $html);
 
         // And the menu is data-driven rather than merely absent: publishing a genuine
         // sub-page produces a dropdown containing that page and no top-level page.
