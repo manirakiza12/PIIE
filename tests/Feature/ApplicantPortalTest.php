@@ -524,8 +524,12 @@ class ApplicantPortalTest extends TestCase
 
         $response = $this->post(route('applicant.application.submit'), ['declaration' => '1']);
 
-        $response->assertRedirect(route('applicant.dashboard'));
+        $response->assertRedirect(route('applicant.application.step', 'payment'));
         $this->assertSame(Admission::STATUS_SUBMITTED, Admission::first()->status);
+        $this->assertTrue(\App\Support\Payments\ApplicantPesaPalPayment::eligible(Admission::first()));
+        $this->get(route('applicant.application.step', 'payment'))->assertOk()
+            ->assertSee('Pay and Submit')
+            ->assertDontSee('name="declaration"', false);
     }
 
     public function test_a_submitted_application_can_no_longer_be_edited_by_the_applicant(): void
@@ -859,7 +863,7 @@ class ApplicantPortalTest extends TestCase
         $this->assertSame(ApplicationPayment::STATUS_FAILED, $payment->status);
     }
 
-    public function test_the_payment_step_does_not_apply_to_a_free_intake(): void
+    public function test_a_free_intake_keeps_step_six_for_submission_without_charging_a_fee(): void
     {
         $this->signIn();
         $this->get(route('applicant.dashboard'));
@@ -867,9 +871,62 @@ class ApplicantPortalTest extends TestCase
         $admission = Admission::first();
         $admission->update(['intake_session_id' => $this->makeIntakeSession($this->schoolId, ['application_fee' => 0])]);
 
-        $this->assertFalse(ApplicationProgress::isApplicable($admission->fresh(), ApplicationProgress::STEP_PAYMENT));
+        $this->assertTrue(ApplicationProgress::isApplicable($admission->fresh(), ApplicationProgress::STEP_PAYMENT));
+        $steps = ApplicationProgress::applicableSteps($admission->fresh());
+        $this->assertCount(6, $steps);
+        $this->assertSame('review', $steps[4]['key']);
+        $this->assertSame('Review', $steps[4]['label']);
+        $this->assertSame('payment', $steps[5]['key']);
+        $this->assertSame('Pay and Submit', $steps[5]['label']);
+        $this->get(route('applicant.application.step', 'payment'))->assertOk()
+            ->assertSee('No application fee is payable')
+            ->assertSee('name="declaration"', false)
+            ->assertDontSee('Submit Payment Details');
 
         $this->get(route('applicant.payment'))->assertRedirect(route('applicant.dashboard'));
+    }
+
+    public function test_review_is_separate_from_the_final_payment_and_submission_step(): void
+    {
+        $this->signIn();
+        $this->get(route('applicant.dashboard'));
+        $admission = Admission::first();
+        $admission->update(['intake_session_id' => $this->makeIntakeSession($this->schoolId, ['application_fee' => 50000])]);
+        $steps = ApplicationProgress::applicableSteps($admission->fresh());
+        $this->assertCount(6, $steps);
+        $this->assertSame('review', $steps[4]['key']);
+        $this->assertSame('payment', $steps[5]['key']);
+        $this->get(route('applicant.application.step', 'documents'))->assertOk()
+            ->assertSee(route('applicant.application.step', 'review'), false);
+        $this->get(route('applicant.application.step', 'review'))->assertOk()
+            ->assertSee('Continue to Pay and Submit')
+            ->assertDontSee('Review &amp; Submit', false)
+            ->assertDontSee('name="declaration"', false);
+        $this->get(route('applicant.application.step', 'payment'))->assertOk()
+            ->assertSee('Pay and Submit')
+            ->assertSee('name="declaration"', false)
+            ->assertSee('Submit Application');
+    }
+
+    public function test_review_is_not_marked_complete_until_the_final_step_is_reached(): void
+    {
+        $this->signIn();
+        $this->get(route('applicant.dashboard'));
+        $admission = $this->completeApplicationFields(Admission::first(), [
+            'programme_id' => $this->makeProgramme($this->schoolId),
+            'intake_session_id' => $this->makeIntakeSession($this->schoolId, ['application_fee' => 0]),
+            'current_step' => 'review',
+        ]);
+        AdmissionDocumentRequirement::create([
+            'school_id' => $this->schoolId, 'key' => 'optional_extra',
+            'label' => 'Optional Extra', 'is_required' => false,
+        ]);
+        $this->assertTrue(ApplicationProgress::canSubmit($admission->fresh()));
+        $this->assertFalse(ApplicationProgress::isComplete($admission->fresh(), 'review'));
+        $this->assertSame('review', ApplicationProgress::nextStep($admission->fresh())['key']);
+        $this->get(route('applicant.application.step', 'payment'))->assertOk();
+        $this->assertTrue(ApplicationProgress::isComplete($admission->fresh(), 'review'));
+        $this->assertFalse(ApplicationProgress::isComplete($admission->fresh(), 'payment'));
     }
 
     // ── Reference numbers ────────────────────────────────────────────────

@@ -47,12 +47,6 @@ class ApplicationController extends BaseApplicantController
         $admission = $this->currentApplication();
         $admission->load(['programme', 'intakeSession', 'educationHistory', 'uploadedDocuments', 'payments']);
 
-        // A step that does not apply (payment on a free intake) is not an
-        // error — send the applicant to the next thing that does.
-        if (! ApplicationProgress::isApplicable($admission, $step)) {
-            return redirect()->route('applicant.application.step', ApplicationProgress::STEP_REVIEW);
-        }
-
         // Remembering where they were is what makes "Continue Application"
         // land somewhere useful after a break.
         if ($admission->isEditableByApplicant() && $admission->current_step !== $step) {
@@ -107,6 +101,8 @@ class ApplicationController extends BaseApplicantController
 
             case ApplicationProgress::STEP_PAYMENT:
                 return view('applicant.application.payment', $shared + [
+                    'blockers'    => ApplicationProgress::blockers($admission),
+                    'canSubmit'   => ApplicationProgress::canSubmit($admission),
                     'amount'      => ApplicationFee::amountFor($admission),
                     'methods'     => ApplicationFee::availableMethods($admission->school_id),
                     'bankDetails' => ApplicationFee::bankInstructions(),
@@ -327,6 +323,13 @@ class ApplicationController extends BaseApplicantController
 
         if (! ApplicationWorkflow::submit($admission, $this->applicant())) {
             return back()->with('error', get_phrase('Your application is not complete yet. Please resolve the outstanding items listed below.'));
+        }
+
+        // Keep fee-paying applicants on the final step, where submission
+        // unlocks the existing provider checkout without changing its rules.
+        if (ApplicationFee::isRequired($admission) && ! ApplicationFee::isSettled($admission)) {
+            return redirect()->route('applicant.application.step', ApplicationProgress::STEP_PAYMENT)
+                ->with('success', get_phrase('Your application has been submitted. Complete your application fee payment below.'));
         }
 
         return redirect()->route('applicant.dashboard')

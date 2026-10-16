@@ -40,6 +40,6 @@
 @if($readOnly)
     <div class="alert alert-info d-flex align-items-start gap-2">
         <i class="bi bi-lock-fill mt-1"></i>
-        <div>{{ get_phrase('Your application has been submitted, so it is now read-only. Contact the admissions office if something needs to change.') }}</div>
+        <div>{{ get_phrase('Your submitted application details are read-only. You can still complete any outstanding application fee payment. Contact admissions for corrections.') }}</div>
     </div>
 @endif

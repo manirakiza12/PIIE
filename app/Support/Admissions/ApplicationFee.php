@@ -14,9 +14,8 @@ use Illuminate\Support\Facades\DB;
  *
  * The amount comes from the chosen intake session, so an institution can run
  * a free "early bird" intake alongside a charged one without any code change.
- * An intake with no fee (or none chosen yet) means the payment step simply
- * does not apply — the wizard skips it rather than showing a zero-value
- * checkout.
+ * An intake with no fee needs no payment checkout. The wizard retains its
+ * final submission step and explains that no application fee is payable.
  */
 class ApplicationFee
 {
