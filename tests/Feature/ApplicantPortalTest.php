@@ -47,6 +47,35 @@ class ApplicantPortalTest extends TestCase
         return $applicant;
     }
 
+    public function test_need_help_uses_the_institution_admissions_email_instead_of_a_personal_sender(): void
+    {
+        $this->signIn();
+        foreach ([
+            'system_email' => 'personal-sender@example.test',
+            'smtp_user' => 'personal-smtp@example.test',
+            \App\Support\Admissions\AdmissionsNotificationCopy::settingKey($this->schoolId) => 'institution@gmail.com',
+            \App\Support\Admissions\AdmissionsNotificationCopy::settingKey($this->makeSchool()) => 'other-institution@example.test',
+        ] as $key => $value) {
+            DB::table('global_settings')->updateOrInsert(['key' => $key], ['value' => $value]);
+        }
+        $this->get(route('applicant.profile'))->assertOk()
+            ->assertSee('mailto:institution@gmail.com', false)
+            ->assertDontSee('personal-sender@example.test')
+            ->assertDontSee('personal-smtp@example.test')
+            ->assertDontSee('other-institution@example.test');
+    }
+
+    public function test_need_help_does_not_fall_back_to_mail_credentials_when_institution_email_is_unconfigured(): void
+    {
+        $this->signIn();
+        foreach (['system_email' => 'personal-sender@example.test', 'smtp_user' => 'personal-smtp@example.test'] as $key => $value) {
+            DB::table('global_settings')->updateOrInsert(['key' => $key], ['value' => $value]);
+        }
+        $this->get(route('applicant.profile'))->assertOk()
+            ->assertDontSee('personal-sender@example.test')
+            ->assertDontSee('personal-smtp@example.test');
+    }
+
     public function test_account_settings_only_exposes_password_changes(): void
     {
         $applicant = $this->signIn();

@@ -3,7 +3,9 @@
     $logoAsset = asset('assets/uploads/logo/logo.png');
     $institution = institution_name();
     $supportPhone = get_settings('system_phone') ?: get_settings('phone');
-    $supportEmail = get_settings('system_email') ?: get_settings('smtp_user');
+    $supportEmail = $applicant
+        ? \App\Support\Admissions\AdmissionsNotificationCopy::recipient((int) $applicant->school_id)
+        : null;
 @endphp
 <!DOCTYPE html>
 <html lang="en">
