@@ -66,7 +66,7 @@
                     <option value="">{{ get_phrase('Select an intake') }}</option>
                     @foreach($intakes as $intake)
                         <option value="{{ $intake->id }}" {{ (int) old('intake_session_id', $admission->intake_session_id) === $intake->id ? 'selected' : '' }}>
-                            {{ $intake->name }}@if($intake->application_fee > 0) ({{ \App\Support\Admissions\ApplicationFee::format((float) $intake->application_fee) }}){{ '' }}@endif
+                            {{ $intake->name }}@if($intake->application_fee > 0) ({{ \App\Support\Admissions\ApplicationFee::format((float) $intake->application_fee, $admission) }}){{ '' }}@endif
                         </option>
                     @endforeach
                 </select>

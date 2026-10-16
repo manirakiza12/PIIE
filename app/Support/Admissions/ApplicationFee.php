@@ -44,14 +44,23 @@ class ApplicationFee
         return $admission->isFeeSettled();
     }
 
-    public static function currency(): string
+    public static function currency(?int $schoolId = null): string
     {
+        $schoolId ??= \App\Support\PublicTenantResolver::resolveSchoolId();
+        if ($schoolId && \Illuminate\Support\Facades\Schema::hasColumn('schools', 'school_currency')) {
+            $configured = strtoupper(trim((string) DB::table('schools')->where('id', $schoolId)->value('school_currency')));
+            if (preg_match('/\A[A-Z]{3}\z/', $configured)) {
+                return $configured;
+            }
+        }
+
+        // Compatibility for institutions that have not configured a currency.
         return get_active_currency();
     }
 
     public static function currencyFor(Admission $admission): string
     {
-        return $admission->application_fee_currency ?: self::currency();
+        return $admission->application_fee_currency ?: self::currency($admission->school_id);
     }
 
     /** Freeze new obligations on submission; existing rows are never mass-rewritten. */
@@ -59,7 +68,7 @@ class ApplicationFee
     {
         if ($admission->application_fee_amount === null) {
             $admission->forceFill(['application_fee_amount' => self::amountFor($admission),
-                'application_fee_currency' => self::currency()])->save();
+                'application_fee_currency' => self::currencyFor($admission)])->save();
         }
     }
 

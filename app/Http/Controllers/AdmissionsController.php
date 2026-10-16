@@ -418,7 +418,7 @@ class AdmissionsController extends Controller
         ]);
         ApplicationFee::refreshStatus($admission);
 
-        AuditLog::record('create', 'Admissions', "Manual application-fee payment recorded for {$admission->app_number} ({$validated['method']}, " . ApplicationFee::format((float) $validated['amount']) . ").", [
+        AuditLog::record('create', 'Admissions', "Manual application-fee payment recorded for {$admission->app_number} ({$validated['method']}, " . ApplicationFee::format((float) $validated['amount'], $admission) . ").", [
             'event_type'  => 'DATA',
             'record_type' => ApplicationPayment::class,
             'record_id'   => $payment->id,
