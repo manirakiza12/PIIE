@@ -1,6 +1,12 @@
 @extends('admin.navigation')
    
 @section('content')
+    @php
+        $profileInfo = json_decode(auth()->user()->user_information ?? '', true);
+        $profileInfo = is_array($profileInfo) ? $profileInfo : [];
+        $birthday = $profileInfo['birthday'] ?? null;
+        $birthday = is_numeric($birthday) ? (int) $birthday : (is_string($birthday) ? strtotime($birthday) : false);
+    @endphp
     <!-- Start User Profile area -->
     <div class="user-profile-area d-flex flex-wrap">
         <!-- Left side -->
@@ -39,12 +45,12 @@
                 </div>
                 <div class="item">
                 <p class="title">{{ get_phrase('Phone Number') }}</p>
-                <p class="info">{{ json_decode(auth()->user()->user_information, true)['phone'] }}</p>
+                <p class="info">{{ ($profileInfo['phone'] ?? '') }}</p>
                 </div>
                 <div class="item">
                 <p class="title">{{ get_phrase('Address') }}</p>
                 <p class="info">
-                {{ json_decode(auth()->user()->user_information, true)['address'] }}
+                {{ ($profileInfo['address'] ?? '') }}
                 </p>
                 </div>
             </div>
@@ -111,18 +117,12 @@
                     <label for="eBrithDay" class="eForm-label"
                         >{{ get_phrase('Birthday') }}</label
                     >
-                    @php
-                        $birthday = json_decode(auth()->user()->user_information, true)['birthday'];
-                        if(empty($birthday)){
-                            $birthday = time();
-                        }
-                    @endphp
                     <input
                         type="text"
                         class="form-control eForm-control"
                         id="eInputDate"
                         name="eDefaultDateRange"
-                        value="{{ date('m/d/Y', $birthday) }}"
+                        value="{{ $birthday ? date('m/d/Y', $birthday) : '' }}"
                     />
                     </div>
                     <div class="fpb-7">
@@ -133,8 +133,8 @@
                         class="form-select eForm-select eChoice-multiple-without-remove"
                         data-placeholder="Type to search..."
                     >
-                        <option value="Male" @php strtolower(json_decode(auth()->user()->user_information, true)['gender']) == 'male' ? 'selected':''; @endphp>{{ get_phrase('Male') }}</option>
-                        <option value="Female" @php strtolower(json_decode(auth()->user()->user_information, true)['gender']) == 'female' ? 'selected':''; @endphp>{{ get_phrase('Female') }}</option>
+                        <option value="Male" @selected(strtolower($profileInfo['gender'] ?? '') === 'male')>{{ get_phrase('Male') }}</option>
+                        <option value="Female" @selected(strtolower($profileInfo['gender'] ?? '') === 'female')>{{ get_phrase('Female') }}</option>
                     </select>
                     </div>
                     <div class="fpb-7">
@@ -146,7 +146,7 @@
                         class="form-control eForm-control"
                         id="eInputPhone"
                         name="phone"
-                        value="{{ json_decode(auth()->user()->user_information, true)['phone'] }}"
+                        value="{{ ($profileInfo['phone'] ?? '') }}"
                         placeholder="00 (00) 12345 6789"
                         aria-label="00 (00) 12345 6789"
                     />
@@ -160,7 +160,7 @@
                         class="form-control eForm-control"
                         id="eInputAddress"
                         name="address"
-                        value="{{ json_decode(auth()->user()->user_information, true)['address'] }}"
+                        value="{{ ($profileInfo['address'] ?? '') }}"
                         placeholder="Enter Address"
                         aria-label="Enter Address"
                     />
@@ -170,7 +170,7 @@
                     <label for="eInputAddress" class="eForm-label"
                         >{{ get_phrase('Photo') }}</label
                     >
-                    <input type="hidden" class="form-control" name="old_photo" value="{{ json_decode(auth()->user()->user_information, true)['photo'] }}"/>
+                    <input type="hidden" class="form-control" name="old_photo" value="{{ ($profileInfo['photo'] ?? '') }}"/>
                     <input type="file" class="form-control eForm-control-file" name="photo" accept="image/*" />
                     </div>
 
