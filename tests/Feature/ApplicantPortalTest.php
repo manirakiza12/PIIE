@@ -47,6 +47,60 @@ class ApplicantPortalTest extends TestCase
         return $applicant;
     }
 
+    public function test_account_settings_only_exposes_password_changes(): void
+    {
+        $applicant = $this->signIn();
+        $this->get(route('applicant.profile'))->assertOk()
+            ->assertSee($applicant->email)
+            ->assertSee('Your account particulars are read-only.')
+            ->assertSee('name="current_password"', false)
+            ->assertDontSee('name="first_name"', false)
+            ->assertDontSee('name="last_name"', false)
+            ->assertDontSee('name="email"', false)
+            ->assertDontSee('name="phone"', false)
+            ->assertDontSee('Save Changes');
+        $this->assertSame(0, Admission::count());
+    }
+
+    public function test_profile_posts_cannot_change_account_or_application_particulars(): void
+    {
+        $applicant = $this->signIn();
+        $this->get(route('applicant.dashboard'));
+        $admission = Admission::firstOrFail();
+        $accountBefore = $applicant->fresh()->getRawOriginal();
+        foreach (['draft', 'submitted', 'needs_correction', 'accepted', 'enrolled'] as $status) {
+            $admission->update(['status' => $status]);
+            $applicationBefore = $admission->fresh()->getRawOriginal();
+            $this->post(route('applicant.profile.update'), [
+                'first_name' => 'Changed', 'last_name' => 'Particulars',
+                'email' => 'changed@example.test', 'phone' => '+256700000000',
+            ])->assertForbidden();
+            $this->assertSame($accountBefore, $applicant->fresh()->getRawOriginal());
+            $this->assertSame($applicationBefore, $admission->fresh()->getRawOriginal());
+        }
+    }
+
+    public function test_password_changes_require_current_password_and_leave_particulars_unchanged(): void
+    {
+        $applicant = $this->signIn();
+        $applicant->forceFill(['password' => Hash::make('OriginalPassword')])->save();
+        $this->get(route('applicant.dashboard'));
+        $admission = Admission::firstOrFail();
+        $admission->update(['status' => 'submitted', 'submitted_at' => now()]);
+        $applicationBefore = $admission->fresh()->getRawOriginal();
+        $accountBefore = $applicant->only(['first_name', 'last_name', 'email', 'phone']);
+        $payload = ['current_password' => 'WrongPassword', 'password' => 'NewSecurePassword',
+            'password_confirmation' => 'NewSecurePassword', 'first_name' => 'Changed', 'email' => 'changed@example.test'];
+        $this->from(route('applicant.profile'))->post(route('applicant.password.change'), $payload)
+            ->assertRedirect(route('applicant.profile'))->assertSessionHas('error');
+        $this->assertTrue(Hash::check('OriginalPassword', $applicant->fresh()->password));
+        $payload['current_password'] = 'OriginalPassword';
+        $this->post(route('applicant.password.change'), $payload)->assertSessionHas('success');
+        $this->assertTrue(Hash::check('NewSecurePassword', $applicant->fresh()->password));
+        $this->assertSame($accountBefore, $applicant->fresh()->only(array_keys($accountBefore)));
+        $this->assertSame($applicationBefore, $admission->fresh()->getRawOriginal());
+    }
+
     // ── Public entry point ───────────────────────────────────────────────
 
     public function test_apply_page_no_longer_accepts_an_anonymous_submission_and_points_at_the_portal(): void
@@ -337,6 +391,41 @@ class ApplicantPortalTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertNull(Admission::first()->submitted_at);
+    }
+
+    public function test_submission_confirmation_goes_to_the_application_email_and_is_not_repeated_by_a_double_post(): void
+    {
+        foreach (['smtp_user' => 'sender@example.test', 'smtp_pass' => 'fixture', 'smtp_host' => 'localhost', 'smtp_port' => '2525'] as $key => $value) {
+            DB::table('global_settings')->updateOrInsert(['key' => $key], ['value' => $value]);
+        }
+        (require database_path('migrations/2026_10_08_210000_create_applicant_notification_deliveries_table.php'))->up();
+        \Illuminate\Support\Facades\Mail::fake();
+        $applicant = $this->signIn();
+        $this->get(route('applicant.dashboard'));
+        $admission = $this->completeApplicationFields(Admission::first(), [
+            'email' => 'application-recipient@example.test',
+            'programme_id' => $this->makeProgramme($this->schoolId),
+            'intake_session_id' => $this->makeIntakeSession($this->schoolId, ['application_fee' => 0]),
+        ]);
+        AdmissionDocumentRequirement::create([
+            'school_id' => $this->schoolId, 'key' => 'optional_extra',
+            'label' => 'Optional Extra', 'is_required' => false,
+        ]);
+
+        $this->post(route('applicant.application.submit'), ['declaration' => '1'])
+            ->assertRedirect(route('applicant.dashboard'));
+        $this->assertSame(Admission::STATUS_SUBMITTED, $admission->fresh()->status);
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class, function ($mail) use ($admission, $applicant) {
+            return $mail->hasTo('application-recipient@example.test')
+                && ! $mail->hasTo($applicant->email)
+                && str_contains($mail->data['subject'], 'Application received')
+                && $mail->data['details']['Application Number'] === $admission->app_number
+                && $mail->data['cta_url'] === route('applicant.track')
+                && str_contains($mail->render(), 'We have received your application');
+        });
+        $this->post(route('applicant.application.submit'), ['declaration' => '1']);
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class, 1);
+        $this->assertSame(1, DB::table('applicant_notification_deliveries')->whereNotNull('sent_at')->count());
     }
 
     public function test_a_complete_application_submits_and_records_a_visible_timeline_entry(): void

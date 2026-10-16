@@ -9,7 +9,6 @@ use App\Support\Admissions\ApplicationFee;
 use App\Support\Admissions\ApplicationProgress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use PDF;
 
@@ -130,36 +129,7 @@ class PortalController extends BaseApplicantController
 
     public function updateProfile(Request $request)
     {
-        $applicant = $this->applicant();
-
-        $validated = $request->validate([
-            'first_name' => 'required|string|max:100',
-            'last_name'  => 'required|string|max:100',
-            'phone'      => 'required|string|max:30',
-            'email'      => [
-                'required', 'email', 'max:150',
-                Rule::unique('applicants', 'email')
-                    ->where(fn ($q) => $q->where('school_id', $applicant->school_id))
-                    ->ignore($applicant->id),
-            ],
-        ]);
-
-        $applicant->update($validated);
-
-        // A draft still mirrors the account details; a submitted application
-        // is a record of what was sent and is left exactly as it was.
-        $admission = $this->currentApplication();
-
-        if ($admission->isDraft()) {
-            $admission->update([
-                'first_name' => $validated['first_name'],
-                'last_name'  => $validated['last_name'],
-                'email'      => $validated['email'],
-                'phone'      => $validated['phone'],
-            ]);
-        }
-
-        return back()->with('success', get_phrase('Your details have been updated.'));
+        abort(403, get_phrase('Account particulars cannot be changed here. Contact the admissions office for corrections.'));
     }
 
     public function updatePassword(Request $request)
