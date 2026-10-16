@@ -1,7 +1,7 @@
 @extends('admin.navigation')
 
 @section('content')
-<div class="mainSection-title"><div class="d-flex justify-content-between align-items-center flex-wrap gap-3"><div><h4>Programme Student Groups</h4><p class="text-muted mb-0">Manage groups of students entering the same programme through a specific admissions intake.</p><ul class="d-flex align-items-center eBreadcrumb-2"><li>Academic</li><li>Programme Student Groups</li></ul></div>
+<div class="mainSection-title"><div class="d-flex justify-content-between align-items-center flex-wrap gap-3"><div><h4>Programme Student Groups</h4><ul class="d-flex align-items-center eBreadcrumb-2"><li>Academics</li><li>Programmes</li></ul></div>
     @if(auth()->user()->hasPermission('academic.programme_cohort.manage'))<a class="btn btn-primary text-nowrap" href="{{ route('admin.programme_cohorts.create') }}">Create Programme Student Group</a>@endif
 </div></div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif

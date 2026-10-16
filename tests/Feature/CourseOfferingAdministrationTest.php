@@ -683,8 +683,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             route('admin.department_list'), route('admin.programmes.index'),
             route('admin.academic_structure.index'), route('admin.academic_structure.index', ['section'=>'semesters']),
             route('admin.settings.academic'), route('admin.curricula.index'), route('admin.subject_list'),
-            route('admin.class_list'), route('admin.programme_cohorts.index'), route('admin.teacher.permission'),
-            route('admin.course_offerings.index'), route('admin.routine'), route('admin.live_classes.index'),
+            route('admin.class_list'), route('admin.course_offerings.index'), route('admin.teacher.permission'), route('admin.routine'), route('admin.live_classes.index'),
             route('admin.daily_attendance'), route('admin.question_bank.index'), route('admin.online_exams.index'),
             route('admin.gradebook'),
         ] as $destination) {
@@ -694,6 +693,23 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             $previousPosition = $positions[0];
         }
         $page->assertSee('>Teaching Groups</span>', false)->assertDontSee('>Classes</span>', false);
+        $this->assertNotContains(route('admin.programme_cohorts.index'), $destinations);
+        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Programme Student Groups');
+        // Keep the direct destination when a legacy restriction prevents opening Programmes.
+        $admin->forceFill(['menu_permission'=>json_encode(['admin.programme_cohorts.index'])])->save();
+        $restricted=$this->actingAs($admin->fresh())->get(route('admin.course_offerings.index'))->assertOk();
+        $this->assertStringContainsString('>Programme Student Groups</span>', $restricted->getContent());
+    }
+
+    public function test_scheduling_a_saved_unit_prefills_its_name_and_keeps_dated_year_selection(): void
+    {
+        $tenant=$this->tenants[1];
+        $this->actingAs($this->staff(1,['academic.course_offering.manage']));
+        $page=$this->get(route('admin.course_offerings.create',['subject_id'=>$tenant['subject']]))->assertOk();
+        $doc=new \DOMDocument();@$doc->loadHTML($page->getContent());$xp=new \DOMXPath($doc);
+        $this->assertSame((string)$tenant['subject'],$xp->query('//select[@name="subject_id"]/option[@selected]')->item(0)->getAttribute('value'));
+        $this->assertSame(1,$xp->query('//select[@name="academic_year_id"]')->length);
+        $this->assertSame(1,$xp->query('//select[@name="academic_period_id"]')->length);
     }
 
     public function test_academic_context_http_workflow_feedback_tenant_validation_and_clear_period(): void

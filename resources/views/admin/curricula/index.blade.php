@@ -3,7 +3,7 @@
 @section('content')
 <div class="mainSection-title">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-        <div><h4>{{ get_phrase('Programme Curricula') }}</h4><p class="text-muted mb-0">{{ get_phrase('Define the stages, course units and credit requirements students follow throughout each programme.') }}</p><ul class="d-flex align-items-center eBreadcrumb-2"><li>{{ get_phrase('Academic Structure') }}</li><li>{{ get_phrase('Programme Curricula') }}</li></ul></div>
+        <div><h4>{{ get_phrase('Programme Curricula') }}</h4><ul class="d-flex align-items-center eBreadcrumb-2"><li>{{ get_phrase('Academics') }}</li><li>{{ get_phrase('Programmes') }}</li></ul></div>
         @if(auth()->user()->hasPermission('academic.curriculum.manage'))
             <a class="eBtn eBtn-primary" href="{{ route('admin.curricula.create', request()->only('programme_id')) }}">{{ get_phrase('Create Curriculum') }}</a>
         @endif

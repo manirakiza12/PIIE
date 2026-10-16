@@ -13,7 +13,13 @@
                         <li><a href="#">{{ get_phrase('Programmes') }}</a></li>
                     </ul>
                 </div>
-                <div class="export-btn-area d-flex gap-2">
+                @php
+                    $programmeMenuRestrictions = json_decode((string) auth()->user()->menu_permission, true) ?: [];
+                @endphp
+                <div class="export-btn-area d-flex gap-2 flex-wrap">
+                    @if(academic_education_level(auth()->user()->school_id) === 'tertiary' && auth()->user()->hasPermission('academic.programme_cohort.view') && (!$programmeMenuRestrictions || in_array('admin.programme_cohorts.index', $programmeMenuRestrictions)))
+                        <a href="{{ route('admin.programme_cohorts.index') }}" class="export_btn export_btn-outline">{{ get_phrase('Programme Student Groups') }}</a>
+                    @endif
                     <a href="{{ route('admin.department_list') }}" class="export_btn export_btn-outline"><i class="bi bi-diagram-3"></i> {{ get_phrase('Manage Faculties') }}</a>
                     <a href="{{ route('admin.programmes.export', ['search' => $search, 'department_id' => $departmentId]) }}" class="export_btn bg-secondary"><i class="bi bi-download"></i> {{ get_phrase('Export CSV') }}</a>
                     <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.programmes.open_modal') }}', '{{ get_phrase('Add Programme') }}')">{{ get_phrase('Add Programme') }}</a>
