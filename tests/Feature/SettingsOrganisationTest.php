@@ -60,6 +60,18 @@ class SettingsOrganisationTest extends TestCase
         $this->assertDatabaseHas('grades',['id'=>$grade]);
     }
 
+    public function test_admissions_copy_address_is_validated_and_saved_for_only_this_institution(): void
+    {
+        $key = \App\Support\Admissions\AdmissionsNotificationCopy::settingKey((int) $this->admin->school_id);
+        $this->post(route('admin.settings.notifications.save'), ['admissions_notification_email' => 'not-an-email'])
+            ->assertSessionHasErrors('admissions_notification_email');
+        $this->assertNull(DB::table('global_settings')->where('key', $key)->value('value'));
+        $this->post(route('admin.settings.notifications.save'), ['admissions_notification_email' => 'admissions@example.test'])->assertRedirect();
+        $this->assertSame('admissions@example.test', DB::table('global_settings')->where('key', $key)->value('value'));
+        $this->get(route('admin.settings.notifications'))->assertOk()->assertSee('admissions@example.test');
+        $this->assertNull(\App\Support\Admissions\AdmissionsNotificationCopy::recipient($this->makeSchool()));
+    }
+
     public function test_legacy_combined_save_still_updates_both_sets(): void
     {
         $this->post(route('admin.settings.academic.save'),['grade'=>[['name'=>'B','mark_from'=>60,'mark_upto'=>79]],'live_class_platform_zoom'=>'1'])->assertRedirect();

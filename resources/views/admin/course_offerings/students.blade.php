@@ -26,7 +26,7 @@
         <div class="col-6 col-md-6 col-xl-2"><div class="text-muted small">Offering Status</div><span class="badge bg-{{ $isOpen ? 'success' : 'secondary' }}">{{ ucfirst(str_replace('_', ' ', $offering->status)) }}</span></div>
     </div>
     <div class="row g-2 mt-3" aria-label="Student registration summary">
-        @foreach(['eligible' => 'Eligible', 'registered' => 'Registered', 'confirmed' => 'Confirmed', 'dropped' => 'Dropped'] as $key => $label)
+        @foreach(['not_registered' => 'Not Registered', 'registered' => 'Awaiting Confirmation', 'confirmed' => 'Confirmed', 'dropped' => 'Withdrawn'] as $key => $label)
             <div class="col-6 col-md-3"><div class="border rounded p-2 text-center h-100"><div class="fs-4 fw-semibold">{{ $counts[$key] }}</div><div class="small text-muted">{{ $label }}</div></div></div>
         @endforeach
     </div>
@@ -47,13 +47,15 @@
 @endif
 
 <ul class="nav nav-tabs mb-0" role="tablist">
-    <li class="nav-item"><a class="nav-link {{ $mode === 'eligible' ? 'active' : '' }}" @if($mode === 'eligible') aria-current="page" @endif href="{{ route('admin.course_offerings.eligible_students', $offering->id) }}">Eligible Students ({{ $counts['eligible'] }})</a></li>
-    <li class="nav-item"><a class="nav-link {{ $mode === 'registered' ? 'active' : '' }}" @if($mode === 'registered') aria-current="page" @endif href="{{ route('admin.course_offerings.registrations', $offering->id) }}">Registered Students ({{ $counts['registered'] + $counts['confirmed'] + $counts['dropped'] }})</a></li>
+    <li class="nav-item"><a class="nav-link {{ $mode === 'eligible' ? 'active' : '' }}" @if($mode === 'eligible') aria-current="page" @endif href="{{ route('admin.course_offerings.eligible_students', $offering->id) }}">Not Registered ({{ $counts['not_registered'] }})</a></li>
+    <li class="nav-item"><a class="nav-link {{ $mode === 'registered' ? 'active' : '' }}" @if($mode === 'registered') aria-current="page" @endif href="{{ route('admin.course_offerings.registrations', $offering->id) }}">Registered Students ({{ $counts['registered'] + $counts['confirmed'] }}) and History</a></li>
 </ul>
 
 <section class="eSection-wrap">
 @if($mode === 'eligible')
-    <p class="text-muted">Eligibility is checked against each student's academic placement: Programme, Curriculum, Year of Study (Curriculum Stage), Academic Year and current Programme Student Group. It is checked again when you register, so a student whose record changed in the meantime will be skipped with a reason.</p>
+    <p class="text-muted">Not Registered lists active student accounts with a current placement in a linked Curriculum or membership of a relevant Programme Student Group and no registration record for this offering. Students without either link cannot be identified here. Withdrawn students appear in Registered Students and History. Counts cover all relevant groups; the group filter narrows the list below.</p>
+<h6>Eligible Students ({{ $students->count() }})</h6>
+<p class="text-muted">Eligibility is checked against each student's academic placement: Programme, Curriculum, Year of Study (Curriculum Stage), Academic Year and current Programme Student Group. It is checked again when you register, so a student whose record changed in the meantime will be skipped with a reason.</p>
     @if(!$isOpen)
         <div class="alert alert-info">Students can be registered only while the Course Offering is open.</div>
     @endif
@@ -118,7 +120,7 @@
     @endif
 
     @if($ineligible->isNotEmpty())
-        <h6 class="mt-4">Not eligible ({{ $ineligible->count() }})</h6>
+        <h6 class="mt-4">Not Registered: Needs Attention ({{ $ineligible->count() }})</h6>
         <p class="text-muted small">These students follow a Curriculum linked to this Course Offering, or belong to a relevant Programme Student Group, but cannot register yet.</p>
         <div class="table-responsive"><table class="table table-sm align-middle">
             <thead><tr><th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Student Group</th><th scope="col">Year of Study (Stage)</th><th scope="col">Reason</th></tr></thead>

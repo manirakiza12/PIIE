@@ -17,8 +17,21 @@ use Illuminate\Support\Facades\Mail;
  */
 class StudentPortalActivation
 {
-    public static function sendActivationEmail(User $student, string $plainPassword, ?int $programmeId = null, ?int $intakeSessionId = null, bool $durable = false): bool
+    public static function sendActivationEmail(User $student, string $plainPassword, ?int $programmeId = null, ?int $intakeSessionId = null, bool $durable = false, bool $copyToAdmissions = true): bool
     {
+        if ($copyToAdmissions) {
+            try {
+                \App\Support\Admissions\AdmissionsNotificationCopy::send($student->email, [
+                    'school_id' => $student->school_id,
+                    'subject' => 'Student portal activation issued',
+                    'heading' => 'Student portal activation issued',
+                    'paragraphs' => ['Portal activation instructions have been prepared for this student. This notice does not confirm inbox delivery.'],
+                    'details' => ['Student Name' => $student->name, 'Student Number' => $student->code],
+                ]);
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Log::warning('Admissions activation copy could not be prepared.');
+            }
+        }
         if ($durable && \Illuminate\Support\Facades\Schema::hasTable('applicant_notification_deliveries')) {
             $id = \App\Support\Admissions\ApplicantNotificationDelivery::record($student->email, [
                 'name' => $student->name, 'email' => $student->email, 'password' => $plainPassword, 'code' => $student->code,
@@ -33,7 +46,7 @@ class StudentPortalActivation
             return \App\Support\Admissions\ApplicantNotificationDelivery::deliver($id);
         }
         if ($durable && \Illuminate\Support\Facades\DB::transactionLevel() > 0) {
-            \Illuminate\Support\Facades\DB::afterCommit(fn () => self::sendActivationEmail($student, $plainPassword, $programmeId, $intakeSessionId));
+            \Illuminate\Support\Facades\DB::afterCommit(fn () => self::sendActivationEmail($student, $plainPassword, $programmeId, $intakeSessionId, false, false));
             return true;
         }
         if (empty(get_settings('smtp_user')) || !get_settings('smtp_pass') || !get_settings('smtp_host') || !get_settings('smtp_port')) {

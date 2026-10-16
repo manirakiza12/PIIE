@@ -82,11 +82,19 @@ class EnhancedSettingsController extends Controller
     public function notifications()
     {
         $notif_settings = $this->getNotifSettings();
-        return view('admin.settings.notifications', compact('notif_settings'));
+        $admissionsCopyEmail = \App\Support\Admissions\AdmissionsNotificationCopy::recipient((int) $this->school_id);
+        return view('admin.settings.notifications', compact('notif_settings', 'admissionsCopyEmail'));
     }
 
     public function saveNotifications(Request $request)
     {
+        $request->validate(['admissions_notification_email' => ['nullable', 'email:filter', 'max:254']]);
+        if ($request->has('admissions_notification_email')) {
+            GlobalSettings::updateOrCreate(
+                ['key' => \App\Support\Admissions\AdmissionsNotificationCopy::settingKey((int) $this->school_id)],
+                ['value' => trim((string) $request->input('admissions_notification_email'))]
+            );
+        }
         $keys = [
             'notif_new_student', 'notif_fee_paid', 'notif_exam_published',
             'notif_assignment', 'notif_leave_request', 'notif_notice',
