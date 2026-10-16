@@ -22,7 +22,7 @@ final class CourseUnitSetup
         }
         $schoolId = (int) $user->school_id;
         $plans = Curriculum::where('school_id', $schoolId)->where('status', 'draft')
-            ->with(['programme', 'stages', 'memberships.stage', 'memberships.subject', 'memberships.prerequisites'])->orderBy('id')->get();
+            ->with(['programme', 'effectiveAcademicYear' => fn ($query) => $query->where('school_id', $schoolId), 'stages', 'memberships.stage', 'memberships.subject', 'memberships.prerequisites'])->orderBy('id')->get();
         return ['plans' => $plans, 'subjectId' => $subject?->id];
     }
 

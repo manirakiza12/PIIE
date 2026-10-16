@@ -15,7 +15,7 @@
             <h4>{{ academic_term('teacher_assignment', auth()->user()->school_id) }}</h4>
             <ul class="d-flex align-items-center eBreadcrumb-2">
               <li><a href="#">{{ get_phrase('Home') }}</a></li>
-              <li><a href="#">{{ get_phrase('Users') }}</a></li>
+              <li><a href="#">{{ get_phrase('Academics') }}</a></li>
               <li><a href="#">{{ academic_term('teacher_assignment', auth()->user()->school_id) }}</a></li>
             </ul>
           </div>
@@ -23,6 +23,13 @@
       </div>
     </div>
 </div>
+@if($tertiaryGroups)
+<div class="alert alert-info" role="note">
+    <strong>Assign lecturers to a course unit:</strong> Open Course Registrations, select its Academic Year and Semester, then View ? Teaching Team.
+    <p class="mb-0 mt-1">The controls below grant marks and attendance access across a Teaching Group or Programme. These access settings remain available for the workflows that use them.</p>
+    @if(auth()->user()->hasPermission('academic.course_offering.view'))<a class="alert-link" href="{{ route('admin.course_offerings.index') }}">Open Course Registrations</a>@endif
+</div>
+@endif
 <!-- Existing teaching-group permissions remain separate from programme access. -->
 <details open class="mb-3"><summary class="fw-bold mb-3">{{ academic_term('class', auth()->user()->school_id) }} {{ get_phrase('Access') }}</summary>
 <div class="row">

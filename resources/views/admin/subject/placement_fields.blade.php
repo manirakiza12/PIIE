@@ -3,6 +3,7 @@
     $setupPlans = $unitSetup['plans']->mapWithKeys(function ($plan) use ($unitSetup) {
         $current = $plan->memberships->firstWhere('subject_id', $unitSetup['subjectId']);
         return [(string)$plan->id => [
+            'academicYear' => $plan->effectiveAcademicYear?->label,
             'stages' => $plan->stages->map(fn ($stage) => ['id' => $stage->id, 'label' => $stage->label])->values(),
             'choices' => $plan->memberships->where('subject_id', '!=', $unitSetup['subjectId'])->map(fn ($member) => ['id' => $member->id, 'label' => trim(($member->subject->code ?? '').' — '.($member->subject->name ?? ''))])->values(),
             'current' => $current ? $current->only(['curriculum_stage_id','classification','credits','period_type','period_sequence','sequence']) + ['prerequisites' => $current->prerequisites->pluck('id')->all()] : null,
@@ -27,6 +28,11 @@
         </select>
     </div>
     @if($unitSetup['plans']->isEmpty())<p class="text-muted">{{ get_phrase('Create a draft Programme Curriculum and its stages before assigning a placement. You can save the Course Unit catalogue record now.') }} <a href="{{ route('admin.curricula.create') }}">{{ get_phrase('Create Programme Curriculum') }}</a></p>@endif
+    <div class="mb-3">
+        <label class="form-label" for="unit-curriculum-academic-year">Curriculum applies from Academic Year</label>
+        <input id="unit-curriculum-academic-year" class="form-control" type="text" readonly data-curriculum-year value="Choose a Programme Curriculum to see its Academic Year">
+        <p class="form-text">This year comes from the selected curriculum. Set or change it in the draft Programme Curriculum. For the actual year and semester in which this unit is taught, use Course Registrations ? Create Course Offering after saving the unit.</p>
+    </div>
     <fieldset data-placement-fields disabled>
         <div class="row g-3">
             <div class="col-md-6"><label class="form-label">{{ get_phrase('Programme Year / Stage') }}</label><select class="form-select" name="placement_stage_id" required data-stage></select></div>
@@ -54,6 +60,7 @@
         const selected = plans[plan.value];
         fields.disabled = !selected;
         stage.replaceChildren(); prerequisites.replaceChildren();
+        root.querySelector('[data-curriculum-year]').value = !selected ? 'Choose a Programme Curriculum to see its Academic Year' : (selected.academicYear || 'Not selected yet ? set it in the draft Programme Curriculum');
         if (!selected) return;
         const current = (restore && recovered) || selected.current || {classification:'compulsory',credits:'0.00',sequence:0,prerequisites:[]};
         selected.stages.forEach(item => stage.add(new Option(item.label, item.id, false, String(item.id) === String(current.curriculum_stage_id))));

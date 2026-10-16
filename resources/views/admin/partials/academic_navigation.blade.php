@@ -3,7 +3,7 @@
     $calendarLabel = ucfirst(\App\Models\School::query()->find($user->school_id)?->academic_calendar_pattern ?: ($schoolType === 'k12' ? 'term' : 'semester')).'s';
     $academicLinks = [
         [$menuAllows('admin.department') && $navCan('admin.department_list'), $canSeeProgrammes ? 'Schools, Faculties & Departments' : 'Departments', 'admin.department_list', [], request()->is('admin/department*'), 'bi-building'],
-        [$showProgrammes, 'Programmes', 'admin.programmes.index', [], request()->is('admin/programmes*'), 'bi-mortarboard'],
+        [$showProgrammes, 'Programmes', 'admin.programmes.index', [], request()->is('admin/programmes*','admin/programme-cohorts*'), 'bi-mortarboard'],
         [$showAcademicYears, 'Academic Years', 'admin.academic_structure.index', [], request()->is('admin/academic-structure') && request('section') !== 'semesters', 'bi-calendar-range'],
         [$showAcademicYears, $calendarLabel, 'admin.academic_structure.index', ['section'=>'semesters'], request()->is('admin/academic-structure') && request('section') === 'semesters', 'bi-calendar-week'],
         [$showLegacySessions, 'Academic Sessions', 'admin.settings.session_manager', [], request()->is('admin/session_manager*'), 'bi-calendar'],
@@ -11,9 +11,9 @@
         [$showStudyPlans, 'Programme Curricula', 'admin.curricula.index', [], request()->is('admin/curricula*'), 'bi-list-check'],
         [$showCourseUnits, academic_term('subjects', $user->school_id), 'admin.subject_list', [], request()->is('admin/subject*','admin/course-unit*'), 'bi-journal-bookmark'],
         [$showClasses, academic_term('classes', $user->school_id), 'admin.class_list', [], request()->is('admin/class_list','admin/class/*','admin/class_create'), 'bi-collection'],
-        [$showCohorts, 'Programme Student Groups', 'admin.programme_cohorts.index', [], request()->is('admin/programme-cohorts*'), 'bi-people'],
-        [$showLecturers, academic_term('teacher_assignment', $user->school_id), 'admin.teacher.permission', [], request()->is('admin/permission*'), 'bi-person-check'],
+        [$showCohorts && !(academic_education_level($user->school_id) === 'tertiary' && $showProgrammes && $menuAllows('admin.programmes', 'admin.programmes.index')), 'Programme Student Groups', 'admin.programme_cohorts.index', [], request()->is('admin/programme-cohorts*'), 'bi-people'],
         [$showOfferings, 'Course Registrations', 'admin.course_offerings.index', [], request()->is('admin/course-offerings*'), 'bi-journal-check'],
+        [$showLecturers, academic_term('teacher_assignment', $user->school_id), 'admin.teacher.permission', [], request()->is('admin/permission*'), 'bi-person-check'],
         [$showTimetable, 'Timetable', 'admin.routine', [], request()->is('admin/routine*'), 'bi-clock'],
         [$showLiveClasses, 'Live Classes', 'admin.live_classes.index', [], request()->is('admin/live-classes*'), 'bi-camera-video'],
         [$showAttendance, 'Attendance', 'admin.daily_attendance', [], request()->is('admin/attendance*'), 'bi-check2-square'],

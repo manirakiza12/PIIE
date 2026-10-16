@@ -166,6 +166,23 @@ class CourseUnitSetupTest extends TestCase
             ->assertDontSee('id="subject-picker-form"', false)->assertDontSee('name="prerequisite_membership_id"', false);
     }
 
+    public function test_form_explains_year_selection_and_preserves_catalogue_and_placement_data(): void
+    {
+        $year = DB::table('academic_years')->insertGetId(['school_id'=>$this->school,'label'=>'2026/2027','start_date'=>'2026-10-01']);
+        DB::table('curricula')->where('id',$this->plan->id)->update(['effective_academic_year_id'=>$year]);
+        $member = $this->existingPlacement('BBA102');
+        $before = $member->getAttributes();
+        $response = $this->get(route('admin.subject.setup', $member->subject_id))->assertOk()
+            ->assertSee('Curriculum applies from Academic Year')->assertSee('2026/2027')->assertSee('data-curriculum-year',false)
+            ->assertSee('Schedule this Course Unit')->assertSee('Academic setup order and next steps');
+        $doc = new \DOMDocument(); @$doc->loadHTML($response->getContent()); $xpath = new \DOMXPath($doc);
+        $this->assertSame(1,$xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
+        $this->assertSame(1,$xpath->query('//input[@id="unit-curriculum-academic-year" and @readonly and not(@name)]')->length);
+        $this->assertSame(0,$xpath->query('//li[@class="nav-links-li"]//a[contains(@href,"programme-cohorts")]')->length);
+        $this->assertEquals($before,$member->fresh()->getAttributes());
+        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Programme Student Groups');
+    }
+
     private function payload(array $overrides = []): array
     {
         return array_replace(['name' => 'Business Foundations', 'code' => 'BBA101', 'programme_id' => $this->programme,
