@@ -264,6 +264,47 @@ class WebsiteCmsTenantOwnershipTest extends TestCase
 
     // ── Super Admin ──────────────────────────────────────────────────────────
 
+    public function test_contact_editor_updates_existing_records_and_public_content_without_duplicates(): void
+    {
+        $school = $this->A['school'];
+        DB::table('website_pages')->insert(['school_id'=>$school,'page_key'=>'contact','slug'=>'contact-us','title'=>'Contact Us','status'=>1]);
+        $section = DB::table('website_sections')->insertGetId(['school_id'=>$school,'page_key'=>'contact','section_key'=>'contact_page','title'=>'Existing title','content'=>'Old introduction','status'=>1,'sort_order'=>0]);
+        $foreign = DB::table('website_sections')->insertGetId(['school_id'=>$this->B['school'],'page_key'=>'contact','section_key'=>'contact_page','content'=>'Other institution','status'=>1]);
+        $intro = str_repeat('Official contact information. ', 15).'FULL INTRODUCTION END <script>alert("unsafe")</script>';
+        $payload = ['school_id'=>$this->B['school'],'contact_eyebrow'=>'Speak with us','contact_heading'=>'Reach our team',
+            'introduction'=>$intro,'contact_line'=>'+256 788 099193','contact_phone'=>'+256 700 111222',
+            'contact_email'=>'info@piie.ac.ug','contact_website'=>'https://piie.ac.ug','contact_address'=>'Official campus',
+            'office_hours'=>"Monday to Friday: 8 am to 5 pm\nSaturday: by appointment"];
+        $this->actingAs($this->A['admin'])->get(route('admin.website.index'))->assertOk()->assertSee('Save Contact Us');
+        foreach ([1,2] as $save) {
+            $this->post(route('admin.website.contact.save'),$payload)->assertRedirect(route('admin.website.index'));
+        }
+        $this->assertSame(1, DB::table('website_sections')->where('school_id',$school)->where('section_key','contact_page')->count());
+        $this->assertSame($intro, DB::table('website_sections')->where('id',$section)->value('content'));
+        $this->assertSame('Existing title', DB::table('website_sections')->where('id',$section)->value('title'));
+        $this->assertSame('Other institution', DB::table('website_sections')->where('id',$foreign)->value('content'));
+        $this->assertSame(1, DB::table('website_settings')->where('school_id',$school)->where('key','office_hours')->count());
+        $this->assertSame(0, DB::table('website_settings')->where('school_id',$this->B['school'])->where('key','office_hours')->count());
+        $this->get(route('website.page','contact-us'))->assertOk()->assertSee('Reach our team')->assertSee('Speak with us')
+            ->assertSee('FULL INTRODUCTION END')->assertSee('Monday to Friday: 8 am to 5 pm')->assertSee('Official campus')
+            ->assertSee('info@piie.ac.ug')->assertDontSee('<script>alert("unsafe")</script>',false);
+        $this->post(route('admin.website.contact.save'),['office_hours'=>'Should not save','contact_website'=>'javascript:alert(1)'])
+            ->assertSessionHasErrors('contact_website');
+        $this->assertSame($payload['office_hours'], DB::table('website_settings')->where('school_id',$school)->where('key','office_hours')->value('value'));
+    }
+
+    public function test_contact_editor_superadmin_scope_and_role_gate(): void
+    {
+        $super = User::factory()->create(['role_id'=>1,'school_id'=>null,'account_status'=>'active']);
+        $this->actingAs($super)->post(route('superadmin.website.contact.save'),['office_hours'=>'Official hours'])
+            ->assertRedirect(route('superadmin.website.index'));
+        $this->assertSame('Official hours',DB::table('website_settings')->where('school_id',$this->A['school'])->where('key','office_hours')->value('value'));
+        $this->assertSame(0,DB::table('website_settings')->where('school_id',$this->B['school'])->where('key','office_hours')->count());
+        $this->actingAs($this->A['admin'])->post(route('superadmin.website.contact.save'),['office_hours'=>'Unauthorised'])
+            ->assertRedirect();
+        $this->assertSame('Official hours',DB::table('website_settings')->where('school_id',$this->A['school'])->where('key','office_hours')->value('value'));
+    }
+
     public function test_super_admin_manages_the_public_site_school(): void
     {
         // The Super Admin layout counts pending subscription payments.
@@ -278,6 +319,9 @@ class WebsiteCmsTenantOwnershipTest extends TestCase
         $index = $this->actingAs($superAdmin)->get(route('superadmin.website.index'));
         $index->assertOk();
         $index->assertSee('AboutA Zq');
+        $index->assertSee('Save Contact Us');
+        $index->assertSee('name="office_hours"', false);
+        $index->assertSee('name="introduction"', false);
         $index->assertDontSee('AboutB Zq');
 
         $this->actingAs($superAdmin)->post(route('superadmin.website.page.update', $this->A['page']), ['page_key' => 'about', 'title' => 'About A by super admin']);
