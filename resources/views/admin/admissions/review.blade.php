@@ -436,12 +436,22 @@
         <div class="eSection-wrap mb-3">
             <h5 class="mb-3"><i class="bi bi-clipboard-check"></i> {{ get_phrase('Decision') }}</h5>
 
+            @if(! empty($enrolmentBlockers))
+                <div class="alert alert-warning" role="status">
+                    <strong>{{ get_phrase('Before enrolment') }}</strong>
+                    <ul class="mb-2">@foreach($enrolmentBlockers as $blocker)<li>{{ $blocker }}</li>@endforeach</ul>
+                    @if($admission->source === 'staff_entry' && $admission->isEditableByApplicant())
+                        <a href="{{ route('admin.hei_admissions.wizard.step', [$admission->id, 'personal']) }}">{{ get_phrase('Continue the application') }}</a>
+                    @endif
+                </div>
+            @endif
+
             <form action="{{ route('admin.hei_admissions.status', $admission->id) }}" method="POST" id="decisionForm">
                 @csrf
                 <label class="form-label">{{ get_phrase('Status') }}</label>
                 <select name="status" id="decisionStatus" class="form-control eForm-control mb-3" onchange="toggleAcademicAssignment(this.value)">
                     @foreach($statuses as $option)
-                        <option value="{{ $option }}" {{ $admission->status === $option ? 'selected' : '' }}>
+                        <option value="{{ $option }}" {{ old('status', $admission->status) === $option ? 'selected' : '' }}>
                             {{ ucwords(str_replace('_', ' ', $option)) }}
                         </option>
                     @endforeach
