@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * The one place a staff member's login account is created.
@@ -163,6 +164,10 @@ class StaffProvisioningService
             throw new AuthorizationException('You may not create this type of staff member.');
         }
 
+        $status = Validator::make($data, [
+            'staff_status' => ['sometimes', 'required', Rule::in(StaffStatus::ALL)],
+        ])->validate()['staff_status'] ?? StaffStatus::ACTIVE;
+
         $profile = $this->profileFor($data);
         $qualifications = $professional['qualifications'] ?? [];
         $registrations = $professional['registrations'] ?? [];
@@ -171,7 +176,13 @@ class StaffProvisioningService
         $storedKeys = [];
         try {
             return $this->provision($roleId, $data, (int) $actor->school_id,
-                function (User $user) use ($actor, $profile, $qualifications, $registrations, $documents, &$storedKeys): void {
+                function (User $user) use ($actor, $profile, $qualifications, $registrations, $documents, $status, &$storedKeys): void {
+                    // The full staff form offers employment status for every role.
+                    // Apply it in the same transaction; legacy create handlers
+                    // continue to use their existing defaults in provision().
+                    if ($user->staff_status !== $status) {
+                        $user->forceFill(['staff_status' => $status])->save();
+                    }
                     $records = app(StaffRecordService::class);
 
                     // Documents first, so a qualification can cite one as its evidence

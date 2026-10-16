@@ -67,6 +67,30 @@ class StaffCreateProfessionalTest extends TestCase
         parent::tearDown();
     }
 
+    #[\PHPUnit\Framework\Attributes\DataProvider('employmentStatusesByStaffType')]
+    public function test_creation_preserves_the_selected_employment_status(string $type, string $status): void
+    {
+        Mail::fake();
+        $academic = \App\Http\Controllers\Admin\StaffCreateController::TYPES[$type]['academic'];
+        $payload = $academic ? $this->lecturerPayload(['staff_status' => $status]) : $this->payload(['staff_status' => $status]);
+        $this->actingAs($this->admin)->post(route('admin.staff.create.store', $type), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $member = User::where('email', $payload['email'])->firstOrFail();
+        $this->assertSame($status, $member->staff_status);
+        $this->assertSame(\App\Support\Staff\StaffStatus::blocksPortal($status), $member->isStaffPortalBlocked());
+    }
+
+    public static function employmentStatusesByStaffType(): array
+    {
+        $cases = [];
+        foreach (array_keys(\App\Http\Controllers\Admin\StaffCreateController::TYPES) as $type) {
+            foreach (\App\Support\Staff\StaffStatus::ALL as $status) {
+                $cases[$type.' '.$status] = [$type, $status];
+            }
+        }
+        return $cases;
+    }
+
     // ====================================================== title dropdown
 
     public function test_the_title_is_a_controlled_dropdown_with_the_expected_options(): void
