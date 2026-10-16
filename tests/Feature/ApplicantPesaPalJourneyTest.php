@@ -74,6 +74,24 @@ class ApplicantPesaPalJourneyTest extends TestCase
         ], $overrides)));
     }
 
+    public function test_ugx_application_fee_is_reserved_submitted_and_settled_in_institution_currency(): void
+    {
+        \Illuminate\Support\Facades\Schema::table('schools', function (\Illuminate\Database\Schema\Blueprint $table) { $table->string('school_currency')->nullable(); });
+        DB::table('schools')->where('id', $this->school)->update(['school_currency'=>'UGX']);
+        DB::table('global_settings')->where('key', 'system_currency')->update(['value'=>'USD']);
+        $admission = $this->application();
+        DB::table('intake_sessions')->where('id', $admission->intake_session_id)->update(['application_fee'=>100000]);
+        $payment = ApplicantPesaPalPayment::start($admission);
+        $this->assertSame('UGX', $payment->currency);
+        $this->assertSame('100000.00', $payment->amount);
+        $this->assertSame('UGX', $admission->fresh()->application_fee_currency);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest') && $request['currency']==='UGX' && (float)$request['amount']===100000.0);
+        $this->code=1; $this->description='COMPLETED'; $this->statusChanges=['amount'=>'100000.00'];
+        ApplicantPesaPalPayment::reconcile($payment);
+        $this->assertSame('paid', $payment->fresh()->status);
+        $this->assertTrue($admission->fresh()->isFeeSettled());
+    }
+
     public static function channels(): array { return [['public'], ['staff_entry']]; }
 
     public function test_applicant_checkout_and_settlement_leave_subscription_and_admin_records_unchanged(): void
