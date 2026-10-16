@@ -11,7 +11,7 @@
 
 @unless($readOnly)
     <div class="d-flex justify-content-end mt-4">
-        <a href="{{ route('applicant.application.step', \App\Support\Admissions\ApplicationProgress::isApplicable($admission, 'payment') ? 'payment' : 'review') }}"
+        <a href="{{ route('applicant.application.step', 'review') }}"
            class="ap-btn ap-btn-primary">
             {{ get_phrase('Continue') }} <i class="bi bi-arrow-right"></i>
         </a>

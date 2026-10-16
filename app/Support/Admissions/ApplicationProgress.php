@@ -32,8 +32,8 @@ class ApplicationProgress
         self::STEP_PROGRAMME,
         self::STEP_EDUCATION,
         self::STEP_DOCUMENTS,
-        self::STEP_PAYMENT,
         self::STEP_REVIEW,
+        self::STEP_PAYMENT,
     ];
 
     /** Personal-details fields an application cannot be submitted without. */
@@ -66,14 +66,14 @@ class ApplicationProgress
                 'icon'  => 'bi-folder2-open',
             ],
             self::STEP_PAYMENT => [
-                'label' => get_phrase('Application Fee'),
-                'hint'  => get_phrase('Settle the application fee for your chosen intake.'),
+                'label' => get_phrase('Pay and Submit'),
+                'hint'  => get_phrase('Complete payment and send your application to the admissions office.'),
                 'icon'  => 'bi-credit-card',
             ],
             self::STEP_REVIEW => [
-                'label' => get_phrase('Review & Submit'),
-                'hint'  => get_phrase('Check everything, then send it to the admissions office.'),
-                'icon'  => 'bi-send-check',
+                'label' => get_phrase('Review'),
+                'hint'  => get_phrase('Check your information and documents before the final step.'),
+                'icon'  => 'bi-check2-square',
             ],
         ];
     }
@@ -81,9 +81,8 @@ class ApplicationProgress
     /**
      * Every step with its label, applicability and completion state.
      *
-     * A step that does not apply (a free intake's payment step) is returned
-     * with applicable=false rather than dropped, so callers that render the
-     * sequence and callers that count progress see the same list.
+     * All six steps stay visible. Free intakes still use the final step to
+     * accept the declaration and submit without a payment charge.
      */
     public static function steps(Admission $admission): array
     {
@@ -109,10 +108,7 @@ class ApplicationProgress
 
     public static function isApplicable(Admission $admission, string $step): bool
     {
-        if ($step === self::STEP_PAYMENT) {
-            return ApplicationFee::isRequired($admission);
-        }
-
+        // The final step also owns submission, including for a free intake.
         return true;
     }
 
@@ -141,10 +137,11 @@ class ApplicationProgress
                 return ApplicationDocuments::isComplete($admission);
 
             case self::STEP_PAYMENT:
-                return ApplicationFee::isSettled($admission);
+                return ! blank($admission->submitted_at) && ApplicationFee::isSettled($admission);
 
             case self::STEP_REVIEW:
-                return ! blank($admission->submitted_at);
+                return ! blank($admission->submitted_at)
+                    || ($admission->current_step === self::STEP_PAYMENT && self::canSubmit($admission));
         }
 
         return false;
@@ -190,10 +187,10 @@ class ApplicationProgress
     }
 
     /**
-     * Whether the application can be submitted: everything except the review
-     * step itself must be complete. Review is excluded because submitting is
-     * what completes it. Payment is excluded too — applicants may submit
-     * unpaid; the fee is settled after submission and review, not before.
+     * Whether the saved application data is complete enough for submission.
+     * Review is a read-only summary. The final Pay and Submit step contains
+     * the declaration and payment controls; payment settlement is governed
+     * separately from data completeness.
      */
     public static function canSubmit(Admission $admission): bool
     {
@@ -214,12 +211,15 @@ class ApplicationProgress
     {
         $blockers = [];
 
-        foreach (self::applicableSteps($admission) as $step) {
-            if (in_array($step['key'], [self::STEP_REVIEW, self::STEP_PAYMENT], true) || $step['complete']) {
+        // Review completion depends on these blockers; inspect data-entry
+        // steps directly rather than generating Review again recursively.
+        $meta = self::meta();
+        foreach (self::ORDER as $key) {
+            if (in_array($key, [self::STEP_REVIEW, self::STEP_PAYMENT], true) || self::isComplete($admission, $key)) {
                 continue;
             }
 
-            if ($step['key'] === self::STEP_DOCUMENTS) {
+            if ($key === self::STEP_DOCUMENTS) {
                 foreach (ApplicationDocuments::outstanding($admission) as $item) {
                     $blockers[] = $item;
                 }
@@ -227,7 +227,7 @@ class ApplicationProgress
                 continue;
             }
 
-            $blockers[] = $step['label'];
+            $blockers[] = $meta[$key]['label'];
         }
 
         return $blockers;
@@ -248,8 +248,8 @@ class ApplicationProgress
             }
 
             $rows[] = [
-                'label'    => $step['label'],
-                'complete' => $step['complete'],
+                'label'    => $step['key'] === self::STEP_PAYMENT ? get_phrase('Application Fee') : $step['label'],
+                'complete' => $step['key'] === self::STEP_PAYMENT ? ApplicationFee::isSettled($admission) : $step['complete'],
                 'url'      => $step['url'],
             ];
         }
@@ -257,7 +257,7 @@ class ApplicationProgress
         $rows[] = [
             'label'    => get_phrase('Application Submitted'),
             'complete' => ! blank($admission->submitted_at),
-            'url'      => route('applicant.application.step', self::STEP_REVIEW),
+            'url'      => route('applicant.application.step', self::STEP_PAYMENT),
         ];
 
         return $rows;

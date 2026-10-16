@@ -95,7 +95,7 @@ class ApplicationPaymentFoundationTest extends TestCase
         $this->assertFalse(ApplicationFee::isSettled($admission));
         $this->assertSame([], ApplicationProgress::blockers($admission));
         $this->post(route('applicant.application.submit'), ['declaration' => '1'])
-            ->assertRedirect(route('applicant.dashboard'));
+            ->assertRedirect(route('applicant.application.step', 'payment'));
         $this->assertSame(Admission::STATUS_SUBMITTED, $admission->fresh()->status);
         $this->assertNotNull($admission->fresh()->submitted_at);
         $this->assertSame(Admission::FEE_UNPAID, $admission->fresh()->fee_status);

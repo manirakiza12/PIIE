@@ -39,6 +39,23 @@ class PesaPalApplicantPaymentUiTest extends TestCase
             $this->assertStringNotContainsString('Sandbox checkout is blocked',$html);
             if($classification==='FAILED'&&$reason===null)$this->assertStringContainsString('did not provide a specific failure reason',$html);
         }
+        $this->be($this->makeApplicant($school), 'applicant');
+        $final = view('applicant.application.payment', [
+            'errors' => new \Illuminate\Support\ViewErrorBag(),
+            'admission' => $admission, 'amount' => 50000,
+            'methods' => [['key' => 'pesapal', 'label' => 'PesaPal', 'icon' => 'bi-credit-card']],
+            'bankDetails' => null, 'payments' => collect(), 'readOnly' => true,
+            'step' => 'payment', 'steps' => \App\Support\Admissions\ApplicationProgress::applicableSteps($admission),
+            'percent' => \App\Support\Admissions\ApplicationProgress::percent($admission),
+            'canSubmit' => true, 'blockers' => [],
+        ])->render();
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($final);
+        $xpath = new \DOMXPath($dom);
+        $buttons = $xpath->query('//form[@action="'.route('applicant.payment.gateway.start', 'pesapal').'"]//button[@type="submit" and not(@disabled)]');
+        $this->assertSame(1, $buttons->length, 'The final step keeps checkout enabled for a submitted unpaid application.');
+        $this->assertStringContainsString('Pay and Submit', $final);
+        $this->assertStringNotContainsString('name="declaration"', $final);
         Http::assertNothingSent();
         $this->assertSame(0,$admission->payments()->count());
     }
