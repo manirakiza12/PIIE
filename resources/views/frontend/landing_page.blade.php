@@ -367,7 +367,7 @@
 
                     <div class="piie-btn-row" style="margin-top:2rem;">
                         <a class="piie-btn piie-btn--primary" href="{{ $piieProgramsUrl }}">Explore Programmes</a>
-                        <a class="piie-btn piie-btn--ghost" href="{{ $piieAboutUrl }}">About PIIE</a>
+                        <a class="piie-btn piie-btn--ghost" href="{{ $piieAboutUrl }}">About</a>
                     </div>
                 </div>
             </div>
