@@ -703,6 +703,45 @@ class WebsiteManagementController extends Controller
         return $this->backToPanel($request, 'Item deleted successfully.');
     }
 
+    /** Edit the existing Contact section and shared public contact settings together. */
+    public function saveContact(Request $request)
+    {
+        $this->ensureWebsiteTablesAndSeed();
+        $data = $request->validate([
+            'contact_eyebrow' => 'nullable|string|max:191',
+            'contact_heading' => 'nullable|string|max:191',
+            'introduction' => 'nullable|string|max:10000',
+            'contact_line' => 'nullable|string|max:255',
+            'contact_phone' => 'nullable|string|max:1000',
+            'contact_email' => 'nullable|string|max:1000',
+            'contact_website' => 'nullable|url:http,https|max:2048',
+            'contact_address' => 'nullable|string|max:2000',
+            'office_hours' => 'nullable|string|max:2000',
+        ]);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
+            foreach ($data as $key => $value) {
+                if ($key !== 'introduction') {
+                    $this->upsertOwned(WebsiteSetting::class, ['key'=>$key], ['value'=>$value, 'is_json'=>0, 'status'=>1]);
+                }
+            }
+            if (array_key_exists('introduction', $data)) {
+                // Update the same section read by the public page and generic CMS editor.
+                $section = WebsiteSection::where('school_id', $this->cmsSchoolId())
+                    ->where('page_key', 'contact')->where('section_key', 'contact_page')
+                    ->orderByDesc('sort_order')->orderByDesc('id')->first();
+                if ($section) {
+                    $section->update(['content'=>$data['introduction']]);
+                } else {
+                    $this->createOwned(WebsiteSection::class, ['page_key'=>'contact', 'section_key'=>'contact_page',
+                        'title'=>'Contact Us', 'content'=>$data['introduction'], 'status'=>1, 'sort_order'=>0]);
+                }
+            }
+        });
+
+        return $this->backToPanel($request, 'Contact Us content updated successfully.');
+    }
+
     public function upsertSettings(Request $request)
     {
         $this->ensureWebsiteTablesAndSeed();

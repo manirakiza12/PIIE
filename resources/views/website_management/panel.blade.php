@@ -1,6 +1,8 @@
 <div class="mainSection-title">
     <div class="row">
-        <div class="col-12">
+        @include('website_management.partials.contact_editor')
+
+<div class="col-12">
             <div class="d-flex justify-content-between align-items-center flex-wrap gr-15">
                 <div class="d-flex flex-column">
                     <h4>{{ get_phrase('Website Management') }}</h4>
@@ -26,10 +28,6 @@
                         'institution_name' => 'Twinehs Divine Integrated Institute of Business and Technology (TDIIBT)',
                         'tagline' => 'Quality Education | Practical Skills | Professional Excellence',
                         'motto' => 'Learning for Impact',
-                        'contact_address' => 'P.O. Box 202386 Kampala GPO',
-                        'contact_phone' => '+256 788 099193',
-                        'contact_email' => 'info@piie.ac.ug',
-                        'contact_website' => 'https://piie.ac.ug',
                         'director_name' => 'Twinamatsiko Naboth PhD(c)',
                         'institute_secretary_name' => 'Mr. Bendaki Evans',
                         'footer_copyright' => '© Twinehs Divine Integrated Institute of Business and Technology (TDIIBT). All Rights Reserved.',

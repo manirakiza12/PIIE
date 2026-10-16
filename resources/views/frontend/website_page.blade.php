@@ -655,10 +655,10 @@
             <section class="piie-section" aria-labelledby="piie-contact-cards-title">
                 <div class="piie-wrap">
                     <div class="piie-head-center">
-                        <span class="piie-eyebrow">Get in touch</span>
-                        <h2 id="piie-contact-cards-title">How to reach the Institute</h2>
+                        <span class="piie-eyebrow">{{ $piieSettingsArray['contact_eyebrow'] ?? 'Get in touch' }}</span>
+                        <h2 id="piie-contact-cards-title">{{ $piieSettingsArray['contact_heading'] ?? 'How to reach the Institute' }}</h2>
                         @if($piieContact && ! empty($piieContact->content))
-                            <p class="piie-lede">{!! \Illuminate\Support\Str::limit(strip_tags($piieContact->content), 220) !!}</p>
+                            <p class="piie-lede" style="white-space: pre-line">{{ strip_tags($piieContact->content) }}</p>
                         @endif
                     </div>
 
@@ -752,7 +752,7 @@
                             <h3 class="piie-card__title">Office Hours</h3>
 
                             @if($piieHours)
-                                <p class="piie-contact-card__value">{{ $piieHours }}</p>
+                                <p class="piie-contact-card__value" style="white-space: pre-line">{{ $piieHours }}</p>
                             @else
                                 <p class="piie-contact-card__pending" data-testid="card-hours-pending">
                                     Office hours are available from the Institute&rsquo;s

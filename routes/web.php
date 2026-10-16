@@ -324,6 +324,7 @@ Route::controller(WebsiteManagementController::class)->middleware('auth', 'super
     Route::get('superadmin/website-management/item/delete/{id}', 'deleteItem')->name('superadmin.website.item.delete');
 
     Route::post('superadmin/website-management/settings/upsert', 'upsertSettings')->name('superadmin.website.settings.upsert');
+    Route::post('superadmin/website-management/contact', 'saveContact')->name('superadmin.website.contact.save');
     Route::post('superadmin/website-management/seo/upsert', 'upsertSeo')->name('superadmin.website.seo.upsert');
 });
 
@@ -356,6 +357,7 @@ Route::controller(WebsiteManagementController::class)->middleware('auth', 'admin
     Route::get('admin/website-management/item/delete/{id}', 'deleteItem')->name('admin.website.item.delete');
 
     Route::post('admin/website-management/settings/upsert', 'upsertSettings')->name('admin.website.settings.upsert');
+    Route::post('admin/website-management/contact', 'saveContact')->name('admin.website.contact.save');
     Route::post('admin/website-management/seo/upsert', 'upsertSeo')->name('admin.website.seo.upsert');
 });
 
