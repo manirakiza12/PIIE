@@ -22,6 +22,35 @@ use Illuminate\Support\Facades\Mail;
  */
 class ApplicantNotifier
 {
+    public static function courseRegistrationChanged(\App\Models\CourseRegistration $registration): void
+    {
+        try {
+            $schoolId = (int) $registration->school_id;
+            $student = \App\Models\User::where('school_id', $schoolId)->findOrFail($registration->student_id);
+            $offering = \App\Models\CourseOffering::where('school_id', $schoolId)->findOrFail($registration->course_offering_id);
+            $subject = \App\Models\Subject::where('school_id', $schoolId)->findOrFail($offering->subject_id);
+            $year = \App\Models\AcademicYear::where('school_id', $schoolId)->findOrFail($offering->academic_year_id);
+            $period = \App\Models\AcademicPeriod::where('school_id', $schoolId)->findOrFail($offering->academic_period_id);
+            $status = match ($registration->status) {
+                'confirmed' => 'Confirmed', 'dropped' => 'Withdrawn', default => 'Awaiting confirmation',
+            };
+            self::send($student->email, [
+                'school_id' => $schoolId,
+                'subject' => 'Course registration: '.$status,
+                'heading' => 'Course registration update',
+                'greeting' => 'Dear '.$student->name.',',
+                'paragraphs' => ['Your course registration status is '.$status.'.'],
+                'details' => ['Student Name' => $student->name, 'Student Number' => $student->code,
+                    'Course Unit' => trim($subject->code.' '.$subject->name),
+                    'Academic Year' => $year->label, 'Academic Period' => $period->label,
+                    'Offering Reference' => $offering->reference ?: '#'.$offering->id,
+                    'Registration ID' => $registration->id, 'Status' => $status],
+            ]);
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Course registration notification could not be prepared.');
+        }
+    }
+
     public static function paymentReversed(Admission $admission, ApplicationPayment $payment): bool
     {
         return self::send($admission->email, ['subject' => 'Application payment reversed', 'heading' => 'Payment reversal verified',
@@ -37,8 +66,15 @@ class ApplicantNotifier
             && ! empty(get_settings('smtp_port'));
     }
 
-    private static function send(?string $to, array $data): bool
+    private static function send(?string $to, array $data, bool $copyToAdmissions = true): bool
     {
+        if (filled($to) && $copyToAdmissions) {
+            try {
+                AdmissionsNotificationCopy::send($to, $data);
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Log::warning('Admissions notification copy failed to prepare.');
+            }
+        }
         if (filled($to) && \Illuminate\Support\Facades\Schema::hasTable('applicant_notification_deliveries')) {
             $id = ApplicantNotificationDelivery::record($to, $data);
             if (\Illuminate\Support\Facades\DB::transactionLevel() > 0) {
@@ -48,7 +84,7 @@ class ApplicantNotifier
             return ApplicantNotificationDelivery::deliver($id);
         }
         if (\Illuminate\Support\Facades\DB::transactionLevel() > 0) {
-            \Illuminate\Support\Facades\DB::afterCommit(fn () => self::send($to, $data));
+            \Illuminate\Support\Facades\DB::afterCommit(fn () => self::send($to, $data, false));
             return true;
         }
         if (blank($to) || ! self::isConfigured()) {
@@ -321,6 +357,6 @@ class ApplicantNotifier
             'cta_url'     => route('applicant.password.reset', ['token' => $token, 'email' => $applicant->email]),
             'footer_note' => get_phrase('This link expires in 60 minutes. If you did not request a password reset, no action is needed — your password will stay as it is.'),
             'school_id'   => $applicant->school_id,
-        ]);
+        ], false);
     }
 }

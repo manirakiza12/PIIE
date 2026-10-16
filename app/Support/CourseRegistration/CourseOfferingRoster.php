@@ -24,11 +24,11 @@ class CourseOfferingRoster
      * cohort following, a Study Plan linked to this Offering — split by the shared
      * eligibility rule. Ineligible students carry an administrator-readable reason.
      */
-    public function review(CourseOffering $offering, ?int $cohortId = null): array
+    public function review(CourseOffering $offering, ?int $cohortId = null, bool $includeClosed = false): array
     {
         $empty = ['eligible' => collect(), 'ineligible' => collect()];
         $schoolId = (int) $offering->school_id;
-        if ($offering->status !== CourseOffering::STATUS_OPEN
+        if ((! $includeClosed && $offering->status !== CourseOffering::STATUS_OPEN)
             || ! Schema::hasTable('course_registrations')
             || ! Schema::hasColumn('course_registrations', 'course_offering_id')
             || ! Schema::hasColumn('course_registrations', 'curriculum_membership_id')) return $empty;

@@ -327,7 +327,8 @@ class CourseOfferingController extends Controller
         $batch = app(\App\Support\CourseRegistration\CourseOfferingRegistrationBatch::class);
         $cohorts = \Illuminate\Support\Facades\Schema::hasTable('programme_cohorts') ? $batch->relevantCohorts($offering) : collect();
         $cohortId = $request->filled('cohort_id') && $cohorts->contains('id', $request->integer('cohort_id')) ? $request->integer('cohort_id') : null;
-        $review = $this->roster->review($offering, $cohortId);
+        $review = $this->roster->review($offering, $cohortId, true);
+        $unfilteredReview = $cohortId === null ? $review : $this->roster->review($offering, null, true);
         $registered = $this->roster->registered($offering);
         $stageLabels = DB::table('course_offering_curriculum_memberships as x')
             ->join('curriculum_memberships as m', fn ($j) => $j->on('m.id', '=', 'x.curriculum_membership_id')->where('m.school_id', $schoolId))
@@ -343,7 +344,8 @@ class CourseOfferingController extends Controller
             'cohortId' => $cohortId,
             'stageLabels' => $stageLabels,
             'counts' => [
-                'eligible' => $cohortId === null ? $review['eligible']->count() : $this->roster->review($offering)['eligible']->count(),
+                'eligible' => $unfilteredReview['eligible']->count(),
+                'not_registered' => $unfilteredReview['eligible']->count() + $unfilteredReview['ineligible']->count(),
                 'registered' => $registered->where('status', 'registered')->count(),
                 'confirmed' => $registered->where('status', 'confirmed')->count(),
                 'dropped' => $registered->where('status', 'dropped')->count(),

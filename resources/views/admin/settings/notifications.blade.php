@@ -22,6 +22,13 @@
             @endphp
 <form class="settings-preferences" data-workspace-continuous action="{{ route('admin.settings.notifications.save') }}" method="POST">
 @csrf
+<section class="eSection-wrap mb-3" aria-labelledby="admissions-copy-heading">
+    <h5 id="admissions-copy-heading">Admissions accountability copies</h5>
+    <label class="form-label" for="admissions_notification_email">Admissions email address</label>
+    <input class="form-control" id="admissions_notification_email" type="email" name="admissions_notification_email" maxlength="254" value="{{ old('admissions_notification_email', $admissionsCopyEmail) }}" aria-describedby="admissions-copy-help">
+    <p id="admissions-copy-help" class="text-muted mt-2">Receive a separate copy of application, admission, enrolment and course registration emails for this institution. Copies include the student email and registration details. Personal passwords, password resets and account-access links are excluded. Leave blank to disable copies.</p>
+    @error('admissions_notification_email')<p class="text-danger">{{ $message }}</p>@enderror
+</section>
 <div class="row g-3">
 @foreach(['email'=>['title'=>'Email Notifications','icon'=>'bi-envelope','description'=>'Choose which events use email notifications.','items'=>$email_notifs], 'sms'=>['title'=>'SMS Notifications','icon'=>'bi-phone','description'=>'Choose which events use text message notifications.','items'=>$sms_notifs]] as $channel=>$group)
 <section class="col-12 col-lg-6" aria-labelledby="{{ $channel }}-heading"><div class="settings-preferences__card">

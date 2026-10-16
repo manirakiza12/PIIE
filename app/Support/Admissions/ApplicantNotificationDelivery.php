@@ -36,7 +36,9 @@ final class ApplicantNotificationDelivery
             if (! empty($message['data']['admission_letter'])) {
                 $letter = $message['data']['admission_letter'];
                 $admission = \App\Models\Admission::whereKey($letter['admission_id'])->where('school_id', $row->school_id)->first();
-                if (! $admission || $admission->status !== \App\Models\Admission::STATUS_ENROLLED || $admission->email !== $message['to']) return false;
+                $studentRecipient = ($message['mail_type'] ?? '') === 'admissions_copy'
+                    ? ($message['data']['_student_recipient'] ?? null) : $message['to'];
+                if (! $admission || $admission->status !== \App\Models\Admission::STATUS_ENROLLED || $admission->email !== $studentRecipient) return false;
                 if ((int) ($letter['school_id'] ?? 0) !== (int) $row->school_id) return false;
             }
             if (isset($message['data']['payment_invitation_admission_id'])) {
@@ -51,7 +53,7 @@ final class ApplicantNotificationDelivery
                 $message['data']['access_url'] = ApplicantPortalAccess::paymentLinkFor($applicant);
             }
             $mail = match ($message['mail_type'] ?? 'applicant') {
-                'applicant' => new ApplicantNotificationEmail($message['data']),
+                'applicant', 'admissions_copy' => new ApplicantNotificationEmail($message['data']),
                 'student_activation' => new \App\Mail\StudentPortalActivationEmail($message['data']),
                 default => throw new \RuntimeException('Unsupported notification type'),
             };

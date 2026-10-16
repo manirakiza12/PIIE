@@ -73,6 +73,7 @@ class CourseRegistrationService
             }
 
             $this->audit('COURSE_REGISTRATION_CREATED', $registration, null, $actorId);
+            \App\Support\Admissions\ApplicantNotifier::courseRegistrationChanged($registration);
             return $registration;
         });
     }
@@ -117,6 +118,7 @@ class CourseRegistrationService
             $registration->status = CourseRegistration::STATUS_CONFIRMED;
             $registration->save();
             $this->audit('COURSE_REGISTRATION_CONFIRMED', $registration, CourseRegistration::STATUS_REGISTERED, $actorId);
+            \App\Support\Admissions\ApplicantNotifier::courseRegistrationChanged($registration);
             return $registration;
         });
     }
@@ -150,6 +152,7 @@ class CourseRegistrationService
             $registration->status = CourseRegistration::STATUS_DROPPED;
             $registration->save();
             $this->audit('COURSE_REGISTRATION_DROPPED', $registration, $before, $actorId, $reason);
+            \App\Support\Admissions\ApplicantNotifier::courseRegistrationChanged($registration);
             return $registration;
         });
     }

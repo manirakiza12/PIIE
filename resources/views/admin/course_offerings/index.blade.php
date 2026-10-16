@@ -5,7 +5,7 @@
         <div>
             <h4>Course Registrations</h4>
             <p class="text-muted mb-0">Manage the {{ \Illuminate\Support\Str::plural($courseUnitLabel) }} being taught in each Academic Year and {{ $periodLabel }}, including teaching teams and student registration.</p>
-            <p class="text-muted mb-0">Select a Course Offering, then open Students to register students for that class.</p>
+            <p class="text-muted mb-0">Open Registered Students or Not Registered for a Course Offering to review its student registration records.</p>
         </div>
         @if(auth()->user()->hasPermission('academic.course_offering.manage'))
             <a class="eBtn eBtn-primary text-nowrap" href="{{ route('admin.course_offerings.create', request()->only('year_id','period_id')) }}">Create Course Offering</a>
@@ -34,7 +34,14 @@
             <thead><tr><th scope="col">Reference / ID</th><th scope="col">{{ $courseUnitLabel }}</th><th scope="col">Academic Year</th><th scope="col">{{ $periodLabel }}</th><th scope="col">Applicable Programme Curricula</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
                 @forelse($offerings as $offering)
-                    <tr><td>{{ $offering->reference ?: '#'.$offering->id }}</td><td>{{ $offering->subject->code ? $offering->subject->code.' — ' : '' }}{{ $offering->subject->name }}</td><td>{{ $offering->academicYear->label }}</td><td>{{ $offering->academicPeriod->label }}</td><td>{{ $offering->applicability_summary ?: '—' }}</td><td><span class="badge bg-{{ $offering->status==='open'?'success':($offering->status==='draft'?'warning text-dark':($offering->status==='cancelled'?'secondary':'primary')) }}">{{ str_replace('_',' ',ucfirst($offering->status)) }}</span></td><td>{{ $offering->updated_at?->format('Y-m-d') }}</td><td><a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ route('admin.course_offerings.show',$offering->id) }}">View</a></td></tr>
+                    <tr><td>{{ $offering->reference ?: '#'.$offering->id }}</td><td>{{ $offering->subject->code ? $offering->subject->code.' — ' : '' }}{{ $offering->subject->name }}</td><td>{{ $offering->academicYear->label }}</td><td>{{ $offering->academicPeriod->label }}</td><td>{{ $offering->applicability_summary ?: '—' }}</td><td><span class="badge bg-{{ $offering->status==='open'?'success':($offering->status==='draft'?'warning text-dark':($offering->status==='cancelled'?'secondary':'primary')) }}">{{ str_replace('_',' ',ucfirst($offering->status)) }}</span></td><td>{{ $offering->updated_at?->format('Y-m-d') }}</td><td><a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ route('admin.course_offerings.show',$offering->id) }}">View</a>
+@if(auth()->user()->hasPermission('academic.course_registration.view'))
+<div class="d-flex flex-wrap gap-2 mt-2">
+<a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ route('admin.course_offerings.registrations', $offering->id) }}">Registered Students</a>
+<a class="btn btn-sm btn-outline-secondary text-nowrap" href="{{ route('admin.course_offerings.eligible_students', $offering->id) }}">Not Registered</a>
+</div>
+@endif
+</td></tr>
                 @empty
                     @if($hasAnyOfferings)
                         <tr><td colspan="8" class="text-center py-4"><p class="mb-2">No Course Offerings match these filters.</p><a class="btn btn-outline-secondary btn-sm" href="{{ route('admin.course_offerings.index') }}">Clear filters</a></td></tr>

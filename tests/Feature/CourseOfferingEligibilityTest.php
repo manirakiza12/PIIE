@@ -181,6 +181,24 @@ class CourseOfferingEligibilityTest extends TestCase
         $this->assertSame(111, (int) $this->roster(self::O_YEAR1)->first()->roster_membership_id);
     }
 
+    public function test_read_only_roster_remains_available_after_registration_closes(): void
+    {
+        $student = $this->placedStudent(stage: 1);
+        $registered = $this->placedStudent(stage: 1);
+        $offering = CourseOffering::findOrFail(self::O_YEAR1);
+        $this->actingAs($registered);
+        app(CourseRegistrationService::class)->registerStudentForOffering($this->school, $registered->id, $offering->id);
+        $offering->forceFill(['status' => 'in_progress']);
+
+        $roster = app(CourseOfferingRoster::class);
+        $this->assertTrue($roster->eligible($offering)->isEmpty());
+        $review = $roster->review($offering, null, true);
+        $ids = $review['eligible']->merge($review['ineligible'])->pluck('id')->all();
+        $this->assertContains($student->id, $ids);
+        $this->assertNotContains($registered->id, $ids);
+        $this->assertNotNull($roster->ineligibilityReason($offering, $student->id));
+    }
+
     public function test_admin_registration_uses_the_same_rule_with_human_messages(): void
     {
         $admin = $this->makeAdminUser($this->school);
@@ -273,6 +291,32 @@ class CourseOfferingEligibilityTest extends TestCase
         $confirmed = $service->confirmRegistration($this->school, $registration->id, $student->id);
 
         $this->assertSame(CourseRegistration::STATUS_CONFIRMED, $confirmed->status);
+    }
+
+    public function test_registration_changes_notify_both_parties_once_per_transition(): void
+    {
+        foreach (['smtp_user' => 'sender@example.test', 'smtp_pass' => 'fixture', 'smtp_host' => 'localhost', 'smtp_port' => '2525'] as $key => $value) {
+            DB::table('global_settings')->updateOrInsert(['key' => $key], ['value' => $value]);
+        }
+        DB::table('global_settings')->insert([
+            'key' => \App\Support\Admissions\AdmissionsNotificationCopy::settingKey($this->school),
+            'value' => 'admissions@example.test',
+        ]);
+        \Illuminate\Support\Facades\Mail::fake();
+        $student = $this->placedStudent(stage: 1);
+        $service = app(CourseRegistrationService::class);
+        $registration = $service->registerStudentForOffering($this->school, $student->id, self::O_YEAR1, null, $student->id);
+        $service->registerStudentForOffering($this->school, $student->id, self::O_YEAR1, null, $student->id);
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class, 2);
+        $service->confirmRegistration($this->school, $registration->id, $student->id);
+        $service->confirmRegistration($this->school, $registration->id, $student->id);
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class, 4);
+        $service->dropRegistration($this->school, $registration->id, $student->id, 'Changed selection');
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class, 6);
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class,
+            fn ($mail) => $mail->hasTo('admissions@example.test') && $mail->data['details']['Status'] === 'Withdrawn');
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class,
+            fn ($mail) => $mail->hasTo($student->email) && $mail->data['details']['Status'] === 'Confirmed');
     }
 
     private function expectDomainFailure(callable $attempt, string $messageFragment): void
