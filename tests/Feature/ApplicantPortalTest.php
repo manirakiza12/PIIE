@@ -88,6 +88,45 @@ class ApplicantPortalTest extends TestCase
         $this->assertSame(0, DB::table('users')->where('email', 'alice@example.com')->count());
     }
 
+    public function test_creating_an_application_account_emails_its_details_to_the_applicant_and_admissions(): void
+    {
+        foreach (['smtp_user' => 'sender@example.test', 'smtp_pass' => 'fixture', 'smtp_host' => 'localhost', 'smtp_port' => '2525'] as $key => $value) {
+            DB::table('global_settings')->updateOrInsert(['key' => $key], ['value' => $value]);
+        }
+        DB::table('global_settings')->insert([
+            'key' => \App\Support\Admissions\AdmissionsNotificationCopy::settingKey($this->schoolId),
+            'value' => 'admissions@example.test',
+        ]);
+        (require database_path('migrations/2026_10_08_210000_create_applicant_notification_deliveries_table.php'))->up();
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $this->post(route('applicant.register.submit'), [
+            'first_name' => 'Alice', 'last_name' => 'Applicant', 'email' => 'alice@example.com',
+            'phone_code' => '+256', 'phone_number' => '0700111222',
+            'password' => 'PrivateAccountPassword', 'password_confirmation' => 'PrivateAccountPassword', 'terms' => '1',
+        ])->assertRedirect(route('applicant.dashboard'));
+
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class, 2);
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class, function ($mail) {
+            if (! $mail->hasTo('alice@example.com')) return false;
+            $this->assertSame('Your application portal account has been created', $mail->data['subject']);
+            $this->assertSame('Alice Applicant', $mail->data['details']['Account Name']);
+            $this->assertSame('alice@example.com', $mail->data['details']['Login Email']);
+            $this->assertSame(route('applicant.login'), $mail->data['details']['Portal Sign-in Address']);
+            $this->assertSame(route('applicant.login'), $mail->data['cta_url']);
+            $html = $mail->render();
+            $this->assertStringContainsString('password you chose', $html);
+            $this->assertStringContainsString('Forgot password', $html);
+            $this->assertStringNotContainsString('PrivateAccountPassword', $html);
+            return true;
+        });
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ApplicantNotificationEmail::class,
+            fn ($mail) => $mail->hasTo('admissions@example.test') && $mail->data['details']['Account Name'] === 'Alice Applicant'
+                && $mail->data['details']['Login Email'] === 'alice@example.com');
+        $this->assertSame(2, DB::table('applicant_notification_deliveries')->whereNotNull('sent_at')->count());
+        $this->assertSame(0, DB::table('admissions')->count());
+    }
+
     public function test_portal_routes_reject_an_unauthenticated_visitor(): void
     {
         $this->get(route('applicant.dashboard'))->assertRedirect(route('applicant.login'));

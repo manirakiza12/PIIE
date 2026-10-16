@@ -105,18 +105,21 @@ class ApplicantNotifier
     public static function welcome(Applicant $applicant, ?Admission $admission = null): bool
     {
         return self::send($applicant->email, [
-            'subject'  => get_phrase('Your applicant account is ready'),
+            'subject'  => get_phrase('Your application portal account has been created'),
             'heading'  => get_phrase('Welcome to the Applicant Portal'),
             'greeting' => get_phrase('Dear') . ' ' . $applicant->full_name . ',',
             'paragraphs' => [
                 get_phrase('Your applicant account has been created. You can now complete your application at your own pace — everything you enter is saved as you go, so you can stop and come back at any time.'),
+                get_phrase('Sign in using the email address below and the password you chose when creating your account. If you forget your password, select Forgot password on the sign-in page.'),
             ],
             'details' => array_filter([
+                get_phrase('Account Name')         => $applicant->full_name,
                 get_phrase('Login Email')          => $applicant->email,
+                get_phrase('Portal Sign-in Address') => route('applicant.login'),
                 get_phrase('Application Number')   => $admission->app_number ?? null,
             ]),
-            'cta_label'   => get_phrase('Continue My Application'),
-            'cta_url'     => route('applicant.dashboard'),
+            'cta_label'   => get_phrase('Sign in to the Application Portal'),
+            'cta_url'     => route('applicant.login'),
             'footer_note' => get_phrase('If you did not create this account, please ignore this email or contact the admissions office.'),
             'school_id'   => $applicant->school_id,
         ]);
@@ -327,8 +330,14 @@ class ApplicantNotifier
                 $isReminder
                     ? get_phrase('Your application fee is outstanding. Use your secure link to pay through PesaPal or check an existing payment.')
                     : get_phrase('An application has been created for you at') . ' ' . (get_settings('system_title') ?: 'the institution') . '. ' . get_phrase('Use your secure link to pay through PesaPal. Payment is verified with the provider.'),
+                filled($accessUrl)
+                    ? get_phrase('Your application portal account details are listed below. Use your personal account-access link in this email to set or reset your password before signing in.')
+                    : get_phrase('Your application portal account details are listed below. Select Forgot password on the sign-in page if you need to set or reset your password.'),
             ],
             'details' => array_filter([
+                get_phrase('Account Name')       => $admission->full_name,
+                get_phrase('Login Email')        => $admission->email,
+                get_phrase('Portal Sign-in Address') => route('applicant.login'),
                 get_phrase('Application Number') => $admission->app_number,
                 get_phrase('Programme')          => optional($admission->programme)->name,
                 get_phrase('Application Fee')    => $amount > 0 ? ApplicationFee::format($amount, $admission) : get_phrase('None for this intake'),

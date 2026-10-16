@@ -331,6 +331,9 @@ class AdmissionPaymentTest extends TestCase
 
         Mail::assertSent(ApplicantNotificationEmail::class, function ($mail) {
             return $mail->hasTo('mailme@example.com')
+                && ($mail->data['details']['Login Email'] ?? null) === 'mailme@example.com'
+                && ! empty($mail->data['details']['Account Name'])
+                && ($mail->data['details']['Portal Sign-in Address'] ?? null) === route('applicant.login')
                 && str_contains($mail->data['subject'], 'PIIE-2627-O-P5001')
                 && ($mail->data['details']['Application Number'] ?? null) === 'PIIE-2627-O-P5001'
                 && ($mail->data['details']['Payment Reference'] ?? null) === 'PIIE-2627-O-P5001'
