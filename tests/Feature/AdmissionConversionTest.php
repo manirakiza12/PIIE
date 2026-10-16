@@ -27,6 +27,45 @@ class AdmissionConversionTest extends TestCase
         $this->bootAdmissionsTestSchema();
     }
 
+    public function test_incomplete_draft_enrolment_returns_actionable_errors_instead_of_an_error_page(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $school = $this->makeSchool();
+        $admin = $this->makeAdminUser($school);
+        $id = $this->makeBasicAdmission($school, ['status' => 'draft', 'submitted_at' => null, 'source' => 'staff_entry']);
+        $review = route('admin.hei_admissions.review', $id);
+        $this->actingAs($admin)->from($review)
+            ->post(route('admin.hei_admissions.status', $id), ['status' => 'enrolled'])
+            ->assertRedirect($review)->assertSessionHasErrors('status');
+        $messages = session('errors')->get('status');
+        $this->assertContains('Accept the application before enrolling the student.', $messages);
+        $this->assertContains('Complete and submit the application before making this decision.', $messages);
+        $this->get($review)->assertOk()
+            ->assertSee('Before enrolment')
+            ->assertSee('Accept the application before enrolling the student.')
+            ->assertSee(route('admin.hei_admissions.wizard.step', [$id, 'personal']), false);
+        $this->assertSame('draft', \App\Models\Admission::findOrFail($id)->status);
+        $this->assertSame(0, User::where('role_id', 7)->count());
+        \Illuminate\Support\Facades\Mail::assertNothingSent();
+    }
+
+    public function test_unpaid_enrolment_returns_structured_validation_without_creating_a_student(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $school = $this->makeSchool();
+        $admin = $this->makeAdminUser($school);
+        $id = $this->makeAdmission($school, ['status' => 'accepted']);
+        \App\Models\Admission::findOrFail($id)->forceFill([
+            'application_fee_amount' => 50000, 'application_fee_currency' => 'UGX', 'fee_status' => 'unpaid',
+        ])->save();
+        $response = $this->actingAs($admin)->postJson(route('admin.hei_admissions.status', $id), ['status' => 'enrolled'])
+            ->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->assertContains('Confirm the application fee payment or record an authorised fee waiver before proceeding.', $response->json('errors.status'));
+        $this->assertSame('accepted', \App\Models\Admission::findOrFail($id)->status);
+        $this->assertSame(0, User::where('role_id', 7)->count());
+        \Illuminate\Support\Facades\Mail::assertNothingSent();
+    }
+
     public function test_enrolling_an_admission_creates_a_student_with_the_correct_role_and_registration_number(): void
     {
         $schoolId = $this->makeSchool();

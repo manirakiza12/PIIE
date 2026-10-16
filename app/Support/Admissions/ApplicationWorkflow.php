@@ -38,6 +38,28 @@ class ApplicationWorkflow
         return true;
     }
 
+    /** Read-only explanations; canTransition remains the authoritative guard. */
+    public static function decisionRequirements(Admission $admission, string $target): array
+    {
+        $requirements = [];
+        if ($target === Admission::STATUS_ENROLLED
+            && ! in_array($admission->status, [Admission::STATUS_ACCEPTED, Admission::STATUS_ENROLLED], true)) {
+            $requirements[] = get_phrase('Accept the application before enrolling the student.');
+        }
+        if (in_array($target, [Admission::STATUS_UNDER_REVIEW, Admission::STATUS_ACCEPTED, Admission::STATUS_ENROLLED], true)) {
+            if (blank($admission->submitted_at)) {
+                $requirements[] = get_phrase('Complete and submit the application before making this decision.');
+            }
+            foreach (ApplicationProgress::blockers($admission) as $blocker) {
+                $requirements[] = get_phrase('Complete the required application item').': '.$blocker;
+            }
+            if (! ApplicationFee::isSettled($admission)) {
+                $requirements[] = get_phrase('Confirm the application fee payment or record an authorised fee waiver before proceeding.');
+            }
+        }
+        return $requirements;
+    }
+
     private static function atomic(Admission $admission, callable $operation): bool
     {
         return DB::transaction(function () use ($admission, $operation) {

@@ -156,7 +156,8 @@ class AdmissionLetterDeliveryTest extends TestCase
     {
         DB::table('intake_sessions')->where('id', $this->admission->intake_session_id)->update(['application_fee' => 50000]);
         $this->admission->forceFill(['application_fee_amount' => 50000, 'application_fee_currency' => 'UGX', 'fee_status' => 'unpaid'])->save();
-        $this->actingAs($this->admin)->post(route('admin.hei_admissions.status', $this->admission->id), ['status' => 'enrolled'])->assertUnprocessable();
+        $this->actingAs($this->admin)->postJson(route('admin.hei_admissions.status', $this->admission->id), ['status' => 'enrolled'])
+            ->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->assertSame(0, AdmissionLetter::count());
         Mail::assertNothingSent();
     }
