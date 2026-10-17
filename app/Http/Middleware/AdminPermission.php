@@ -17,6 +17,23 @@ class AdminPermission
      * @var array<string, array<int, string>>
      */
     private const MODULE_ROUTES = [
+        'admin.department_list' => [
+            'admin.department.schools_faculties',
+            'admin.department.departments',
+            'admin.department.departments.create',
+            'admin.department.departments.edit',
+            'admin.department.show',
+            'admin.department.units.create',
+            'admin.department.units.store',
+            'admin.department.units.show',
+            'admin.department.units.edit',
+            'admin.department.units.update',
+            'admin.department.open_modal',
+            'admin.create.department',
+            'admin.edit.department',
+            'admin.department.update',
+            'admin.department.delete',
+        ],
         'admin.exam_category' => [
             'admin.exam_category.open_modal',
             'admin.create.exam_category',

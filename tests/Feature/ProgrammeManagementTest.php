@@ -71,7 +71,7 @@ class ProgrammeManagementTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('Faculty of Law');
-        $response->assertSee('No programmes in this faculty yet.');
+        $response->assertSee('No programmes in this department yet.');
     }
 
     public function test_department_filter_narrows_to_one_faculty(): void

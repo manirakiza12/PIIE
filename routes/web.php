@@ -811,13 +811,24 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::post('admin/subject/{id}', 'subjectUpdate')->name('admin.subject.update');
     Route::get('admin/subject/delete/{id}', 'subjectDelete')->name('admin.subject.delete');
 
-    //Depertment routes
-    Route::get('admin/department', 'departmentList')->name('admin.department_list')->middleware('admin_permission');
-    Route::get('admin/department_create', 'createDepartment')->name('admin.department.open_modal');
-    Route::post('admin/department', 'departmentCreate')->name('admin.create.department');
-    Route::get('admin/department/{id}', 'editDepartment')->name('admin.edit.department');
-    Route::post('admin/department/{id}', 'departmentUpdate')->name('admin.department.update');
-    Route::get('admin/department/delete/{id}', 'departmentDelete')->name('admin.department.delete');
+    // Academic divisions. Keep the original entry point and department
+    // form routes so existing links continue to resolve.
+    Route::get('admin/department', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'index'])->name('admin.department_list')->middleware('admin_permission');
+    Route::get('admin/department/schools-faculties', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'schoolsAndFaculties'])->name('admin.department.schools_faculties')->middleware('admin_permission');
+    Route::get('admin/department/departments', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'departments'])->name('admin.department.departments')->middleware('admin_permission');
+    Route::get('admin/department/departments/create', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'createDepartmentPage'])->name('admin.department.departments.create')->middleware('admin_permission');
+    Route::get('admin/department/departments/{id}/edit', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'editDepartmentPage'])->whereNumber('id')->name('admin.department.departments.edit')->middleware('admin_permission');
+    Route::get('admin/department/schools-faculties/create', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'createUnit'])->name('admin.department.units.create')->middleware('admin_permission');
+    Route::post('admin/department/schools-faculties', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'storeUnit'])->name('admin.department.units.store')->middleware('admin_permission');
+    Route::get('admin/department/schools-faculties/{id}', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'showUnit'])->whereNumber('id')->name('admin.department.units.show')->middleware('admin_permission');
+    Route::get('admin/department/schools-faculties/{id}/edit', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'editUnit'])->whereNumber('id')->name('admin.department.units.edit')->middleware('admin_permission');
+    Route::put('admin/department/schools-faculties/{id}', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'updateUnit'])->whereNumber('id')->name('admin.department.units.update')->middleware('admin_permission');
+    Route::get('admin/department/departments/{id}', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'showDepartment'])->whereNumber('id')->name('admin.department.show')->middleware('admin_permission');
+    Route::get('admin/department_create', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'createDepartment'])->name('admin.department.open_modal')->middleware('admin_permission');
+    Route::post('admin/department', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'storeDepartment'])->name('admin.create.department')->middleware('admin_permission');
+    Route::get('admin/department/{id}', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'editDepartment'])->whereNumber('id')->name('admin.edit.department')->middleware('admin_permission');
+    Route::post('admin/department/{id}', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'updateDepartment'])->whereNumber('id')->name('admin.department.update')->middleware('admin_permission');
+    Route::get('admin/department/delete/{id}', [\App\Http\Controllers\Admin\AcademicUnitController::class, 'deleteDepartment'])->whereNumber('id')->name('admin.department.delete')->middleware('admin_permission');
 
     Route::get('admin/designation', 'designationList')->name('admin.designation_list')->middleware('admin_permission');
     Route::get('admin/designation_create', 'createDesignation')->name('admin.designation.open_modal');
