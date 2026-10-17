@@ -73,7 +73,7 @@ class AcademicUnitManagementTest extends TestCase
         $this->get(route('admin.department.units.create', ['type' => 'faculty']))
             ->assertOk()->assertSee('Faculty')->assertSee('Belongs To - Select Parent School or Faculty');
         $this->get(route('admin.department.units.show', $school))->assertOk()->assertSee('School of Computing');
-        $this->get(route('admin.department.units.edit', $school))->assertOk()->assertSee('Edit School / Faculty');
+        $this->get(route('admin.department.units.edit', $school))->assertOk()->assertSee('Save changes')->assertSee('School of Computing');
         $this->get(route('admin.department.departments.create'))
             ->assertOk()->assertSee('Belongs To - Select Parent School or Faculty')->assertSee('School of Computing - School')->assertDontSee('Academic units sections');
         $this->assertGreaterThan(0, $school);
