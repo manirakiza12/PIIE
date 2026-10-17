@@ -361,6 +361,7 @@ class StudentCourseCatalogueUiTest extends TestCase
     public function test_a_pending_card_withdraws_confirm_while_a_balance_is_outstanding(): void
     {
         $registrationId = $this->register(11, 111);
+        DB::table('student_fee_managers')->where('student_id', $this->student->id)->update(['paid_amount' => 0]);
         DB::table('student_fee_managers')->insert([
             'student_id' => $this->student->id, 'school_id' => $this->school,
             'title' => 'Tuition', 'class_id' => 0, 'payment_method' => 'cash', 'status' => 'unpaid',
@@ -371,7 +372,7 @@ class StudentCourseCatalogueUiTest extends TestCase
 
         // A button the controller will refuse is worse than no button.
         $this->assertStringNotContainsString(route('student.my_courses.confirm', $registrationId), $html);
-        $this->assertStringContainsString('Confirmation is unavailable until your outstanding balance is resolved.', $html);
+        $this->assertStringContainsString('Pay at least 20% of your current academic-session fees before registering or confirming a course.', $html);
         $this->assertStringContainsString(route('student.fee_manager.list'), $html);
     }
 

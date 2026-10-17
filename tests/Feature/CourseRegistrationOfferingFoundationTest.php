@@ -135,18 +135,14 @@ class CourseRegistrationOfferingFoundationTest extends TestCase
         $this->actingAs($this->fixture['student']);
         $service = app(CourseRegistrationService::class);
         $registration = $service->registerStudentForOffering(1, $this->fixture['student']->id, $this->fixture['offering'], $this->fixture['membership']);
-        DB::table('student_fee_managers')->insert([
-            'title' => 'Tuition', 'total_amount' => 100, 'amount' => 100, 'class_id' => 0,
-            'student_id' => $this->fixture['student']->id, 'payment_method' => 'offline', 'paid_amount' => 20,
-            'status' => 'unpaid', 'school_id' => 1, 'session_id' => 1,
-        ]);
+        DB::table('student_fee_managers')->where('student_id', $this->fixture['student']->id)->update(['paid_amount' => 0]);
         try {
             $service->confirmRegistration(1, $registration->id);
-            $this->fail('Outstanding balance must prevent confirmation.');
+            $this->fail('Payment below the 20% threshold must prevent confirmation.');
         } catch (\Illuminate\Validation\ValidationException) {
             $this->assertSame('registered', $registration->fresh()->status);
         }
-        DB::table('student_fee_managers')->where('student_id', $this->fixture['student']->id)->update(['paid_amount' => 100]);
+        DB::table('student_fee_managers')->where('student_id', $this->fixture['student']->id)->update(['paid_amount' => 20]);
         $service->confirmRegistration(1, $registration->id);
         $confirmed = $registration->fresh();
         $this->assertSame('confirmed', $confirmed->status);
@@ -398,6 +394,7 @@ class CourseRegistrationOfferingFoundationTest extends TestCase
         DB::table('programme_cohorts')->insert(['id' => 1, 'school_id' => $school, 'programme_id' => $programme, 'curriculum_id' => 1, 'entry_academic_year_id' => 1, 'name' => 'Cohort 2025', 'code' => 'C-2025', 'status' => 'active']);
         DB::table('programme_cohort_memberships')->insert(['id' => 1, 'school_id' => $school, 'student_id' => $student->id, 'programme_cohort_id' => 1, 'status' => 'active', 'started_at' => now()]);
         DB::table('student_curriculum_assignments')->insert(['school_id' => $school, 'student_id' => $student->id, 'programme_id' => $programme, 'curriculum_id' => 1, 'entry_academic_year_id' => 1, 'effective_from_academic_year_id' => 1, 'programme_cohort_membership_id' => 1, 'entry_curriculum_stage_id' => 1, 'assigned_by' => $student->id, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('student_fee_managers')->insert(['title' => 'Current session tuition', 'total_amount' => 100, 'amount' => 100, 'class_id' => 0, 'student_id' => $student->id, 'payment_method' => 'offline', 'paid_amount' => 20, 'status' => 'unpaid', 'school_id' => $school, 'session_id' => 1]);
         foreach ([1 => 'open', 2 => 'open', 3 => 'draft'] as $id => $status) {
             DB::table('course_offerings')->insert(['id' => $id, 'school_id' => $school, 'subject_id' => $subject, 'academic_year_id' => 1, 'academic_period_id' => 1, 'status' => $status, 'created_at' => now(), 'updated_at' => now()]);
         }

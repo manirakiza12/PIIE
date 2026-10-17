@@ -120,7 +120,7 @@ class StudentCourseRegistrationTest extends TestCase
         ]);
         DB::table('student_fee_managers')->insert([
             'title' => 'Tuition', 'total_amount' => 500, 'amount' => 500, 'discounted_price' => 0, 'class_id' => 0,
-            'student_id' => $student->id, 'payment_method' => 'unpaid', 'paid_amount' => 100,
+            'student_id' => $student->id, 'payment_method' => 'unpaid', 'paid_amount' => 99,
             'status' => 'unpaid', 'school_id' => $schoolId, 'session_id' => 1,
             'created_at' => now(), 'updated_at' => now(),
         ]);

@@ -250,7 +250,8 @@ class StudentController extends Controller
 
     /**
      * My Courses — pick subjects from the student's own programme/class
-     * catalog for the current session, then confirm once fees are settled.
+     * catalog for the current session; at least 20% of current-session fees
+     * must be paid before course registration or confirmation.
      * Nothing before this let a student register for specific courses at
      * all; Gradebook (marks) assumed the course list came from somewhere
      * else, and Subject's credits/code/course_type columns (added earlier
@@ -358,9 +359,12 @@ class StudentController extends Controller
                     $membershipId,
                     (int) $student->id,
                 );
-                return redirect()->route('student.my_courses')->with('message', 'Course registration saved. Confirm it after your financial eligibility is cleared.');
-            } catch (DomainException) {
-                return redirect()->route('student.my_courses')->with('error', 'The Course Offering could not be registered. Refresh the page or contact the academic office.');
+                return redirect()->route('student.my_courses')->with('message', 'Course registration saved.');
+            } catch (DomainException $exception) {
+                $message = $exception->getMessage() === 'Pay at least 20% of the current academic-session fees before registering for courses.'
+                    ? $exception->getMessage()
+                    : 'The Course Offering could not be registered. Refresh the page or contact the academic office.';
+                return redirect()->route('student.my_courses')->with('error', $message);
             }
         }
 
@@ -378,7 +382,7 @@ class StudentController extends Controller
             );
         }
 
-        return redirect()->back()->with('message', get_phrase('Courses registered. Confirm them once your fees are settled.'));
+                return redirect()->back()->with('message', get_phrase('Courses registered. Pay at least 20% of your current academic-session fees to confirm them.'));
     }
 
     public function confirmCourse($id)
@@ -391,14 +395,14 @@ class StudentController extends Controller
                 app(CourseRegistrationService::class)->confirmRegistration((int) $student->school_id, (int) $registration->id, (int) $student->id);
                 return redirect()->back()->with('message', get_phrase('Course confirmed.'));
             } catch (ValidationException) {
-                return redirect()->back()->with('error', 'Registration is saved, but confirmation is currently unavailable until your outstanding balance is resolved.');
+                return redirect()->back()->with('error', 'Pay at least 20% of your current academic-session fees before confirming course registration.');
             } catch (DomainException) {
                 return redirect()->back()->with('error', 'Registration could not be confirmed. Contact the academic office if the problem continues.');
             }
         }
 
         if (! app(StudentRegistrationConfirmationEligibility::class)->allows($student)) {
-            return redirect()->back()->with('error', get_phrase('You must clear your fee balance before confirming course registration.'));
+            return redirect()->back()->with('error', get_phrase('Pay at least 20% of the current academic-session fees before confirming course registration.'));
         }
 
         $registration->update(['status' => CourseRegistration::STATUS_CONFIRMED]);

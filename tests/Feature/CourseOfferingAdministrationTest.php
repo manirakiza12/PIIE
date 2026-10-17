@@ -694,11 +694,11 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         }
         $page->assertSee('>Teaching Groups</span>', false)->assertDontSee('>Classes</span>', false);
         $this->assertNotContains(route('admin.programme_cohorts.index'), $destinations);
-        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Programme Student Groups');
+        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Place Student in Programme');
         // Keep the direct destination when a legacy restriction prevents opening Programmes.
         $admin->forceFill(['menu_permission'=>json_encode(['admin.programme_cohorts.index'])])->save();
         $restricted=$this->actingAs($admin->fresh())->get(route('admin.course_offerings.index'))->assertOk();
-        $this->assertStringContainsString('>Programme Student Groups</span>', $restricted->getContent());
+        $this->assertStringContainsString('>Place Student in Programme</span>', $restricted->getContent());
     }
 
     public function test_scheduling_a_saved_unit_prefills_its_name_and_keeps_dated_year_selection(): void

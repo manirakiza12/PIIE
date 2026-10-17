@@ -113,6 +113,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $confirmer = $this->staff($this->fixture['school'], ['academic.course_registration.confirm']);
         $regA = CourseRegistration::create(['school_id' => $this->fixture['school'], 'student_id' => $this->fixture['studentA']->id, 'course_offering_id' => 1, 'curriculum_membership_id' => 1, 'subject_id' => $this->fixture['subject'], 'registered_credits' => '12.50', 'registered_classification' => 'compulsory', 'status' => 'registered']);
         $regB = CourseRegistration::create(['school_id' => $this->fixture['school'], 'student_id' => $this->fixture['studentB']->id, 'course_offering_id' => 1, 'curriculum_membership_id' => 1, 'subject_id' => $this->fixture['subject'], 'registered_credits' => '12.50', 'registered_classification' => 'compulsory', 'status' => 'registered']);
+        DB::table('student_fee_managers')->where('student_id', $this->fixture['studentB']->id)->update(['paid_amount' => 0]);
         DB::table('student_fee_managers')->insert([
             'title' => 'Tuition', 'total_amount' => 100, 'amount' => 100, 'class_id' => 0,
             'student_id' => $this->fixture['studentB']->id, 'payment_method' => 'offline', 'paid_amount' => 20,
@@ -135,7 +136,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertSame(1, $summary['already']);
         $this->assertSame(1, $summary['skipped']);
         $this->assertSame('registered', $regB->fresh()->status);
-        $this->assertStringContainsString('financial clearance', collect($summary['details'])->firstWhere('result', 'skipped')['reason']);
+        $this->assertStringContainsString('at least 20%', collect($summary['details'])->firstWhere('result', 'skipped')['reason']);
     }
 
     public function test_registration_and_confirmation_routes_enforce_distinct_rbac(): void
@@ -199,6 +200,9 @@ class CourseOfferingRegistrationBatchTest extends TestCase
 
         foreach ([$studentA, $studentB, $studentAlready, $studentIneligible] as $student) {
             DB::table('student_profiles')->insert(['user_id' => $student->id, 'school_id' => $school, 'programme_id' => $programme, 'created_at' => now(), 'updated_at' => now()]);
+            if ($student !== $studentIneligible) {
+                DB::table('student_fee_managers')->insert(['title' => 'Current session tuition', 'total_amount' => 100, 'amount' => 100, 'class_id' => 0, 'student_id' => $student->id, 'payment_method' => 'offline', 'paid_amount' => 20, 'status' => 'unpaid', 'school_id' => $school, 'session_id' => 1]);
+            }
         }
 
         $cohortMembershipA = (int) DB::table('programme_cohort_memberships')->insertGetId(['school_id' => $school, 'student_id' => $studentA->id, 'programme_cohort_id' => 1, 'status' => 'active', 'started_at' => now()]);

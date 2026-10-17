@@ -30,8 +30,12 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
             <a href="{{ route('admin.student.export', ['search' => $search, 'class_id' => $class_id, 'section_id' => $section_id]) }}" class="export_btn bg-secondary"><i class="bi bi-download"></i> {{ get_phrase('Export CSV') }}</a>
             <a href="{{ route('admin.student.export_excel', ['search' => $search, 'class_id' => $class_id, 'section_id' => $section_id]) }}" class="export_btn bg-secondary"><i class="bi bi-file-earmark-excel"></i> {{ get_phrase('Export Excel') }}</a>
             @if(empty($user->menu_permission) || in_array('admin.offline_admission.single', $menu_permission))
+            <a href="{{ route('admin.hei_admissions.wizard.create') }}" class="export_btn">{{ get_phrase('Add Application') }}</a>
             <a href="{{ route('admin.student.open_modal') }}" class="export_btn">{{ get_phrase('Add Existing Student') }}</a>
             <a href="{{ route('admin.student.import.index') }}" class="export_btn">{{ get_phrase('Import Existing Students') }}</a>
+            @endif
+            @if(academic_education_level($user->school_id) === 'tertiary' && $user->hasPermission('academic.programme_cohort.membership'))
+            <a href="{{ route('admin.academic.direct_placement') }}" class="export_btn">{{ get_phrase('Place Student in Programme') }}</a>
             @endif
           </div>
         </div>

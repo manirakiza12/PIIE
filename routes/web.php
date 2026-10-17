@@ -1066,6 +1066,11 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\P
     Route::post('admin/programme-cohorts/{id}/placement/{membershipId}', 'place')->name('admin.programme_cohorts.placement.store');
 });
 
+Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\DirectAcademicPlacementController::class)->group(function () {
+    Route::get('admin/academic/direct-placement', 'edit')->name('admin.academic.direct_placement');
+    Route::post('admin/academic/direct-placement', 'store')->name('admin.academic.direct_placement.store');
+});
+
 // Personal timezone preference, shared by every portal so the rule
 // "NULL means follow your institution" is written down exactly once.
 // Presentation only: it can never change the institution's official
@@ -1835,6 +1840,8 @@ Route::controller(\App\Http\Controllers\CourseOfferingController::class)->middle
     Route::post('/{id}/registrations/bulk', 'registerBulk')->whereNumber('id')->name('registrations.bulk');
     Route::post('/{id}/registrations/confirm', 'confirmBulk')->whereNumber('id')->name('registrations.confirm_bulk');
     Route::post('/{id}/registrations/{registration}/confirm', 'confirmStudent')->whereNumber('id')->whereNumber('registration')->name('registrations.confirm');
+    Route::post('/{id}/students/{studentId}/fee-waiver', 'grantStudentFeeWaiver')->whereNumber('id')->whereNumber('studentId')->name('students.fee_waiver.store');
+    Route::delete('/{id}/students/{studentId}/fee-waiver', 'revokeStudentFeeWaiver')->whereNumber('id')->whereNumber('studentId')->name('students.fee_waiver.destroy');
     Route::controller(\App\Http\Controllers\CourseOfferingLecturerController::class)->prefix('/{offering}/lecturers')->name('lecturers.')->group(function () {
         Route::get('/', 'index')->whereNumber('offering')->name('index');
         Route::get('/history', 'history')->whereNumber('offering')->name('history');

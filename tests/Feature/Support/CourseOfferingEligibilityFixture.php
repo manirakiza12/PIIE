@@ -35,6 +35,11 @@ trait CourseOfferingEligibilityFixture
             'entry_academic_year_id' => 1, 'effective_from_academic_year_id' => 1, 'programme_cohort_membership_id' => $membership,
             'entry_curriculum_stage_id' => $stage, 'assigned_by' => $student->id, 'created_at' => now(), 'updated_at' => now(),
         ]);
+        DB::table('student_fee_managers')->insert([
+            'title' => 'Current session tuition', 'total_amount' => 100, 'amount' => 100, 'class_id' => 0,
+            'student_id' => $student->id, 'payment_method' => 'offline', 'paid_amount' => 20,
+            'status' => 'unpaid', 'school_id' => $this->school, 'session_id' => 1,
+        ]);
 
         return $student;
     }

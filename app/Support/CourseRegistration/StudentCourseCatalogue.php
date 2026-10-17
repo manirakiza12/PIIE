@@ -210,9 +210,8 @@ final class StudentCourseCatalogue
     private function actionFor(string $section, bool $financeEligible): string
     {
         return match ($section) {
-            'available' => 'register',
-            // Confirmation is gated on financial eligibility exactly as the table
-            // was: the card must not offer a button the controller will refuse.
+            'available' => $financeEligible ? 'register' : 'blocked',
+            // Both registration and confirmation require the same minimum payment.
             'pending' => $financeEligible ? 'confirm' : 'blocked',
             'confirmed' => 'open',
             default => 'none',
