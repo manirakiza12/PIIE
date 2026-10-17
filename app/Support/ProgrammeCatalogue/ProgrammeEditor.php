@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /** Save details, public images and catalogue visibility as one operation. */
@@ -58,6 +59,10 @@ class ProgrammeEditor
                     throw ValidationException::withMessages(['gallery_images' => 'A programme can have at most two gallery images. Select an existing image for removal to replace it.']);
                 }
                 $programme->fill(Arr::except($validated, ['cover_image', 'gallery_images', 'remove_cover', 'remove_gallery_images', 'is_published', 'section_key']))->save();
+                if (($validated['department_id'] ?? null) && Schema::hasColumn('programmes', 'legacy_department_id')) {
+                    $programme->legacy_department_id = null;
+                    $programme->save();
+                }
                 if ($request->boolean('is_published') && ! $programme->is_active) {
                     throw ValidationException::withMessages(['is_published' => 'Activate this programme before publishing it.']);
                 }

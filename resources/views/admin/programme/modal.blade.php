@@ -77,6 +77,9 @@
                             <option value="{{ $dept->id }}" {{ (string) old('department_id', $programme->department_id ?? '') === (string) $dept->id ? 'selected' : '' }}>{{ $dept->name }}</option>
                         @endforeach
                     </select>
+                    @if($programme?->legacy_department_id && $programme->legacyDepartment)
+                        <small class="text-warning d-block mt-1">Previously listed under {{ $programme->legacyDepartment->name }} (School / Faculty). This programme is currently unassigned; choose its Department after review.</small>
+                    @endif
                     @if($departments->isEmpty())
                         <small class="text-muted d-block mt-1">
                             {{ get_phrase('No departments set up yet.') }}

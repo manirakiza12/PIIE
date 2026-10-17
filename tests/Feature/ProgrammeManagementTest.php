@@ -56,7 +56,7 @@ class ProgrammeManagementTest extends TestCase
         $response->assertSeeInOrder(['Faculty of Engineering', 'BSc Civil Engineering']);
         // The catch-all group is labelled for what it really holds: no faculty
         // set, AND a faculty that no longer exists.
-        $response->assertSee('Unassigned / Unknown Department');
+        $response->assertSee('Unassigned / Needs Department');
         $response->assertSee('Unassigned Programme');
     }
 
@@ -285,7 +285,7 @@ class ProgrammeManagementTest extends TestCase
         $response = $this->actingAs($admin)->get(route('admin.programmes.index'));
 
         $response->assertStatus(200);
-        $response->assertSee('Unassigned / Unknown Department');
+        $response->assertSee('Unassigned / Needs Department');
         $response->assertSee('BBIT');
 
         // Asserted on the group structure, not the HTML: the faculty filter
@@ -320,7 +320,7 @@ class ProgrammeManagementTest extends TestCase
         foreach (['NUL1', 'DAN1', 'OWN1'] as $code) {
             $this->assertStringContainsString($code, $html, "{$code} must be displayed");
         }
-        $this->assertStringContainsString('Unassigned / Unknown Department', $html);
+        $this->assertStringContainsString('Unassigned / Needs Department', $html);
 
         // Each programme appears exactly once: no duplicates across groups.
         foreach (['NUL1', 'DAN1', 'OWN1'] as $code) {
@@ -371,7 +371,7 @@ class ProgrammeManagementTest extends TestCase
         $this->assertStringContainsString('XNT', $html);
         $this->assertStringNotContainsString('Foreign Confidential Faculty', $html,
             'another tenant\'s faculty must never leak into this screen');
-        $this->assertStringContainsString('Unassigned / Unknown Department', $html);
+        $this->assertStringContainsString('Unassigned / Needs Department', $html);
     }
 
     public function test_another_tenants_programmes_never_appear_at_all(): void

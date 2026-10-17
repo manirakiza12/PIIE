@@ -25,6 +25,7 @@ class AcademicUnitManagementTest extends TestCase
         (require database_path('migrations/2026_10_17_110000_create_academic_units_and_link_departments.php'))->up();
         (require database_path('migrations/2026_10_17_120000_add_codes_and_leadership_to_academic_divisions.php'))->up();
         (require database_path('migrations/2026_10_17_130000_promote_legacy_academic_units.php'))->up();
+        (require database_path('migrations/2026_10_17_140000_detach_legacy_unit_programmes.php'))->up();
     }
 
     private function createUnit(int $schoolId, string $type, string $name, ?int $parentId = null): int
@@ -71,6 +72,8 @@ class AcademicUnitManagementTest extends TestCase
             ->assertSee('Dean / Director / Head')->assertDontSee('Dean / Director / Head Title')->assertDontSee('Academic units sections');
         $this->get(route('admin.department.units.create', ['type' => 'faculty']))
             ->assertOk()->assertSee('Faculty')->assertSee('Belongs To - Select Parent School or Faculty');
+        $this->get(route('admin.department.units.show', $school))->assertOk()->assertSee('School of Computing');
+        $this->get(route('admin.department.units.edit', $school))->assertOk()->assertSee('Edit School / Faculty');
         $this->get(route('admin.department.departments.create'))
             ->assertOk()->assertSee('Belongs To - Select Parent School or Faculty')->assertSee('School of Computing - School')->assertDontSee('Academic units sections');
         $this->assertGreaterThan(0, $school);
@@ -173,6 +176,15 @@ class AcademicUnitManagementTest extends TestCase
         $this->assertSame('CSC', $department->code);
         $this->assertSame('Carol Example', $department->hod_name);
         $this->assertSame((int) $department->id, (int) Programme::query()->findOrFail($programmeId)->department_id);
+        $this->get(route('admin.department.show', $department->id))->assertOk()->assertSee('Computer Science');
+        $this->get(route('admin.department.departments.edit', $department->id))->assertOk()->assertSee('Edit Department');
+        $this->post(route('admin.department.update', $department->id), [
+            'name' => 'Computing', 'code' => 'CSC', 'hod_name' => 'Carol Example', 'academic_unit_id' => $parent,
+        ])->assertSessionHasNoErrors()->assertRedirect(route('admin.department.departments'));
+        $department->refresh();
+        $this->assertSame('Computing', $department->name);
+        $this->assertSame((int) $parent, (int) $department->academic_unit_id);
+        $this->assertSame((int) $department->id, (int) Programme::query()->findOrFail($programmeId)->department_id);
 
         $this->from(route('admin.department.departments.create'))
             ->post(route('admin.create.department'), ['name' => 'Computer Science', 'academic_unit_id' => $parent])
@@ -248,6 +260,7 @@ class AcademicUnitManagementTest extends TestCase
     public function test_migration_can_be_reverted_on_an_empty_new_structure_without_affecting_departments(): void
     {
         $this->migrateAcademicUnits();
+        (require database_path('migrations/2026_10_17_140000_detach_legacy_unit_programmes.php'))->down();
         (require database_path('migrations/2026_10_17_130000_promote_legacy_academic_units.php'))->down();
         (require database_path('migrations/2026_10_17_120000_add_codes_and_leadership_to_academic_divisions.php'))->down();
         (require database_path('migrations/2026_10_17_110000_create_academic_units_and_link_departments.php'))->down();
@@ -291,12 +304,54 @@ class AcademicUnitManagementTest extends TestCase
             ->assertOk()->assertSee('FACULTY OF EDUCATION')->assertSee('1');
         $this->get(route('admin.department.departments'))
             ->assertOk()->assertDontSee('<td class="fw-semibold">FACULTY OF EDUCATION</td>', false)->assertSee('Department of Education');
-        $this->assertDatabaseHas('programmes', ['department_id' => $legacyIds['FACULTY OF EDUCATION']]);
+        $this->get(route('admin.department.show', $legacyIds['FACULTY OF EDUCATION']))->assertNotFound();
+        $this->get(route('admin.department.departments.edit', $legacyIds['FACULTY OF EDUCATION']))->assertNotFound();
+        $this->assertDatabaseHas('programmes', [
+            'name' => 'Education Programme', 'department_id' => null,
+            'legacy_department_id' => $legacyIds['FACULTY OF EDUCATION'],
+        ]);
         $this->assertDatabaseHas('departments', ['id' => $normalDepartmentId, 'name' => 'Department of Education']);
+        $this->actingAs($admin)->get(route('admin.programmes.open_modal'))
+            ->assertOk()->assertSee('Department of Education')->assertDontSee('FACULTY OF EDUCATION');
+        $this->get(route('admin.programmes.index'))->assertOk()
+            ->assertSee('Previously under FACULTY OF EDUCATION');
+        $this->post(route('admin.programmes.store'), [
+            'name' => 'Another Education Programme', 'code' => 'EDU2', 'level' => 'Diploma',
+            'mode' => 'Full Time', 'department_id' => $legacyIds['FACULTY OF EDUCATION'],
+        ])->assertSessionHasErrors('department_id');
+        $educationProgramme = Programme::query()->where('school_id', $schoolId)->where('code', 'EDU1')->firstOrFail();
+        $this->postJson(route('admin.programmes.update', $educationProgramme->id), [
+            'name' => $educationProgramme->name, 'code' => $educationProgramme->code,
+            'level' => $educationProgramme->level, 'mode' => $educationProgramme->mode,
+            'department_id' => $normalDepartmentId,
+        ])->assertOk();
+        $this->assertDatabaseHas('programmes', [
+            'id' => $educationProgramme->id, 'department_id' => $normalDepartmentId,
+            'legacy_department_id' => null,
+        ]);
         $faculty = AcademicUnit::query()->where('school_id', $schoolId)->where('name', 'FACULTY OF EDUCATION')->firstOrFail();
         $this->get(route('admin.department.units.show', $faculty->id))->assertOk()->assertSee('Programmes')->assertSee('1');
         $this->delete(route('admin.department.units.destroy', $faculty->id))
             ->assertRedirect(route('admin.department.schools_faculties'))->assertSessionHas('error');
         $this->assertDatabaseHas('academic_units', ['id' => $faculty->id, 'legacy_department_id' => $legacyIds['FACULTY OF EDUCATION']]);
+    }
+
+    public function test_legacy_programme_link_can_be_restored_if_the_new_migration_is_rolled_back(): void
+    {
+        $schoolId = $this->makeSchool();
+        $legacyDepartmentId = (int) DB::table('departments')->insertGetId([
+            'school_id' => $schoolId, 'name' => 'FACULTY OF EDUCATION',
+        ]);
+        $this->makeProgramme($schoolId, [
+            'name' => 'Education Programme', 'code' => 'EDU1', 'department_id' => $legacyDepartmentId,
+        ]);
+
+        $this->migrateAcademicUnits();
+        $this->assertDatabaseHas('programmes', ['code' => 'EDU1', 'department_id' => null, 'legacy_department_id' => $legacyDepartmentId]);
+
+        (require database_path('migrations/2026_10_17_140000_detach_legacy_unit_programmes.php'))->down();
+
+        $this->assertDatabaseHas('programmes', ['code' => 'EDU1', 'department_id' => $legacyDepartmentId]);
+        $this->assertFalse(Schema::hasColumn('programmes', 'legacy_department_id'));
     }
 }

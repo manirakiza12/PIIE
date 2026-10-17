@@ -17,6 +17,7 @@ use App\Support\ProgrammeCatalogue\ProgrammePublisher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class ProgrammeController extends Controller
@@ -64,17 +65,20 @@ class ProgrammeController extends Controller
         $search       = $request->search ?? '';
         $departmentId = $request->department_id ?? '';
 
-        $programmes = Programme::where('school_id', $this->school_id)
+        $programmeQuery = Programme::where('school_id', $this->school_id)
             ->when($search, fn($q) => $q->where(function ($sub) use ($search) {
                 $sub->where('name', 'like', "%$search%")->orWhere('code', 'like', "%$search%");
             }))
             ->when($departmentId === 'none', fn($q) => $q->whereNull('department_id'))
             ->when($departmentId !== '' && $departmentId !== 'none', fn($q) => $q->where('department_id', $departmentId))
-            ->with('department')
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
+        $programmeQuery->with('department');
+        if (Schema::hasColumn('programmes', 'legacy_department_id')) {
+            $programmeQuery->with('legacyDepartment');
+        }
+        $programmes = $programmeQuery->get();
 
-        $departments = Department::where('school_id', $this->school_id)->orderBy('name')->get();
+        $departments = $this->selectableDepartments();
         $schoolType = \Illuminate\Support\Facades\DB::table('schools')->where('id', $this->school_id)->value('school_type') ?: 'k12';
         $canSeeProgrammes = $schoolType !== 'k12';
 
@@ -143,7 +147,7 @@ class ProgrammeController extends Controller
     {
         $id          = $request->id;
         $programme   = $id ? $this->findOwned($id) : null;
-        $departments = Department::where('school_id', $this->school_id)->orderBy('name')->get();
+        $departments = $this->selectableDepartments();
 
         return view('admin.programme.modal', compact('programme', 'departments'))
             ->with([
@@ -221,7 +225,12 @@ class ProgrammeController extends Controller
             'tuition_fee'   => 'nullable|numeric|min:0',
             'department_id' => [
                 'nullable',
-                Rule::exists('departments', 'id')->where(fn ($q) => $q->where('school_id', $this->school_id)),
+                Rule::exists('departments', 'id')->where(function ($q) {
+                    $q->where('school_id', $this->school_id);
+                    if (Schema::hasTable('academic_units') && Schema::hasColumn('academic_units', 'legacy_department_id')) {
+                        $q->whereNotIn('id', DB::table('academic_units')->select('legacy_department_id')->whereNotNull('legacy_department_id'));
+                    }
+                }),
             ],
 
             // Catalogue metadata. A CURRENCY is only meaningful when an amount is
@@ -245,6 +254,16 @@ class ProgrammeController extends Controller
             'is_published' => ['sometimes', 'boolean'],
             'section_key' => ['nullable', Rule::in(ProgrammePublisher::CATALOGUE_SECTIONS)],
         ];
+    }
+
+    /** Departments that are not retained compatibility rows for promoted Schools/Faculties. */
+    private function selectableDepartments()
+    {
+        $query = Department::query()->where('school_id', $this->school_id);
+        if (Schema::hasTable('academic_units') && Schema::hasColumn('academic_units', 'legacy_department_id')) {
+            $query->whereNotIn('id', DB::table('academic_units')->select('legacy_department_id')->whereNotNull('legacy_department_id'));
+        }
+        return $query->orderBy('name')->get();
     }
 
     /**
