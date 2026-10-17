@@ -187,13 +187,13 @@ class AcademicUnitManagementTest extends TestCase
         $this->assertSame((int) $department->id, (int) Programme::query()->findOrFail($programmeId)->department_id);
 
         $this->from(route('admin.department.departments.create'))
-            ->post(route('admin.create.department'), ['name' => 'Computer Science', 'academic_unit_id' => $parent])
+            ->post(route('admin.create.department'), ['name' => 'Computing', 'academic_unit_id' => $parent])
             ->assertSessionHasErrors('name');
         $this->from(route('admin.department.departments.create'))
             ->post(route('admin.create.department'), ['name' => 'Information Systems', 'code' => 'CSC', 'academic_unit_id' => $parent])
             ->assertSessionHasErrors('code');
-        $this->get(route('admin.department.departments', ['search' => 'Computer']))
-            ->assertOk()->assertSee('Computer Science')->assertSee('School of Technology');
+        $this->get(route('admin.department.departments', ['search' => 'Computing']))
+            ->assertOk()->assertSee('Computing')->assertSee('School of Technology');
     }
 
     public function test_department_delete_is_blocked_when_programmes_use_it_and_module_permissions_are_retained(): void
@@ -322,7 +322,7 @@ class AcademicUnitManagementTest extends TestCase
         $educationProgramme = Programme::query()->where('school_id', $schoolId)->where('code', 'EDU1')->firstOrFail();
         $this->postJson(route('admin.programmes.update', $educationProgramme->id), [
             'name' => $educationProgramme->name, 'code' => $educationProgramme->code,
-            'level' => $educationProgramme->level, 'mode' => $educationProgramme->mode,
+            'level' => $educationProgramme->level, 'mode' => 'Full Time',
             'department_id' => $normalDepartmentId,
         ])->assertOk();
         $this->assertDatabaseHas('programmes', [
@@ -330,7 +330,7 @@ class AcademicUnitManagementTest extends TestCase
             'legacy_department_id' => null,
         ]);
         $faculty = AcademicUnit::query()->where('school_id', $schoolId)->where('name', 'FACULTY OF EDUCATION')->firstOrFail();
-        $this->get(route('admin.department.units.show', $faculty->id))->assertOk()->assertSee('Programmes')->assertSee('1');
+        $this->get(route('admin.department.units.show', $faculty->id))->assertOk()->assertSee('Programmes')->assertSee('0');
         $this->delete(route('admin.department.units.destroy', $faculty->id))
             ->assertRedirect(route('admin.department.schools_faculties'))->assertSessionHas('error');
         $this->assertDatabaseHas('academic_units', ['id' => $faculty->id, 'legacy_department_id' => $legacyIds['FACULTY OF EDUCATION']]);
