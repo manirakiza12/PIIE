@@ -17,7 +17,7 @@
                     $programmeMenuRestrictions = json_decode((string) auth()->user()->menu_permission, true) ?: [];
                 @endphp
                 <div class="export-btn-area d-flex gap-2 flex-wrap">
-                    <a href="{{ route('admin.department_list') }}" class="export_btn export_btn-outline"><i class="bi bi-diagram-3"></i> {{ get_phrase('Manage Faculties') }}</a>
+                    <a href="{{ route('admin.department.departments') }}" class="export_btn export_btn-outline"><i class="bi bi-diagram-3"></i> {{ get_phrase('Manage Departments') }}</a>
                     <a href="{{ route('admin.programmes.export', ['search' => $search, 'department_id' => $departmentId]) }}" class="export_btn bg-secondary"><i class="bi bi-download"></i> {{ get_phrase('Export CSV') }}</a>
                     <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.programmes.open_modal') }}', '{{ get_phrase('Add Programme') }}')">{{ get_phrase('Add Programme') }}</a>
                 </div>
@@ -40,8 +40,8 @@
                 <form action="{{ route('admin.programmes.index') }}" class="d-flex gap-2 flex-wrap align-items-center">
                     <input type="text" name="search" value="{{ $search }}" placeholder="{{ get_phrase('Search programmes') }}" class="form-control eForm-control" style="min-width:220px;">
                     <select name="department_id" class="form-control eForm-control" style="min-width:200px;" onchange="this.form.submit()">
-                        <option value="">{{ get_phrase('All Faculties') }}</option>
-                        <option value="none" {{ $departmentId === 'none' ? 'selected' : '' }}>{{ get_phrase('Unassigned (no faculty)') }}</option>
+                        <option value="">{{ get_phrase('All Departments') }}</option>
+                        <option value="none" {{ $departmentId === 'none' ? 'selected' : '' }}>{{ get_phrase('Unassigned (no department)') }}</option>
                         @foreach($departments as $dept)
                             <option value="{{ $dept->id }}" {{ (string) $departmentId === (string) $dept->id ? 'selected' : '' }}>{{ $dept->name }}</option>
                         @endforeach
@@ -56,8 +56,8 @@
 
             @if($departments->isEmpty())
                 <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <span>{{ get_phrase('No faculties are set up yet, so every programme below is grouped as Unassigned.') }}</span>
-                    <a href="{{ route('admin.department_list') }}" class="eBtn eBtn-sm eBtn-primary">{{ get_phrase('Add a Faculty') }}</a>
+                    <span>{{ get_phrase('No departments are set up yet, so every programme below is grouped as Unassigned.') }}</span>
+                    <a href="{{ route('admin.department.departments.create') }}" class="eBtn eBtn-sm eBtn-primary">{{ get_phrase('Add a Department') }}</a>
                 </div>
             @endif
 
@@ -90,7 +90,7 @@
                              data-bs-parent="#programmeFacultyAccordion">
                             <div class="accordion-body p-0">
                                 @if($groupProgrammes->isEmpty())
-                                    <p class="text-muted text-center py-3 mb-0">{{ get_phrase('No programmes in this faculty yet.') }}</p>
+                                    <p class="text-muted text-center py-3 mb-0">{{ get_phrase('No programmes in this department yet.') }}</p>
                                 @else
                                     @if($isUnresolved)
                                         {{-- Say why these are here, so an orphaned programme

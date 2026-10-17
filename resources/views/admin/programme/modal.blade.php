@@ -70,7 +70,7 @@
 
             <div class="row mt-2">
                 <div class="col-12 fpb-7">
-                    <label class="eForm-label" for="piie-dept">{{ get_phrase('Faculty / Department') }}</label>
+                    <label class="eForm-label" for="piie-dept">{{ get_phrase('Department') }}</label>
                     <select id="piie-dept" class="form-control eForm-control" name="department_id">
                         <option value="">{{ get_phrase('— None —') }}</option>
                         @foreach($departments as $dept)
@@ -79,8 +79,8 @@
                     </select>
                     @if($departments->isEmpty())
                         <small class="text-muted d-block mt-1">
-                            {{ get_phrase('No faculties set up yet.') }}
-                            <a href="{{ route('admin.department_list') }}" target="_blank" rel="noopener">{{ get_phrase('Add one') }}</a>
+                            {{ get_phrase('No departments set up yet.') }}
+                            <a href="{{ route('admin.department.departments.create') }}" target="_blank" rel="noopener">{{ get_phrase('Add one') }}</a>
                         </small>
                     @endif
                 </div>

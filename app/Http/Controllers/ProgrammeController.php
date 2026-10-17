@@ -638,7 +638,7 @@ class ProgrammeController extends Controller
         $callback = function () use ($search, $departmentId) {
             $out = fopen('php://output', 'w');
             fputcsv($out, [
-                '#', 'Faculty/Department', 'Code', 'Name', 'Level', 'Mode', 'Duration',
+                '#', 'Department', 'Code', 'Name', 'Level', 'Mode', 'Duration',
                 // The tuition columns are the AMOUNT and the BASIS separately, not
                 // a merged figure. An export that flattened them would reproduce in
                 // a spreadsheet exactly the ambiguity this feature exists to remove:
