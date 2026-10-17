@@ -50,7 +50,7 @@ class AcademicUnitController extends Controller
     public function createUnit(Request $request)
     {
         $type = $request->query('type');
-        abort_unless(in_array($type, AcademicUnit::TYPES, true), 404);
+        abort_unless($type === null || in_array($type, AcademicUnit::TYPES, true), 404);
         $unit = null;
         $parents = $this->parentOptions((int) $request->user()->school_id, null);
         return view('admin.department.unit_form', compact('unit', 'type', 'parents'));

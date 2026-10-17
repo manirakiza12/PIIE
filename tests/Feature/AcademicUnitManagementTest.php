@@ -61,10 +61,12 @@ class AcademicUnitManagementTest extends TestCase
         $school = $this->createUnit($schoolId, 'school', 'School of Computing');
 
         $this->actingAs($admin)->get(route('admin.department_list'))->assertRedirect(route('admin.department.schools_faculties'));
-        $this->get(route('admin.department.schools_faculties'))->assertOk()->assertSee('Schools & Faculties')->assertSee('School of Computing')->assertSee('Add Faculty');
+        $this->get(route('admin.department.schools_faculties'))->assertOk()->assertSee('Schools & Faculties')->assertSee('School of Computing')->assertSee('Add School / Faculty');
         $this->get(route('admin.department.departments'))->assertOk()->assertSee('Departments')->assertSee('Add Department');
+        $this->get(route('admin.department.units.create'))
+            ->assertOk()->assertSee('Choose School or Faculty')->assertSee('Belongs To - Select Parent School or Faculty')->assertSee('School of Computing - School');
         $this->get(route('admin.department.units.create', ['type' => 'faculty']))
-            ->assertOk()->assertSee('Belongs To - Select Parent School or Faculty')->assertSee('School of Computing - School');
+            ->assertOk()->assertSee('Faculty')->assertSee('Belongs To - Select Parent School or Faculty');
         $this->get(route('admin.department.departments.create'))
             ->assertOk()->assertSee('Belongs To - Select Parent School or Faculty')->assertSee('School of Computing - School');
         $this->assertGreaterThan(0, $school);
