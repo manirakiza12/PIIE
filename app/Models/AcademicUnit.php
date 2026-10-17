@@ -12,7 +12,7 @@ class AcademicUnit extends Model
     public const TYPE_FACULTY = 'faculty';
     public const TYPES = [self::TYPE_SCHOOL, self::TYPE_FACULTY];
 
-    protected $fillable = ['school_id', 'type', 'name', 'code', 'head_title', 'head_name', 'description', 'status', 'parent_id'];
+    protected $fillable = ['school_id', 'type', 'name', 'code', 'head_title', 'head_name', 'description', 'status', 'parent_id', 'legacy_department_id'];
 
     public function parent(): BelongsTo
     {
@@ -27,6 +27,11 @@ class AcademicUnit extends Model
     public function departments(): HasMany
     {
         return $this->hasMany(Department::class, 'academic_unit_id');
+    }
+
+    public function legacyDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'legacy_department_id');
     }
 
     public function getHierarchyLabelAttribute(): string

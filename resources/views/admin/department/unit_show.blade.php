@@ -3,7 +3,6 @@
 @section('content')
 <div class="mainSection-title"><h4>{{ $unit->name }}</h4><p class="text-muted">{{ ucfirst($unit->type) }} details</p></div>
 <div class="eSection-wrap">
-    @include('admin.department._sections')
     <dl class="row">
         <dt class="col-sm-3">Type</dt><dd class="col-sm-9">{{ ucfirst($unit->type) }}</dd>
         <dt class="col-sm-3">Code</dt><dd class="col-sm-9">{{ $unit->code ?: 'Not set' }}</dd>

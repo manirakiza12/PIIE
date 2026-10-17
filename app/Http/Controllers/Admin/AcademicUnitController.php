@@ -28,7 +28,10 @@ class AcademicUnitController extends Controller
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->query('type')))
             ->withCount(['departments' => fn ($q) => $q->where('school_id', $schoolId)])
             ->selectSub(DB::table('programmes')->join('departments', 'departments.id', '=', 'programmes.department_id')
-                ->whereColumn('departments.academic_unit_id', 'academic_units.id')
+                ->where(function ($q) {
+                    $q->whereColumn('departments.academic_unit_id', 'academic_units.id')
+                        ->orWhereColumn('departments.id', 'academic_units.legacy_department_id');
+                })
                 ->where('departments.school_id', $schoolId)->where('programmes.school_id', $schoolId)->selectRaw('count(*)'), 'programmes_count')
             ->orderByRaw("CASE WHEN type = 'school' THEN 0 ELSE 1 END")->orderBy('name')->paginate(15)->withQueryString();
 
@@ -38,7 +41,9 @@ class AcademicUnitController extends Controller
     public function departments(Request $request)
     {
         $schoolId = (int) $request->user()->school_id;
-        $departments = Department::query()->where('school_id', $schoolId)->with('academicUnit.parent.parent')
+        $departments = Department::query()->where('school_id', $schoolId)
+            ->whereNotIn('id', DB::table('academic_units')->select('legacy_department_id')->whereNotNull('legacy_department_id'))
+            ->with('academicUnit.parent.parent')
             ->withCount(['programmes' => fn ($q) => $q->where('school_id', $schoolId)])
             ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.trim((string) $request->query('search')).'%'))
             ->when($request->filled('academic_unit_id'), fn ($q) => $q->where('academic_unit_id', (int) $request->query('academic_unit_id')))
@@ -72,7 +77,7 @@ class AcademicUnitController extends Controller
             'head_name' => $this->cleanOptional($data['head_name'] ?? null),
             'description' => $this->cleanOptional($data['description'] ?? null),
             'status' => $data['status'],
-            'parent_id' => $data['type'] === AcademicUnit::TYPE_FACULTY ? (int) $data['parent_id'] : null,
+            'parent_id' => $data['type'] === AcademicUnit::TYPE_FACULTY && ! empty($data['parent_id']) ? (int) $data['parent_id'] : null,
         ]));
 
         return redirect()->route('admin.department.schools_faculties')->with('success', ucfirst($data['type']).' created.');
@@ -85,7 +90,7 @@ class AcademicUnitController extends Controller
             ->with(['parent.parent', 'children' => fn ($q) => $q->where('school_id', $schoolId), 'departments' => fn ($q) => $q->where('school_id', $schoolId)])
             ->findOrFail($id);
         $programmesCount = Programme::query()->where('school_id', $request->user()->school_id)
-            ->whereIn('department_id', $unit->departments->pluck('id'))->count();
+            ->whereIn('department_id', $unit->departments->pluck('id')->push($unit->legacy_department_id)->filter()->unique())->count();
         return view('admin.department.unit_show', compact('unit', 'programmesCount'));
     }
 
@@ -111,7 +116,7 @@ class AcademicUnitController extends Controller
             'head_name' => $this->cleanOptional($data['head_name'] ?? null),
             'description' => $this->cleanOptional($data['description'] ?? null),
             'status' => $data['status'],
-            'parent_id' => $unit->type === AcademicUnit::TYPE_FACULTY ? (int) $data['parent_id'] : null,
+            'parent_id' => $unit->type === AcademicUnit::TYPE_FACULTY && ! empty($data['parent_id']) ? (int) $data['parent_id'] : null,
         ]));
 
         return redirect()->route('admin.department.schools_faculties')->with('success', ucfirst($unit->type).' updated.');
@@ -124,11 +129,13 @@ class AcademicUnitController extends Controller
             $unit = AcademicUnit::query()->where('school_id', $schoolId)->lockForUpdate()->findOrFail($id);
             $children = AcademicUnit::query()->where('parent_id', $unit->id)->count();
             $departments = Department::query()->where('academic_unit_id', $unit->id)->count();
+            $legacyDepartment = $unit->legacy_department_id !== null;
 
-            if ($children > 0 || $departments > 0) {
+            if ($children > 0 || $departments > 0 || $legacyDepartment) {
                 $dependencies = [];
                 if ($children > 0) $dependencies[] = $children.' child academic unit'.($children === 1 ? '' : 's');
                 if ($departments > 0) $dependencies[] = $departments.' department'.($departments === 1 ? '' : 's');
+                if ($legacyDepartment) $dependencies[] = 'a linked legacy department record';
                 return 'Cannot delete this '.ucfirst($unit->type).' while it has '.implode(' and ', $dependencies).'. Reassign or remove those records first.';
             }
 
@@ -219,6 +226,10 @@ class AcademicUnitController extends Controller
             $department = Department::query()->where('school_id', $schoolId)->lockForUpdate()->findOrFail($id);
             $references = [];
 
+            if (Schema::hasColumn('academic_units', 'legacy_department_id') && AcademicUnit::query()->where('legacy_department_id', $department->id)->exists()) {
+                $references[] = 'a promoted School / Faculty record';
+            }
+
             $programmes = Programme::query()->where('department_id', $department->id)->count();
             if ($programmes > 0) $references[] = $programmes.' programme'.($programmes === 1 ? '' : 's');
 
@@ -261,7 +272,9 @@ class AcademicUnitController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'parent_id' => $type === AcademicUnit::TYPE_FACULTY
-                ? ['required', 'integer', $parentRule]
+                ? (($unit?->legacy_department_id && $unit->parent_id === null)
+                    ? ['nullable', 'integer', $parentRule]
+                    : ['required', 'integer', $parentRule])
                 : ['nullable', 'prohibited'],
         ];
         return array_merge(['type' => $type], $request->validate($rules, [
