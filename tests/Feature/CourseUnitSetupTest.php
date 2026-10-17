@@ -180,7 +180,7 @@ class CourseUnitSetupTest extends TestCase
         $this->assertSame(1,$xpath->query('//input[@id="unit-curriculum-academic-year" and @readonly and not(@name)]')->length);
         $this->assertSame(0,$xpath->query('//li[@class="nav-links-li"]//a[contains(@href,"programme-cohorts")]')->length);
         $this->assertEquals($before,$member->fresh()->getAttributes());
-        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Programme Student Groups');
+        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Place Student in Programme');
     }
 
     private function payload(array $overrides = []): array

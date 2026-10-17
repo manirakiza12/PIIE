@@ -309,17 +309,23 @@ class StudentCurriculumAssignmentService
 
     private function createAssignment(int $schoolId, User $student, Programme $programme, Curriculum $curriculum, AcademicYear $entryYear, AcademicYear $effectiveYear, User $actor, ?string $reason, string $event, ?int $stageId = null): StudentCurriculumAssignment
     {
-        $assignment = StudentCurriculumAssignment::createThroughDomainService([
+        $attributes = [
             'school_id' => $schoolId,
             'student_id' => $student->id,
             'programme_id' => $programme->id,
             'curriculum_id' => $curriculum->id,
             'entry_academic_year_id' => $entryYear->id,
             'effective_from_academic_year_id' => $effectiveYear->id,
-            'entry_curriculum_stage_id' => $stageId,
             'assigned_by' => $actor->id,
             'reason' => $reason,
-        ]);
+        ];
+        // Keep the older assignment-only workflow compatible with deployments
+        // whose schemas predate curriculum-stage provenance. Direct placement
+        // passes a stage and therefore stores it on the current schema.
+        if ($stageId !== null) {
+            $attributes['entry_curriculum_stage_id'] = $stageId;
+        }
+        $assignment = StudentCurriculumAssignment::createThroughDomainService($attributes);
 
         $this->audit($event, $assignment, $actor, [
             'school_id' => $schoolId,

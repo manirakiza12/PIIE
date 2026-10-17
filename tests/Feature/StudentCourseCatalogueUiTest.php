@@ -361,6 +361,7 @@ class StudentCourseCatalogueUiTest extends TestCase
     public function test_a_pending_card_withdraws_confirm_while_a_balance_is_outstanding(): void
     {
         $registrationId = $this->register(11, 111);
+        DB::table('student_fee_managers')->where('student_id', $this->student->id)->update(['paid_amount' => 0]);
         DB::table('student_fee_managers')->insert([
             'student_id' => $this->student->id, 'school_id' => $this->school,
             'title' => 'Tuition', 'class_id' => 0, 'payment_method' => 'cash', 'status' => 'unpaid',
