@@ -29,7 +29,7 @@
                     <td>{{ $department->hod_name ?: 'Not assigned' }}</td>
                     <td>{{ $department->programmes_count }}</td>
                     <td>@if($department->academic_unit_id)<span class="badge text-bg-success">Assigned</span>@else<span class="badge text-bg-warning">Needs review</span>@endif</td>
-                    <td class="text-end"><div class="d-inline-flex gap-2"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.department.show', $department->id) }}">View</a><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.department.departments.edit', $department->id) }}">Edit</a></div></td>
+                    <td class="text-end"><div class="d-inline-flex gap-2 align-items-center"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.department.show', $department->id) }}">View</a><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.department.departments.edit', $department->id) }}">Edit</a><form method="POST" action="{{ route('admin.department.departments.destroy', $department->id) }}" onsubmit="return confirm('Delete this Department? Departments with programmes, staff or student accounts, or enrollments cannot be deleted.')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form></div></td>
                 </tr>
             @endforeach</tbody>
         </table></div>

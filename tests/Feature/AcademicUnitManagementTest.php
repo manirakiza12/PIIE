@@ -198,6 +198,50 @@ class AcademicUnitManagementTest extends TestCase
         $this->from(route('admin.dashboard'))->actingAs($admin->fresh())->get(route('admin.department.departments'))->assertRedirect(route('admin.dashboard'));
     }
 
+    public function test_delete_actions_are_available_and_block_academic_records_until_reassigned(): void
+    {
+        $this->migrateAcademicUnits();
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $school = $this->createUnit($schoolId, 'school', 'School of Science');
+        $faculty = $this->createUnit($schoolId, 'faculty', 'Faculty of Computing', $school);
+        $department = Department::query()->create([
+            'school_id' => $schoolId, 'name' => 'Computer Science', 'academic_unit_id' => $faculty,
+        ]);
+        $programmeId = $this->makeProgramme($schoolId, ['name' => 'BSc Computing', 'code' => 'BSC1', 'department_id' => $department->id]);
+        $this->actingAs($admin);
+
+        $this->get(route('admin.department.schools_faculties'))->assertOk()
+            ->assertSee('Delete')->assertSee(route('admin.department.units.destroy', $school), false);
+        $this->get(route('admin.department.departments'))->assertOk()
+            ->assertSee('Delete')->assertSee(route('admin.department.departments.destroy', $department->id), false);
+
+        $this->delete(route('admin.department.units.destroy', $school))
+            ->assertRedirect(route('admin.department.schools_faculties'))->assertSessionHas('error');
+        $this->delete(route('admin.department.units.destroy', $faculty))
+            ->assertRedirect(route('admin.department.schools_faculties'))->assertSessionHas('error');
+        $this->delete(route('admin.department.departments.destroy', $department->id))
+            ->assertRedirect(route('admin.department.departments'))->assertSessionHas('error');
+        $this->assertDatabaseHas('academic_units', ['id' => $school]);
+        $this->assertDatabaseHas('departments', ['id' => $department->id]);
+
+        Programme::query()->whereKey($programmeId)->delete();
+        if (Schema::hasColumn('users', 'department_id')) {
+            DB::table('users')->where('id', $admin->id)->update(['department_id' => $department->id]);
+            $this->delete(route('admin.department.departments.destroy', $department->id))
+                ->assertRedirect(route('admin.department.departments'))->assertSessionHas('error');
+            DB::table('users')->where('id', $admin->id)->update(['department_id' => null]);
+        }
+        $this->delete(route('admin.department.departments.destroy', $department->id))
+            ->assertRedirect(route('admin.department.departments'))->assertSessionHas('success', 'Department deleted.');
+        $this->delete(route('admin.department.units.destroy', $faculty))
+            ->assertRedirect(route('admin.department.schools_faculties'))->assertSessionHas('success', 'School / Faculty deleted.');
+        $this->delete(route('admin.department.units.destroy', $school))
+            ->assertRedirect(route('admin.department.schools_faculties'))->assertSessionHas('success', 'School / Faculty deleted.');
+        $this->assertDatabaseMissing('academic_units', ['id' => $school]);
+        $this->assertDatabaseMissing('departments', ['id' => $department->id]);
+    }
+
     public function test_migration_can_be_reverted_on_an_empty_new_structure_without_affecting_departments(): void
     {
         $this->migrateAcademicUnits();
