@@ -44,7 +44,8 @@ class TenantIsolationSweepTest extends TestCase
         'expense_categories' => ['id' => 'n', 'name' => 's', 'school_id' => 'n', 'session_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
         'admit_cards' => ['id' => 'n', 'template' => 's', 'heading' => 's', 'title' => 's', 'school_id' => 'n', 'exam_center' => 's', 'footer_text' => 's', 'left_logo' => 's', 'right_logo' => 's', 'sign' => 's', 'background_image' => 's', 'created_at' => 'd', 'updated_at' => 'd'],
         'syllabuses' => ['id' => 'n', 'title' => 's', 'class_id' => 'n', 'section_id' => 'n', 'subject_id' => 'n', 'file' => 's', 'school_id' => 'n', 'session_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
-        'departments' => ['id' => 'n', 'name' => 's', 'school_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
+        'academic_units' => ['id' => 'n', 'school_id' => 'n', 'type' => 's', 'name' => 's', 'code' => 's', 'head_title' => 's', 'head_name' => 's', 'description' => 's', 'status' => 's', 'parent_id' => 'z', 'created_at' => 'd', 'updated_at' => 'd'],
+        'departments' => ['id' => 'n', 'name' => 's', 'school_id' => 'n', 'academic_unit_id' => 'z', 'code' => 's', 'hod_name' => 's', 'created_at' => 'd', 'updated_at' => 'd'],
         'class_rooms' => ['id' => 'n', 'name' => 's', 'school_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
         'sessions' => ['id' => 'n', 'session_title' => 's', 'status' => 'n', 'created_at' => 'd', 'updated_at' => 'd', 'school_id' => 'n'],
         'feedback' => ['id' => 'n', 'title' => 's', 'feedback_text' => 's', 'student_id' => 'n', 'admin_id' => 'n', 'parent_id' => 'n', 'class_id' => 'n', 'section_id' => 'n', 'school_id' => 'n', 'session_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
@@ -109,6 +110,10 @@ class TenantIsolationSweepTest extends TestCase
     private function world(string $tag): array
     {
         $w = ['tag' => $tag, 'school' => $this->makeSchool(['title' => "School {$tag}", 'status' => 1])];
+        $w['academic_unit'] = DB::table('academic_units')->insertGetId([
+            'school_id' => $w['school'], 'type' => 'school', 'name' => "Academic School {$tag}", 'status' => 'active',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         $w['class'] = $this->makeClass($w['school'], ['name' => "Class{$tag}"]);
         $w['section'] = DB::table('sections')->insertGetId(['name' => "Sec{$tag}", 'class_id' => $w['class'], 'created_at' => now(), 'updated_at' => now()]);
         $w['student'] = User::factory()->create(['role_id' => 7, 'school_id' => $w['school']])->id;
@@ -127,7 +132,7 @@ class TenantIsolationSweepTest extends TestCase
     {
         $fk = ['class_id' => 'class', 'section_id' => 'section', 'student_id' => 'student', 'teacher_id' => 'teacher', 'hostel_id' => 'hostel',
                'room_id' => 'room', 'book_id' => 'book', 'expense_category_id' => 'expense_category', 'assignment_id' => 'assignment',
-               'user_id' => 'student', 'warden_id' => 'teacher', 'admin_id' => 'teacher', 'parent_id' => 'student'];
+               'user_id' => 'student', 'warden_id' => 'teacher', 'admin_id' => 'teacher', 'parent_id' => 'student', 'academic_unit_id' => 'academic_unit'];
         $marker = 'MARK' . $w['tag'] . (++$this->seq) . 'X';
         $row = [];
         foreach (self::LIVE_COLUMNS[$table] as $name => $type) {
@@ -337,8 +342,8 @@ class TenantIsolationSweepTest extends TestCase
     public function test_departments_class_rooms_and_sessions_are_tenant_isolated(): void
     {
         $this->assertReadIsolated('admin.edit.department', 'departments');
-        $this->assertMutationIsolated('admin.department.update', 'departments', ['name' => 'CHANGED']);
-        $this->assertMutationIsolated('admin.department.delete', 'departments');
+        $this->assertMutationIsolated('admin.department.update', 'departments', ['name' => 'CHANGED', 'academic_unit_id' => '@academic_unit']);
+        $this->assertMutationIsolated('admin.department.delete', 'departments', [], false);
         $this->assertReadIsolated('admin.edit.class_room', 'class_rooms');
         $this->assertMutationIsolated('admin.class_room.update', 'class_rooms', ['name' => 'CHANGED']);
         $this->assertMutationIsolated('admin.class_room.delete', 'class_rooms');

@@ -61,7 +61,7 @@ class AcademicUnitManagementTest extends TestCase
         $school = $this->createUnit($schoolId, 'school', 'School of Computing');
 
         $this->actingAs($admin)->get(route('admin.department_list'))->assertRedirect(route('admin.department.schools_faculties'));
-        $this->get(route('admin.department.schools_faculties'))->assertOk()->assertSee('Schools &amp; Faculties')->assertSee('School of Computing')->assertSee('Add Faculty');
+        $this->get(route('admin.department.schools_faculties'))->assertOk()->assertSee('Schools & Faculties')->assertSee('School of Computing')->assertSee('Add Faculty');
         $this->get(route('admin.department.departments'))->assertOk()->assertSee('Departments')->assertSee('Add Department');
         $this->get(route('admin.department.units.create', ['type' => 'faculty']))
             ->assertOk()->assertSee('Belongs To - Select Parent School or Faculty')->assertSee('School of Computing - School');
@@ -77,9 +77,11 @@ class AcademicUnitManagementTest extends TestCase
         $otherSchool = $this->makeSchool();
         $admin = $this->makeAdminUser($schoolId);
         $otherParent = $this->createUnit($otherSchool, 'school', 'Other Tenant School');
+        $admin->forceFill(['menu_permission' => json_encode(['admin.department_list'])])->save();
         $this->actingAs($admin);
 
         $this->post(route('admin.department.units.store'), ['type' => 'school', 'name' => 'School of Business', 'code' => 'BUS', 'head_title' => 'Director', 'head_name' => 'Amina Example', 'status' => 'active'])
+            ->assertRedirect(route('admin.department.schools_faculties'))
             ->assertSessionHasNoErrors();
         $school = AcademicUnit::query()->where('school_id', $schoolId)->where('type', 'school')->where('name', 'School of Business')->firstOrFail();
         $this->assertNull($school->parent_id);
