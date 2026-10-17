@@ -46,7 +46,16 @@ if grep -qiE 'drop +(table|column|database)|truncate|delete +from' "$REL/migrati
 if [ "$MODE" = stage ]; then echo "STAGED $RID: live release, uploads and database unchanged"; exit 0; fi
 BACK="$BASE/backups/$RID"
 install -d -m 700 "$BACK"
-docker exec piie-db sh -c 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-dump --user=root --single-transaction --routines --triggers --events --hex-blob "$MARIADB_DATABASE"' | gzip > "$BACK/database.sql.gz"
+(
+  db_env=$(mktemp)
+  chmod 600 "$db_env"
+  trap 'rm -f "$db_env"' EXIT
+  docker inspect piie-db --format '{{range .Config.Env}}{{println .}}{{end}}' |
+    grep -E '^MARIADB_(DATABASE|ROOT_PASSWORD)=' > "$db_env"
+  docker run --rm --network piie-stack_private --env-file "$db_env" mariadb:11.4 sh -ec \
+    'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-dump --host=piie-db --user=root --single-transaction --routines --triggers --events --hex-blob "$MARIADB_DATABASE"' |
+    gzip > "$BACK/database.sql.gz"
+)
 gzip -t "$BACK/database.sql.gz"; [ "$(stat -c %s "$BACK/database.sql.gz")" -gt 100 ] || fail 'Empty database backup'
 tar -czf "$BACK/storage.tar.gz" -C "$BASE/shared" storage
 tar -tzf "$BACK/storage.tar.gz" >/dev/null
