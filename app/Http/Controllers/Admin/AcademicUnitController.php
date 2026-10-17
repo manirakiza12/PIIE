@@ -208,11 +208,11 @@ class AcademicUnitController extends Controller
                 ? ['required', 'integer', $parentRule]
                 : ['nullable', 'prohibited'],
         ];
-        return $request->validate($rules, [
+        return array_merge(['type' => $type], $request->validate($rules, [
             'parent_id.required' => 'Select the School or Faculty this Faculty belongs to.',
             'parent_id.exists' => 'Select a School or Faculty from this institution.',
             'parent_id.prohibited' => 'A School is a top-level academic unit and cannot have a parent.',
-        ]);
+        ]));
     }
 
     private function validateDepartment(Request $request, int $schoolId, ?Department $department = null): array
