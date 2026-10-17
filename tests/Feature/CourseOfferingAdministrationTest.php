@@ -692,7 +692,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             $this->assertGreaterThan($previousPosition, $positions[0], 'Academic dependency order: '.$destination);
             $previousPosition = $positions[0];
         }
-        $page->assertSee('>Schools &amp; Faculties</span>', false)
+        $page->assertSee('>Schools / Faculties</span>', false)
             ->assertSee('>Departments</span>', false)
             ->assertSee('>Teaching Groups</span>', false)
             ->assertDontSee('>Schools, Faculties & Departments</span>', false)

@@ -2,7 +2,7 @@
 @php
     $calendarLabel = ucfirst(\App\Models\School::query()->find($user->school_id)?->academic_calendar_pattern ?: ($schoolType === 'k12' ? 'term' : 'semester')).'s';
     $academicLinks = [
-        [$canSeeProgrammes && $menuAllows('admin.department') && $navCan('admin.department_list'), 'Schools & Faculties', 'admin.department.schools_faculties', [], request()->routeIs('admin.department.schools_faculties', 'admin.department.units.*'), 'bi-building'],
+        [$canSeeProgrammes && $menuAllows('admin.department') && $navCan('admin.department_list'), 'Schools / Faculties', 'admin.department.schools_faculties', [], request()->routeIs('admin.department.schools_faculties', 'admin.department.units.*'), 'bi-building'],
         [$menuAllows('admin.department') && $navCan('admin.department_list'), 'Departments', 'admin.department.departments', [], request()->routeIs('admin.department.departments', 'admin.department.departments.*', 'admin.department.show'), 'bi-diagram-3'],
         [$showProgrammes, 'Programmes', 'admin.programmes.index', [], request()->is('admin/programmes*','admin/programme-cohorts*'), 'bi-mortarboard'],
         [$showAcademicYears, 'Academic Years', 'admin.academic_structure.index', [], request()->is('admin/academic-structure') && request('section') !== 'semesters', 'bi-calendar-range'],

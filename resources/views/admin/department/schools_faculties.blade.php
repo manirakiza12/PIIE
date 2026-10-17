@@ -5,8 +5,7 @@
     <div class="row align-items-center gr-15">
         <div class="col"><h4>Schools &amp; Faculties</h4><p class="text-muted mb-0">Organise your academic units. Faculties belong to a School or another Faculty; Schools are top-level.</p></div>
         <div class="col-auto d-flex flex-wrap gap-2">
-            <a class="export_btn" href="{{ route('admin.department.units.create', ['type' => 'school']) }}"><i class="bi bi-plus"></i> Add School</a>
-            <a class="export_btn" href="{{ route('admin.department.units.create', ['type' => 'faculty']) }}"><i class="bi bi-plus"></i> Add Faculty</a>
+            <a class="export_btn" href="{{ route('admin.department.units.create') }}"><i class="bi bi-plus"></i> Add School / Faculty</a>
         </div>
     </div>
 </div>
