@@ -15,5 +15,13 @@ docker exec --user www-data piie-app test -r /srv/piie/shared/.env
 docker exec --user www-data piie-app test -w /srv/piie/shared/storage
 docker exec piie-app php -r 'exit(PHP_VERSION_ID >= 80300 && extension_loaded("pdo_mysql") ? 0 : 1);'
 docker exec piie-app grep -F 'DocumentRoot /srv/piie/current/public' /etc/apache2/sites-enabled/000-default.conf
-docker exec piie-db sh -c 'command -v mariadb-dump >/dev/null && test -n "$MARIADB_DATABASE" && test -n "$MARIADB_ROOT_PASSWORD"'
+(
+  db_env=$(mktemp)
+  chmod 600 "$db_env"
+  trap 'rm -f "$db_env"' EXIT
+  docker inspect piie-db --format '{{range .Config.Env}}{{println .}}{{end}}' |
+    grep -E '^MARIADB_(DATABASE|ROOT_PASSWORD)=' > "$db_env"
+  docker run --rm --network piie-stack_private --env-file "$db_env" mariadb:11.4 sh -ec \
+    'command -v mariadb-dump >/dev/null; MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb --connect-timeout=3 --host=piie-db --user=root -Nse "SELECT 1" | grep -qx 1'
+)
 echo 'Verified live Docker runtime, shared environment, storage, PHP and database backup tooling.'

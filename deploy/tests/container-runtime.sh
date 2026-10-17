@@ -21,6 +21,7 @@ cat > "$S/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$FIXTURE_LOG"
 case "$*" in
+  *'inspect piie-db --format'*) printf 'MARIADB_DATABASE=forge\nMARIADB_ROOT_PASSWORD=test-password\n';;
   *mariadb-dump*) head -c 2000 /dev/urandom;;
   *'migrate --pretend'*) [ "${FAIL_PREVIEW:-0}" = 0 ];;
   *'curl --fail'*) [ "${FAIL_HEALTH:-0}" = 0 ];;
@@ -60,6 +61,8 @@ set -e
 [ "$(cat "$S/shared/public-uploads/keep.txt")" = live-upload ]
 [ "$(cat "$S/shared/.env")" = preserved ]
 [ -s "$S/backups/20261014-120003-aaaaaaaaaaaa/database.sql.gz" ]
+grep -q 'run --rm --network piie-stack_private --env-file' "$S/docker.log"
+! grep -q 'exec piie-db' "$S/docker.log"
 echo 'PASS: failed HTTP health rolls code back, preserving live uploads and environment'
 EXPECTED_DEPLOYED_SHA="$SHA" bash "$S/scripts/container-deploy.sh" 20261014-120004-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/success.log" 2>&1
 [ "$(readlink "$S/current")" = releases/20261014-120004-aaaaaaaaaaaa ]
