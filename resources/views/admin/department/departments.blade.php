@@ -8,7 +8,6 @@
     </div>
 </div>
 <div class="eSection-wrap">
-    @include('admin.department._sections')
     @if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}</div>@endif
     @if(session('error'))<div class="alert alert-danger" role="alert">{{ session('error') }}</div>@endif
     <form method="GET" action="{{ route('admin.department.departments') }}" class="row g-2 mb-3" role="search">
@@ -17,10 +16,10 @@
         <div class="col-auto"><button class="btn btn-outline-primary" type="submit">Filter</button></div>
     </form>
     @if($departments->isEmpty())
-        <div class="alert alert-light border"><strong>No departments found.</strong><br>Create a School or Faculty first, then add a Department under it. <a href="{{ route('admin.department.schools_faculties') }}">Manage Schools &amp; Faculties</a>.</div>
+        <div class="alert alert-light border"><strong>No departments found.</strong><br>Create a Department and select its School or Faculty.</div>
     @else
         <div class="table-responsive"><table class="table eTable align-middle">
-            <thead><tr><th>Department</th><th>Code</th><th>Belongs To</th><th>Head of Department</th><th>Programmes</th><th>Parent assignment</th><th class="text-end">Actions</th></tr></thead>
+            <thead><tr><th>Department</th><th>Code</th><th>Belongs To</th><th>Head of Department</th><th>Programmes</th><th class="text-end">Actions</th></tr></thead>
             <tbody>@foreach($departments as $department)
                 <tr>
                     <td class="fw-semibold">{{ $department->name }}</td>
@@ -28,7 +27,6 @@
                     <td>{{ $department->academicUnit ? $department->academicUnit->hierarchy_label : 'Parent not assigned' }}</td>
                     <td>{{ $department->hod_name ?: 'Not assigned' }}</td>
                     <td>{{ $department->programmes_count }}</td>
-                    <td>@if($department->academic_unit_id)<span class="badge text-bg-success">Assigned</span>@else<span class="badge text-bg-warning">Needs review</span>@endif</td>
                     <td class="text-end"><div class="d-inline-flex gap-2 align-items-center"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.department.show', $department->id) }}">View</a><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.department.departments.edit', $department->id) }}">Edit</a><form method="POST" action="{{ route('admin.department.departments.destroy', $department->id) }}" onsubmit="return confirm('Delete this Department? Departments with programmes, staff or student accounts, or enrollments cannot be deleted.')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form></div></td>
                 </tr>
             @endforeach</tbody>

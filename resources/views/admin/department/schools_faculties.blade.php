@@ -10,7 +10,6 @@
     </div>
 </div>
 <div class="eSection-wrap">
-    @include('admin.department._sections')
     @if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}</div>@endif
     @if(session('error'))<div class="alert alert-danger" role="alert">{{ session('error') }}</div>@endif
     <form method="GET" action="{{ route('admin.department.schools_faculties') }}" class="row g-2 mb-3" role="search">
@@ -32,7 +31,7 @@
                     <td>{{ $unit->head_name ? trim(($unit->head_title ? $unit->head_title.' - ' : '').$unit->head_name) : 'Not assigned' }}</td>
                     <td>{{ $unit->departments_count }}</td><td>{{ $unit->programmes_count }}</td>
                     <td><span class="badge {{ $unit->status === 'active' ? 'text-bg-success' : 'text-bg-secondary' }}">{{ ucfirst($unit->status) }}</span></td>
-                    <td class="text-end"><div class="d-inline-flex gap-2 align-items-center"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.department.units.show', $unit->id) }}">View</a><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.department.units.edit', $unit->id) }}">Edit</a><form method="POST" action="{{ route('admin.department.units.destroy', $unit->id) }}" onsubmit="return confirm('Delete this School / Faculty? Units with departments or child units cannot be deleted.')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form></div></td>
+                    <td class="text-end"><div class="d-inline-flex gap-2 align-items-center"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.department.units.show', $unit->id) }}">View</a><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.department.units.edit', $unit->id) }}">Edit</a>@if($unit->legacy_department_id)<button class="btn btn-sm btn-outline-secondary" type="button" disabled title="The linked legacy Department ID is retained to protect existing records.">In use</button>@else<form method="POST" action="{{ route('admin.department.units.destroy', $unit->id) }}" onsubmit="return confirm('Delete this School / Faculty? Units with departments or child units cannot be deleted.')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form>@endif</div></td>
                 </tr>
             @endforeach</tbody>
         </table></div>

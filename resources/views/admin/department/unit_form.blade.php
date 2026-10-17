@@ -1,9 +1,9 @@
 @extends('admin.navigation')
 
 @section('content')
+@php($legacyRootFaculty = $unit && $unit->legacy_department_id && !$unit->parent_id)
 <div class="mainSection-title"><h4>{{ $unit ? 'Edit' : 'Add School / Faculty' }}</h4><p class="text-muted">Choose whether this is a School or Faculty. Faculties belong to a School or another Faculty.</p></div>
 <div class="eSection-wrap">
-    @include('admin.department._sections')
     <form method="POST" action="{{ $unit ? route('admin.department.units.update', $unit->id) : route('admin.department.units.store') }}" class="row g-3" novalidate>
         @csrf
         @if($unit)
@@ -32,7 +32,7 @@
             @error('code')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
         <div id="unit-parent-wrap" class="col-12 col-lg-8" @if($type !== 'faculty') hidden @endif>
-            <label for="unit-parent" class="form-label">Belongs To - Select Parent School or Faculty <span aria-hidden="true">*</span></label>
+            <label for="unit-parent" class="form-label">Belongs To - Select Parent School or Faculty @if(!$legacyRootFaculty)<span aria-hidden="true">*</span>@else<span class="text-muted">(optional for this existing top-level Faculty)</span>@endif</label>
             <select id="unit-parent" class="form-select @error('parent_id') is-invalid @enderror" name="parent_id" @if($type !== 'faculty') disabled @endif>
                 <option value="">Select a School or Faculty</option>
                 @foreach($parents as $parent)<option value="{{ $parent->id }}" @selected((string)old('parent_id', $unit?->parent_id) === (string)$parent->id)>{{ $parent->hierarchy_label }}</option>@endforeach
