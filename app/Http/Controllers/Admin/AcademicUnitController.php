@@ -106,7 +106,7 @@ class AcademicUnitController extends Controller
         DB::transaction(fn () => $unit->update([
             'name' => trim($data['name']),
             'code' => $this->cleanOptional($data['code'] ?? null),
-            'head_title' => $this->cleanOptional($data['head_title'] ?? null),
+            'head_title' => array_key_exists('head_title', $data) ? $this->cleanOptional($data['head_title']) : $unit->head_title,
             'head_name' => $this->cleanOptional($data['head_name'] ?? null),
             'description' => $this->cleanOptional($data['description'] ?? null),
             'status' => $data['status'],

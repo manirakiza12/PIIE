@@ -40,13 +40,8 @@
             @error('parent_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
         <div class="col-12 col-md-4">
-            <label for="unit-head-title" class="form-label">Dean / Director / Head Title <span class="text-muted">(optional)</span></label>
-            <input id="unit-head-title" class="form-control @error('head_title') is-invalid @enderror" name="head_title" value="{{ old('head_title', $unit?->head_title) }}" maxlength="100" placeholder="e.g. Dean or Director">
-            @error('head_title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-        </div>
-        <div class="col-12 col-md-4">
-            <label for="unit-head-name" class="form-label">Dean / Director / Head Name <span class="text-muted">(optional)</span></label>
-            <input id="unit-head-name" class="form-control @error('head_name') is-invalid @enderror" name="head_name" value="{{ old('head_name', $unit?->head_name) }}" maxlength="255" autocomplete="name">
+            <label for="unit-head-name" class="form-label">Dean / Director / Head <span class="text-muted">(optional)</span></label>
+            <input id="unit-head-name" class="form-control @error('head_name') is-invalid @enderror" name="head_name" value="{{ old('head_name', $unit?->head_name) }}" maxlength="255" autocomplete="name" placeholder="Enter the person's name">
             @error('head_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
         <div class="col-12 col-lg-8"><label for="unit-description" class="form-label">Description <span class="text-muted">(optional)</span></label><textarea id="unit-description" class="form-control @error('description') is-invalid @enderror" name="description" rows="3" maxlength="2000">{{ old('description', $unit?->description) }}</textarea>@error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>

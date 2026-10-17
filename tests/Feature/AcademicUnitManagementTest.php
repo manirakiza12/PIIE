@@ -64,7 +64,8 @@ class AcademicUnitManagementTest extends TestCase
         $this->get(route('admin.department.schools_faculties'))->assertOk()->assertSee('Schools & Faculties')->assertSee('School of Computing')->assertSee('Add School / Faculty');
         $this->get(route('admin.department.departments'))->assertOk()->assertSee('Departments')->assertSee('Add Department');
         $this->get(route('admin.department.units.create'))
-            ->assertOk()->assertSee('Choose School or Faculty')->assertSee('Belongs To - Select Parent School or Faculty')->assertSee('School of Computing - School');
+            ->assertOk()->assertSee('Choose School or Faculty')->assertSee('Belongs To - Select Parent School or Faculty')->assertSee('School of Computing - School')
+            ->assertSee('Dean / Director / Head')->assertDontSee('Dean / Director / Head Title');
         $this->get(route('admin.department.units.create', ['type' => 'faculty']))
             ->assertOk()->assertSee('Faculty')->assertSee('Belongs To - Select Parent School or Faculty');
         $this->get(route('admin.department.departments.create'))
@@ -90,6 +91,10 @@ class AcademicUnitManagementTest extends TestCase
         $this->assertSame('BUS', $school->code);
         $this->assertSame('Director', $school->head_title);
         $this->assertSame('Amina Example', $school->head_name);
+        $this->put(route('admin.department.units.update', $school->id), [
+            'name' => 'School of Business', 'code' => 'BUS', 'head_name' => 'Amina Example', 'status' => 'active',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('Director', $school->fresh()->head_title);
 
         $this->from(route('admin.department.units.create', ['type' => 'faculty']))
             ->post(route('admin.department.units.store'), ['type' => 'faculty', 'name' => 'Faculty of Finance', 'status' => 'active'])
