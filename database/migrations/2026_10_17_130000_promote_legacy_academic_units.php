@@ -62,6 +62,7 @@ return new class extends Migration
     {
         // Preserve the promoted units and old department IDs on rollback.
         Schema::table('academic_units', function (Blueprint $table): void {
+            $table->dropUnique('academic_units_legacy_department_id_unique');
             $table->dropConstrainedForeignId('legacy_department_id');
         });
     }

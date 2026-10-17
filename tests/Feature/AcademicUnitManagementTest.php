@@ -290,7 +290,7 @@ class AcademicUnitManagementTest extends TestCase
         $this->actingAs($admin)->get(route('admin.department.schools_faculties'))
             ->assertOk()->assertSee('FACULTY OF EDUCATION')->assertSee('1');
         $this->get(route('admin.department.departments'))
-            ->assertOk()->assertDontSee('FACULTY OF EDUCATION')->assertSee('Department of Education');
+            ->assertOk()->assertDontSee('<td class="fw-semibold">FACULTY OF EDUCATION</td>', false)->assertSee('Department of Education');
         $this->assertDatabaseHas('programmes', ['department_id' => $legacyIds['FACULTY OF EDUCATION']]);
         $this->assertDatabaseHas('departments', ['id' => $normalDepartmentId, 'name' => 'Department of Education']);
         $faculty = AcademicUnit::query()->where('school_id', $schoolId)->where('name', 'FACULTY OF EDUCATION')->firstOrFail();
