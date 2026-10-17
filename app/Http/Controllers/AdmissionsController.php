@@ -636,7 +636,8 @@ class AdmissionsController extends Controller
             return $admission;
         });
         AuditLog::record('create', 'Admissions', "New application: {$admission->app_number} — {$admission->first_name} {$admission->last_name}");
-        return response()->json(['status' => 'success', 'message' => get_phrase('Application created successfully')]);
+        return redirect()->route('admin.hei_admissions.wizard.step', [$admission->id, 'personal'])
+            ->with('success', get_phrase('Application created. Complete the required details and documents, then submit it for review.'));
     }
 
     public function updateStatus(Request $request, $id)

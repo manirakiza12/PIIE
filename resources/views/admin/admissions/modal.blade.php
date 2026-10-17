@@ -1,5 +1,5 @@
 <div class="eoff-form">
-    <form method="POST" class="d-block ajaxForm"
+    <form method="POST" class="d-block"
           action="{{ $admission ? route('admin.hei_admissions.open_modal', ['id' => $admission->id]) : route('admin.hei_admissions.store') }}">
         @csrf
         <div class="form-row">

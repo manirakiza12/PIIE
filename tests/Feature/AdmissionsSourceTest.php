@@ -71,10 +71,11 @@ class AdmissionsSourceTest extends TestCase
             'source' => 'public',
         ]);
 
-        $response->assertStatus(200);
-
         $admission = Admission::where('email', 'staffentered@example.com')->first();
         $this->assertNotNull($admission);
+        $response->assertRedirect(route('admin.hei_admissions.wizard.step', [$admission->id, 'personal']))
+            ->assertSessionHas('success');
+
         $this->assertSame('staff_entry', $admission->source);
     }
 
