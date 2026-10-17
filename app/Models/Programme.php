@@ -99,6 +99,12 @@ class Programme extends Model
         return $this->belongsTo(Department::class, 'department_id');
     }
 
+    /** The former School/Faculty row retained for manual programme correction. */
+    public function legacyDepartment()
+    {
+        return $this->belongsTo(Department::class, 'legacy_department_id');
+    }
+
     public function subjects()
     {
         return $this->hasMany(Subject::class, 'programme_id');

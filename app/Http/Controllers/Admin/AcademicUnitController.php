@@ -27,12 +27,15 @@ class AcademicUnitController extends Controller
             ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.trim((string) $request->query('search')).'%'))
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->query('type')))
             ->withCount(['departments' => fn ($q) => $q->where('school_id', $schoolId)])
-            ->selectSub(DB::table('programmes')->join('departments', 'departments.id', '=', 'programmes.department_id')
-                ->where(function ($q) {
-                    $q->whereColumn('departments.academic_unit_id', 'academic_units.id')
-                        ->orWhereColumn('departments.id', 'academic_units.legacy_department_id');
-                })
-                ->where('departments.school_id', $schoolId)->where('programmes.school_id', $schoolId)->selectRaw('count(*)'), 'programmes_count')
+            ->selectSub(DB::table('programmes')->where('programmes.school_id', $schoolId)
+                ->where(function ($q) use ($schoolId) {
+                    $q->whereIn('programmes.department_id', DB::table('departments')->select('id')
+                        ->whereColumn('departments.academic_unit_id', 'academic_units.id')
+                        ->where('departments.school_id', $schoolId));
+                    if (Schema::hasColumn('programmes', 'legacy_department_id')) {
+                        $q->orWhereColumn('programmes.legacy_department_id', 'academic_units.legacy_department_id');
+                    }
+                })->selectRaw('count(*)'), 'programmes_count')
             ->orderByRaw("CASE WHEN type = 'school' THEN 0 ELSE 1 END")->orderBy('name')->paginate(15)->withQueryString();
 
         return view('admin.department.schools_faculties', compact('units'));
@@ -41,8 +44,7 @@ class AcademicUnitController extends Controller
     public function departments(Request $request)
     {
         $schoolId = (int) $request->user()->school_id;
-        $departments = Department::query()->where('school_id', $schoolId)
-            ->whereNotIn('id', DB::table('academic_units')->select('legacy_department_id')->whereNotNull('legacy_department_id'))
+        $departments = $this->managedDepartments($schoolId)
             ->with('academicUnit.parent.parent')
             ->withCount(['programmes' => fn ($q) => $q->where('school_id', $schoolId)])
             ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.trim((string) $request->query('search')).'%'))
@@ -89,8 +91,14 @@ class AcademicUnitController extends Controller
         $unit = AcademicUnit::query()->where('school_id', $schoolId)
             ->with(['parent.parent', 'children' => fn ($q) => $q->where('school_id', $schoolId), 'departments' => fn ($q) => $q->where('school_id', $schoolId)])
             ->findOrFail($id);
-        $programmesCount = Programme::query()->where('school_id', $request->user()->school_id)
-            ->whereIn('department_id', $unit->departments->pluck('id')->push($unit->legacy_department_id)->filter()->unique())->count();
+        $departmentIds = $unit->departments->pluck('id')->push($unit->legacy_department_id)->filter()->unique();
+        $programmesCount = Programme::query()->where('school_id', $schoolId)
+            ->where(function ($query) use ($departmentIds): void {
+                $query->whereIn('department_id', $departmentIds);
+                if (Schema::hasColumn('programmes', 'legacy_department_id')) {
+                    $query->orWhereIn('legacy_department_id', $departmentIds);
+                }
+            })->count();
         return view('admin.department.unit_show', compact('unit', 'programmesCount'));
     }
 
@@ -179,21 +187,21 @@ class AcademicUnitController extends Controller
     public function showDepartment(Request $request, int $id)
     {
         $schoolId = (int) $request->user()->school_id;
-        $department = Department::query()->where('school_id', $schoolId)->with('academicUnit.parent.parent')
+        $department = $this->managedDepartments($schoolId)->with('academicUnit.parent.parent')
             ->withCount(['programmes' => fn ($q) => $q->where('school_id', $schoolId)])->findOrFail($id);
         return view('admin.department.department_show', compact('department'));
     }
 
     public function editDepartment(Request $request, int $id)
     {
-        $department = Department::query()->where('school_id', $request->user()->school_id)->findOrFail($id);
+        $department = $this->managedDepartments((int) $request->user()->school_id)->findOrFail($id);
         $parents = AcademicUnit::query()->where('school_id', $request->user()->school_id)->where('status', 'active')->with('parent.parent')->orderBy('name')->get();
         return view('admin.department.edit_department', compact('department', 'parents'));
     }
 
     public function editDepartmentPage(Request $request, int $id)
     {
-        $department = Department::query()->where('school_id', $request->user()->school_id)->findOrFail($id);
+        $department = $this->managedDepartments((int) $request->user()->school_id)->findOrFail($id);
         $parents = AcademicUnit::query()->where('school_id', $request->user()->school_id)->where('status', 'active')->with('parent.parent')->orderBy('name')->get();
         return view('admin.department.department_form', compact('department', 'parents'));
     }
@@ -201,7 +209,7 @@ class AcademicUnitController extends Controller
     public function updateDepartment(Request $request, int $id)
     {
         $schoolId = (int) $request->user()->school_id;
-        $department = Department::query()->where('school_id', $schoolId)->findOrFail($id);
+        $department = $this->managedDepartments($schoolId)->findOrFail($id);
         $data = $this->validateDepartment($request, $schoolId, $department);
         DB::transaction(fn () => $department->update([
             'name' => trim($data['name']),
@@ -301,6 +309,16 @@ class AcademicUnitController extends Controller
     {
         $value = trim((string) $value);
         return $value === '' ? null : $value;
+    }
+
+    /** The old Department rows remain as compatibility records, not manageable departments. */
+    private function managedDepartments(int $schoolId)
+    {
+        $query = Department::query()->where('school_id', $schoolId);
+        if (Schema::hasTable('academic_units') && Schema::hasColumn('academic_units', 'legacy_department_id')) {
+            $query->whereNotIn('id', DB::table('academic_units')->select('legacy_department_id')->whereNotNull('legacy_department_id'));
+        }
+        return $query;
     }
 
     private function parentOptions(int $schoolId, ?AcademicUnit $editing)

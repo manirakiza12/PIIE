@@ -74,7 +74,7 @@
                         $groupTitle = $department
                             ? $department->name
                             : ($isUnresolved
-                                ? get_phrase('Unassigned / Unknown Department')
+                                ? get_phrase('Unassigned / Needs Department')
                                 : get_phrase('Unassigned (no faculty)'));
                     @endphp
                     <div class="accordion-item mb-2" style="border:1px solid #e7e9ee; border-radius:8px; overflow:hidden;">
@@ -98,7 +98,7 @@
                                              an unexplained extra row. --}}
                                         <p class="text-muted small px-3 pt-3 mb-0">
                                             <i class="bi bi-exclamation-triangle me-1"></i>
-                                            {{ get_phrase('These programmes have no faculty, or point at a faculty that no longer exists. Assign a faculty to each so they are grouped correctly.') }}
+                                            {{ get_phrase('These programmes have no Department assigned, or their previous Department needs review. Assign an existing Department to file each programme correctly.') }}
                                         </p>
                                     @endif
                                     <div class="table-responsive">
@@ -147,7 +147,11 @@
                                                     </td>
 
                                                     <td class="d-none d-lg-table-cell"><strong>{{ $prog->code }}</strong></td>
-                                                    <td>{{ $prog->name }}</td>
+                                                    <td>{{ $prog->name }}
+                                                        @if($prog->legacyDepartment)
+                                                            <small class="d-block text-warning">Previously under {{ $prog->legacyDepartment->name }} (School / Faculty); review Department assignment.</small>
+                                                        @endif
+                                                    </td>
                                                     <td class="d-none d-xl-table-cell"><span class="badge bg-primary">{{ $prog->level }}</span></td>
                                                     <td class="d-none d-xl-table-cell">{{ $prog->mode }}</td>
                                                     <td class="d-none d-xl-table-cell">{{ $prog->duration ?? '—' }}</td>
