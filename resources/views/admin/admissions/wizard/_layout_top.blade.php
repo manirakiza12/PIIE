@@ -51,3 +51,9 @@
         <a href="{{ route('admin.hei_admissions.review', $admission->id) }}">{{ get_phrase('Go to the review screen') }}</a>
     </div>
 @endif
+
+@if(! $readOnly && $admission->status === \App\Models\Admission::STATUS_DRAFT)
+    <div class="alert alert-info" role="status">
+        {{ get_phrase('This application is a draft while you complete the details and required documents. Use Review & Submit to send it to the admissions queue.') }}
+    </div>
+@endif

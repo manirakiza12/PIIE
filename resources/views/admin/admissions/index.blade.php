@@ -18,7 +18,7 @@
                 <a href="{{ route('admin.intake_sessions.index') }}" class="export_btn export_btn-outline">{{ get_phrase('Intake Sessions') }}</a>
                 <a href="{{ route('admin.admissions_documents.index') }}" class="export_btn export_btn-outline">{{ get_phrase('Document Requirements') }}</a>
                 <a href="{{ route('admin.admissions_agents.index') }}" class="export_btn export_btn-outline">{{ get_phrase('Agents') }}</a>
-                <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.hei_admissions.open_modal') }}', '{{ get_phrase('New Application') }}')">{{ get_phrase('Add Application') }}</a>
+                <a href="{{ route('admin.hei_admissions.wizard.create') }}" class="export_btn">{{ get_phrase('Add Application') }}</a>
             </div>
         </div>
     </div></div>
