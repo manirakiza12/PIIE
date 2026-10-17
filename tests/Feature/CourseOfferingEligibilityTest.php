@@ -129,7 +129,8 @@ class CourseOfferingEligibilityTest extends TestCase
 
         $unlinked = $this->placedStudent(stage: 1);
         DB::table('student_curriculum_assignments')->where('student_id', $unlinked->id)->update(['programme_cohort_membership_id' => null]);
-        $this->assertSame('placement_incomplete', $this->evaluate(self::O_YEAR1, $unlinked)->code);
+        // Direct student placement no longer depends on creating a Programme Student Group.
+        $this->assertSame('eligible', $this->evaluate(self::O_YEAR1, $unlinked)->code);
 
         $noStage = $this->placedStudent(stage: 1);
         DB::table('student_curriculum_assignments')->where('student_id', $noStage->id)->update(['entry_curriculum_stage_id' => null]);
