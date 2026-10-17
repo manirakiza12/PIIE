@@ -57,3 +57,31 @@
         {{ get_phrase('This application is a draft while you complete the details and required documents. Use Review & Submit to send it to the admissions queue.') }}
     </div>
 @endif
+
+@if(! $readOnly)
+    <div class="eSection-wrap mb-3">
+        <h5>{{ get_phrase('Required before enrollment') }}</h5>
+        <p>{{ get_phrase('Complete and submit the application, then accept it before enrolling the student.') }}</p>
+        <ul class="mb-0">
+            @foreach($steps as $requiredStep)
+                @if(in_array($requiredStep['key'], ['personal', 'programme', 'education'], true))
+                    <li><a href="{{ $requiredStep['url'] }}">{{ $requiredStep['label'] }}</a>
+                        @if($requiredStep['complete'])<span class="text-success">({{ get_phrase('Complete') }})</span>@endif
+                    </li>
+                @endif
+            @endforeach
+            @foreach(\App\Support\Admissions\ApplicationDocuments::checklist($admission) as $documentItem)
+                @if($documentItem['requirement']->is_required)
+                    <li>
+                        <a href="{{ route('admin.hei_admissions.wizard.step', [$admission->id, 'documents']) }}">{{ $documentItem['requirement']->label }}</a>
+                        @if(in_array($documentItem['state'], ['pending', 'verified'], true))
+                            <span class="text-success">({{ get_phrase('Uploaded') }})</span>
+                        @else
+                            <span class="text-danger">({{ get_phrase('Required') }})</span>
+                        @endif
+                    </li>
+                @endif
+            @endforeach
+        </ul>
+    </div>
+@endif

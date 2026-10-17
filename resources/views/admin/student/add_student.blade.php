@@ -1,4 +1,8 @@
 <div class="eoff-form">
+    <div class="alert alert-info">
+        {{ get_phrase('For a new student, complete an application with personal information, programme selection, education history and required documents. Submit and accept the application before enrolling the student.') }}
+        <a href="{{ route('admin.hei_admissions.wizard.create') }}" class="fw-bold">{{ get_phrase('Add Application') }}</a>
+    </div>
     <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.student.create') }}">
         <div class="alert alert-info">Add an existing student using their current registration number. No enrolment or fee invoice will be created. The student must change their temporary password on first login.</div>
         <div class="fpb-7">
