@@ -9,6 +9,7 @@ use App\Models\Programme;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -116,6 +117,29 @@ class AcademicUnitController extends Controller
         return redirect()->route('admin.department.schools_faculties')->with('success', ucfirst($unit->type).' updated.');
     }
 
+    public function destroyUnit(Request $request, int $id)
+    {
+        $schoolId = (int) $request->user()->school_id;
+        $message = DB::transaction(function () use ($schoolId, $id): ?string {
+            $unit = AcademicUnit::query()->where('school_id', $schoolId)->lockForUpdate()->findOrFail($id);
+            $children = AcademicUnit::query()->where('parent_id', $unit->id)->count();
+            $departments = Department::query()->where('academic_unit_id', $unit->id)->count();
+
+            if ($children > 0 || $departments > 0) {
+                $dependencies = [];
+                if ($children > 0) $dependencies[] = $children.' child academic unit'.($children === 1 ? '' : 's');
+                if ($departments > 0) $dependencies[] = $departments.' department'.($departments === 1 ? '' : 's');
+                return 'Cannot delete this '.ucfirst($unit->type).' while it has '.implode(' and ', $dependencies).'. Reassign or remove those records first.';
+            }
+
+            $unit->delete();
+            return null;
+        });
+
+        if ($message) return redirect()->route('admin.department.schools_faculties')->with('error', $message);
+        return redirect()->route('admin.department.schools_faculties')->with('success', 'School / Faculty deleted.');
+    }
+
     public function createDepartment(Request $request)
     {
         $department = null;
@@ -186,6 +210,38 @@ class AcademicUnitController extends Controller
     {
         Department::query()->where('school_id', $request->user()->school_id)->findOrFail($id);
         return redirect()->route('admin.department.departments')->with('error', 'Department removal is disabled on this legacy link. Academic records must be reassigned through an approved workflow first.');
+    }
+
+    public function destroyDepartment(Request $request, int $id)
+    {
+        $schoolId = (int) $request->user()->school_id;
+        $message = DB::transaction(function () use ($schoolId, $id): ?string {
+            $department = Department::query()->where('school_id', $schoolId)->lockForUpdate()->findOrFail($id);
+            $references = [];
+
+            $programmes = Programme::query()->where('department_id', $department->id)->count();
+            if ($programmes > 0) $references[] = $programmes.' programme'.($programmes === 1 ? '' : 's');
+
+            if (Schema::hasTable('users') && Schema::hasColumn('users', 'department_id')) {
+                $accounts = DB::table('users')->where('department_id', $department->id)->count();
+                if ($accounts > 0) $references[] = $accounts.' staff/student account'.($accounts === 1 ? '' : 's');
+            }
+
+            if (Schema::hasTable('enrollment') && Schema::hasColumn('enrollment', 'department_id')) {
+                $enrollments = DB::table('enrollment')->where('department_id', $department->id)->count();
+                if ($enrollments > 0) $references[] = $enrollments.' enrollment record'.($enrollments === 1 ? '' : 's');
+            }
+
+            if ($references !== []) {
+                return 'Cannot delete this Department while it is used by '.implode(', ', $references).'. Reassign those records first.';
+            }
+
+            $department->delete();
+            return null;
+        });
+
+        if ($message) return redirect()->route('admin.department.departments')->with('error', $message);
+        return redirect()->route('admin.department.departments')->with('success', 'Department deleted.');
     }
 
     private function validateUnit(Request $request, int $schoolId, ?AcademicUnit $unit = null): array
