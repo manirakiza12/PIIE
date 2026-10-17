@@ -109,6 +109,7 @@ return [
         'academic.course_registration.view' => $p('academic', 'View Course Registrations', 'View tenant-local student Course Offering registrations and their academic provenance.'),
         'academic.course_registration.manage' => $p('academic', 'Manage Course Registrations', 'Create exceptional Offering registrations and manage withdrawals.'),
         'academic.course_registration.confirm' => $p('academic', 'Confirm Course Registrations', 'Confirm tenant-local student Course Offering registrations.'),
+        'academic.course_registration.fee_waiver' => $p('academic', 'Manage continuing-student registration fee waivers', 'Grant or revoke an audited waiver of the 20% current-session course-registration payment requirement for continuing students.', true, false),
         'academic.routine' => $p('academic', 'Class routine', 'Manage timetables.'),
         'academic.syllabus' => $p('academic', 'Syllabus', 'Manage syllabus files.'),
         'academic.attendance' => $p('academic', 'Attendance', 'Take and review daily attendance.'),
@@ -320,6 +321,8 @@ return [
         'admin.course_offerings.registrations.bulk' => 'academic.course_registration.manage',
         'admin.course_offerings.registrations.confirm' => 'academic.course_registration.confirm',
         'admin.course_offerings.registrations.confirm_bulk' => 'academic.course_registration.confirm',
+        'admin.course_offerings.students.fee_waiver.store' => 'academic.course_registration.fee_waiver',
+        'admin.course_offerings.students.fee_waiver.destroy' => 'academic.course_registration.fee_waiver',
         'admin.course_offerings.lecturers.index' => 'academic.course_offering.lecturer.view',
         'admin.course_offerings.lecturers.history' => 'academic.course_offering.lecturer.view',
         'admin.course_offerings.lecturers.create' => 'academic.course_offering.lecturer.manage',
@@ -343,6 +346,8 @@ return [
         'admin.programme_cohorts.lifecycle' => 'academic.programme_cohort.lifecycle',
         'admin.programme_cohorts.members.*' => 'academic.programme_cohort.membership',
         'admin.programme_cohorts.placement.*' => 'academic.programme_cohort.membership',
+        'admin.academic.direct_placement' => 'academic.programme_cohort.membership',
+        'admin.academic.direct_placement.store' => 'academic.programme_cohort.membership',
 
         // Curriculum read and governance routes are specific before the manage wildcard.
         'admin.curricula.approve' => 'academic.curriculum.approve',

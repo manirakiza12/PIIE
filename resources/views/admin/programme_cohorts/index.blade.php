@@ -1,8 +1,8 @@
 @extends('admin.navigation')
 
 @section('content')
-<div class="mainSection-title"><div class="d-flex justify-content-between align-items-center flex-wrap gap-3"><div><h4>Programme Student Groups</h4><ul class="d-flex align-items-center eBreadcrumb-2"><li>Academics</li><li>Programmes</li></ul></div>
-    @if(auth()->user()->hasPermission('academic.programme_cohort.manage'))<a class="btn btn-primary text-nowrap" href="{{ route('admin.programme_cohorts.create') }}">Create Programme Student Group</a>@endif
+<div class="mainSection-title"><div class="d-flex justify-content-between align-items-center flex-wrap gap-3"><div><h4>Student Group History</h4><p class="text-muted mb-0">Existing groups remain available for history and current memberships. New students can be placed directly.</p><ul class="d-flex align-items-center eBreadcrumb-2"><li>Academics</li><li>Programmes</li></ul></div>
+    <a class="btn btn-primary text-nowrap" href="{{ route('admin.academic.direct_placement') }}">Place Student in Programme</a>
 </div></div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 <div class="eSection-wrap">
@@ -30,7 +30,7 @@
             </div>
         </article>
     @empty
-        <div class="text-center py-5"><h5>No Programme Student Groups match these filters</h5><p class="text-muted mb-3">A Programme Student Group groups students entering the same Programme through one Admissions Intake. Clear the filters or create a draft to get started.</p><div class="d-flex justify-content-center flex-wrap gap-2"><a class="btn btn-outline-secondary" href="{{ route('admin.programme_cohorts.index') }}">Clear filters</a>@if(auth()->user()->hasPermission('academic.programme_cohort.manage'))<a class="btn btn-primary" href="{{ route('admin.programme_cohorts.create') }}">Create Programme Student Group</a>@endif</div></div>
+<div class="text-center py-5"><h5>No legacy student groups match these filters</h5><p class="text-muted mb-3">Student groups are optional. Place students directly in their approved Programme Curriculum and Study Stage.</p><div class="d-flex justify-content-center flex-wrap gap-2"><a class="btn btn-outline-secondary" href="{{ route('admin.programme_cohorts.index') }}">Clear filters</a><a class="btn btn-primary" href="{{ route('admin.academic.direct_placement') }}">Place Student in Programme</a></div></div>
     @endforelse
     {{ $cohorts->links() }}
 </div>

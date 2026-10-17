@@ -61,6 +61,29 @@ class StudentCurriculumAssignmentService
         });
     }
 
+    /** Place one student directly; a Programme Cohort is optional. */
+    public function assignDirectPlacement(int $schoolId, int $studentId, int $programmeId, int $curriculumId, int $stageId, int $academicYearId, int $actorId): StudentCurriculumAssignment
+    {
+        return DB::transaction(function () use ($schoolId, $studentId, $programmeId, $curriculumId, $stageId, $academicYearId, $actorId): StudentCurriculumAssignment {
+            [$student, $programme, $entryYear, $effectiveYear, $actor] = $this->lockAndValidateContext($schoolId, $studentId, $programmeId, $academicYearId, $academicYearId, $actorId);
+            $this->assertNoActiveAssignment($schoolId, $studentId);
+            $curriculum = $this->assignableCurriculum($schoolId, $programmeId, $curriculumId);
+            $stage = \App\Models\CurriculumStage::query()->where('school_id', $schoolId)->where('curriculum_id', $curriculumId)->whereKey($stageId)->first();
+            if (! $stage) {
+                throw new DomainException('Choose a Study Stage from the selected approved Programme Curriculum.');
+            }
+            $this->assertEffectiveDateNotBeforeCurriculumFloor($curriculum, $effectiveYear);
+            $profile = StudentProfile::query()->where('school_id', $schoolId)->where('user_id', $studentId)->lockForUpdate()->first();
+            if (! $profile) {
+                throw new DomainException('The student needs an institution profile before academic placement.');
+            }
+
+            $assignment = $this->createAssignment($schoolId, $student, $programme, $curriculum, $entryYear, $effectiveYear, $actor, 'Direct academic placement.', 'STUDENT_ACADEMIC_PLACEMENT_CREATED', $stageId);
+            $profile->forceFill(['programme_id' => $programmeId, 'year_of_study' => $stage->sequence])->save();
+            return $assignment;
+        });
+    }
+
     public function changeCurriculum(int $schoolId, int $studentId, int $curriculumId, int $effectiveFromAcademicYearId, int $actorId, string $reason): StudentCurriculumAssignment
     {
         return $this->changeAssignment($schoolId, $studentId, $curriculumId, null, $effectiveFromAcademicYearId, $actorId, $reason, false);
@@ -284,7 +307,7 @@ class StudentCurriculumAssignmentService
         return $actor;
     }
 
-    private function createAssignment(int $schoolId, User $student, Programme $programme, Curriculum $curriculum, AcademicYear $entryYear, AcademicYear $effectiveYear, User $actor, ?string $reason, string $event): StudentCurriculumAssignment
+    private function createAssignment(int $schoolId, User $student, Programme $programme, Curriculum $curriculum, AcademicYear $entryYear, AcademicYear $effectiveYear, User $actor, ?string $reason, string $event, ?int $stageId = null): StudentCurriculumAssignment
     {
         $assignment = StudentCurriculumAssignment::createThroughDomainService([
             'school_id' => $schoolId,
@@ -293,6 +316,7 @@ class StudentCurriculumAssignmentService
             'curriculum_id' => $curriculum->id,
             'entry_academic_year_id' => $entryYear->id,
             'effective_from_academic_year_id' => $effectiveYear->id,
+            'entry_curriculum_stage_id' => $stageId,
             'assigned_by' => $actor->id,
             'reason' => $reason,
         ]);
@@ -302,6 +326,7 @@ class StudentCurriculumAssignmentService
             'student_id' => $student->id,
             'programme_id' => $programme->id,
             'curriculum_id' => $curriculum->id,
+            'entry_curriculum_stage_id' => $stageId,
             'entry_academic_year_id' => $entryYear->id,
             'effective_from_academic_year_id' => $effectiveYear->id,
             'assigned_by' => $actor->id,

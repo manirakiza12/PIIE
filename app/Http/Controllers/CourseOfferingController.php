@@ -352,7 +352,36 @@ class CourseOfferingController extends Controller
             ],
             'canManage' => $permissions->allows($request->user(), 'academic.course_registration.manage'),
             'canConfirm' => $permissions->allows($request->user(), 'academic.course_registration.confirm'),
+            'canManageFeeWaivers' => $permissions->allows($request->user(), 'academic.course_registration.fee_waiver'),
         ]);
+    }
+
+    public function grantStudentFeeWaiver(Request $request, int $id, int $studentId)
+    {
+        $offering = $this->tenantOffering((int) $request->user()->school_id, $id);
+        $data = $request->validate(['reason' => ['required', 'string', 'min:10', 'max:500']]);
+        try {
+            app(\App\Support\CourseRegistration\CourseRegistrationFeeWaiverService::class)
+                ->grant($request->user(), $studentId, $offering, $data['reason']);
+        } catch (\DomainException $exception) {
+            return back()->withErrors(['fee_waiver' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('admin.course_offerings.eligible_students', $id)->with('success', 'Continuing-student fee waiver recorded for this session.');
+    }
+
+    public function revokeStudentFeeWaiver(Request $request, int $id, int $studentId)
+    {
+        $offering = $this->tenantOffering((int) $request->user()->school_id, $id);
+        $data = $request->validate(['reason' => ['required', 'string', 'min:10', 'max:500']]);
+        try {
+            app(\App\Support\CourseRegistration\CourseRegistrationFeeWaiverService::class)
+                ->revoke($request->user(), $studentId, (int) $offering->school_id, $data['reason']);
+        } catch (\DomainException $exception) {
+            return back()->withErrors(['fee_waiver' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('admin.course_offerings.eligible_students', $id)->with('success', 'Continuing-student fee waiver revoked for this session.');
     }
 
     public function registerBulk(Request $request, int $id)

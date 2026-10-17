@@ -15,9 +15,9 @@ use Illuminate\Support\Facades\DB;
  *
  * Governed academic placement (StudentCurriculumAssignment) is authoritative:
  * Programme, Study Plan, the explicitly recorded Study Plan Stage and the
- * Academic Year that stage was recorded for. The Programme Cohort membership
- * that produced the placement must still be current and agree with it; it is
- * a consistency boundary, never a substitute for placement.
+ * Academic Year that stage was recorded for. A cohort membership, when one
+ * exists, must still be current and agree with the placement; it is a
+ * consistency check, never a prerequisite or substitute for placement.
  *
  * Progression is not inferred: a placement's stage governs only its entry
  * Academic Year. Later years need a recorded progression (not yet modelled),
@@ -85,7 +85,11 @@ class CourseOfferingEligibility
             return CourseOfferingEligibilityResult::denied('placement_incomplete', 'Academic placement is incomplete: no Study Plan stage has been recorded for this student.', $assignment);
         }
 
-        $cohortResult = $this->cohortConsistency($schoolId, $studentId, $assignment);
+        // Cohorts are an optional intake-management tool. A direct academic
+        // placement has no cohort membership and remains fully eligible.
+        $cohortResult = $assignment->programme_cohort_membership_id === null
+            ? null
+            : $this->cohortConsistency($schoolId, $studentId, $assignment);
         if ($cohortResult) {
             return $cohortResult;
         }

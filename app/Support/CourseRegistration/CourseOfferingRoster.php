@@ -12,7 +12,11 @@ use Illuminate\Support\Facades\Schema;
 /** Tenant-scoped administrator roster, derived from the shared CourseOfferingEligibility rule. */
 class CourseOfferingRoster
 {
-    public function __construct(private CourseOfferingEligibility $eligibility) {}
+    public function __construct(
+        private CourseOfferingEligibility $eligibility,
+        private StudentRegistrationConfirmationEligibility $financialEligibility,
+        private CourseRegistrationFeeWaiverService $feeWaivers,
+    ) {}
 
     public function eligible(CourseOffering $offering)
     {
@@ -63,11 +67,18 @@ class CourseOfferingRoster
 
         $reviewed = $students->map(function (User $student) use ($offering, $schoolId, $currentMemberships, $stageLabels): User {
             $result = $this->eligibility->evaluate($offering, (int) $student->id);
+            $financeEligible = $this->financialEligibility->allows($student);
+            $activeWaiver = $this->feeWaivers->activeFor($student);
             $student->setAttribute('roster_cohort', $currentMemberships->get((int) $student->id)?->cohort_name);
             $stageId = $result->assignment?->entry_curriculum_stage_id;
             $student->setAttribute('roster_stage', $stageId ? $stageLabels->get($stageId) : null);
-            $student->setAttribute('roster_eligible', $result->eligible);
-            $student->setAttribute('roster_reason', $result->eligible ? null : $result->message);
+            $student->setAttribute('roster_fee_waived', (bool) $activeWaiver);
+            $student->setAttribute('roster_can_waive_fees', $result->eligible && ! $financeEligible
+                && $this->feeWaivers->mayWaive($student, $offering, $result->assignment));
+            $student->setAttribute('roster_eligible', $result->eligible && $financeEligible);
+            $student->setAttribute('roster_reason', ! $result->eligible
+                ? $result->message
+                : ($financeEligible ? null : 'Pay at least 20% of the current academic-session fees before course registration.'));
             if ($result->eligible) {
                 $curriculum = $result->curriculum;
                 $curriculum->setRelation('programme', Programme::query()->where('school_id', $schoolId)->whereKey($curriculum->programme_id)->first());
@@ -91,8 +102,11 @@ class CourseOfferingRoster
             return 'Students can be registered only while the Course Offering is open.';
         }
         $result = $this->eligibility->evaluate($offering, $studentId);
-
-        return $result->eligible ? null : $result->message;
+        if (! $result->eligible) return $result->message;
+        $student = User::query()->where('school_id', $offering->school_id)->where('role_id', 7)->find($studentId);
+        return $student && $this->financialEligibility->allows($student)
+            ? null
+            : 'Pay at least 20% of the current academic-session fees, or obtain an authorised continuing-student waiver.';
     }
 
     public function registered(CourseOffering $offering)

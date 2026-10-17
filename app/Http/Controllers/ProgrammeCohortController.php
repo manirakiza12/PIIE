@@ -60,60 +60,22 @@ class ProgrammeCohortController extends Controller
 
     public function create(Request $request)
     {
-        $schoolId = $this->schoolContext($request);
-        $programmeId = $request->integer('programme_id') ?: null;
-
-        return view('admin.programme_cohorts.form', [
-            'cohort' => null,
-            'programmes' => Programme::where('school_id', $schoolId)->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
-            'intakes' => IntakeSession::where('school_id', $schoolId)->orderByDesc('id')->get(['id', 'name']),
-            'years' => AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label']),
-            'plans' => $this->plans($schoolId, null),
-            'codeSuggestions' => Programme::where('school_id', $schoolId)->where('is_active', true)->get(['id'])->mapWithKeys(fn ($p) => [$p->id => $this->cohorts->suggestedCode($schoolId, (int) $p->id)]),
-            'suggestedCode' => $programmeId ? $this->cohorts->suggestedCode($schoolId, $programmeId) : '',
-        ]);
+        return redirect()->route('admin.academic.direct_placement')->with('info', 'Student groups are optional. Place each student directly in their Programme.');
     }
 
     public function store(Request $request)
     {
-        try {
-            $cohort = $this->cohorts->createDraft($request->user(), $request->only([
-                'programme_id', 'intake_session_id', 'entry_academic_year_id', 'curriculum_id', 'name', 'code', 'expected_completion_date',
-            ]));
-        } catch (DomainException | QueryException $exception) {
-            return $this->workflowFailure($exception);
-        }
-
-        return redirect()->route('admin.programme_cohorts.show', $cohort->id)->with('success', 'Draft Programme Cohort created.');
+        return redirect()->route('admin.academic.direct_placement')->with('info', 'Student groups are optional. Place each student directly in their Programme.');
     }
 
     public function edit(Request $request, int $id)
     {
-        $schoolId = $this->schoolContext($request);
-        $cohort = ProgrammeCohort::where('school_id', $schoolId)->whereKey($id)->firstOrFail();
-        abort_unless($cohort->status === 'draft', 404);
-
-        return view('admin.programme_cohorts.form', [
-            'cohort' => $cohort,
-            'programmes' => Programme::where('school_id', $schoolId)->orderBy('name')->get(['id', 'code', 'name']),
-            'intakes' => IntakeSession::where('school_id', $schoolId)->orderByDesc('id')->get(['id', 'name']),
-            'years' => AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label']),
-            'plans' => $this->plans($schoolId, null),
-            'suggestedCode' => $cohort->code,
-        ]);
+        return redirect()->route('admin.programme_cohorts.show', $id)->with('info', 'Student groups are retained for history. Use direct student placement for new students.');
     }
 
     public function update(Request $request, int $id)
     {
-        try {
-            $cohort = $this->cohorts->updateDraft($request->user(), $id, $request->only([
-                'programme_id', 'intake_session_id', 'entry_academic_year_id', 'curriculum_id', 'name', 'code', 'expected_completion_date',
-            ]));
-        } catch (DomainException | QueryException $exception) {
-            return $this->workflowFailure($exception);
-        }
-
-        return redirect()->route('admin.programme_cohorts.show', $cohort->id)->with('success', 'Draft Programme Cohort updated.');
+        return redirect()->route('admin.programme_cohorts.show', $id)->with('info', 'Student groups are retained for history. Use direct student placement for new students.');
     }
 
     public function show(Request $request, int $id)

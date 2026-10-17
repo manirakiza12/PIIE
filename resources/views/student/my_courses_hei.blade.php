@@ -272,9 +272,7 @@
                                             @break
 
                                         @case('confirm')
-                                            {{-- Confirmation is gated on financial eligibility
-                                                 exactly as the table was: the card must not
-                                                 offer a button the controller will refuse. --}}
+                                            {{-- The financial rule applies to registration and confirmation. --}}
                                             <form method="POST" action="{{ route('student.my_courses.confirm', $card['registration_id']) }}">
                                                 @csrf
                                                 <button type="submit" class="eBtn eBtn-success w-100">{{ get_phrase('Confirm') }}</button>
@@ -283,7 +281,7 @@
 
                                         @case('blocked')
                                             <span class="sc-card__note">
-                                                {{ get_phrase('Confirmation is unavailable until your outstanding balance is resolved.') }}
+                                                {{ get_phrase('Pay at least 20% of your current academic-session fees before registering or confirming a course.') }}
                                             </span>
                                             <a href="{{ route('student.fee_manager.list') }}" class="eBtn eBtn-sm w-100">
                                                 {{ get_phrase('View fee information') }}

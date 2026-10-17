@@ -27,6 +27,9 @@ class CourseRegistrationService
         return DB::transaction(function () use ($schoolId, $studentId, $offeringId, $membershipId, $actorId): CourseRegistration {
             $student = $this->student($schoolId, $studentId, true);
             $this->assertActor($student, $actorId);
+            if (! $this->confirmationEligibility->allows($student)) {
+                throw new DomainException('Pay at least 20% of the current academic-session fees before registering for courses.');
+            }
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($offeringId)->first();
             if (! $offering) {
                 throw new DomainException('This Course Offering could not be found in this institution.');
@@ -112,7 +115,7 @@ class CourseRegistrationService
                 throw new DomainException('Registration confirmation is allowed only while the Course Offering is open.');
             }
             if (! $this->confirmationEligibility->allows($student)) {
-                throw ValidationException::withMessages(['registration' => 'Outstanding fees must be settled before this Course Registration can be confirmed.']);
+                throw ValidationException::withMessages(['registration' => 'Pay at least 20% of the current academic-session fees before confirming this Course Registration.']);
             }
 
             $registration->status = CourseRegistration::STATUS_CONFIRMED;
