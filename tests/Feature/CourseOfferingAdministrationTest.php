@@ -680,7 +680,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         }
         $previousPosition = -1;
         foreach ([
-            route('admin.department_list'), route('admin.programmes.index'),
+            route('admin.department.schools_faculties'), route('admin.department.departments'), route('admin.programmes.index'),
             route('admin.academic_structure.index'), route('admin.academic_structure.index', ['section'=>'semesters']),
             route('admin.settings.academic'), route('admin.curricula.index'), route('admin.subject_list'),
             route('admin.class_list'), route('admin.course_offerings.index'), route('admin.teacher.permission'), route('admin.routine'), route('admin.live_classes.index'),
@@ -692,7 +692,11 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             $this->assertGreaterThan($previousPosition, $positions[0], 'Academic dependency order: '.$destination);
             $previousPosition = $positions[0];
         }
-        $page->assertSee('>Teaching Groups</span>', false)->assertDontSee('>Classes</span>', false);
+        $page->assertSee('>Schools &amp; Faculties</span>', false)
+            ->assertSee('>Departments</span>', false)
+            ->assertSee('>Teaching Groups</span>', false)
+            ->assertDontSee('>Schools, Faculties & Departments</span>', false)
+            ->assertDontSee('>Classes</span>', false);
         $this->assertNotContains(route('admin.programme_cohorts.index'), $destinations);
         $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Place Student in Programme');
         // Keep the direct destination when a legacy restriction prevents opening Programmes.
