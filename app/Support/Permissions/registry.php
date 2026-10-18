@@ -362,6 +362,7 @@ return [
         // Curriculum read and governance routes are specific before the manage wildcard.
         'admin.curricula.approve' => 'academic.curriculum.approve',
         'admin.curricula.retire' => 'academic.curriculum.approve',
+        'admin.curricula.owner_status' => 'academic.curriculum.approve',
         'admin.curricula.index' => 'academic.curriculum.view',
         'admin.curricula.show' => 'academic.curriculum.view',
         'admin.curricula.subjects.search' => 'academic.curriculum.view',

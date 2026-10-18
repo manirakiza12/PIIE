@@ -46,6 +46,7 @@ class CurriculumPermissionTest extends TestCase
             'admin.curricula.successor' => 'academic.curriculum.manage',
             'admin.curricula.approve' => 'academic.curriculum.approve',
             'admin.curricula.retire' => 'academic.curriculum.approve',
+            'admin.curricula.owner_status' => 'academic.curriculum.approve',
         ];
         foreach ($expected as $route => $permission) {
             $this->assertSame($permission, $permissions->routePermission($route), $route);

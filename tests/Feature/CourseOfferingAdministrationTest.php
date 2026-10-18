@@ -63,6 +63,51 @@ class CourseOfferingAdministrationTest extends TestCase
         }
     }
 
+    public function test_owner_can_reopen_approved_and_retired_curricula_and_restore_accidental_retirement(): void
+    {
+        $tenant = $this->tenants[1];
+        $id = $tenant['curriculum'];
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+        $ownerPage = $this->get(route('admin.curricula.show', $id))->assertOk()->assertSee('Owner curriculum controls');
+        if (getenv('PIIE_CAPTURE_PROGRAMME_WORKSPACE') === '1') {
+            file_put_contents(base_path('output/programme-workspace-browser/curriculum-owner-approved.html'), $ownerPage->getContent());
+        }
+        $this->get(route('admin.curricula.index'))->assertOk()->assertSee('Edit / Restore');
+        $this->post(route('admin.curricula.owner_status', $id), ['status' => 'draft', 'reason' => ''])->assertSessionHasErrors('reason');
+        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'approved']);
+        $this->post(route('admin.curricula.owner_status', $id), ['status' => 'draft', 'reason' => 'Owner correcting approved year label'])->assertSessionHasNoErrors();
+        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Owner corrected Year 1', 'sequence' => 1])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $tenant['stage'], 'label' => 'Owner corrected Year 1']);
+        $this->post(route('admin.curricula.approve', $id))->assertSessionHasNoErrors();
+        $this->post(route('admin.curricula.retire', $id))->assertSessionHasNoErrors();
+        $retiredPage = $this->get(route('admin.curricula.show', $id))->assertOk()->assertSee('Restore to Approved');
+        if (getenv('PIIE_CAPTURE_PROGRAMME_WORKSPACE') === '1') {
+            file_put_contents(base_path('output/programme-workspace-browser/curriculum-owner-retired.html'), $retiredPage->getContent());
+        }
+        $this->post(route('admin.curricula.owner_status', $id), ['status' => 'approved', 'reason' => 'Retired accidentally'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'approved']);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_OWNER_STATUS_CHANGED']);
+        $this->post(route('admin.curricula.retire', $id))->assertSessionHasNoErrors();
+        $this->post(route('admin.curricula.owner_status', $id), ['status' => 'draft', 'reason' => 'Correct retired structure'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'draft']);
+        $this->post(route('admin.curricula.owner_status', $this->tenants[2]['curriculum']), ['status' => 'draft', 'reason' => 'Foreign'])->assertNotFound();
+    }
+
+    public function test_delegated_curriculum_approval_does_not_grant_owner_override(): void
+    {
+        $tenant = $this->tenants[1];
+        $this->actingAs($this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage', 'academic.curriculum.approve']));
+        $this->get(route('admin.curricula.show', $tenant['curriculum']))->assertOk()->assertDontSee('Owner curriculum controls');
+        $this->post(route('admin.curricula.owner_status', $tenant['curriculum']), ['status' => 'draft', 'reason' => 'Not an owner'])->assertForbidden();
+        $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'status' => 'approved']);
+        try {
+            app(\App\Support\Curriculum\CurriculumFoundationService::class)->ownerChangeStatus(\App\Models\Curriculum::findOrFail($tenant['curriculum']), 'draft', 'Direct service attempt');
+            $this->fail('The service must enforce owner access too.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+    }
+
     public function test_standalone_programme_years_crud_and_tenant_boundaries(): void
     {
         $tenant = $this->tenants[1];

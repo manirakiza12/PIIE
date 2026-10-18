@@ -255,6 +255,16 @@ class CurriculumController extends Controller
         return redirect()->route('admin.curricula.show', $id)->with('success', 'Curriculum approved and now official.');
     }
 
+    public function ownerStatus(Request $request, int $id)
+    {
+        $curriculum = Curriculum::where('school_id', $request->user()->school_id)->findOrFail($id);
+        $data = $request->validate(['status' => ['required', 'in:draft,approved'], 'reason' => ['required', 'string', 'max:500']]);
+        $this->curricula->ownerChangeStatus($curriculum, $data['status'], $data['reason']);
+        return redirect()->route('admin.curricula.show', $id)->with('success', $data['status'] === 'draft'
+            ? 'Curriculum reopened for editing. Edit its details, Programme Years and Course Units, then approve it when ready.'
+            : 'Curriculum restored to Approved and available for use.');
+    }
+
     public function retire(Request $request, int $id)
     {
         $this->curricula->retire($this->tenantCurriculum($request, $id));

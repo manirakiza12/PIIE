@@ -1851,6 +1851,7 @@ Route::controller(\App\Http\Controllers\CurriculumController::class)->middleware
     Route::delete('/{id}/prerequisites', 'destroyPrerequisite')->whereNumber('id')->name('prerequisites.destroy');
     Route::post('/{id}/approve', 'approve')->whereNumber('id')->name('approve');
     Route::post('/{id}/retire', 'retire')->whereNumber('id')->name('retire');
+    Route::post('/{id}/owner-status', 'ownerStatus')->whereNumber('id')->name('owner_status');
     Route::post('/{id}/successor', 'successor')->whereNumber('id')->name('successor');
 });
 
