@@ -46,6 +46,72 @@ class CourseOfferingEligibilityTest extends TestCase
         $this->seedAcademicStructure();
     }
 
+    public function test_unused_direct_placement_can_be_created_corrected_and_deleted_without_deleting_student(): void
+    {
+        if (!Schema::hasColumn('student_profiles', 'year_of_study')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->unsignedSmallInteger('year_of_study')->nullable());
+        }
+        $student = $this->placedStudent(stage: 1);
+        DB::table('student_curriculum_assignments')->where('student_id', $student->id)->delete();
+        DB::table('programme_cohort_memberships')->where('student_id', $student->id)->delete();
+        $admin = $this->makeAdminUser($this->school);
+        $this->actingAs($admin);
+        $service = app(\App\Support\Curriculum\StudentCurriculumAssignmentService::class);
+        $placement = $service->assignDirectPlacement($this->school, $student->id, $this->programme, 1, 1, 1, $admin->id);
+        $response = $this->get(route('admin.academic.placements.index'))->assertOk()->assertSee('Create Student Placement')->assertSee($student->name);
+        $this->get(route('admin.academic.direct_placement', ['placement_id' => $placement->id]))->assertOk()->assertSee('Update Placement');
+        if (getenv('PIIE_CAPTURE_PROGRAMME_WORKSPACE') === '1') {
+            file_put_contents(base_path('output/programme-workspace-browser/student-placements.html'), $response->getContent());
+        }
+        $this->assertTrue($this->evaluate(self::O_YEAR1, $student)->eligible);
+        $service->correctUnusedDirectPlacement($this->school, $placement->id, 1, 2, 1, $admin->id, 'Correct entry year');
+        $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id, 'year_of_study' => 2]);
+        $this->assertSame('stage_mismatch', $this->evaluate(self::O_YEAR1, $student)->code);
+        $service->deleteUnusedDirectPlacement($this->school, $placement->id, $admin->id);
+        $this->assertDatabaseMissing('student_curriculum_assignments', ['id' => $placement->id]);
+        $this->assertDatabaseHas('users', ['id' => $student->id]);
+        $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id]);
+    }
+
+    public function test_registration_history_protects_direct_placement_from_correction_and_deletion(): void
+    {
+        $student = $this->placedStudent(stage: 1);
+        DB::table('student_curriculum_assignments')->where('student_id', $student->id)->update(['programme_cohort_membership_id' => null]);
+        $id = DB::table('student_curriculum_assignments')->where('student_id', $student->id)->value('id');
+        $admin = $this->makeAdminUser($this->school);
+        $this->actingAs($admin);
+        app(CourseRegistrationService::class)->registerStudentForOffering($this->school, $student->id, self::O_YEAR1, null, $admin->id);
+        $service = app(\App\Support\Curriculum\StudentCurriculumAssignmentService::class);
+        foreach ([fn () => $service->deleteUnusedDirectPlacement($this->school, $id, $admin->id), fn () => $service->correctUnusedDirectPlacement($this->school, $id, 1, 2, 1, $admin->id, 'Correction')] as $operation) {
+            try { $operation(); $this->fail('Registration history must protect placement.'); }
+            catch (DomainException $e) { $this->assertStringContainsString('registration history', $e->getMessage()); }
+        }
+        $this->assertDatabaseHas('student_curriculum_assignments', ['id' => $id, 'entry_curriculum_stage_id' => 1]);
+    }
+
+    public function test_deleting_pending_registration_returns_student_to_candidates_and_confirmed_history_is_protected(): void
+    {
+        $student = $this->placedStudent(stage: 1);
+        $admin = $this->makeAdminUser($this->school);
+        $this->actingAs($admin);
+        $service = app(CourseRegistrationService::class);
+        $offering = CourseOffering::findOrFail(self::O_YEAR1);
+        $registration = $service->registerStudentForOffering($this->school, $student->id, $offering->id, null, $admin->id);
+        $this->assertFalse(app(CourseOfferingRoster::class)->eligible($offering)->contains('id', $student->id));
+        $service->deletePending($this->school, $registration->id, $admin->id);
+        $this->assertDatabaseMissing('course_registrations', ['id' => $registration->id]);
+        $this->assertTrue(app(CourseOfferingRoster::class)->eligible($offering)->contains('id', $student->id));
+        $confirmed = $service->registerStudentForOffering($this->school, $student->id, $offering->id, null, $admin->id);
+        $service->confirmRegistration($this->school, $confirmed->id, $admin->id);
+        try {
+            $service->deletePending($this->school, $confirmed->id, $admin->id);
+            $this->fail('Confirmed history must be preserved.');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('Only pending', $e->getMessage());
+        }
+        $this->assertDatabaseHas('course_registrations', ['id' => $confirmed->id, 'status' => 'confirmed']);
+    }
+
     public function test_year1_student_is_eligible_for_a_year1_semester1_unit(): void
     {
         $student = $this->placedStudent(stage: 1);

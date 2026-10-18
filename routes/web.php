@@ -1084,6 +1084,9 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\P
 });
 
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\DirectAcademicPlacementController::class)->group(function () {
+    Route::get('admin/academic/student-placements', 'index')->name('admin.academic.placements.index');
+    Route::put('admin/academic/student-placements/{id}', 'update')->whereNumber('id')->name('admin.academic.placements.update');
+    Route::delete('admin/academic/student-placements/{id}', 'destroy')->whereNumber('id')->name('admin.academic.placements.destroy');
     Route::get('admin/academic/direct-placement', 'edit')->name('admin.academic.direct_placement');
     Route::post('admin/academic/direct-placement', 'store')->name('admin.academic.direct_placement.store');
 });
@@ -1820,6 +1823,7 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
 Route::controller(\App\Http\Controllers\ProgrammeYearController::class)->middleware('auth', 'admin', 'rbac')->prefix('admin/programme-years')->name('admin.programme_years.')->group(function () {
     Route::get('/', 'index')->name('index');
     Route::post('/', 'store')->name('store');
+    Route::get('/{id}', 'show')->whereNumber('id')->name('show');
     Route::put('/{id}', 'update')->whereNumber('id')->name('update');
     Route::delete('/{id}', 'destroy')->whereNumber('id')->name('destroy');
 });
@@ -1866,6 +1870,7 @@ Route::controller(\App\Http\Controllers\CourseOfferingController::class)->middle
     Route::get('/{id}/registrations', 'registeredStudents')->whereNumber('id')->name('registrations');
     Route::post('/{id}/registrations', 'registerStudent')->whereNumber('id')->name('registrations.store');
     Route::post('/{id}/registrations/{registration}/drop', 'dropStudent')->whereNumber('id')->whereNumber('registration')->name('registrations.drop');
+    Route::delete('/{id}/registrations/{registration}', 'deleteRegistration')->whereNumber('id')->whereNumber('registration')->name('registrations.destroy');
     Route::post('/{id}/registrations/bulk', 'registerBulk')->whereNumber('id')->name('registrations.bulk');
     Route::post('/{id}/registrations/confirm', 'confirmBulk')->whereNumber('id')->name('registrations.confirm_bulk');
     Route::post('/{id}/registrations/{registration}/confirm', 'confirmStudent')->whereNumber('id')->whereNumber('registration')->name('registrations.confirm');
@@ -1877,6 +1882,7 @@ Route::controller(\App\Http\Controllers\CourseOfferingController::class)->middle
         Route::get('/create', 'create')->whereNumber('offering')->name('create');
         Route::post('/', 'store')->whereNumber('offering')->name('store');
         Route::put('/{allocation}', 'update')->whereNumber('offering')->whereNumber('allocation')->name('update');
+        Route::delete('/{allocation}', 'destroy')->whereNumber('offering')->whereNumber('allocation')->name('destroy');
         Route::post('/{allocation}/activate', 'activate')->whereNumber('offering')->whereNumber('allocation')->name('activate');
         Route::post('/{allocation}/end', 'end')->whereNumber('offering')->whereNumber('allocation')->name('end');
         Route::post('/{allocation}/cancel', 'cancel')->whereNumber('offering')->whereNumber('allocation')->name('cancel');

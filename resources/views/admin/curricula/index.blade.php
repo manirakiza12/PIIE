@@ -33,7 +33,11 @@
                 <td>{{ $row->department_name ?: '—' }}</td><td>{{ $row->version }}</td><td>{{ $row->academic_year_label ?: '—' }}</td>
                 <td><span class="badge {{ $row->status === 'approved' ? 'bg-success' : ($row->status === 'retired' ? 'bg-secondary' : 'bg-warning text-dark') }}">{{ ucfirst($row->status) }}</span></td>
                 <td>{{ $row->stages_count }}</td><td>{{ $row->memberships_count }}</td><td>{{ number_format((float)($row->total_credits ?? 0), 2) }}</td>
-                <td><a class="eBtn eBtn-sm eBtn-primary" href="{{ route('admin.curricula.show', $row->id) }}">{{ get_phrase('Open') }}</a></td>
+                <td><div class="d-flex flex-wrap gap-2"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.curricula.show', $row->id) }}">View</a>
+                @if($row->status === 'draft' && auth()->user()->hasPermission('academic.curriculum.manage'))
+                <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#metadata-heading">Edit</a><form method="POST" action="{{ route('admin.curricula.destroy', $row->id) }}" onsubmit="return confirm('Delete this draft curriculum and its structure?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete</button></form>
+                @else<span class="small text-muted">Official structure is protected</span>@endif
+                </div></td>
             </tr>
         @empty
             <tr><td colspan="9" class="text-center py-4 text-muted">@if(request()->filled('search') || request()->filled('programme_id') || request()->filled('department_id') || request()->filled('status') || request()->filled('academic_year_id')){{ get_phrase('No programme curriculum match these filters.') }}@else{{ get_phrase('No programme curriculum have been created yet.') }}@endif @if(auth()->user()->hasPermission('academic.curriculum.manage')) <a href="{{ route('admin.curricula.create', request()->only('programme_id')) }}">{{ get_phrase('Create a Curriculum') }}</a>@endif</td></tr>

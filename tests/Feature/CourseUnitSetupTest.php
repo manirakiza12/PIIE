@@ -180,7 +180,11 @@ class CourseUnitSetupTest extends TestCase
         $this->assertSame(1,$xpath->query('//input[@id="unit-curriculum-academic-year" and @readonly and not(@name)]')->length);
         $this->assertSame(0,$xpath->query('//li[@class="nav-links-li"]//a[contains(@href,"programme-cohorts")]')->length);
         $this->assertEquals($before,$member->fresh()->getAttributes());
-        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Place Student in Programme');
+        $view = $this->get(route('admin.subject.setup', ['id' => $member->subject_id, 'view' => '1']))->assertOk()->assertSee('View Course Unit');
+        $viewDoc = new \DOMDocument(); @$viewDoc->loadHTML($view->getContent());
+        $this->assertGreaterThanOrEqual(1, (new \DOMXPath($viewDoc))->query('//fieldset[@disabled]')->length);
+        $view->assertDontSee('Remove placement');
+        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Student Placement');
     }
 
     private function payload(array $overrides = []): array

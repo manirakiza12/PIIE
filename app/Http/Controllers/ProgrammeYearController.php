@@ -33,6 +33,12 @@ class ProgrammeYearController extends Controller
         return back()->with('success', 'Programme Year created.');
     }
 
+    public function show(Request $request, int $id)
+    {
+        $year = CurriculumStage::where('school_id', $request->user()->school_id)->with(['curriculum.programme', 'memberships.subject'])->findOrFail($id);
+        return view('admin.programme_years.show', compact('year'));
+    }
+
     public function update(Request $request, int $id)
     {
         $year = CurriculumStage::where('school_id', $request->user()->school_id)->with('curriculum')->findOrFail($id);
