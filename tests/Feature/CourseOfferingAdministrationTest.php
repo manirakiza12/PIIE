@@ -742,7 +742,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             ->assertSee('Current academic context updated.')
             ->assertSee('2026 (2026-01-01) — Semester 1')
             ->assertSee('Semester 1')
-            ->assertDontSee('Academic year 2026-2027')
+            ->assertSee('Academic year 2026-2027')
             ->assertSee('class="eBtn eBtn-primary" type="submit">Save current selection</button>', false);
 
         $this->post(route('admin.academic_structure.current'), [
