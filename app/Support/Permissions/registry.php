@@ -101,14 +101,14 @@ return [
         'academic.programme_cohort.manage' => $p('academic', 'Manage Programme Cohorts', 'Create and edit draft Programme Cohorts.'),
         'academic.programme_cohort.lifecycle' => $p('academic', 'Manage Programme Cohort lifecycle', 'Activate, complete or safely cancel Programme Cohorts.', true),
         'academic.programme_cohort.membership' => $p('academic', 'Manage Programme Cohort membership', 'Assign, place, defer, resume, transfer, withdraw or complete cohort memberships.', true),
-        'academic.course_offering.view' => $p('academic', 'View Course Offerings', 'View academic delivery instances.'),
-        'academic.course_offering.manage' => $p('academic', 'Manage Course Offering drafts', 'Create and edit draft Offerings and Curriculum applicability.'),
-        'academic.course_offering.lifecycle' => $p('academic', 'Manage Course Offering lifecycle', 'Open, start, complete or cancel Offerings.'),
-        'academic.course_offering.lecturer.view' => $p('academic', 'View Offering lecturers', 'View teaching allocations and their history for Course Offerings.'),
-        'academic.course_offering.lecturer.manage' => $p('academic', 'Manage Offering lecturers', 'Assign, edit, activate, end, cancel and replace Course Offering lecturers.'),
-        'academic.course_registration.view' => $p('academic', 'View Course Registrations', 'View tenant-local student Course Offering registrations and their academic provenance.'),
-        'academic.course_registration.manage' => $p('academic', 'Manage Course Registrations', 'Create exceptional Offering registrations and manage withdrawals.'),
-        'academic.course_registration.confirm' => $p('academic', 'Confirm Course Registrations', 'Confirm tenant-local student Course Offering registrations.'),
+        'academic.course_offering.view' => $p('academic', 'View Course Allocations', 'View academic delivery instances.'),
+        'academic.course_offering.manage' => $p('academic', 'Manage Course Allocation drafts', 'Create and edit draft Allocations and Curriculum applicability.'),
+        'academic.course_offering.lifecycle' => $p('academic', 'Manage Course Allocation lifecycle', 'Open, start, complete or cancel Allocations.'),
+        'academic.course_offering.lecturer.view' => $p('academic', 'View Allocation lecturers', 'View teaching allocations and their history for Course Allocations.'),
+        'academic.course_offering.lecturer.manage' => $p('academic', 'Manage Allocation lecturers', 'Assign, edit, activate, end, cancel and replace Course Allocation lecturers.'),
+        'academic.course_registration.view' => $p('academic', 'View Course Registrations', 'View tenant-local student Course Allocation registrations and their academic provenance.'),
+        'academic.course_registration.manage' => $p('academic', 'Manage Course Registrations', 'Create exceptional Allocation registrations and manage withdrawals.'),
+        'academic.course_registration.confirm' => $p('academic', 'Confirm Course Registrations', 'Confirm tenant-local student Course Allocation registrations.'),
         'academic.course_registration.fee_waiver' => $p('academic', 'Manage continuing-student registration fee waivers', 'Grant or revoke an audited waiver of the 20% current-session course-registration payment requirement for continuing students.', true, false),
         'academic.routine' => $p('academic', 'Class routine', 'Manage timetables.'),
         'academic.syllabus' => $p('academic', 'Syllabus', 'Manage syllabus files.'),
@@ -137,18 +137,18 @@ return [
         'online_exams.proctoring' => $p('online_exams', 'Proctoring review', 'Review proctoring events.'),
 
         // Live Classes — bridged to App\Policies\LiveClassPolicy (authoritative)
-        // Course Content. Authoring is a Course Offering concern, so these are
+        // Course Content. Authoring is a Course Allocation concern, so these are
     // capabilities rather than roles: a lecturer additionally needs an
-    // allocation on the exact Offering (CourseContentAccess), and a student
+    // allocation on the exact Allocation (CourseContentAccess), and a student
     // additionally needs a confirmed registration - neither is satisfied by
     // holding a permission.
-    'course_content.view' => $p('course_content', 'View Course Content', 'See the modules and lessons of a Course Offering.'),
-    'course_content.manage' => $p('course_content', 'Manage Course Content', 'Create, edit, order and publish the modules and lessons of a Course Offering.'),
-    // Course Offering Assignments. Authoring, publishing, grading and returning
+    'course_content.view' => $p('course_content', 'View Course Content', 'See the modules and lessons of a Course Allocation.'),
+    'course_content.manage' => $p('course_content', 'Manage Course Content', 'Create, edit, order and publish the modules and lessons of a Course Allocation.'),
+    // Course Allocation Assignments. Authoring, publishing, grading and returning
     // are all gated on a current lecturer allocation in addition to these, so a
     // grant here is a CAPABILITY and never by itself an authorisation.
-    'course_assignments.view' => $p('course_assignments', 'View Course Assignments', 'See the assignments of a Course Offering and the submissions against them.'),
-    'course_assignments.manage' => $p('course_assignments', 'Manage Course Assignments', 'Create, edit, publish, close and grade the assignments of a Course Offering.'),
+    'course_assignments.view' => $p('course_assignments', 'View Course Assignments', 'See the assignments of a Course Allocation and the submissions against them.'),
+    'course_assignments.manage' => $p('course_assignments', 'Manage Course Assignments', 'Create, edit, publish, close and grade the assignments of a Course Allocation.'),
 
     'live_classes.view' => $p('live_classes', 'View live classes', 'See live classes and their materials.'),
         'live_classes.create' => $p('live_classes', 'Schedule live classes', 'Create live classes.'),
@@ -227,16 +227,16 @@ return [
         // System Testing: an ADDITIONAL capability, never a role of its own. A tester
         // keeps their real identity and authority (a Lecturer stays a Lecturer) and
         // users.role_id is never touched. It relaxes exactly ONE condition, the
-        // pre-start DATE gate on an allocation, and only for a Course Offering that
+        // pre-start DATE gate on an allocation, and only for a Course Allocation that
         // was deliberately early-started through the governed workflow. It is NOT a
         // bypass of authentication, tenant isolation, Lecturer identity, allocation
-        // existence or status, Offering lifecycle, or IDOR protection. See
+        // existence or status, Allocation lifecycle, or IDOR protection. See
         // App\Support\CourseOffering\SystemTesterAccess.
         //
         // Student testing is deliberately absent: there is currently no student-side
         // pre-start date gate requiring an exception, and a Student must never be
         // given a staff permission merely to label the account.
-        'system.testing.prestart_lecturer' => $p('system_testing', 'Pre-start Lecturer testing', 'Allows a Lecturer who already holds a valid allocation to exercise approved teaching and testing functionality before the Academic Period start date, on a Course Offering that was deliberately started early for testing. The Lecturer keeps their Lecturer role; this does not bypass any other authorization.', true),
+        'system.testing.prestart_lecturer' => $p('system_testing', 'Pre-start Lecturer testing', 'Allows a Lecturer who already holds a valid allocation to exercise approved teaching and testing functionality before the Academic Period start date, on a Course Allocation that was deliberately started early for testing. The Lecturer keeps their Lecturer role; this does not bypass any other authorization.', true),
     ],
 
     /*
@@ -302,6 +302,12 @@ return [
     | shared AJAX helpers (admin.class_wise_*), dashboard, profile and chat.
     */
     'routes' => [
+        'admin.programme_years.index' => 'academic.curriculum.view',
+        'admin.curriculum_units.index' => 'academic.curriculum.view',
+        'admin.programme_years.*' => 'academic.curriculum.manage',
+        'admin.course_registrations.index' => 'academic.course_registration.view',
+        'admin.lecturer_assignments.index' => 'academic.course_offering.lecturer.view',
+        'admin.course_offerings.destroy' => 'academic.course_offering.manage',
         'admin.message.*' => 'messaging.use',
         'admin.course_offerings.index' => 'academic.course_offering.view',
         'admin.course_offerings.create' => 'academic.course_offering.manage',

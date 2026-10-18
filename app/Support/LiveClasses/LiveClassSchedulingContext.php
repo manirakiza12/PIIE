@@ -12,7 +12,7 @@ use App\Support\TenantConfiguration;
  * Everything the lecturer-facing "Schedule Live Class" screen needs to know
  * about the institution it is being rendered for.
  *
- * This exists so the HEI (Course Offering) form and the K12 form can share one
+ * This exists so the HEI (Course Allocation) form and the K12 form can share one
  * view without either of them hardcoding institution assumptions. It reads
  * configuration that already exists - it creates no new structure and no new
  * authority:
@@ -23,8 +23,8 @@ use App\Support\TenantConfiguration;
  *    institution's own configured value, falling back to the application
  *    default exactly as the rest of the platform does. It is never hardcoded to
  *    any particular city: a tenant that sets its timezone gets its own.
- *  - Manageable Course Offerings come from LecturerCourseOfferingAccess, the
- *    same authority the "My Course Offerings" list uses, so the selector can
+ *  - Manageable Course Allocations come from LecturerCourseOfferingAccess, the
+ *    same authority the "My Course Allocations" list uses, so the selector can
  *    only ever offer what the lecturer may actually manage - including the
  *    governed pre-start tester case and excluding a normal lecturer whose
  *    allocation has not begun.
@@ -36,8 +36,8 @@ class LiveClassSchedulingContext
 {
     /**
      * True when the lecturer's institution schedules Live Classes through a
-     * Course Offering. 'mixed' counts as higher-ed: an institution that also
-     * teaches K12 must still let a lecturer pick an Offering, so Offering stays
+     * Course Allocation. 'mixed' counts as higher-ed: an institution that also
+     * teaches K12 must still let a lecturer pick an Allocation, so Allocation stays
      * the primary path and the legacy Class/Section form remains reachable for
      * genuine K12 classes rather than disappearing.
      */
@@ -97,7 +97,7 @@ class LiveClassSchedulingContext
     }
 
     /**
-     * The Course Offerings this lecturer may schedule into, with the academic
+     * The Course Allocations this lecturer may schedule into, with the academic
      * context the chooser displays.
      */
     public function manageableOfferings(User $user)
@@ -106,17 +106,17 @@ class LiveClassSchedulingContext
     }
 
     /**
-     * The same academic context, for one Offering.
+     * The same academic context, for one Allocation.
      *
      * The context a scheduling form shows (programme, stage, study plan,
      * lecturer role, confirmed student count) is already derived by
-     * LecturerCourseOfferingAccess for the "My Course Offerings" workspace.
+     * LecturerCourseOfferingAccess for the "My Course Allocations" workspace.
      * Routing through the same method means the schedule form and the workspace
-     * can never disagree about what an Offering is, and the view never has to
+     * can never disagree about what an Allocation is, and the view never has to
      * build the academic context itself.
      *
      * Returns the original model untouched when the caller is not a lecturer of
-     * that Offering (a tenant admin, for example), so the admin form still
+     * that Allocation (a tenant admin, for example), so the admin form still
      * renders.
      */
     public function offeringContext(User $user, \App\Models\CourseOffering $offering): \App\Models\CourseOffering
@@ -126,7 +126,7 @@ class LiveClassSchedulingContext
         return $decorated instanceof \App\Models\CourseOffering ? $decorated : $offering;
     }
 
-    /** Human one-liner of the lecturer's own role on this Offering. */
+    /** Human one-liner of the lecturer's own role on this Allocation. */
     public function roleLabel(\App\Models\CourseOffering $offering): ?string
     {
         $label = $offering->getAttribute('my_role_label');
@@ -134,7 +134,7 @@ class LiveClassSchedulingContext
         return $label ? (string) $label : null;
     }
 
-    /** Programme names derived for this Offering, if any. */
+    /** Programme names derived for this Allocation, if any. */
     public function programmes(\App\Models\CourseOffering $offering): array
     {
         return collect($offering->getAttribute('my_programmes') ?? [])
@@ -144,7 +144,7 @@ class LiveClassSchedulingContext
             ->all();
     }
 
-    /** Stage / year-of-study labels derived for this Offering, if any. */
+    /** Stage / year-of-study labels derived for this Allocation, if any. */
     public function stages(\App\Models\CourseOffering $offering): array
     {
         return collect($offering->getAttribute('my_stages') ?? [])
@@ -154,7 +154,7 @@ class LiveClassSchedulingContext
             ->all();
     }
 
-    /** Study Plan versions derived for this Offering, if any. */
+    /** Study Plan versions derived for this Allocation, if any. */
     public function studyPlans(\App\Models\CourseOffering $offering): array
     {
         return collect($offering->getAttribute('my_study_plans') ?? [])
@@ -281,7 +281,7 @@ class LiveClassSchedulingContext
             [
                 'value' => 'publish',
                 'label' => 'Schedule & Notify Students',
-                'help' => 'Makes the class available and notifies the students registered for this Course Offering.',
+                'help' => 'Makes the class available and notifies the students registered for this Course Allocation.',
             ],
         ];
     }
@@ -331,7 +331,7 @@ class LiveClassSchedulingContext
         ];
     }
 
-    /** The status a freshly saved Offering-backed class gets, from the action. */
+    /** The status a freshly saved Allocation-backed class gets, from the action. */
     public function statusForAction(string $action): string
     {
         return $action === 'publish' ? LiveClass::STATUS_SCHEDULED : LiveClass::STATUS_DRAFT;

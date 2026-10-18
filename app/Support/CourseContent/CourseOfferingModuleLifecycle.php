@@ -178,7 +178,7 @@ class CourseOfferingModuleLifecycle
                 'label' => $scheduled ? 'Publish now' : 'Publish now',
                 'hint' => $scheduled
                     ? 'Release it straight away instead of waiting for '.($module->released_at->format('j M Y, H:i')).'.'
-                    : 'Make it visible to students on this Course Offering now.',
+                    : 'Make it visible to students on this Course Allocation now.',
                 'style' => 'primary',
                 'schedule' => false,
             ];

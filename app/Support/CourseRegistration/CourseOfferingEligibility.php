@@ -11,7 +11,7 @@ use DomainException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The single academic eligibility rule for Course Offering registration.
+ * The single academic eligibility rule for Course Allocation registration.
  *
  * Governed academic placement (StudentCurriculumAssignment) is authoritative:
  * Programme, Study Plan, the explicitly recorded Study Plan Stage and the
@@ -41,7 +41,7 @@ class CourseOfferingEligibility
     {
     }
 
-    /** Student-level checks for one Academic Year, independent of any Offering. */
+    /** Student-level checks for one Academic Year, independent of any Allocation. */
     public function placement(int $schoolId, int $studentId, int $academicYearId, bool $lock = false, bool $allowRetiredStudyPlan = false): CourseOfferingEligibilityResult
     {
         $student = DB::table('users')->where('school_id', $schoolId)->where('id', $studentId)->first(['id', 'role_id', 'account_status']);
@@ -50,7 +50,7 @@ class CourseOfferingEligibility
         }
         $year = DB::table('academic_years')->where('school_id', $schoolId)->where('id', $academicYearId)->first(['id', 'label']);
         if (! $year) {
-            return CourseOfferingEligibilityResult::denied('placement_review', 'The Academic Year of this Course Offering could not be found.');
+            return CourseOfferingEligibilityResult::denied('placement_review', 'The Academic Year of this Course Allocation could not be found.');
         }
 
         try {
@@ -82,7 +82,7 @@ class CourseOfferingEligibility
             ->where('school_id', $schoolId)->where('curriculum_id', $assignment->curriculum_id)
             ->where('id', $assignment->entry_curriculum_stage_id)->first(['id', 'label']);
         if (! $stage) {
-            return CourseOfferingEligibilityResult::denied('placement_incomplete', 'Academic placement is incomplete: no Study Plan stage has been recorded for this student.', $assignment);
+            return CourseOfferingEligibilityResult::denied('placement_incomplete', 'Academic placement is incomplete: no Study Plan year has been recorded for this student.', $assignment);
         }
 
         // Cohorts are an optional intake-management tool. A direct academic
@@ -103,7 +103,7 @@ class CourseOfferingEligibility
     }
 
     /**
-     * Full rule for one student and one Offering. When $membershipId is given it
+     * Full rule for one student and one Allocation. When $membershipId is given it
      * must equal the placement-resolved Study Plan membership.
      */
     public function evaluate(CourseOffering $offering, int $studentId, ?int $membershipId = null, bool $lock = false, bool $allowRetiredStudyPlan = false): CourseOfferingEligibilityResult
@@ -119,7 +119,7 @@ class CourseOfferingEligibility
             ->where('academic_year_id', $offering->academic_year_id)->where('id', $offering->academic_period_id)
             ->first(['type', 'sequence', 'label']);
         if (! $period || ! DB::table('subjects')->where('school_id', $schoolId)->where('id', $offering->subject_id)->exists()) {
-            return CourseOfferingEligibilityResult::denied('offering_invalid', 'This Course Offering needs academic review before students can register.', $assignment);
+            return CourseOfferingEligibilityResult::denied('offering_invalid', 'This Course Allocation needs academic review before students can register.', $assignment);
         }
 
         $linked = DB::table('course_offering_curriculum_memberships as x')
@@ -134,7 +134,7 @@ class CourseOfferingEligibility
             ->where('x.subject_id', $offering->subject_id)->where('m.subject_id', $offering->subject_id)
             ->get(['m.id', 'm.curriculum_stage_id', 'm.period_type', 'm.period_sequence', 'st.label as stage_label']);
         if ($linked->isEmpty()) {
-            return CourseOfferingEligibilityResult::denied('not_in_study_plan', 'This Course Unit is not part of the student\'s current Study Plan for this Course Offering.', $assignment);
+            return CourseOfferingEligibilityResult::denied('not_in_study_plan', 'This Course Unit is not part of the student\'s current Study Plan for this Course Allocation.', $assignment);
         }
 
         $inPeriod = $linked->filter(fn ($m) => $m->period_type === $period->type && (int) $m->period_sequence === (int) $period->sequence);
@@ -144,12 +144,12 @@ class CourseOfferingEligibility
 
         $inStage = $inPeriod->filter(fn ($m) => (int) $m->curriculum_stage_id === (int) $assignment->entry_curriculum_stage_id);
         if ($inStage->isEmpty()) {
-            $unitStage = $inPeriod->pluck('stage_label')->filter()->unique()->implode(' / ') ?: 'another stage';
+            $unitStage = $inPeriod->pluck('stage_label')->filter()->unique()->implode(' / ') ?: 'another year';
             $studentStage = DB::table('curriculum_stages')->where('school_id', $schoolId)->where('id', $assignment->entry_curriculum_stage_id)->value('label');
             return CourseOfferingEligibilityResult::denied('stage_mismatch', "Not eligible — this Course Unit belongs to {$unitStage} of the student's Study Plan; the student is placed in {$studentStage}.", $assignment);
         }
         if ($inStage->count() !== 1) {
-            return CourseOfferingEligibilityResult::denied('ambiguous_study_plan', 'This Course Unit appears more than once in the student\'s Study Plan stage; the academic office must review the Study Plan.', $assignment);
+            return CourseOfferingEligibilityResult::denied('ambiguous_study_plan', 'This Course Unit appears more than once in the student\'s Study Plan year; the academic office must review the Study Plan.', $assignment);
         }
 
         $resolvedId = (int) $inStage->first()->id;

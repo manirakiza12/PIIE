@@ -17,16 +17,16 @@ use Tests\Feature\Support\AdmissionsTestHelper;
 use Tests\TestCase;
 
 /**
- * The real Course Offering -> Live Class workflow, end to end.
+ * The real Course Allocation -> Live Class workflow, end to end.
  *
  * The gap this covers is narrow and specific. The offering-scoped Live Class
  * endpoints already existed and were already lecturer-aware
  * (LiveClassController::createForOffering / storeForOffering both call
  * LiveClassAccessService::canLecturerCreateForOffering), but they were mounted
  * under middleware('auth','admin','rbac') only. A Lecturer in the teacher
- * portal therefore had no route to create an Offering-backed class at all: the
+ * portal therefore had no route to create an Allocation-backed class at all: the
  * only creation form they could reach was the legacy Class/Section one, which
- * cannot express Offering context and so would never attach course_offering_id.
+ * cannot express Allocation context and so would never attach course_offering_id.
  *
  * These tests prove the lecturer route now works, that it is gated by the SAME
  * shared SystemTesterAccess definition used everywhere else, and that a normal
@@ -260,7 +260,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
         if ($governedEarlyStart) {
             DB::table('audit_logs')->insert([
                 'school_id' => $offering->school_id, 'action' => 'COURSE_OFFERING_EARLY_START',
-                'event_type' => 'COURSE_OFFERING_EARLY_START', 'module' => 'Course Offerings',
+                'event_type' => 'COURSE_OFFERING_EARLY_START', 'module' => 'Course Allocations',
                 'description' => 'early start', 'record_type' => CourseOffering::class,
                 'record_id' => $offering->id, 'created_at' => now(),
             ]);
@@ -325,8 +325,8 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
      * Google Meet class" — while standing on this very form — had to go and find
      * the control somewhere else entirely.
      *
-     * The Offering context rides along in the return path, so consent brings the
-     * lecturer back to THIS form for THIS Offering instead of the class list.
+     * The Allocation context rides along in the return path, so consent brings the
+     * lecturer back to THIS form for THIS Allocation instead of the class list.
      */
     public function test_the_offering_create_page_carries_the_connect_control_and_the_offering_return_path(): void
     {
@@ -352,7 +352,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
         $this->assertStringContainsString('Not connected', $html);
         $this->assertStringContainsString(route('google.auth.connect'), $html);
 
-        // The Offering context is preserved across the OAuth round trip. Asserted
+        // The Allocation context is preserved across the OAuth round trip. Asserted
         // as a PATH, not a full url: the return value is restricted to a same-site
         // path because that restriction is the open-redirect defence, so an
         // absolute url here would (correctly) be refused by the controller.
@@ -404,7 +404,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
         )->assertSessionHasNoErrors();
 
         $liveClass = LiveClass::where('course_offering_id', $this->offering->id)->first();
-        $this->assertNotNull($liveClass, 'the Live Class was created and is Offering-backed');
+        $this->assertNotNull($liveClass, 'the Live Class was created and is Allocation-backed');
         $this->assertSame('Business Mathematics revision', $liveClass->title);
         $this->assertSame($this->school, (int) $liveClass->school_id, 'tenant preserved');
         $this->assertSame((int) $lecturer->id, (int) $liveClass->teacher_id, 'the lecturer facilitates it');
@@ -449,7 +449,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
     }
 
     // 4. A governed early start is required: a tester on a normally-started
-    //    Offering is still date-gated.
+    //    Allocation is still date-gated.
     public function test_tester_access_requires_governed_early_start_evidence(): void
     {
         $lecturer = $this->lecturer(tester: true, name: 'No Early Start Tester');
@@ -460,7 +460,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
             ->assertForbidden();
     }
 
-    // 5. Offering context is route-derived and cannot be spoofed.
+    // 5. Allocation context is route-derived and cannot be spoofed.
     public function test_offering_context_cannot_be_submitted_by_the_client(): void
     {
         $lecturer = $this->lecturer(tester: true, name: 'Spoof Lecturer');
@@ -476,7 +476,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
         )->assertSessionHasErrors();
 
         $this->assertSame(0, LiveClass::where('course_offering_id', $foreign->id)->count(),
-            'nothing was attached to the spoofed Offering');
+            'nothing was attached to the spoofed Allocation');
     }
 
     // 6. CROSS_TENANT_BLOCKED.
@@ -497,11 +497,11 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
         $this->assertSame(0, LiveClass::where('course_offering_id', $this->offering->id)->count());
     }
 
-    // 7. CROSS_OFFERING_BLOCKED: a lecturer of another Offering cannot add to this one.
+    // 7. CROSS_OFFERING_BLOCKED: a lecturer of another Allocation cannot add to this one.
     public function test_a_lecturer_of_another_offering_cannot_create_for_this_one(): void
     {
         $other = $this->makeOffering('in_progress', 'SECOND-OFFERING');
-        $stranger = $this->lecturer(tester: true, name: 'Other Offering Lecturer');
+        $stranger = $this->lecturer(tester: true, name: 'Other Allocation Lecturer');
         DB::table('course_offering_lecturer_allocations')->insert([
             'school_id' => $this->school, 'course_offering_id' => $other->id,
             'user_id' => $stranger->id, 'role' => 'primary_lecturer',
@@ -533,7 +533,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
         $confirmed = $this->makeStudent('Confirmed Student', $this->school, $this->offering);
         $pending = $this->makeStudent('Pending Student', $this->school, $this->offering, 'pending');
         $dropped = $this->makeStudent('Dropped Student', $this->school, $this->offering, 'dropped');
-        $otherOffering = $this->makeStudent('Other Offering Student', $this->school,
+        $otherOffering = $this->makeStudent('Other Allocation Student', $this->school,
             $this->makeOffering('in_progress', 'SECOND-OFFERING'));
         $otherTenant = $this->makeStudent('Foreign Student', $this->otherSchool,
             $this->makeOffering('in_progress', 'FOREIGN-1', $this->otherSchool));
@@ -553,7 +553,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
         $this->assertFalse($access->canStudentViewClass($dropped, $liveClass),
             'a dropped registration does not');
         $this->assertFalse($access->canStudentViewClass($otherOffering, $liveClass),
-            'a confirmed registration for a different Offering does not');
+            'a confirmed registration for a different Allocation does not');
         $this->assertFalse($access->canStudentViewClass($random, $liveClass),
             'an unregistered student does not');
         $this->assertFalse($access->canStudentViewClass($otherTenant, $liveClass),
@@ -610,7 +610,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
             ->assertSee('Business Mathematics revision');
     }
 
-    // 11. The Offering workspace surfaces the creation entry point with context.
+    // 11. The Allocation workspace surfaces the creation entry point with context.
     public function test_the_offering_workspace_offers_the_creation_entry_point(): void
     {
         $lecturer = $this->lecturer(tester: true, name: 'Workspace Lecturer');

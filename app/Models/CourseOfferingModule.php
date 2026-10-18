@@ -9,13 +9,13 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
 
 /**
- * A Module of a Course Offering: one ordered group of learning items.
+ * A Module of a Course Allocation: one ordered group of learning items.
  *
- * Modules belong to a Course Offering and to nothing above it. A module is not a
+ * Modules belong to a Course Allocation and to nothing above it. A module is not a
  * curriculum stage and not a Study Plan - those are institutional, and one
  * Study Plan describes every delivery of a unit across the programme. A module is
  * what THIS lecturer prepared for THIS delivery, which is why it hangs off the
- * Offering id and is named accordingly.
+ * Allocation id and is named accordingly.
  *
  * @property int $id
  * @property int $school_id
@@ -68,7 +68,7 @@ class CourseOfferingModule extends Model
      * A module may have NO task at all - that is a normal state, not an empty
      * state to be corrected - so a caller must not treat an empty result as a
      * problem. Only tasks belonging to this module are returned, and only
-     * Course Offering tasks, never a legacy K12 row.
+     * Course Allocation tasks, never a legacy K12 row.
      */
     public function tasks(): HasMany
     {

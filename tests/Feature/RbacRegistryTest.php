@@ -34,7 +34,7 @@ class RbacRegistryTest extends TestCase
     {
         $modules = PermissionRegistry::modules();
         foreach ($this->registry() as $key => $definition) {
-            // module.action, optionally module.resource.action; Course Offering lecturer permissions use the explicit academic.course_offering.lecturer.action namespace.
+            // module.action, optionally module.resource.action; Course Allocation lecturer permissions use the explicit academic.course_offering.lecturer.action namespace.
             $this->assertTrue(
                 preg_match('/^[a-z_]+(\.[a-z_]+){1,2}$/', $key) === 1
                     || preg_match('/^academic\.course_offering\.lecturer\.(view|manage)$/', $key) === 1,

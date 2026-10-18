@@ -27,7 +27,7 @@ use Illuminate\Validation\ValidationException;
  * Sequence is assigned by the server from the CURRENT order inside the parent,
  * in a transaction that locks the parent. The client may send an ordering; it may
  * not invent a sequence number, and it cannot move a row into another module,
- * another Offering or another tenant, because the parent is re-resolved by id
+ * another Allocation or another tenant, because the parent is re-resolved by id
  * under lock and every write is constrained by the resolved parent's ids.
  */
 class CourseContentService
@@ -84,7 +84,7 @@ class CourseContentService
      * Apply a client-supplied module ordering.
      *
      * The ids are RE-READ from the database and only those that genuinely belong
-     * to this Offering and tenant are honoured. Anything else is discarded
+     * to this Allocation and tenant are honoured. Anything else is discarded
      * rather than trusted, so a tampered request cannot pull another tenant's
      * module into this list, or renumber a module that is not in it.
      *

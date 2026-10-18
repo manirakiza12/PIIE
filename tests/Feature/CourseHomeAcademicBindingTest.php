@@ -35,7 +35,7 @@ use Tests\TestCase;
  *
  * â”€â”€ WHY THE TEACHING RECORD IS SHOWN, NOT JUST THE CURRENT TEACHER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *
- * Offering #5's one allocation is `active` with `starts_on` tomorrow, and the old
+ * Allocation #5's one allocation is `active` with `starts_on` tomorrow, and the old
  * rule demanded `starts_on <= now` before it would print a name. The page therefore
  * said "No lecturer is currently allocated to this course" about a colleague who IS
  * allocated - a false statement, and the kind that makes a colleague look
@@ -43,7 +43,7 @@ use Tests\TestCase;
  *
  * The domain already draws this line in the OTHER direction, in
  * `reachableOfferings()`: "Cancelled allocations are excluded outright; ENDED ones
- * are included so a COMPLETED Course Offering still shows its TEACHING RECORD."
+ * are included so a COMPLETED Course Allocation still shows its TEACHING RECORD."
  *
  * So the header shows the record and labels each row, using the EXISTING currency
  * test. Teaching AUTHORITY is unchanged, and there is a test below that fails if
@@ -143,8 +143,8 @@ class CourseHomeAcademicBindingTest extends TestCase
 
     public function test_the_values_come_from_the_OFFERING_S_OWN_relationships(): void
     {
-        // Not from a lookup, not from a default: from the Offering's own
-        // `academicYear` / `academicPeriod`. Re-pointing the Offering's ids moves the
+        // Not from a lookup, not from a default: from the Allocation's own
+        // `academicYear` / `academicPeriod`. Re-pointing the Allocation's ids moves the
         // header, and touches nothing else.
         $otherYear = (int) DB::table('academic_years')->insertGetId([
             'school_id' => $this->school, 'label' => '2027/2028 verified',
@@ -204,7 +204,7 @@ class CourseHomeAcademicBindingTest extends TestCase
     public function test_an_ALLOCATION_THAT_HAS_ENDED_is_still_shown_with_its_end_date(): void
     {
         // The domain's own rule, from `reachableOfferings()`: ended ones are
-        // included "so a COMPLETED Course Offering still shows its TEACHING RECORD".
+        // included "so a COMPLETED Course Allocation still shows its TEACHING RECORD".
         $this->setAllocation('user_id', $this->lecturer->id, [
             'starts_on' => now()->subYear()->toDateString(),
             'ends_on' => now()->subMonth()->toDateString(),
@@ -309,14 +309,14 @@ class CourseHomeAcademicBindingTest extends TestCase
         $this->assertFalse($row['is_current'], 'the header must not claim he is teaching yet');
 
         // `resolveForLecturer()` answers REACHABILITY, not authority: the allocation
-        // exists, so the Offering resolves. That is what lets a completed course show
+        // exists, so the Allocation resolves. That is what lets a completed course show
         // its teaching record, and it is why it is the wrong thing to assert null on.
         $resolved = $access->resolveForLecturer($this->lecturer, (int) $this->offering->id);
 
-        $this->assertNotNull($resolved, 'the allocation exists, so the Offering is reachable');
+        $this->assertNotNull($resolved, 'the allocation exists, so the Allocation is reachable');
         $this->assertFalse(
             (bool) $resolved->getAttribute('my_allocation_is_current'),
-            'and the Offering itself records that he is not yet teaching'
+            'and the Allocation itself records that he is not yet teaching'
         );
 
         // The AUTHORITY gate is the other half, and it is closed.
@@ -325,7 +325,7 @@ class CourseHomeAcademicBindingTest extends TestCase
             'teaching authority must remain closed until the allocation starts'
         );
 
-        // And the header's label and the Offering's own attribute are the SAME
+        // And the header's label and the Allocation's own attribute are the SAME
         // question, so they must answer identically - which is what "one rule, one
         // place" actually means rather than merely claiming it.
         $this->assertSame(
@@ -413,7 +413,7 @@ class CourseHomeAcademicBindingTest extends TestCase
             'the eager load must return rows, which it did not before the relation was fixed'
         );
 
-        // And the header built from an EAGER-LOADED Offering is identical to the one
+        // And the header built from an EAGER-LOADED Allocation is identical to the one
         // built from a plain read, so the two paths cannot differ.
         $fromEager = app(StudentCourseHome::class)->build($this->student, $eager)['header']['lecturers'];
         $fromPlain = $this->home()['header']['lecturers'];
@@ -433,7 +433,7 @@ class CourseHomeAcademicBindingTest extends TestCase
     {
         $theirs = $this->otherTenant();
 
-        // An allocation that CLAIMS this Offering but belongs to another school.
+        // An allocation that CLAIMS this Allocation but belongs to another school.
         // Corrupt data - and the point is that a corrupt row cannot put another
         // institution's colleague on this header.
         DB::table('course_offering_lecturer_allocations')->insert([
@@ -492,7 +492,7 @@ class CourseHomeAcademicBindingTest extends TestCase
 
         // A year of the SECOND INSTITUTION's very own.
         //
-        // `otherTenant()` points its Offering at THIS tenant's year, so there was no
+        // `otherTenant()` points its Allocation at THIS tenant's year, so there was no
         // row to rename and the test was failing on a null - which means it asserted
         // nothing at all. Creating one makes the leak assertion real.
         // ONE other tenant, called once. `otherTenant()` is a BUILDER, so a second

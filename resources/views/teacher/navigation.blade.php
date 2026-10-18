@@ -129,7 +129,7 @@
 	                    <path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v3.64C5 18.64 8.13 20 12 20s7-1.36 7-3.18v-3.64L12 16l-7-2.82z"/>
 	                  </svg>
 	                </div>
-	                <span class="link_name">{{ get_phrase('My Course Offerings') }}</span>
+	                <span class="link_name">{{ get_phrase('My Course Allocations') }}</span>
 	              </a>
 	            </div>
 	        </li>

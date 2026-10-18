@@ -230,7 +230,7 @@ class ModuleCompletion
      * a module that holds nothing but tasks is cheap to read. Filtering a few rows
      * in memory is the price of having one rule rather than two.
      *
-     * An assignment scoped to a different Offering or tenant cannot appear here:
+     * An assignment scoped to a different Allocation or tenant cannot appear here:
      * the module is already scoped, and the school is matched as well.
      *
      * @return \Illuminate\Support\Collection<int, array<string, mixed>>
@@ -394,7 +394,7 @@ class ModuleCompletion
     }
 
     /**
-     * Completion of every module in a Course Offering, keyed by module id.
+     * Completion of every module in a Course Allocation, keyed by module id.
      *
      * @return array<int, array<string, mixed>>
      */

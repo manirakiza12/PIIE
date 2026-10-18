@@ -180,7 +180,7 @@ class LibraryCommunityController extends LibraryController
             DB::table('library_course_resources')->updateOrInsert(['course_offering_id'=>$offering->id,'book_id'=>$id],['school_id'=>$actor->school_id,'linked_by'=>$actor->id,'created_at'=>now(),'updated_at'=>now()]);
             $this->library->event($actor,'course_resource_link','Linked approved resource to offering #'.$offering->id,$id);
         });
-        return $this->redirect('course-resources','Approved library resource linked to your course offering.');
+        return $this->redirect('course-resources','Approved library resource linked to your course allocation.');
     }
 
     public function courseResources()

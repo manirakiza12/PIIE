@@ -158,7 +158,7 @@ class CourseOfferingFoundationTest extends TestCase
         $offering = $this->service->createDraft(1, $subject, 11, 101);
         $this->assertDomainFailure(fn () => $this->service->open(1, $offering->id));
         $this->service->addApplicability(1, $offering->id, $membership);
-        // The Offering reference is system-generated and immutable: not accepted by updateDraft, even while draft.
+        // The Allocation reference is system-generated and immutable: not accepted by updateDraft, even while draft.
         $this->assertDomainFailure(fn () => $this->service->updateDraft(1, $offering->id, ['reference' => 'UPDATED']));
         $this->assertDomainFailure(fn () => $this->service->updateDraft(1, $offering->id, ['subject_id' => $this->subject(1)]));
 
@@ -207,7 +207,7 @@ class CourseOfferingFoundationTest extends TestCase
         }
         $this->assertSame('open', $opened->fresh()->status);
 
-        // complete() carries the same guard independently, even if an Offering
+        // complete() carries the same guard independently, even if an Allocation
         // reached in_progress by another means (e.g. the Academic Period dates
         // were edited after a legitimate start).
         DB::table('course_offerings')->where('id', $future->id)->update(['status' => 'in_progress']);
@@ -256,7 +256,7 @@ class CourseOfferingFoundationTest extends TestCase
 
         // CHANGED BEHAVIOUR (was: the reference stayed frozen at BBIT1101-2026-S1).
         // Freezing it while identity was freely editable is what let production
-        // Offering #5 end up as reference BBIT1103-2026-S1 against subject
+        // Allocation #5 end up as reference BBIT1103-2026-S1 against subject
         // BBIT4201. The reference is now regenerated from the persisted identity,
         // server-side, in the same statement that persists it.
         $this->service->updateDraft(1, $offering->id, ['academic_period_id' => 102]);
@@ -368,7 +368,7 @@ class CourseOfferingFoundationTest extends TestCase
         ] as $attempt) {
             try {
                 $attempt();
-                $this->fail('Expected the Course Offering domain operation to be rejected.');
+                $this->fail('Expected the Course Allocation domain operation to be rejected.');
             } catch (DomainException $exception) {
                 $this->assertHumanMessage($exception->getMessage());
             }
@@ -462,7 +462,7 @@ class CourseOfferingFoundationTest extends TestCase
     {
         try {
             $callback();
-            $this->fail('Expected the Course Offering domain operation to be rejected.');
+            $this->fail('Expected the Course Allocation domain operation to be rejected.');
         } catch (DomainException $exception) {
             $this->assertNotSame('', $exception->getMessage());
         }

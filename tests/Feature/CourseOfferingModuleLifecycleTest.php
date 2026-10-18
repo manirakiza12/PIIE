@@ -21,8 +21,8 @@ use Tests\TestCase;
  * `<select>` and a date field inside a collapsed panel.
  *
  * So the assertions here are about the ROUTE and the BUTTONS:
- *   - a lecturer allocated to the Offering can perform every legal move;
- *   - a lecturer allocated to a DIFFERENT Offering cannot, by URL or by form;
+ *   - a lecturer allocated to the Allocation can perform every legal move;
+ *   - a lecturer allocated to a DIFFERENT Allocation cannot, by URL or by form;
  *   - a student sees a published module, and does NOT see a draft or a future one.
  *
  * A service-only test would pass on all of the above while the page still offered
@@ -41,7 +41,7 @@ class CourseOfferingModuleLifecycleTest extends TestCase
     }
 
     /**
-     * The reduced Course Offering fixture declares lessons but not their
+     * The reduced Course Allocation fixture declares lessons but not their
      * attachments.
      *
      * Nothing here creates a lesson resource, but rendering any lesson loads the
@@ -80,13 +80,13 @@ class CourseOfferingModuleLifecycleTest extends TestCase
     private ?\App\Models\User $lecturerA = null;
 
     /**
-     * ONE Offering for the whole test.
+     * ONE Allocation for the whole test.
      *
      * Memoised on purpose. The first version of this file used `$this->offering()`
      * assuming the fixture declared it, which it does not - so every test errored on
      * an undefined property before reaching a single assertion. A helper that builds a
-     * NEW Offering per call is the same trap as a cast helper that builds a new user
-     * per call: two calls are two different Offerings, and "the module's Offering"
+     * NEW Allocation per call is the same trap as a cast helper that builds a new user
+     * per call: two calls are two different Allocations, and "the module's Allocation"
      * stops meaning anything.
      */
     private ?\App\Models\CourseOffering $offeringRow = null;
@@ -101,7 +101,7 @@ class CourseOfferingModuleLifecycleTest extends TestCase
         return $this->makeUser(7, 1, 'active', 'Student A');
     }
 
-    /** A module in a given state, on this Offering. */
+    /** A module in a given state, on this Allocation. */
     private function module(string $status = CourseOfferingModule::STATUS_DRAFT, ?string $releasedAt = null): CourseOfferingModule
     {
         $row = [
@@ -156,7 +156,7 @@ class CourseOfferingModuleLifecycleTest extends TestCase
      * Keep only the columns the table actually has.
      *
      * The shared `CourseOfferingExamFixture` is a hand-written, REDUCED copy of the
-     * Course Offering schema - it has no `course_offering_modules.summary`, and its
+     * Course Allocation schema - it has no `course_offering_modules.summary`, and its
      * `assignments` has no `created_by`. Three other suites depend on it, and it was
      * left deliberately partial rather than corrected.
      *
@@ -439,7 +439,7 @@ class CourseOfferingModuleLifecycleTest extends TestCase
 
         // 404, not 403, and deliberately: `resolveOffering()` refuses before the
         // manage check runs, so an unallocated colleague cannot even learn that this
-        // Offering exists. Asserting 403 would have been asserting the WEAKER property.
+        // Allocation exists. Asserting 403 would have been asserting the WEAKER property.
         $this->actingAs($stranger)
             ->post($this->transitionUrl($module, 'published'))
             ->assertNotFound();
@@ -477,8 +477,8 @@ class CourseOfferingModuleLifecycleTest extends TestCase
 
     public function test_a_module_in_ANOTHER_offering_cannot_be_moved_through_THIS_offerings_url(): void
     {
-        // The Offering id is in the URL and the module is re-resolved INSIDE it, so a
-        // module from another Offering is not found - a 404, not a silent success.
+        // The Allocation id is in the URL and the module is re-resolved INSIDE it, so a
+        // module from another Allocation is not found - a 404, not a silent success.
         $theirs = $this->otherInstitution();
         $module = $this->module(CourseOfferingModule::STATUS_DRAFT);
 
@@ -586,7 +586,7 @@ class CourseOfferingModuleLifecycleTest extends TestCase
         $this->allocateLecturer($this->offering(), $lecturer);
         $theirs = $this->otherInstitution();
 
-        // The id is matched against THIS Offering's own module options, so a foreign
+        // The id is matched against THIS Allocation's own module options, so a foreign
         // one is dropped rather than attached. `resolveModule()` remains the authority.
         $html = $this->actingAs($lecturer)
             ->get(route('teacher.course_offerings.assignments.create', $this->offering()->id)
@@ -597,7 +597,7 @@ class CourseOfferingModuleLifecycleTest extends TestCase
         $this->assertDoesNotMatchRegularExpression(
             '/value="'.$theirs['offering']->id.'"\s+selected/',
             $html,
-            'a module belonging to another Offering must never be pre-selected'
+            'a module belonging to another Allocation must never be pre-selected'
         );
     }
 
@@ -746,7 +746,7 @@ class CourseOfferingModuleLifecycleTest extends TestCase
     /**
      * THE PROVENANCE OF THE BAD ROW, STATED AS A TEST.
      *
-     * The document that reached `assignment_questions` on Offering 5 was:
+     * The document that reached `assignment_questions` on Allocation 5 was:
      *
      *     <h1><span style="font-family: Arial">﻿</span></h1>
      *
@@ -763,7 +763,7 @@ class CourseOfferingModuleLifecycleTest extends TestCase
 
         $this->assertFalse(
             app(HtmlSanitizer::class)->hasMeaningfulText($badRow),
-            'the row that reached Offering 5 must be recognised as empty'
+            'the row that reached Allocation 5 must be recognised as empty'
         );
 
         // And a real heading with real words in it must NOT be refused - which was

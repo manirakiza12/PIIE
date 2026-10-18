@@ -14,7 +14,7 @@ use Tests\TestCase;
 /**
  * THE FINAL END-TO-END REGRESSION, ON A DISPOSABLE COURSE-OFFERING PAPER.
  *
- * One controlled 20-mark examination on Course Offering #5 (BBIT1103-2026-S1,
+ * One controlled 20-mark examination on Course Allocation #5 (BBIT1103-2026-S1,
  * Business Mathematics), with exactly the four question types the brief names:
  *
  *     Q1  MCQ          5 marks   marked by the engine
@@ -428,7 +428,7 @@ $this->buildOfferingTables();
      *
      * Asserted directly on the query, which is the single definition both the exam
      * list and "open this exam" use. This is what makes offering #5 behave correctly
-     * in production without reconstructing the whole Course Offering authorisation
+     * in production without reconstructing the whole Course Allocation authorisation
      * stack that the rest of the suite would need for it.
      */
     public function test_offering_scoped_papers_follow_the_registration_rule(): void

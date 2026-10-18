@@ -4,7 +4,7 @@
 
 @php
     /**
-     * The lecturer's Course Offering assignment list.
+     * The lecturer's Course Allocation assignment list.
      *
      * Every column answers a question a lecturer actually asks: what state is
      * this in, when is it due, out of how many marks, how many have handed in,
@@ -22,7 +22,7 @@
 
 <div class="mainSection-title">
     <a href="{{ route('teacher.course_offerings.show', $offering->id) }}" class="btn btn-sm btn-outline-secondary mb-2">
-        Back to {{ $offering->subject?->code ?? 'Course Offering' }}
+        Back to {{ $offering->subject?->code ?? 'Course Allocation' }}
     </a>
     <h4 class="mb-1">Assignments &mdash; {{ $unitName }}</h4>
     <p class="text-muted mb-0">
@@ -46,7 +46,7 @@
 @if(!$canManage)
     <div class="alert alert-warning" role="status">
         <strong>You are viewing this read-only.</strong>
-        You are not currently allocated to teach this Course Offering, so the authoring actions are not
+        You are not currently allocated to teach this Course Allocation, so the authoring actions are not
         available to you.
     </div>
 @endif
@@ -108,7 +108,7 @@
                 @if($canManage)
                     Create your first assignment above. It will be a Draft until you publish it.
                 @else
-                    The lecturer for this Course Offering has not set any assignments yet.
+                    The lecturer for this Course Allocation has not set any assignments yet.
                 @endif
             </p>
         </div>

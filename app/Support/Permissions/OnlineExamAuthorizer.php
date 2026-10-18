@@ -84,10 +84,10 @@ class OnlineExamAuthorizer
      * Reaching this method at all means the lecturer is neither the author
      * (`ownsExam()`) nor an `edit_all_online_exams` holder, because
      * `canAccessExamAttempts()` offers those two first. So this method is the only
-     * remaining way in to somebody ELSE's submissions - and on a Course Offering
+     * remaining way in to somebody ELSE's submissions - and on a Course Allocation
      * assessment it let a stranger through.
      *
-     * A Course Offering exam is created with `class_id` AND `programme_id` both
+     * A Course Allocation exam is created with `class_id` AND `programme_id` both
      * NULL, deliberately: populating them would enrol every student of that class
      * and bypass confirmed registration. Those NULLs are the right answer for
      * DELIVERY. But this method was written to read them as "school-wide paper,
@@ -107,10 +107,10 @@ class OnlineExamAuthorizer
      *
      * That fail-open is deliberate for legacy delivery, where a subject with no
      * assignment rows is the only configuration some schools have. It is the WRONG
-     * answer for an Offering assessment, whose authority model is the Lecturer
+     * answer for an Allocation assessment, whose authority model is the Lecturer
      * Allocation - a table that exists, and was simply never consulted here.
      *
-     * Measured on a real Course Offering exam whose subject was unlinked, an
+     * Measured on a real Course Allocation exam whose subject was unlinked, an
      * unallocated role-3 lecturer in the same school passed this method,
      * `canMarkAnswer()` returned true, the route answered 302, and the mark was
      * written. That is precisely what §4 of the brief forbids.
@@ -128,7 +128,7 @@ class OnlineExamAuthorizer
      *     `ownsExam()` first, so a lecturer who created the paper can still mark it
      *     after being deallocated.
      *   - An ADMINISTRATOR never enters this method - it is role 3 only.
-     *   - Fail CLOSED: no allocation table, or an Offering that cannot be loaded,
+     *   - Fail CLOSED: no allocation table, or an Allocation that cannot be loaded,
      *     answers `false`.
      */
     public function canTeachExam(User $user, OnlineExam $exam): bool
@@ -163,14 +163,14 @@ class OnlineExamAuthorizer
     }
 
     /**
-     * Is this lecturer currently allocated to the Offering this assessment belongs
+     * Is this lecturer currently allocated to the Allocation this assessment belongs
      * to?
      *
      * Two collaborators, each the single authority for one half of the question,
      * and neither of them restated here:
      *
      *  1. `LecturerCourseOfferingAccess::resolveForLecturer()` answers "is there an
-     *     Offering this lecturer is allocated to, in this tenant". It returns NULL
+     *     Allocation this lecturer is allocated to, in this tenant". It returns NULL
      *     rather than throwing.
      *
      *     That distinction matters, and it was found by running this. The first
@@ -203,8 +203,8 @@ class OnlineExamAuthorizer
             return false;
         }
 
-        // Defence in depth, and free: the Offering found must be the exam's OWN
-        // Offering and in the exam's OWN tenant. `resolveForLecturer()` already
+        // Defence in depth, and free: the Allocation found must be the exam's OWN
+        // Allocation and in the exam's OWN tenant. `resolveForLecturer()` already
         // scopes by the actor's school, so this comparison is what stops a future
         // refactor of that method from quietly widening this one.
         if ((int) $offering->id !== (int) $exam->course_offering_id

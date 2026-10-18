@@ -60,12 +60,12 @@
 
         @if($grid['modules'] === [])
             <div class="alert alert-info" role="status">
-                This Course Offering has no topics yet, so there is no progress to show.
+                This Course Allocation has no topics yet, so there is no progress to show.
                 Create a topic from <strong>Content</strong> first.
             </div>
         @elseif($grid['rows'] === [])
             <div class="alert alert-info" role="status">
-                No students are confirmed on this Course Offering yet, so there is no progress to show.
+                No students are confirmed on this Course Allocation yet, so there is no progress to show.
             </div>
         @else
             <div class="table-responsive">

@@ -18,7 +18,7 @@ use Tests\TestCase;
 
 /**
  * The student submission workflow, protected files, grading and the shapes a
- * future Course Offering Gradebook will consume.
+ * future Course Allocation Gradebook will consume.
  *
  * THE THREE PROPERTIES PINNED HARDEST HERE
  *
@@ -173,7 +173,7 @@ class CourseAssignmentSubmissionTest extends TestCase
         $this->assertEquals(1, $row->attempt_no);
         $this->assertEquals('submitted', $row->status);
         // The canonical rich-text field. The legacy `submission` column is left
-        // NULL for Course Offering rows, so this also proves the two are not both
+        // NULL for Course Allocation rows, so this also proves the two are not both
         // holding HEI content - which is what stops them drifting apart.
         $this->assertStringContainsString('one and a half times', $row->text_response);
         $this->assertNull($row->submission, 'the legacy column is for K12 rows only');
@@ -540,7 +540,7 @@ class CourseAssignmentSubmissionTest extends TestCase
     {
         Storage::fake('local');
 
-        // A second confirmed registrant on the SAME Offering, so the registration
+        // A second confirmed registrant on the SAME Allocation, so the registration
         // check passes for both and only ownership can refuse.
         $other = $this->secondConfirmedStudent();
         $assignment = $this->publishedAssignment(['submission_type' => Assignment::SUBMISSION_FILE]);
@@ -840,8 +840,8 @@ class CourseAssignmentSubmissionTest extends TestCase
     {
         $other = $this->otherTenantAssignment();
 
-        // This lecturer IS legitimately allocated - to their own Offering, in
-        // their own institution. Only the tenant differs, so the Offering in the
+        // This lecturer IS legitimately allocated - to their own Allocation, in
+        // their own institution. Only the tenant differs, so the Allocation in the
         // URL cannot resolve for them at all.
         $this->actingAs($this->lecturer)
             ->post("/teacher/course-offerings/{$other['offeringId']}/assignments/{$other['assignmentId']}/submissions/{$other['submissionId']}/grade", [
@@ -1145,7 +1145,7 @@ class CourseAssignmentSubmissionTest extends TestCase
 
         $row = $rows[0];
 
-        // The contract a future Course Offering Gradebook is written against.
+        // The contract a future Course Allocation Gradebook is written against.
         foreach ([
             'course_offering_id', 'assignment_id', 'assignment_title', 'student_id',
             'marks', 'max_marks', 'percent', 'graded_at', 'graded_by', 'released_at', 'is_late',

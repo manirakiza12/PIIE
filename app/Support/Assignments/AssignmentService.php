@@ -102,7 +102,7 @@ class AssignmentService
         }
 
         $assignment->school_id = $offering->school_id;
-        // The Offering is the container. It is taken from the resolved Offering,
+        // The Allocation is the container. It is taken from the resolved Allocation,
         // never from the form, so a submitted field cannot move an assignment
         // between deliveries.
         $assignment->course_offering_id = $offering->id;
@@ -127,8 +127,8 @@ class AssignmentService
 
         // ── Module/chapter task fields ──
         //
-        // The module id is RESOLVED against the already-authorised Offering, not
-        // trusted from the form. A substituted id from another Offering or another
+        // The module id is RESOLVED against the already-authorised Allocation, not
+        // trusted from the form. A substituted id from another Allocation or another
         // tenant is refused rather than written, which is what stops a task being
         // attached across a boundary by a crafted request.
         $assignment->course_offering_module_id = $this->resolveModule(
@@ -462,11 +462,11 @@ class AssignmentService
     }
 
     /**
-     * Resolve the module this task belongs to, INSIDE the authorised Offering.
+     * Resolve the module this task belongs to, INSIDE the authorised Allocation.
      *
      * Three outcomes: no module (null - the common case), a module of this
-     * Offering, or a refusal. A module id that exists but belongs to a different
-     * Offering or tenant is NOT silently ignored, because writing null would look
+     * Allocation, or a refusal. A module id that exists but belongs to a different
+     * Allocation or tenant is NOT silently ignored, because writing null would look
      * like a successful save and the lecturer would believe the task was attached
      * when it was not.
      *
@@ -485,7 +485,7 @@ class AssignmentService
 
         if (! $module) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'course_offering_module_id' => 'That module does not belong to this Course Offering.',
+                'course_offering_module_id' => 'That module does not belong to this Course Allocation.',
             ]);
         }
 

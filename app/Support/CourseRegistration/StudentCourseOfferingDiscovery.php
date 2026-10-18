@@ -15,7 +15,7 @@ use App\Support\Curriculum\StudentCurriculumAssignmentService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
-/** Tenant-scoped student view model for assignment-governed Offering registration. */
+/** Tenant-scoped student view model for assignment-governed Allocation registration. */
 class StudentCourseOfferingDiscovery
 {
     public function __construct(
@@ -41,9 +41,9 @@ class StudentCourseOfferingDiscovery
         // in the main path only would leave the lecturer blank on exactly the cards
         // a student most needs a name on.
         //
-        // The SAME `activeLecturers()` definition the available Offerings already use
+        // The SAME `activeLecturers()` definition the available Allocations already use
         // — active allocation, started, not ended — so a card never names a lecturer
-        // who has already left the Offering.
+        // who has already left the Allocation.
         $registrationLecturers = $this->activeLecturers(
             $schoolId,
             $registrations->pluck('offering_id')->map(fn ($id) => (int) $id)->unique()->values()->all()
@@ -147,8 +147,8 @@ class StudentCourseOfferingDiscovery
         return [
             'state' => $ambiguousOfferingIds->isNotEmpty() ? 'integrity_review' : ($offerings->isEmpty() ? 'no_offerings' : 'ready'),
             'message' => $ambiguousOfferingIds->isNotEmpty()
-                ? 'Some Course Offering records need academic review. Other valid Offerings remain available.'
-                : ($offerings->isEmpty() ? 'No Course Offering is currently available for your programme in this period.' : null),
+                ? 'Some Course Allocation records need academic review. Other valid Allocations remain available.'
+                : ($offerings->isEmpty() ? 'No Course Allocation is currently available for your programme in this period.' : null),
             'year' => $year,
             'period' => $period,
             'offerings' => $offerings,

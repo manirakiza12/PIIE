@@ -22,15 +22,15 @@ class CourseOfferingCurriculumMembership extends Model
     protected static function booted(): void
     {
         static::creating(function (): void {
-            throw new DomainException('Offering applicability may only be attached through CourseOfferingService.');
+            throw new DomainException('Allocation applicability may only be attached through CourseOfferingService.');
         });
 
         static::updating(function (): void {
-            throw new DomainException('Offering applicability identity cannot be edited directly.');
+            throw new DomainException('Allocation applicability identity cannot be edited directly.');
         });
 
         static::deleting(function (): void {
-            throw new DomainException('Offering applicability may only be removed through CourseOfferingService.');
+            throw new DomainException('Allocation applicability may only be removed through CourseOfferingService.');
         });
     }
 

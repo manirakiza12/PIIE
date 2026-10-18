@@ -8,22 +8,22 @@
  * on the real database produced two distinct findings, and it matters that they are
  * different in kind:
  *
- *   1. NO exam is bound to any Course Offering. All 9 have
+ *   1. NO exam is bound to any Course Allocation. All 9 have
  *      `course_offering_id = NULL`. So the Course Home's Quizzes & Exams tab is
  *      CORRECTLY empty, and the report is an accurate observation of a real
  *      absence. Nothing is broken about that; there is simply nothing to deliver.
  *
- *   2. A LEAK that would have happened the moment an Offering exam was published.
+ *   2. A LEAK that would have happened the moment an Allocation exam was published.
  *      `OnlineExamPortalNotifier::eligibleStudents()` narrows recipients by
  *      `class_id` ONLY:
  *
  *          if ($exam->class_id) $query->whereExists(... enrollment ...);
  *
- *      A Course Offering exam has `class_id = NULL` by design, so the narrowing
+ *      A Course Allocation exam has `class_id = NULL` by design, so the narrowing
  *      NEVER RUNS and the query degrades to "every student in the school".
- *      Simulated against the real rows: publishing an Offering-5 exam would have
+ *      Simulated against the real rows: publishing an Allocation-5 exam would have
  *      notified 4 students when only 3 are confirmed on it - leaking to
- *      "Fag alex", who is confirmed on nothing in Offering 5.
+ *      "Fag alex", who is confirmed on nothing in Allocation 5.
  *
  *      `OnlineExamAnnouncementNotifier::eligibleStudents()` has the identical
  *      shape, so the "starting soon" reminder would leak the same way.
@@ -50,7 +50,7 @@
  * A legacy exam (`course_offering_id IS NULL`) keeps the class/enrolment rule
  * exactly as it was, including the NULL-class school-wide arm that nine live exams
  * depend on. Only the OFFERING arm is new, and it requires a confirmed Course
- * Registration - the test every other part of the Course Offering student surface
+ * Registration - the test every other part of the Course Allocation student surface
  * already uses.
  */
 namespace App\Support\OnlineExams;
@@ -84,8 +84,8 @@ final class OnlineExamRecipients
         // ── A COURSE OFFERING ASSESSMENT: confirmed registration, nothing else ──
         //
         // Never Programme, Cohort, Study Plan or legacy Class membership. A student
-        // is told about an Offering assessment because they are CONFIRMED on that
-        // Offering, which is the same test the exam's own visibility rule uses.
+        // is told about an Allocation assessment because they are CONFIRMED on that
+        // Allocation, which is the same test the exam's own visibility rule uses.
         if ($exam->course_offering_id !== null) {
             if (! Schema::hasTable('course_registrations')) {
                 // Fail CLOSED. No registration table means no confirmed

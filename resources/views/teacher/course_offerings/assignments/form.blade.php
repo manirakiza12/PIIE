@@ -203,7 +203,7 @@
                         @endforeach
                     </select>
                     <div class="form-text">
-                        Only this Course Offering&rsquo;s modules are listed. A module needs no task.
+                        Only this Course Allocation&rsquo;s modules are listed. A module needs no task.
                     </div>
                 </div>
 
@@ -403,7 +403,7 @@
                 <p class="small text-muted">
                     @if($isEdit)
                         Files are stored outside the public web folder and are only reachable by students
-                        registered for this Course Offering.
+                        registered for this Course Allocation.
                     @else
                         An assignment can be <strong>only files</strong> &mdash; a dataset, a case study,
                         a worksheet. Uploading here saves a draft with your title and brief so far, then

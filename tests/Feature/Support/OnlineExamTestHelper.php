@@ -144,7 +144,7 @@ trait OnlineExamTestHelper
             $table->unsignedBigInteger('class_id')->nullable();
             $table->unsignedBigInteger('programme_id')->nullable()->index();
             $table->unsignedBigInteger('session_id')->nullable()->index();
-            // The Course Offering delivery context, mirroring the additive migration
+            // The Course Allocation delivery context, mirroring the additive migration
             // 2026_09_30_140000. Nullable, so every legacy Class/Section exam above
             // and every existing test in this suite keeps meaning exactly what it
             // meant - and the engine's own null-guards in CourseOfferingExamAccess

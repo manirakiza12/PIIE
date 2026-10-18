@@ -330,7 +330,7 @@ class FinalSecurityHardeningTest extends TestCase
             $t->integer('subject_id')->nullable(); $t->string('file')->nullable(); $t->integer('school_id')->nullable(); $t->integer('session_id')->nullable(); $t->timestamps();
         });
         // `course_offering_id` is declared because the production table has it
-        // (added by the Course Offering Assignments migration) and the legacy
+        // (added by the Course Allocation Assignments migration) and the legacy
         // controller now scopes its reads with `->k12()`. It is NULL for every row
         // in this test on purpose: these ARE the legacy K12 assignments the test is
         // about, and the domain partition must not exclude them. Every assertion

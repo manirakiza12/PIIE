@@ -17,10 +17,10 @@ use Illuminate\Validation\ValidationException;
  *
  * Every method begins by resolving the assignment through `AssignmentAccess` for
  * the actor, which proves a current lecturer allocation (or the academic office's
- * capability) on the exact Offering in the URL. Nothing in this class reads an
+ * capability) on the exact Allocation in the URL. Nothing in this class reads an
  * offering id from a request, and nothing trusts a question id on its own: a
  * question is always re-resolved INSIDE its own assignment, so a question from
- * another tenant, another Offering or another assignment cannot be reached by
+ * another tenant, another Allocation or another assignment cannot be reached by
  * substituting its id.
  *
  * THE FREEZE RULE, WHICH IS THE HEART OF THIS CLASS
@@ -370,13 +370,13 @@ class QuestionService
     }
 
     /**
-     * Re-resolve the assignment for this actor, INSIDE the Offering it belongs to.
+     * Re-resolve the assignment for this actor, INSIDE the Allocation it belongs to.
      */
     private function resolveForManager(User $actor, Assignment $assignment): Assignment
     {
         if ($assignment->course_offering_id === null) {
-            // A legacy K12 assignment has no Offering and therefore no lecturer
-            // allocation to check. Questions are a Course Offering feature; the K12
+            // A legacy K12 assignment has no Allocation and therefore no lecturer
+            // allocation to check. Questions are a Course Allocation feature; the K12
             // screens keep their own single-form flow untouched.
             throw ValidationException::withMessages([
                 'questions' => 'This is a legacy K12 assignment, which does not use questions.',
@@ -393,7 +393,7 @@ class QuestionService
     /**
      * Re-resolve a question INSIDE its own assignment.
      *
-     * A question id from another assignment, another Offering or another tenant is
+     * A question id from another assignment, another Allocation or another tenant is
      * a 404. Never "found and edited anyway": the parent is the authority, and
      * trusting a bare id would let a lecturer reach a question they cannot manage.
      *

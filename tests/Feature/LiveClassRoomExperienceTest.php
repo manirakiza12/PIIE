@@ -32,7 +32,7 @@ use Tests\TestCase;
  * yet, so pressing it appeared to do nothing. The lecturer page offered only
  * "Unpublish" and "Cancel Class" with no way to start, enter or end a class.
  *
- * The shape of every class here is Live Class #43: Offering #5, BBIT1103,
+ * The shape of every class here is Live Class #43: Allocation #5, BBIT1103,
  * Jitsi, published, three confirmed students.
  */
 class LiveClassRoomExperienceTest extends TestCase
@@ -229,7 +229,7 @@ class LiveClassRoomExperienceTest extends TestCase
     }
 
     /**
-     * The shape of #43: published, Jitsi, Offering #5, three confirmed students.
+     * The shape of #43: published, Jitsi, Allocation #5, three confirmed students.
      * $startsIn is relative to now, so a class can be placed in any lifecycle
      * state without touching a clock.
      */

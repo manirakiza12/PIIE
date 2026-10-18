@@ -11,7 +11,7 @@ use Tests\Feature\Support\AssignmentFixture;
 use Tests\TestCase;
 
 /**
- * The optional Course Offering cover image: CAPABILITY ONLY.
+ * The optional Course Allocation cover image: CAPABILITY ONLY.
  *
  * The visual card design is explicitly deferred, so nothing in this suite asserts
  * that an image is rendered anywhere. What it asserts is the part that cannot be
@@ -22,7 +22,7 @@ use Tests\TestCase;
  *   - the authorised route is the only way to read it;
  *   - that route answers for a lecturer with an allocation, a CONFIRMED student,
  *     and nobody else - and a 404 rather than a 403, so it cannot be used to
- *     discover that some other Offering has a cover;
+ *     discover that some other Allocation has a cover;
  *   - replacing or clearing a cover disposes of the old bytes rather than
  *     accumulating files nobody intends to keep.
  */
@@ -221,7 +221,7 @@ class CourseOfferingCoverImageTest extends TestCase
         $offering = CourseOffering::query()->findOrFail($this->offering->id);
         $this->cover()->set($this->lecturer, $offering, UploadedFile::fake()->image('c.png', 100, 100));
 
-        // Same tenant, same student, different delivery. Only the Offering differs,
+        // Same tenant, same student, different delivery. Only the Allocation differs,
         // so the school check alone would not catch it.
         $second = \App\Models\CourseOffering::query()->findOrFail(
             $this->secondOfferingAssignment()['offeringId']
@@ -284,7 +284,7 @@ class CourseOfferingCoverImageTest extends TestCase
         // What it was really guarding still holds, and is asserted DIRECTLY here
         // rather than inferred from a page not mentioning a route: the bytes live
         // OUTSIDE the web root, and the only way to read them is a route that
-        // re-checks that the viewer is entitled to this Offering.
+        // re-checks that the viewer is entitled to this Allocation.
         Storage::fake('local');
 
         $offering = CourseOffering::query()->findOrFail($this->offering->id);
@@ -358,14 +358,14 @@ class CourseOfferingCoverImageTest extends TestCase
     {
         // The brief is explicit that Google Meet stays deferred until institutional
         // configuration exists, and that individual Live Classes keep their own
-        // governed meeting URLs. Nothing may add a Meeting field to an Offering.
+        // governed meeting URLs. Nothing may add a Meeting field to an Allocation.
         // Schema::hasColumn(), not information_schema. The suite runs on SQLite,
         // where information_schema does not exist - so a test written against it
         // would only ever pass on the development database, which is not a test.
         foreach (['meet_url', 'google_meet_url', 'meeting_url', 'live_classroom_url'] as $forbidden) {
             $this->assertFalse(
                 \Illuminate\Support\Facades\Schema::hasColumn('course_offerings', $forbidden),
-                "'{$forbidden}' must not exist on a Course Offering"
+                "'{$forbidden}' must not exist on a Course Allocation"
             );
         }
 

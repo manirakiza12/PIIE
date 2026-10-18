@@ -2,14 +2,14 @@
 @section('content')
 @php
     /**
-     * The Course-Offering-driven scheduling form.
+     * The Course-Allocation-driven scheduling form.
      *
      * Deliberately short. The lecturer chooses a title, a time, a provider and
      * one of two actions. Everything else - subject, programme, academic year,
      * period, lecturer role, registered students - is DERIVED from the Course
-     * Offering in the URL and shown read-only, because a lecturer who could
+     * Allocation in the URL and shown read-only, because a lecturer who could
      * also pick a "Course" or a "Session" would be able to build a class whose
-     * academic identity contradicts the Offering it claims to belong to.
+     * academic identity contradicts the Allocation it claims to belong to.
      *
      * Removed from this form, and why:
      *  - status dropdown  -> replaced by the two real intentions. A pre-filled
@@ -20,8 +20,8 @@
      *  - recording_url -> an after-class action. Publishing one notifies
      *    registered students through the recording event.
      *  - attendance_enabled -> the legacy K12 "record who pressed Join" habit.
-     *    For an Offering-backed class it stays off: participation is evidence,
-     *    and official Attendance is the certified Course Offering Attendance
+     *    For an Allocation-backed class it stays off: participation is evidence,
+     *    and official Attendance is the certified Course Allocation Attendance
      *    workflow, always lecturer-controlled. Joining never marks anyone
      *    present.
      */
@@ -36,7 +36,7 @@
         <div>
             <h4>{{ get_phrase('Schedule Live Class') }}</h4>
             <p class="text-muted mb-0">
-                <a href="{{ $isOfferingScopedTeacher ? route('teacher.course_offerings.show', $offering->id) : route('admin.course_offerings.show', $offering->id) }}">{{ $offering->reference ?: get_phrase('Course Offering') }}</a>
+                <a href="{{ $isOfferingScopedTeacher ? route('teacher.course_offerings.show', $offering->id) : route('admin.course_offerings.show', $offering->id) }}">{{ $offering->reference ?: get_phrase('Course Allocation') }}</a>
             </p>
         </div>
         <a href="{{ route($routePrefix . '.live_classes.index') }}" class="eBtn eBtn-dark">{{ get_phrase('Back to Live Classes') }}</a>
@@ -103,7 +103,7 @@
                         </p>
                     </div>
                     @if($isOfferingScopedTeacher && $otherManageableOfferings > 0)
-                        <a href="{{ route('teacher.live_classes.create') }}" class="eBtn eBtn-dark">{{ get_phrase('Change Course Offering') }}</a>
+                        <a href="{{ route('teacher.live_classes.create') }}" class="eBtn eBtn-dark">{{ get_phrase('Change Course Allocation') }}</a>
                     @endif
                 </div>
             </div>
@@ -233,7 +233,7 @@
                 @endif
 
                 <button type="submit" class="eBtn eBtn-primary w-100 mb-2" name="action" value="publish">{{ get_phrase('Schedule & Notify Students') }}</button>
-                <p class="text-muted small">{{ get_phrase('Makes the class available and notifies the students registered for this Course Offering.') }}</p>
+                <p class="text-muted small">{{ get_phrase('Makes the class available and notifies the students registered for this Course Allocation.') }}</p>
 
                 <hr class="my-3">
 

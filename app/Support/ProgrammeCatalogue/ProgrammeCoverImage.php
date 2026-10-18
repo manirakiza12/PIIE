@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\File;
  *
  * ── THIS IS NOT `CourseCoverImage`, AND THE DIFFERENCE IS THE POINT ─────────
  *
- * A Course Offering cover is PRIVATE teaching material: it is stored outside the
+ * A Course Allocation cover is PRIVATE teaching material: it is stored outside the
  * web root and read only through a route that re-checks the viewer's allocation
  * or confirmed registration. A programme cover is the opposite — it is public
  * marketing material that an anonymous applicant must be able to load, so it has

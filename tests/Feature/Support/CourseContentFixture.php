@@ -20,8 +20,8 @@ use Illuminate\Support\Facades\Schema;
  *
  * BUILT ON THE EXISTING FIXTURE RATHER THAN A NEW ONE
  *
- * Course Content lives inside a Course Offering, so every meaningful test needs
- * an institution, a year, a period, a subject, an in-progress Offering, an
+ * Course Content lives inside a Course Allocation, so every meaningful test needs
+ * an institution, a year, a period, a subject, an in-progress Allocation, an
  * allocated lecturer and a confirmed student. Rebuilding that here would create
  * a second, subtly different version of the same chain, and the two suites would
  * then disagree about what "allocated" or "confirmed" means. So this trait
@@ -242,7 +242,7 @@ trait CourseContentFixture
     // ── a second institution, for isolation tests ─────────────────────────
 
     /**
-     * A whole second tenant: school, subject, Offering, allocated lecturer and
+     * A whole second tenant: school, subject, Allocation, allocated lecturer and
      * confirmed student, all in the other school.
      *
      * Isolation is only meaningfully tested by having content that genuinely
@@ -311,12 +311,12 @@ trait CourseContentFixture
     }
 
     /**
-     * A SECOND Offering inside the SAME school.
+     * A SECOND Allocation inside the SAME school.
      *
-     * Needed because cross-Offering denial is a different failure from
+     * Needed because cross-Allocation denial is a different failure from
      * cross-tenant denial: the ids are both valid, the tenant is the same, and
-     * only the Offering differs. A second tenant alone would not prove the
-     * Offering boundary, because the school check would catch it anyway.
+     * only the Allocation differs. A second tenant alone would not prove the
+     * Allocation boundary, because the school check would catch it anyway.
      */
     protected function secondOfferingSameSchool(): CourseOffering
     {

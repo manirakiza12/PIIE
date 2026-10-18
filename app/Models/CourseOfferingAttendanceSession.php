@@ -8,9 +8,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * One teaching occurrence of a Course Offering - "Lecture on 5 October 2026,
- * 09:00-11:00". A Course Offering meets many times, so attendance is recorded
- * against occurrences rather than against the Course Offering directly.
+ * One teaching occurrence of a Course Allocation - "Lecture on 5 October 2026,
+ * 09:00-11:00". A Course Allocation meets many times, so attendance is recorded
+ * against occurrences rather than against the Course Allocation directly.
  *
  * Governed through CourseOfferingSupport\CourseOfferingAttendanceService, which
  * refuses direct writes exactly as CourseOffering and

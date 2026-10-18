@@ -345,7 +345,7 @@ class PermissionService
      */
     /**
      * Capability only, for the same reason courseContentBaseAllows() exists: a
-     * lecturer who could already teach a Course Offering must not be stranded
+     * lecturer who could already teach a Course Allocation must not be stranded
      * behind a permission grant nobody has been asked to make. The ALLOCATION
      * check lives in AssignmentAccess and is not bypassed by this.
      *

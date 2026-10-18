@@ -26,9 +26,9 @@ use Tests\TestCase;
  *
  *     if ($exam->class_id) $query->whereExists(... enrollment ...);
  *
- * A Course Offering exam has `class_id = NULL` BY DESIGN, so the narrowing never
+ * A Course Allocation exam has `class_id = NULL` BY DESIGN, so the narrowing never
  * ran and both degraded to "every student in the school". Simulated against the
- * real database, publishing an exam on Offering 5 would have notified 4 students
+ * real database, publishing an exam on Allocation 5 would have notified 4 students
  * when only 3 are confirmed on it - including "Fag alex", who is confirmed on
  * nothing.
  *
@@ -180,7 +180,7 @@ class OnlineExamRecipientsTest extends TestCase
     {
         // `class_id` NULL and `course_offering_id` NULL has always meant "every
         // student in the school", and nine live exams depend on it. §13 forbids
-        // changing that meaning to accommodate Course Offerings - so it is pinned.
+        // changing that meaning to accommodate Course Allocations - so it is pinned.
         $a = $this->makeUser(7, 1, 'active', 'Student One');
         $b = $this->makeUser(7, 1, 'active', 'Student Two');
 

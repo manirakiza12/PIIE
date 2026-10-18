@@ -17,7 +17,6 @@
                     $programmeMenuRestrictions = json_decode((string) auth()->user()->menu_permission, true) ?: [];
                 @endphp
                 <div class="export-btn-area d-flex gap-2 flex-wrap">
-                    <a href="{{ route('admin.department.departments') }}" class="export_btn export_btn-outline"><i class="bi bi-diagram-3"></i> {{ get_phrase('Manage Departments') }}</a>
                     <a href="{{ route('admin.programmes.export', ['search' => $search, 'department_id' => $departmentId]) }}" class="export_btn bg-secondary"><i class="bi bi-download"></i> {{ get_phrase('Export CSV') }}</a>
                     <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.programmes.open_modal') }}', '{{ get_phrase('Add Programme') }}')">{{ get_phrase('Add Programme') }}</a>
                 </div>
@@ -194,12 +193,6 @@
                                                     </td>
 
                                                     <td class="d-flex flex-wrap gap-1">
-                                                        @if($canSeeProgrammes && auth()->user()->hasPermission('academic.curriculum.view'))
-                                                            <a href="{{ route('admin.curricula.index', ['programme_id' => $prog->id]) }}" class="eBtn eBtn-sm eBtn-info" title="{{ get_phrase('Manage Programme Curricula') }}">{{ get_phrase('Curricula') }}</a>
-                                                        @endif
-                                                        @if($canSeeProgrammes && app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'academic.course_offering.view'))
-                                                            <a href="{{ route('admin.course_offerings.index', ['programme_id' => $prog->id]) }}" class="eBtn eBtn-sm eBtn-info">{{ get_phrase('Offerings') }}</a>
-                                                        @endif
                                                         <a href="javascript:;" class="eBtn eBtn-sm eBtn-primary" title="{{ get_phrase('Edit') }}" onclick="rightModal('{{ route('admin.programmes.open_modal', ['id' => $prog->id]) }}', '{{ get_phrase('Edit Programme') }}')"><i class="bi bi-pencil"></i></a>
                                                         <a href="{{ route('admin.programmes.preview', $prog->id) }}" class="eBtn eBtn-sm eBtn-secondary" title="{{ get_phrase('Preview the public catalogue card') }}" target="_blank" rel="noopener"><i class="bi bi-eye"></i></a>
                                                         <a href="{{ route('admin.programmes.toggle', $prog->id) }}" class="eBtn eBtn-sm eBtn-warning" title="{{ $prog->is_active ? get_phrase('Deactivate') : get_phrase('Activate') }}"><i class="bi bi-toggle-on"></i></a>

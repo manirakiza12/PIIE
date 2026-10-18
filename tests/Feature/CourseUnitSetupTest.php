@@ -162,7 +162,7 @@ class CourseUnitSetupTest extends TestCase
         }
         $this->get(route('admin.subject_list', ['curriculum_id' => $this->plan->id]))->assertOk()->assertSee('subject-picker-form', false);
         $this->get(route('admin.curricula.show', $this->plan->id))->assertOk()
-            ->assertSee('Edit Course Unit setup')->assertDontSee('name="credits"', false)
+            ->assertDontSee('Edit Course Unit setup')->assertDontSee('name="credits"', false)
             ->assertDontSee('id="subject-picker-form"', false)->assertDontSee('name="prerequisite_membership_id"', false);
     }
 
@@ -174,9 +174,9 @@ class CourseUnitSetupTest extends TestCase
         $before = $member->getAttributes();
         $response = $this->get(route('admin.subject.setup', $member->subject_id))->assertOk()
             ->assertSee('Curriculum applies from Academic Year')->assertSee('2026\/2027', false)->assertSee('data-curriculum-year',false)
-            ->assertSee('Schedule this Course Unit')->assertDontSee('Academic setup order and next steps');
+            ->assertDontSee('Schedule this Course Unit')->assertSee('Academic setup order and next steps');
         $doc = new \DOMDocument(); @$doc->loadHTML($response->getContent()); $xpath = new \DOMXPath($doc);
-        $this->assertSame(0,$xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
+        $this->assertSame(1,$xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
         $this->assertSame(1,$xpath->query('//input[@id="unit-curriculum-academic-year" and @readonly and not(@name)]')->length);
         $this->assertSame(0,$xpath->query('//li[@class="nav-links-li"]//a[contains(@href,"programme-cohorts")]')->length);
         $this->assertEquals($before,$member->fresh()->getAttributes());

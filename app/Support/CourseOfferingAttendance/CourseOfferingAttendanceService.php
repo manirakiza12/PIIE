@@ -17,22 +17,22 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * The single authority for HEI Course Offering attendance.
+ * The single authority for HEI Course Allocation attendance.
  *
  * Authorization is never restated here: it is delegated to
  * LecturerCourseOfferingAccess, so a lecturer can only ever reach a Course
- * Offering they are genuinely allocated to, in their own institution. This
+ * Allocation they are genuinely allocated to, in their own institution. This
  * service adds only the attendance-specific rules on top:
  *
- *   - the roster is the Offering's CONFIRMED course registrations, never a
+ *   - the roster is the Allocation's CONFIRMED course registrations, never a
  *     Programme, Cohort or Class roster;
- *   - a record must belong to a registration of the same Offering, and its
+ *   - a record must belong to a registration of the same Allocation, and its
  *     student_id must match that registration;
  *   - one record per registration per session, so a repeated bulk submission is
  *     idempotent rather than duplicating;
  *   - marking requires a DRAFT session, so a finalised register is not silently
  *     rewritten;
- *   - a session belongs to one Offering and one tenant, enforced by the database
+ *   - a session belongs to one Allocation and one tenant, enforced by the database
  *     and re-asserted here.
  *
  * Nothing here hard-deletes: attendance is an academic record, and correction
@@ -50,9 +50,9 @@ class CourseOfferingAttendanceService
     // ------------------------------------------------------------- sessions
 
     /**
-     * Create one teaching occurrence. The Offering must be in progress: a
-     * prepared Offering may be planned for, but a register records teaching that
-     * has actually happened, and a closed or cancelled Offering takes no new
+     * Create one teaching occurrence. The Allocation must be in progress: a
+     * prepared Allocation may be planned for, but a register records teaching that
+     * has actually happened, and a closed or cancelled Allocation takes no new
      * sessions.
      */
     public function createSession(
@@ -73,7 +73,7 @@ class CourseOfferingAttendanceService
         $liveClass = $liveClassId === null ? null : $this->assertLiveClassBelongsToOffering($offering, $liveClassId);
 
         return DB::transaction(function () use ($lecturer, $offering, $sessionDate, $startsAt, $endsAt, $type, $topic, $liveClass): CourseOfferingAttendanceSession {
-            // Serialise session creation per Offering so the untimed duplicate
+            // Serialise session creation per Allocation so the untimed duplicate
             // rule below is deterministic rather than a read-then-write race.
             DB::table('course_offerings')
                 ->where('school_id', $offering->school_id)->where('id', $offering->id)
@@ -103,7 +103,7 @@ class CourseOfferingAttendanceService
         });
     }
 
-    /** Sessions of one Offering, newest first, with mark counts attached. */
+    /** Sessions of one Allocation, newest first, with mark counts attached. */
     public function sessionsForOffering(CourseOffering $offering): Collection
     {
         $sessions = CourseOfferingAttendanceSession::query()
@@ -214,7 +214,7 @@ class CourseOfferingAttendanceService
     }
 
     /**
-     * The teaching roster: this Offering's confirmed registrations only.
+     * The teaching roster: this Allocation's confirmed registrations only.
      * Programme, Cohort and Class rosters are never a substitute.
      */
     public function rosterFor(CourseOfferingAttendanceSession $session): Collection
@@ -286,7 +286,7 @@ class CourseOfferingAttendanceService
 
     // ------------------------------------------------------------- history
 
-    /** Per-student summary across one Offering's sessions. Factual only. */
+    /** Per-student summary across one Allocation's sessions. Factual only. */
     public function historyForOffering(CourseOffering $offering): Collection
     {
         $sessions = CourseOfferingAttendanceSession::query()
@@ -354,20 +354,20 @@ class CourseOfferingAttendanceService
 
     // ------------------------------------------------------------ internals
 
-    /** The Offering, resolved through the Step 4 allocation boundary. */
+    /** The Allocation, resolved through the Step 4 allocation boundary. */
     private function activeOffering(User $lecturer, int $offeringId): CourseOffering
     {
         $offering = $this->access->resolveForLecturer($lecturer, $offeringId);
         if (! $offering) {
-            throw new DomainException('This Course Offering could not be found in this institution.');
+            throw new DomainException('This Course Allocation could not be found in this institution.');
         }
 
         return $offering;
     }
 
     /**
-     * Only an in-progress Offering records teaching that has happened. A prepared
-     * Offering cannot, and a closed or cancelled one takes nothing new.
+     * Only an in-progress Allocation records teaching that has happened. A prepared
+     * Allocation cannot, and a closed or cancelled one takes nothing new.
      */
     private function assertOfferingAcceptsTeaching(CourseOffering $offering): void
     {
@@ -375,11 +375,11 @@ class CourseOfferingAttendanceService
             return;
         }
         $message = match ($offering->status) {
-            CourseOffering::STATUS_DRAFT => 'Attendance can be recorded once this Course Offering is in progress.',
-            CourseOffering::STATUS_OPEN => 'Attendance can be recorded once this Course Offering is in progress. Open means registration, not teaching.',
-            CourseOffering::STATUS_COMPLETED => 'This Course Offering is completed; its attendance history is read-only.',
-            CourseOffering::STATUS_CANCELLED => 'This Course Offering was cancelled; no attendance can be recorded.',
-            default => 'Attendance cannot be recorded for this Course Offering.',
+            CourseOffering::STATUS_DRAFT => 'Attendance can be recorded once this Course Allocation is in progress.',
+            CourseOffering::STATUS_OPEN => 'Attendance can be recorded once this Course Allocation is in progress. Open means registration, not teaching.',
+            CourseOffering::STATUS_COMPLETED => 'This Course Allocation is completed; its attendance history is read-only.',
+            CourseOffering::STATUS_CANCELLED => 'This Course Allocation was cancelled; no attendance can be recorded.',
+            default => 'Attendance cannot be recorded for this Course Allocation.',
         };
 
         throw new DomainException($message);
@@ -389,17 +389,17 @@ class CourseOfferingAttendanceService
     {
         if ((int) $session->school_id !== (int) $lecturer->school_id
             || (int) $session->course_offering_id !== (int) $offering->id) {
-            throw new DomainException('This Attendance Session does not belong to this Course Offering.');
+            throw new DomainException('This Attendance Session does not belong to this Course Allocation.');
         }
     }
 
-    /** A session may only be marked by a current lecturer of a teaching Offering. */
+    /** A session may only be marked by a current lecturer of a teaching Allocation. */
     private function assertMarkingAllowed(User $lecturer, CourseOfferingAttendanceSession $session): void
     {
         $offering = $this->activeOffering($lecturer, (int) $session->course_offering_id);
         $this->assertSessionTenant($lecturer, $session, $offering);
         if (! $this->access->teachingActionsAllowed($offering)) {
-            throw new DomainException('Attendance cannot be recorded for this Course Offering. A current lecturer allocation is required while the Course Offering is in progress.');
+            throw new DomainException('Attendance cannot be recorded for this Course Allocation. A current lecturer allocation is required while the Course Allocation is in progress.');
         }
         if (! $session->acceptsMarking()) {
             throw new DomainException("This Attendance Session is {$session->statusLabel()} and can no longer be changed by a lecturer.");
@@ -412,11 +412,11 @@ class CourseOfferingAttendanceService
             throw new DomainException('This Course Registration belongs to another institution.');
         }
         if (! $this->registrationsFor($session)->has((int) $registration->id)) {
-            throw new DomainException('This Course Registration is not a confirmed registration for this Course Offering.');
+            throw new DomainException('This Course Registration is not a confirmed registration for this Course Allocation.');
         }
     }
 
-    /** Confirmed registrations of the session's Offering, keyed by id. */
+    /** Confirmed registrations of the session's Allocation, keyed by id. */
     private function registrationsFor(CourseOfferingAttendanceSession $session): Collection
     {
         return CourseRegistration::query()
@@ -451,12 +451,12 @@ class CourseOfferingAttendanceService
 
         if ($query->exists()) {
             throw new DomainException($startsAt === null
-                ? 'An untimed Attendance Session already exists for this Course Offering on that date.'
-                : 'An Attendance Session already exists for this Course Offering at that start time on that date.');
+                ? 'An untimed Attendance Session already exists for this Course Allocation on that date.'
+                : 'An Attendance Session already exists for this Course Allocation at that start time on that date.');
         }
     }
 
-    /** A session date must fall inside the Offering's Academic Period. */
+    /** A session date must fall inside the Allocation's Academic Period. */
     private function assertDateWithinPeriod(CourseOffering $offering, string $sessionDate, ?User $lecturer = null): void
     {
         if (! Schema::hasTable('academic_periods')) {
@@ -479,7 +479,7 @@ class CourseOfferingAttendanceService
             // The ONLY bound an authorised pre-start System Tester may relax is
             // the period START, and only through the single shared testing
             // authority: the grant, this exact lecturer, this exact tenant, an
-            // exact ACTIVE non-ended allocation, an IN_PROGRESS Offering with
+            // exact ACTIVE non-ended allocation, an IN_PROGRESS Allocation with
             // durable governed early-start evidence, and a date that is not in
             // the future. The period end is never relaxed, and no date on the
             // Academic Period or on the allocation is ever written.
@@ -493,15 +493,15 @@ class CourseOfferingAttendanceService
                 return;
             }
 
-            throw new DomainException("An Attendance Session must fall within the Offering's Academic Period ({$period->label}).");
+            throw new DomainException("An Attendance Session must fall within the Allocation's Academic Period ({$period->label}).");
         }
 
         if ($date->gt($periodEnd)) {
-            throw new DomainException("An Attendance Session must fall within the Offering's Academic Period ({$period->label}).");
+            throw new DomainException("An Attendance Session must fall within the Allocation's Academic Period ({$period->label}).");
         }
     }
 
-    /** A linked Live Class must belong to the same tenant and the same Offering. */
+    /** A linked Live Class must belong to the same tenant and the same Allocation. */
     private function assertLiveClassBelongsToOffering(CourseOffering $offering, int $liveClassId): LiveClass
     {
         $liveClass = LiveClass::where('school_id', $offering->school_id)->whereKey($liveClassId)->first();
@@ -509,7 +509,7 @@ class CourseOfferingAttendanceService
             throw new DomainException('That Live Class could not be found in this institution.');
         }
         if ((int) $liveClass->course_offering_id !== (int) $offering->id) {
-            throw new DomainException('That Live Class belongs to a different Course Offering.');
+            throw new DomainException('That Live Class belongs to a different Course Allocation.');
         }
 
         return $liveClass;
@@ -556,7 +556,7 @@ class CourseOfferingAttendanceService
      */
     private function audit(string $action, CourseOfferingAttendanceSession $session, array $old, array $new): void
     {
-        \App\Models\AuditLog::record($action, 'Course Offering Attendance', "{$action} for Attendance Session #{$session->id}.", [
+        \App\Models\AuditLog::record($action, 'Course Allocation Attendance', "{$action} for Attendance Session #{$session->id}.", [
             'school_id' => $session->school_id,
             'record_type' => CourseOfferingAttendanceSession::class,
             'record_id' => $session->id,

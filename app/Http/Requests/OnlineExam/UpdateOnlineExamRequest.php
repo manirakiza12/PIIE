@@ -22,8 +22,8 @@ use Illuminate\Validation\Rule;
  * read from `$this->exam->course_offering_id` and the request is checked AGAINST
  * it. Three consequences, each of which is a rejection rather than a coercion:
  *
- *   - a Course Offering exam cannot be RE-POINTED at another Offering;
- *   - a LEGACY exam cannot be silently CONVERTED into a Course Offering exam.
+ *   - a Course Allocation exam cannot be RE-POINTED at another Allocation;
+ *   - a LEGACY exam cannot be silently CONVERTED into a Course Allocation exam.
  *     Historical exams stay on the legacy path, which is what backward compatibility
  *     means here: no destructive migration, in either direction, ever.
  *
@@ -70,7 +70,7 @@ class UpdateOnlineExamRequest extends FormRequest
         // `Schema::hasColumn` AND `Schema::hasTable`. Both, because several suites in
         // this engine hand-roll a partial schema: one declares the `course_offering_id`
         // column on `online_exams` while never creating `course_offerings` at all, and
-        // resolving the Offering there would be a 500 on the save.
+        // resolving the Allocation there would be a 500 on the save.
         return $this->exam !== null
             && $this->exam->course_offering_id !== null
             && Schema::hasColumn('online_exams', 'course_offering_id')
@@ -78,7 +78,7 @@ class UpdateOnlineExamRequest extends FormRequest
     }
 
     /**
-     * The Offering this exam belongs to, read in the exam's OWN tenant.
+     * The Allocation this exam belongs to, read in the exam's OWN tenant.
      *
      * Tenant from the exam row, never from the request: the exam was authorised
      * against its own school in `authorize()` and in the controller, so the context
@@ -111,8 +111,8 @@ class UpdateOnlineExamRequest extends FormRequest
             // rather than trusted. See the class note: an exam's mode comes from the
             // row, so a post may never move an exam between modes.
             'course_offering_id' => ['nullable', 'integer'],
-            // Required only for a legacy exam. A Course Offering exam's Course Unit
-            // comes from the Offering, so the form does not offer it as a choice.
+            // Required only for a legacy exam. A Course Allocation exam's Course Unit
+            // comes from the Allocation, so the form does not offer it as a choice.
             'subject_id' => array_values(array_filter([
                 Rule::requiredIf(! $isOffering),
                 'nullable',
@@ -215,7 +215,7 @@ class UpdateOnlineExamRequest extends FormRequest
             } elseif ($this->filled('course_offering_id')) {
                 $validator->errors()->add(
                     'course_offering_id',
-                    'This is a legacy exam. It stays on the legacy class/subject path and cannot be attached to a Course Offering.'
+                    'This is a legacy exam. It stays on the legacy class/subject path and cannot be attached to a Course Allocation.'
                 );
             }
 
@@ -243,9 +243,9 @@ class UpdateOnlineExamRequest extends FormRequest
 
             // ── LEGACY SUBJECT/CLASS/PROGRAMME RULES, FROM HERE DOWN ───────────
             //
-            // Unchanged, and deliberately NOT applied to a Course Offering exam:
+            // Unchanged, and deliberately NOT applied to a Course Allocation exam:
             // `teacherCanUseSubject()` reads `teacher_permissions`, which a lecturer
-            // allocated only to a Course Offering does not hold, so requiring it here
+            // allocated only to a Course Allocation does not hold, so requiring it here
             // would lock the primary lecturer out of editing their own paper.
             if ($this->isCourseOfferingMode()) {
                 return;
@@ -288,13 +288,13 @@ class UpdateOnlineExamRequest extends FormRequest
     }
 
     /**
-     * An exam's Course Offering cannot be re-pointed, and its derived academic
+     * An exam's Course Allocation cannot be re-pointed, and its derived academic
      * context cannot be steered from a form.
      *
      * The first is a rejection rather than a coercion on purpose. Two lecturers each
-     * allocated to a different Offering could otherwise move a shared draft between
+     * allocated to a different Allocation could otherwise move a shared draft between
      * their own courses by editing one hidden field, and - because the legacy
-     * columns are forced to NULL on an Offering exam - they could do it while
+     * columns are forced to NULL on an Allocation exam - they could do it while
      * changing which students the paper reaches. `course_offering_id` is treated as
      * an immutable property of the exam, which is what it is.
      */
@@ -304,20 +304,20 @@ class UpdateOnlineExamRequest extends FormRequest
             && (int) $this->input('course_offering_id') !== (int) $this->exam->course_offering_id) {
             $validator->errors()->add(
                 'course_offering_id',
-                'An assessment cannot be moved to a different Course Offering.'
+                'An assessment cannot be moved to a different Course Allocation.'
             );
         }
 
         $offering = $this->offering();
 
         if (! $offering instanceof CourseOffering) {
-            // The Offering row is gone. Refusing is the only safe answer: there is
+            // The Allocation row is gone. Refusing is the only safe answer: there is
             // no longer an authority from which to derive the academic context, and
             // writing the exam with a NULL Course Unit would silently move it onto
             // the legacy path where it would become school-wide.
             $validator->errors()->add(
                 'exam',
-                'The Course Offering this assessment belongs to could not be found. Ask an administrator to check the course record.'
+                'The Course Allocation this assessment belongs to could not be found. Ask an administrator to check the course record.'
             );
 
             return;
@@ -326,7 +326,7 @@ class UpdateOnlineExamRequest extends FormRequest
         if ($this->filled('subject_id') && (int) $this->input('subject_id') !== (int) $offering->subject_id) {
             $validator->errors()->add(
                 'subject_id',
-                'The Course Unit is taken from the Course Offering and cannot be changed here.'
+                'The Course Unit is taken from the Course Allocation and cannot be changed here.'
             );
         }
 
@@ -334,7 +334,7 @@ class UpdateOnlineExamRequest extends FormRequest
             if ($this->filled($legacyField)) {
                 $validator->errors()->add(
                     $legacyField,
-                    'A Course Offering exam does not target a class, programme or academic session. Only students confirmed on the Course Offering will receive it.'
+                    'A Course Allocation exam does not target a class, programme or academic session. Only students confirmed on the Course Allocation will receive it.'
                 );
             }
         }

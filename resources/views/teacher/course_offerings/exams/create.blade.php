@@ -4,7 +4,7 @@
 
 @section('content')
     <nav class="mb-3" aria-label="Breadcrumb">
-        <a href="{{ route('teacher.course_offerings.index') }}">My Course Offerings</a>
+        <a href="{{ route('teacher.course_offerings.index') }}">My Course Allocations</a>
         <span aria-hidden="true"> / </span>
         <a href="{{ route('teacher.course_offerings.show', $offering) }}">{{ $offering->reference }}</a>
         <span aria-hidden="true"> / </span>
@@ -22,10 +22,10 @@
 
     {{-- ── WHAT IS FIXED, AND WHY ───────────────────────────────────────────
          A legacy Class, Programme or academic Session is deliberately NOT
-         offered here. This is a higher-education Course Offering, and choosing a
+         offered here. This is a higher-education Course Allocation, and choosing a
          legacy class would enrol every student of that class into the assessment
          and bypass the confirmed Course Registration that is the legitimate
-         eligibility test. The Course Unit is shown read-only because the Offering
+         eligibility test. The Course Unit is shown read-only because the Allocation
          already has exactly one, and letting a lecturer change it here would
          produce an assessment filed under this course but about another subject.
 

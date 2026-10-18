@@ -52,8 +52,8 @@ use Illuminate\Support\Collection;
  *
  * â”€â”€ AUTHORISATION IS THE CALLER'S JOB, AND IT IS NOT NEGOTIABLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *
- * This class reads. It decides nothing about who may see this Offering. The
- * controller resolves the Offering through `AssignmentAccess`, which is the single
+ * This class reads. It decides nothing about who may see this Allocation. The
+ * controller resolves the Allocation through `AssignmentAccess`, which is the single
  * authority on a confirmed registration, and only then calls `build()`. A read
  * service that also checked would create a second gate that could disagree -
  * and a gate that sometimes opens is worse than no gate.
@@ -166,7 +166,7 @@ class StudentCourseHome
     }
 
     /**
-     * Who is ALLOCATED to teach this Offering - the teaching RECORD.
+     * Who is ALLOCATED to teach this Allocation - the teaching RECORD.
      *
      * ── WHY THIS IS NOT "WHO IS TEACHING RIGHT NOW" ─────────────────────────
      *
@@ -178,7 +178,7 @@ class StudentCourseHome
      *
      * The domain already draws the line, in the other direction, in
      * `reachableOfferings()`: "Cancelled allocations are excluded outright; ENDED
-     * ones are included so a COMPLETED Course Offering still shows its TEACHING
+     * ones are included so a COMPLETED Course Allocation still shows its TEACHING
      * RECORD." A header is exactly such a record.
      *
      * So the list is the allocations, and each row says which it is - teaching now,
@@ -691,7 +691,7 @@ class StudentCourseHome
     }
 
     /**
-     * Every assignment on this Offering that this student may see, with its state.
+     * Every assignment on this Allocation that this student may see, with its state.
      *
      * The visibility rule is the assignment list's rule, unchanged: published and
      * released to students. A draft or a not-yet-scheduled assignment is not
@@ -740,7 +740,7 @@ class StudentCourseHome
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     /**
-     * This Offering's Live Classes, and whether this student may join each.
+     * This Allocation's Live Classes, and whether this student may join each.
      *
      * â”€â”€ THE JOIN BUTTON IS A QUESTION TO `LiveClassAccessService`, NOT A CLOCK â”€â”€
      *
@@ -926,7 +926,7 @@ class StudentCourseHome
      *
      * @param  list<CourseOfferingModule>  $modules
      * @param  int  $assessmentCount  The number of published assessments for this
-     *         Offering, counted by `CourseOfferingAssessments` - the same service the
+     *         Allocation, counted by `CourseOfferingAssessments` - the same service the
      *         tab's own page lists from. Passed IN rather than recomputed here so
      *         the count in the navigation and the rows on the page cannot disagree.
      * @return list<array<string, mixed>>
@@ -961,7 +961,7 @@ class StudentCourseHome
                 'label' => 'Live Classes',
                 'available' => true,
                 // The student's own Live Class pages exist, so this area is real and
-                // links to them. Per-Offering filtering happens on the destination's
+                // links to them. Per-Allocation filtering happens on the destination's
                 // own terms, which is where the Live Class domain's rules already
                 // are.
                 'url' => route('student.live_classes.index'),
@@ -1040,7 +1040,7 @@ class StudentCourseHome
     }
 
     /**
-     * The published, released lessons across the whole Offering.
+     * The published, released lessons across the whole Allocation.
      *
      * @return Collection<int, CourseOfferingLesson>
      */

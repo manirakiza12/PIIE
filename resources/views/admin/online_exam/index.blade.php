@@ -7,7 +7,7 @@
             <ul class="d-flex align-items-center eBreadcrumb-2"><li><a href="#">{{ get_phrase('Examination') }}</a></li><li><a href="#">{{ get_phrase('Online Exams') }}</a></li></ul>
         </div>
         <div class="export-btn-area d-flex gap-2">
-            <a href="{{ route('admin.question_bank.index') }}" class="export_btn bg-secondary">{{ get_phrase('Question Bank') }}</a>
+            @if(academic_education_level(auth()->user()->school_id) !== 'tertiary')<a href="{{ route('admin.question_bank.index') }}" class="export_btn bg-secondary">{{ get_phrase('Question Bank') }}</a>@endif
             <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.online_exams.open_modal') }}', '{{ get_phrase('Create Exam') }}')">{{ get_phrase('Create Exam') }}</a>
         </div>
     </div>
@@ -17,10 +17,14 @@
 <div class="alert alert-info">{{ get_phrase('Administrators create and publish exam structures, schedules, and release policies. Teachers manage assigned questions and marking when permitted.') }}</div>
 <div class="alert alert-secondary">
     <strong>{{ get_phrase('Exam eligibility setup') }}</strong>:
+    @if(academic_education_level(auth()->user()->school_id) === 'tertiary')
+    {{ get_phrase('Assign the teaching team and confirm student course registrations before publishing course-based exams. Teaching Groups and Programme Student Groups are not required for course-based exams.') }}
+    @else
     {{ get_phrase('Create classes, assign teachers, and place students into their class before publishing class-targeted exams.') }}
     <a class="ms-2" href="{{ route('admin.class_list') }}">{{ get_phrase('Manage Classes') }}</a>
     <a class="ms-2" href="{{ route('admin.teacher.permission') }}">{{ get_phrase('Assign').' '.academic_term('teachers', auth()->user()->school_id) }}</a>
     <a class="ms-2" href="{{ route('admin.student') }}">{{ get_phrase('Assign Students') }}</a>
+    @endif
 </div>
 <div class="row"><div class="col-12"><div class="eSection-wrap">
     <div class="table-responsive online-exam-table-wrap">

@@ -244,7 +244,7 @@ class CourseProgressGridTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        // 404, not a refusal page. A 404 does not confirm the Course Offering
+        // 404, not a refusal page. A 404 does not confirm the Course Allocation
         // exists, so the page cannot be used to discover which offerings exist for
         // a lecturer who may not see them. A polite "you are not allocated" would
         // confirm all of that to anyone who guessed an id - and this workspace

@@ -65,7 +65,7 @@ class AssignmentSubmission extends Model
         // legacy shape - unchanged
         'assignment_id', 'student_id', 'submission', 'file_path', 'link',
         'submitted_at', 'marks_awarded', 'feedback', 'status',
-        // Course Offering shape
+        // Course Allocation shape
         'course_offering_id', 'attempt_no', 'attempt_cycle', 'is_draft', 'file_name', 'file_size',
         'file_mime', 'graded_at', 'graded_by', 'returned_at', 'returned_by',
         'marks_released_at', 'idempotency_key',
@@ -252,7 +252,7 @@ class AssignmentSubmission extends Model
     /**
      * The written response, preferring the canonical rich-text field.
      *
-     * `text_response` is what a Course Offering submission writes; `submission` is
+     * `text_response` is what a Course Allocation submission writes; `submission` is
      * the legacy TEXT column the K12 screens read. The two never both carry HEI
      * content, so this is a preference rather than a merge - and nothing is
      * mirrored between them, which is what would let them drift.

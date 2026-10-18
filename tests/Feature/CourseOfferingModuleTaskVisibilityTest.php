@@ -182,7 +182,7 @@ class CourseOfferingModuleTaskVisibilityTest extends TestCase
             ->getContent();
 
         // `teacher_verification` is declared in the vocabulary but not implemented.
-        // Offering it would let a lecturer create a required task that no student
+        // Allocation it would let a lecturer create a required task that no student
         // could ever satisfy.
         $this->assertStringNotContainsString('teacher_verification', $html);
         $this->assertStringContainsString('Once the student has submitted their work', $html);

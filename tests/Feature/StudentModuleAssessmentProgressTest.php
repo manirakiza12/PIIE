@@ -41,7 +41,7 @@ use Tests\TestCase;
  *   7.  an optional assessment never blocks, in any state
  *   8.  a DRAFT assessment is invisible AND does not block
  *   9.  a scheduled / not-yet-released assessment is handled correctly
- *   10. another Offering's assessment cannot affect this module
+ *   10. another Allocation's assessment cannot affect this module
  *   11. another tenant's assessment cannot affect this module
  *   12. an unconfirmed student cannot reach the assessment
  *   13. existing lesson completion records are preserved

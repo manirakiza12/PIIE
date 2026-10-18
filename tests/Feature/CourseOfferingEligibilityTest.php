@@ -18,7 +18,7 @@ use Tests\Feature\Support\CourseOfferingEligibilityFixture;
 use Tests\TestCase;
 
 /**
- * Study-year (Study Plan Stage) and Programme Cohort aware Course Offering
+ * Study-year (Study Plan Stage) and Programme Cohort aware Course Allocation
  * eligibility, shared by the admin roster/registration, student discovery,
  * self-registration and confirmation.
  */
@@ -27,7 +27,7 @@ class CourseOfferingEligibilityTest extends TestCase
     use AdmissionsTestHelper;
     use CourseOfferingEligibilityFixture;
 
-    // Offerings in 2026/2027 Semester 1 (and one in 2027/2028).
+    // Allocations in 2026/2027 Semester 1 (and one in 2027/2028).
     private const O_YEAR1 = 11;
     private const O_YEAR2 = 21;
     private const O_YEAR3 = 31;
@@ -94,7 +94,7 @@ class CourseOfferingEligibilityTest extends TestCase
         $result = $this->evaluate(self::O_YEAR1, $otherPlan);
 
         $this->assertSame('not_in_study_plan', $result->code);
-        $this->assertSame("This Course Unit is not part of the student's current Study Plan for this Course Offering.", $result->message);
+        $this->assertSame("This Course Unit is not part of the student's current Study Plan for this Course Allocation.", $result->message);
     }
 
     public function test_offering_in_an_academic_year_without_recorded_progression_is_blocked(): void
@@ -134,7 +134,7 @@ class CourseOfferingEligibilityTest extends TestCase
 
         $noStage = $this->placedStudent(stage: 1);
         DB::table('student_curriculum_assignments')->where('student_id', $noStage->id)->update(['entry_curriculum_stage_id' => null]);
-        $this->assertSame('Academic placement is incomplete: no Study Plan stage has been recorded for this student.', $this->evaluate(self::O_YEAR1, $noStage)->message);
+        $this->assertSame('Academic placement is incomplete: no Study Plan year has been recorded for this student.', $this->evaluate(self::O_YEAR1, $noStage)->message);
     }
 
     public function test_historical_or_non_current_cohort_membership_does_not_grant_eligibility(): void
@@ -216,7 +216,7 @@ class CourseOfferingEligibilityTest extends TestCase
         $this->assertSame(111, (int) CourseRegistration::query()->sole()->curriculum_membership_id);
 
         $this->actingAs($admin)->post(route('admin.course_offerings.registrations.store', self::O_YEAR1), ['student_id' => $student->id])
-            ->assertSessionHasErrors(['registration' => 'This student already has a registration record for this Course Offering.']);
+            ->assertSessionHasErrors(['registration' => 'This student already has a registration record for this Course Allocation.']);
         $this->assertSame(1, CourseRegistration::query()->count());
     }
 

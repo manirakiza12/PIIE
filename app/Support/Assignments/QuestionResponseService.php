@@ -42,7 +42,7 @@ use Illuminate\Validation\ValidationException;
  * A QUESTION ID FROM ANYWHERE ELSE IS REFUSED
  *
  * Every submitted `question_id` is resolved INSIDE the resolved assignment before
- * anything is read from it. An id from another assignment, another Offering or
+ * anything is read from it. An id from another assignment, another Allocation or
  * another tenant is a validation error, not a silent skip - a student who
  * tampered with the form has to be told, and a lecturer must never be handed
  * evidence filed against a question they do not own.

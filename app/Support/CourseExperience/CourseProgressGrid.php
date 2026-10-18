@@ -43,7 +43,7 @@ final class CourseProgressGrid
     }
 
     /**
-     * The grid for one Course Offering.
+     * The grid for one Course Allocation.
      *
      * @return array{
      *     modules: list<array{id:int,title:string,sequence:int,published:bool}>,

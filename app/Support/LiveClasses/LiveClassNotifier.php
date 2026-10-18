@@ -29,7 +29,7 @@ class LiveClassNotifier
     ];
 
     /**
-     * Lifecycle announcements for a Course-Offering-backed Live Class.
+     * Lifecycle announcements for a Course-Allocation-backed Live Class.
      *
      * Structure: an EVENT decides what happened and who must hear it, then
      * CHANNELS deliver it. Today two channels exist - in-app (via the shared
@@ -39,7 +39,7 @@ class LiveClassNotifier
      * message changes, and Live Classes are not rewritten to accommodate them.
      *
      * Recipients always come from LiveClassEligibility, i.e. CONFIRMED
-     * course_registrations for this exact Offering. Nothing here reads
+     * course_registrations for this exact Allocation. Nothing here reads
      * Programme, Cohort, Study Plan or legacy Class/Section membership.
      *
      * Every announcement is deduplicated by a row in live_class_notifications,
@@ -125,7 +125,7 @@ class LiveClassNotifier
         $windowLabel = get_phrase(self::WINDOW_LABELS[$type] ?? 'is starting soon');
         $studentIds = LiveClassEligibility::eligibleStudentUserIds($liveClass);
 
-        // Offering-backed reminders are recipient-scoped below. A shared
+        // Allocation-backed reminders are recipient-scoped below. A shared
         // Noticeboard item would disclose the class to unrelated students.
         if ($liveClass->course_offering_id === null) {
             self::createNotice($liveClass, $windowLabel);

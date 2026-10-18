@@ -3,7 +3,7 @@
 @section('content')
 @php
     /**
-     * The question builder for one Course Offering assignment.
+     * The question builder for one Course Allocation assignment.
      *
      * A question paper is a DOCUMENT, and a document does not belong in a modal.
      * This is its own page for the same reason the create and edit screens are:

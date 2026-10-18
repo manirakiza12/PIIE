@@ -38,9 +38,9 @@ final class OnlineExamPortalNotifier
      * ── WHY THIS IS NO LONGER "WHOEVER CREATED IT" ──────────────────────────
      *
      * It used to resolve exactly one id: `creator_id ?: created_by`. For a Course
-     * Offering exam that is the author, and it is the wrong question to ask. The
+     * Allocation exam that is the author, and it is the wrong question to ask. The
      * brief is explicit that a student's submission must reach "the lecturer
-     * allocated to that Course Offering", and the authority for that is the
+     * allocated to that Course Allocation", and the authority for that is the
      * allocation, not authorship:
      *
      *     exam.course_offering_id -> course_offering_lecturer_allocations
@@ -53,7 +53,7 @@ final class OnlineExamPortalNotifier
      *    decide who marks a higher-education paper;
      *  - a CANCELLED allocation, or one outside its own dates, is not notified -
      *    `activeManagerUserIds()` is the same rule Live Classes and the Course
-     *    Offering workspace already apply, asked rather than restated.
+     *    Allocation workspace already apply, asked rather than restated.
      *
      * A LEGACY exam (`course_offering_id` NULL) keeps the original rule exactly:
      * the creator, and only the creator. Nine live exams depend on it, and silently
@@ -151,7 +151,7 @@ final class OnlineExamPortalNotifier
     /**
      * The page a lecturer should land on for this exam.
      *
-     * A Course Offering paper points at the lecturer's own exam view, which now
+     * A Course Allocation paper points at the lecturer's own exam view, which now
      * carries the offering's derived context. A legacy paper keeps its own view.
      * Both are stored as locations, for the reason above.
      */
@@ -169,9 +169,9 @@ final class OnlineExamPortalNotifier
      *
      *     if ($exam->class_id) $query->whereExists(... enrollment ...);
      *
-     * A Course Offering exam has `class_id = NULL` by design, so the narrowing never
+     * A Course Allocation exam has `class_id = NULL` by design, so the narrowing never
      * ran and the query became "every student in the school". Simulated on the real
-     * rows, publishing an Offering-5 exam would have notified 4 students when only 3
+     * rows, publishing an Allocation-5 exam would have notified 4 students when only 3
      * are confirmed on it.
      *
      * That is the same class-only blind spot that made exam VISIBILITY school-wide,

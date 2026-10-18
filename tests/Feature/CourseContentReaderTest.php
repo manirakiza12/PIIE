@@ -90,10 +90,10 @@ class CourseContentReaderTest extends TestCase
         $this->module();
         $this->lesson();
 
-        // A student confirmed on a DIFFERENT Offering in the same school, and
-        // deliberately NOT confirmed on this one. The Offering boundary, not the
+        // A student confirmed on a DIFFERENT Allocation in the same school, and
+        // deliberately NOT confirmed on this one. The Allocation boundary, not the
         // tenant boundary, is what has to stop them - and a tenant-only test
-        // would pass even if the Offering check were missing, because the school
+        // would pass even if the Allocation check were missing, because the school
         // check would catch the request anyway.
         $other = $this->secondOfferingSameSchool();
         $stranger = $this->user('Nabirye Sarah', 7);

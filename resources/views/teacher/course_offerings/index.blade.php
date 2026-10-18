@@ -10,8 +10,8 @@
 <div class="mainSection-title">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
         <div>
-            <h4 class="mb-1">My Course Offerings</h4>
-            <p class="text-muted mb-0">The Course Offerings you are allocated to teach at {{ $terms['programme'] === 'Programme' ? 'this institution' : 'this school' }}.</p>
+            <h4 class="mb-1">My Course Allocations</h4>
+            <p class="text-muted mb-0">The Course Allocations you are allocated to teach at {{ $terms['programme'] === 'Programme' ? 'this institution' : 'this school' }}.</p>
         </div>
     </div>
 </div>
@@ -49,12 +49,12 @@
 @if($offerings->isEmpty())
     <section class="eSection-wrap">
         <div class="border rounded p-4 text-center" role="status">
-            <h6>You do not currently have any Course Offerings assigned.</h6>
+            <h6>You do not currently have any Course Allocations assigned.</h6>
             <p class="text-muted mb-0">When the academic office allocates you to a {{ $courseUnitLabel }}, it will appear here.</p>
         </div>
     </section>
 @else
-    <p class="text-muted small">{{ $offerings->count() }} {{ \Illuminate\Support\Str::plural('Course Offering', $offerings->count()) }} &middot; {{ $current }} currently allocated.</p>
+    <p class="text-muted small">{{ $offerings->count() }} {{ \Illuminate\Support\Str::plural('Course Allocation', $offerings->count()) }} &middot; {{ $current }} currently allocated.</p>
 
     {{-- Desktop table --}}
     <div class="d-none d-lg-block">
@@ -67,7 +67,7 @@
                             <th scope="col">Academic Year</th>
                             <th scope="col">{{ $periodLabel }}</th>
                             <th scope="col">Study Plan / {{ $terms['programme'] }}</th>
-                            <th scope="col">Stage / Year of Study</th>
+                            <th scope="col">Programme Year</th>
                             <th scope="col">Status</th>
                             <th scope="col">My Teaching Role</th>
                             <th scope="col">Students</th>
@@ -122,7 +122,7 @@
                         </div>
                         <dl class="row small mb-2 mt-2">
                             <dt class="col-5">Study Plan</dt><dd class="col-7">{{ $offering->my_study_plans->isNotEmpty() ? $offering->my_study_plans->implode(', ') : '—' }}</dd>
-                            <dt class="col-5">Stage / Year of Study</dt><dd class="col-7">{{ $offering->my_stages->isNotEmpty() ? $offering->my_stages->implode(', ') : '—' }}</dd>
+                            <dt class="col-5">Programme Year</dt><dd class="col-7">{{ $offering->my_stages->isNotEmpty() ? $offering->my_stages->implode(', ') : '—' }}</dd>
                             <dt class="col-5">My Teaching Role</dt><dd class="col-7">{{ $offering->my_role_label }}</dd>
                             <dt class="col-5">Confirmed Students</dt><dd class="col-7">{{ $offering->my_confirmed_students }}</dd>
                         </dl>

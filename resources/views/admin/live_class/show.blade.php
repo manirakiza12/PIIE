@@ -56,16 +56,16 @@
             </div>
         @endif
         @if($liveClass->course_offering_id && \Illuminate\Support\Facades\Schema::hasTable('course_offerings'))
-            {{-- An Offering-backed class has no Programme of its own: the
+            {{-- An Allocation-backed class has no Programme of its own: the
                  Programme, Academic Year, Period and Stage all come from the
-                 Course Offering. Showing "Programme: —" here is the symptom of
+                 Course Allocation. Showing "Programme: —" here is the symptom of
                  reading a field that was never meant to be populated for this
                  kind of class. Derive the whole context instead. --}}
             <div class="eSection-wrap mb-3">
                 <h6 class="text-uppercase small fw-bold text-primary mb-3">{{ get_phrase('Course Context') }}</h6>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <strong>{{ get_phrase('Course Offering') }}:</strong>
+                        <strong>{{ get_phrase('Course Allocation') }}:</strong>
                         {{ $liveClass->courseOffering?->reference ?: '#'.$liveClass->course_offering_id }}
                     </div>
                     <div class="col-md-6"><strong>{{ get_phrase('Course Unit') }}:</strong> {{ optional($liveClass->subject)->name ?: '—' }}</div>
@@ -83,7 +83,7 @@
                     </div>
                     <div class="col-12">
                         <a href="{{ $routePrefix === 'teacher' ? route('teacher.course_offerings.show', $liveClass->course_offering_id) : route('admin.course_offerings.show', $liveClass->course_offering_id) }}"
-                           class="eBtn eBtn-dark">{{ get_phrase('Open Course Offering') }}</a>
+                           class="eBtn eBtn-dark">{{ get_phrase('Open Course Allocation') }}</a>
                     </div>
                 </div>
             </div>
@@ -139,9 +139,9 @@
                 </div>
                 @unless($liveClass->course_offering_id)
                     {{-- "Attendance enabled" is the legacy K12 flag that records
-                         who pressed Join. For an Offering-backed class it is
+                         who pressed Join. For an Allocation-backed class it is
                          always off and is actively misleading, because official
-                         attendance is the governed Course Offering Attendance
+                         attendance is the governed Course Allocation Attendance
                          workflow - a separate, certified system. --}}
                     <div class="col-md-6"><strong>{{ get_phrase('Attendance enabled') }}:</strong> {{ $liveClass->attendance_enabled ? get_phrase('Yes') : get_phrase('No') }}</div>
                 @endunless
@@ -329,13 +329,13 @@
             @endif
 
             @if($liveClass->course_offering_id)
-                {{-- No Delete for an Offering-backed class. The endpoint already
+                {{-- No Delete for an Allocation-backed class. The endpoint already
                      refuses one (destroy() aborts 403), so showing the button
                      only ever led a lecturer to a dead end - and for a class
                      that has already notified students it invited destroying
                      academic history. Cancel is the governed way to end it. --}}
                 <p class="text-muted small mb-0">
-                    {{ get_phrase('A Course Offering Live Class cannot be deleted. Cancel it instead, so its history and any student notifications are preserved.') }}
+                    {{ get_phrase('A Course Allocation Live Class cannot be deleted. Cancel it instead, so its history and any student notifications are preserved.') }}
                 </p>
             @else
                 <form method="POST" action="{{ route($routePrefix . '.live_classes.destroy', $liveClass->id) }}" onsubmit="return confirm('{{ get_phrase('Delete this class?') }}')">

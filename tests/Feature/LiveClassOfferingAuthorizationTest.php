@@ -144,7 +144,7 @@ class LiveClassOfferingAuthorizationTest extends TestCase
 
         foreach ([CourseOffering::STATUS_DRAFT, CourseOffering::STATUS_CANCELLED, CourseOffering::STATUS_COMPLETED] as $status) {
             DB::table('course_offerings')->where('id', 101)->update(['status' => $status]);
-            $this->assertFalse($this->access->canStudentJoin($student, $class), $status.' Offering must not permit operational join.');
+            $this->assertFalse($this->access->canStudentJoin($student, $class), $status.' Allocation must not permit operational join.');
         }
     }
 
@@ -407,7 +407,7 @@ class LiveClassOfferingAuthorizationTest extends TestCase
     {
         $defaults = [
             'id' => $id, 'school_id' => $schoolId, 'course_offering_id' => $offeringId,
-            'title' => 'Offering class '.$id, 'platform' => 'custom',
+            'title' => 'Allocation class '.$id, 'platform' => 'custom',
             'meeting_url' => 'https://meet.example.test/secret-room',
             'scheduled_at' => '2026-09-25 10:00:00', 'ends_at' => '2026-09-25 11:00:00',
             'start_date' => '2026-09-25', 'start_time' => '10:00:00', 'end_time' => '11:00:00',

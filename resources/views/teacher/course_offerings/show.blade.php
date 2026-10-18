@@ -6,16 +6,16 @@
     $statusLabels = ['draft' => 'Draft', 'open' => 'Open', 'in_progress' => 'In Progress', 'completed' => 'Completed', 'cancelled' => 'Cancelled'];
     $statusBadges = ['draft' => 'warning text-dark', 'open' => 'success', 'in_progress' => 'primary', 'completed' => 'secondary', 'cancelled' => 'dark'];
     $headline = match ($offering->status) {
-        'draft' => 'This Course Offering is still being prepared. Teaching actions become available once it is open.',
-        'open' => 'Registration is open for this Course Offering. Teaching actions become available once it starts.',
-        'in_progress' => 'Teaching is currently in progress for this Course Offering.',
-        'completed' => 'This Course Offering has been completed. Teaching records remain available for reference.',
-        default => 'This Course Offering was cancelled.',
+        'draft' => 'This Course Allocation is still being prepared. Teaching actions become available once it is open.',
+        'open' => 'Registration is open for this Course Allocation. Teaching actions become available once it starts.',
+        'in_progress' => 'Teaching is currently in progress for this Course Allocation.',
+        'completed' => 'This Course Allocation has been completed. Teaching records remain available for reference.',
+        default => 'This Course Allocation was cancelled.',
     };
 @endphp
 
 <div class="mainSection-title">
-    <a href="{{ route('teacher.course_offerings.index') }}" class="btn btn-sm btn-outline-secondary mb-2">Back to My Course Offerings</a>
+    <a href="{{ route('teacher.course_offerings.index') }}" class="btn btn-sm btn-outline-secondary mb-2">Back to My Course Allocations</a>
     <h4 class="mb-1">{{ $offering->subject?->code }} &mdash; {{ $offering->subject?->name }}</h4>
     <p class="text-muted mb-0">{{ $offering->academicYear?->label }} &middot; {{ $offering->academicPeriod?->label }}</p>
 </div>
@@ -42,14 +42,14 @@
          Period are both still in the future, and nothing has been rewritten. --}}
     <div class="alert alert-info" role="status">
         <strong>Testing access active</strong> &mdash; pre-start access has been granted for authorised system testing.
-        This Course Offering was deliberately started early, so your teaching actions are available now. Your allocation
+        This Course Allocation was deliberately started early, so your teaching actions are available now. Your allocation
         ({{ $offering->my_allocation_starts_on }} to {{ $offering->my_allocation_ends_on ?: 'no end date' }})
         and the Academic Period ({{ $offering->academicPeriod?->label }}) are unchanged; only the pre-start date
         gate has been relaxed for this account.
     </div>
 @endif
 
-<section class="eSection-wrap mb-3" aria-label="Course Offering summary">
+<section class="eSection-wrap mb-3" aria-label="Course Allocation summary">
     <div class="row g-3">
         <div class="col-12 col-lg-6">
             <dl class="row mb-0">
@@ -65,9 +65,9 @@
                     @else{{ $offering->my_study_plans->map(fn ($version) => 'Study Plan '.$version)->implode(', ') }}@endif
                     @if($offering->my_programmes->isNotEmpty())<div class="small text-muted">{{ $offering->my_programmes->implode(', ') }}</div>@endif
                 </dd>
-                <dt class="col-5 col-sm-4">Stage / Year of Study</dt>
+                <dt class="col-5 col-sm-4">Programme Year</dt>
                 <dd class="col-7 col-sm-8">{{ $offering->my_stages->isNotEmpty() ? $offering->my_stages->implode(', ') : 'Not recorded' }}</dd>
-                <dt class="col-5 col-sm-4">Offering Status</dt>
+                <dt class="col-5 col-sm-4">Allocation Status</dt>
                 <dd class="col-7 col-sm-8"><span class="badge bg-{{ $statusBadges[$offering->status] ?? 'secondary' }}">{{ $statusLabels[$offering->status] ?? ucfirst($offering->status) }}</span></dd>
                 <dt class="col-5 col-sm-4">My Teaching Role</dt>
                 <dd class="col-7 col-sm-8">{{ $offering->my_role_label }}</dd>
@@ -83,7 +83,7 @@
                  checked: a lecturer whose dashboard said "0" while five classes
                  plainly existed had no way to tell a real zero from a broken
                  query. The breakdown makes both visible, and every part of it
-                 is derived from the same Offering-scoped set the page lists. --}}
+                 is derived from the same Allocation-scoped set the page lists. --}}
             <h6>Live Classes</h6>
             <div class="fs-3">{{ $liveClassCounts['total'] }}</div>
             @if($liveClassCounts['total'] > 0)
@@ -111,16 +111,16 @@
                     @if($module['available'])
                         <a class="btn btn-sm btn-outline-primary" href="{{ $module['url'] }}">Open {{ $module['label'] }}</a>
                     @else
-                        <span class="small text-muted">Not available for this Course Offering</span>
+                        <span class="small text-muted">Not available for this Course Allocation</span>
                     @endif
                 </div>
             </div>
         @endforeach
     </div>
-    <p class="small text-muted mt-2 mb-0">Attendance and Assignments are not yet scoped to a Course Offering, so they are not offered here. Use the existing Attendance and Assignments screens from the main menu.</p>
+    <p class="small text-muted mt-2 mb-0">Attendance and Assignments are not yet scoped to a Course Allocation, so they are not offered here. Use the existing Attendance and Assignments screens from the main menu.</p>
 </section>
 
-<section class="eSection-wrap mb-3" aria-label="Live Classes for this Course Offering">
+<section class="eSection-wrap mb-3" aria-label="Live Classes for this Course Allocation">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
         <div>
             <h5 class="mb-1">Live Classes for this {{ $courseUnitLabel }}</h5>
@@ -141,7 +141,7 @@
     @if($liveClasses->isEmpty())
         <div class="border rounded p-4 text-center" role="status">
             <h6>No Live Classes have been scheduled yet.</h6>
-            <p class="text-muted mb-0">Live Classes scheduled for this Course Offering will be listed here.</p>
+            <p class="text-muted mb-0">Live Classes scheduled for this Course Allocation will be listed here.</p>
         </div>
     @else
         <div class="table-responsive">

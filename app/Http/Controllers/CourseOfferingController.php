@@ -109,13 +109,24 @@ class CourseOfferingController extends Controller
         return view('admin.course_offerings.index', compact('offerings', 'years', 'periods', 'courseUnits', 'programmes', 'curricula', 'departments', 'courseUnitLabel', 'periodLabel', 'hasAnyOfferings'));
     }
 
+    public function destroy(Request $request, int $id)
+    {
+        try {
+            $this->tenantOffering((int) $request->user()->school_id, $id);
+            $this->offerings->deleteDraft((int) $request->user()->school_id, $id);
+        } catch (\DomainException $e) {
+            return back()->withErrors(['allocation' => $e->getMessage()]);
+        }
+        return redirect()->route('admin.course_offerings.index')->with('success', 'Draft Course Allocation deleted.');
+    }
+
     public function create(Request $request)
     {
         $schoolId = (int) $request->user()->school_id;
         $subjects = Subject::where('school_id', $schoolId)->orderBy('name')->get();
         $years = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get();
         $periods = AcademicPeriod::where('school_id', $schoolId)->when($request->filled('year_id'), fn ($q) => $q->where('academic_year_id', $request->integer('year_id')))->orderBy('sequence')->get();
-        $curricula = Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with('programme')->orderBy('version')->get();
+        $curricula = Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with(['programme', 'memberships.subject', 'memberships.stage'])->orderBy('version')->get();
         $tenantConfiguration = app(\App\Support\TenantConfiguration::class);
         $tenant = \App\Models\School::query()->find($schoolId);
         $tenantDisplay = $tenantConfiguration->resolve($tenant, $request->user());
@@ -133,10 +144,16 @@ class CourseOfferingController extends Controller
     public function store(Request $request)
     {
         $schoolId = (int) $request->user()->school_id;
-        $data = $request->validate(['subject_id' => ['required','integer', Rule::exists('subjects','id')->where('school_id',$schoolId)], 'academic_year_id' => ['required','integer', Rule::exists('academic_years','id')->where('school_id',$schoolId)], 'academic_period_id' => ['required','integer', Rule::exists('academic_periods','id')->where('school_id',$schoolId)->where('academic_year_id',$request->input('academic_year_id'))]]);
-        try { $offering = $this->offerings->createDraft($schoolId, (int)$data['subject_id'], (int)$data['academic_year_id'], (int)$data['academic_period_id']); }
+        $data = $request->validate(['subject_id' => ['required','integer', Rule::exists('subjects','id')->where('school_id',$schoolId)], 'academic_year_id' => ['required','integer', Rule::exists('academic_years','id')->where('school_id',$schoolId)], 'academic_period_id' => ['required','integer', Rule::exists('academic_periods','id')->where('school_id',$schoolId)->where('academic_year_id',$request->input('academic_year_id'))], 'curriculum_membership_id' => ['nullable', 'integer', Rule::exists('curriculum_memberships', 'id')->where('school_id', $schoolId)]]);
+        try { $offering = DB::transaction(function () use ($schoolId, $data) {
+            $offering = $this->offerings->createDraft($schoolId, (int)$data['subject_id'], (int)$data['academic_year_id'], (int)$data['academic_period_id']);
+            if (! empty($data['curriculum_membership_id'])) {
+                $this->offerings->addApplicability($schoolId, $offering->id, (int) $data['curriculum_membership_id']);
+            }
+            return $offering;
+        }); }
         catch (Throwable $e) { return back()->withInput()->withErrors(['offering' => $this->safeMessage($e)]); }
-        return redirect()->route('admin.course_offerings.show', $offering->id)->with('success', 'Draft Offering created.');
+        return redirect()->route('admin.course_offerings.show', $offering->id)->with('success', 'Draft Allocation created.');
     }
 
     public function show(Request $request, int $id)
@@ -212,7 +229,7 @@ class CourseOfferingController extends Controller
         // deliberately no "starts_on <= today" window: a forward-dated but
         // ACTIVE allocation is still the current team, because lecturers are
         // assigned before the term begins. That extra filter is what made
-        // Offering #5's real, active Primary Lecturer (2026-10-01 to 2027-01-25)
+        // Allocation #5's real, active Primary Lecturer (2026-10-01 to 2027-01-25)
         // disappear from this workspace and report "No lecturers have been
         // assigned yet" while the Teaching Team page showed them correctly.
         // An allocation whose end date has already passed is history even if the
@@ -256,43 +273,43 @@ class CourseOfferingController extends Controller
         $studyPlanStages = $links->pluck('stage_label')->filter()->unique()->values();
         $studyPlanVersions = $links->pluck('version')->filter()->unique()->values();
         $stateHeadline = match ($offering->status) {
-            'draft' => 'This Course Offering is being prepared.',
-            'open' => 'Preparation and student registration are open. The assigned lecturer may prepare academic delivery; student-facing release and delivery begin once this Course Offering is in progress.',
+            'draft' => 'This Course Allocation is being prepared.',
+            'open' => 'Preparation and student registration are open. The assigned lecturer may prepare academic delivery; student-facing release and delivery begin once this Course Allocation is in progress.',
             'in_progress' => 'Teaching is currently in progress.',
-            'completed' => 'This Course Offering has been completed.',
-            default => 'This Course Offering was cancelled.',
+            'completed' => 'This Course Allocation has been completed.',
+            default => 'This Course Allocation was cancelled.',
         };
         $cancellationReason = $offering->status === 'cancelled'
             ? $audit->firstWhere('action', 'COURSE_OFFERING_CANCELLED')?->new_values
             : null;
         $cancellationReason = $cancellationReason ? (json_decode($cancellationReason, true)['reason'] ?? null) : null;
         $nextStep = match (true) {
-            $offering->status === 'draft' && $links->isEmpty() && $request->user()->hasPermission('academic.course_offering.manage') => 'Link a compatible Programme Study Plan before opening this Course Offering.',
-            $offering->status === 'draft' && $links->isEmpty() => 'A Programme Study Plan must be linked before this Course Offering can be opened. Ask an authorized administrator to link one.',
+            $offering->status === 'draft' && $links->isEmpty() && $request->user()->hasPermission('academic.course_offering.manage') => 'Link a compatible Programme Study Plan before opening this Course Allocation.',
+            $offering->status === 'draft' && $links->isEmpty() => 'A Programme Study Plan must be linked before this Course Allocation can be opened. Ask an authorized administrator to link one.',
             $offering->status === 'draft' => 'Confirm Study Plan applicability, assign the teaching team, then open registration when ready.',
             $offering->status === 'completed' => 'Its teaching and registration history is retained and read-only.',
             $offering->status === 'cancelled' => $cancellationReason ? "Reason: {$cancellationReason}" : 'Its history is retained and read-only.',
             $offering->status === 'in_progress' => 'Teaching is under way: run Live Classes, take Attendance, set Assignments and Online Exams for this Course Unit.',
-            $offering->status === 'open' && $activeTeachingTeam->isEmpty() && $hasPlannedLecturers => 'Review and activate the planned lecturer allocations, register eligible students, then Start the Course Offering when registration is done.',
-            $offering->status === 'open' && $activeTeachingTeam->isEmpty() && $registeredStudents->isEmpty() => 'Assign the teaching team and register eligible students, then Start the Course Offering when registration is done.',
-            $offering->status === 'open' && $activeTeachingTeam->isEmpty() => 'Assign the teaching team, then Start the Course Offering when registration is done.',
-            $offering->status === 'open' && $registeredStudents->isEmpty() && $canViewRegistrations => 'Register eligible students and confirm their registrations, then Start the Course Offering when registration is done.',
-            $offering->status === 'open' => 'Preparation and registration are open: the assigned lecturer may draft content, resources and assessments and schedule future Live Classes where module rules permit. Start the Course Offering when the teaching team and registration are ready.',
-            $activeTeachingTeam->isEmpty() && $hasPlannedLecturers => 'Review and activate the planned lecturer allocations for this Course Offering.',
-            $activeTeachingTeam->isEmpty() => 'Assign the teaching team for this Course Offering.',
+            $offering->status === 'open' && $activeTeachingTeam->isEmpty() && $hasPlannedLecturers => 'Review and activate the planned lecturer allocations, register eligible students, then Start the Course Allocation when registration is done.',
+            $offering->status === 'open' && $activeTeachingTeam->isEmpty() && $registeredStudents->isEmpty() => 'Assign the teaching team and register eligible students, then Start the Course Allocation when registration is done.',
+            $offering->status === 'open' && $activeTeachingTeam->isEmpty() => 'Assign the teaching team, then Start the Course Allocation when registration is done.',
+            $offering->status === 'open' && $registeredStudents->isEmpty() && $canViewRegistrations => 'Register eligible students and confirm their registrations, then Start the Course Allocation when registration is done.',
+            $offering->status === 'open' => 'Preparation and registration are open: the assigned lecturer may draft content, resources and assessments and schedule future Live Classes where module rules permit. Start the Course Allocation when the teaching team and registration are ready.',
+            $activeTeachingTeam->isEmpty() && $hasPlannedLecturers => 'Review and activate the planned lecturer allocations for this Course Allocation.',
+            $activeTeachingTeam->isEmpty() => 'Assign the teaching team for this Course Allocation.',
             $registeredStudents->isEmpty() && $canViewRegistrations => 'Review eligible students and begin Course Registration.',
-            default => 'Course Offering ready for teaching.',
+            default => 'Course Allocation ready for teaching.',
         };
         $completionBlockers = [];
         if ($offering->status === CourseOffering::STATUS_IN_PROGRESS) {
             if (\Illuminate\Support\Facades\Schema::hasTable('course_offering_lecturer_allocations')
                 && DB::table('course_offering_lecturer_allocations')->where('school_id', $schoolId)
                     ->where('course_offering_id', $id)->whereIn('status', ['planned', 'active'])->exists()) {
-                $completionBlockers[] = 'Lecturer allocations are still active. End the remaining teaching team allocations before completing this Course Offering.';
+                $completionBlockers[] = 'Lecturer allocations are still active. End the remaining teaching team allocations before completing this Course Allocation.';
             }
             if ($canViewRegistrations && $registeredStudents->where('status', 'registered')->isNotEmpty()) {
                 $pending = $registeredStudents->where('status', 'registered')->count();
-                $completionBlockers[] = "{$pending} student ".Illuminate\Support\Str::plural('registration', $pending).' still need confirmation or withdrawal before this Course Offering can be completed.';
+                $completionBlockers[] = "{$pending} student ".Illuminate\Support\Str::plural('registration', $pending).' still need confirmation or withdrawal before this Course Allocation can be completed.';
             }
         }
 
@@ -318,7 +335,7 @@ class CourseOfferingController extends Controller
         return $this->studentsWorkspace($request, $id, 'registered');
     }
 
-    /** Eligible and Registered tabs of the Offering student workspace. */
+    /** Eligible and Registered tabs of the Allocation student workspace. */
     private function studentsWorkspace(Request $request, int $id, string $mode)
     {
         $schoolId = (int) $request->user()->school_id;
@@ -395,7 +412,7 @@ class CourseOfferingController extends Controller
             'programme_cohort_id' => ['required_if:mode,cohort', 'nullable', 'integer', 'min:1'],
         ], ['student_ids.required_if' => 'Select at least one eligible student to register.', 'programme_cohort_id.required_if' => 'Choose a Programme Cohort.']);
         if ($offering->status !== CourseOffering::STATUS_OPEN) {
-            return back()->withErrors(['registration' => 'Students can be registered only while the Course Offering is open.']);
+            return back()->withErrors(['registration' => 'Students can be registered only while the Course Allocation is open.']);
         }
         $batch = app(\App\Support\CourseRegistration\CourseOfferingRegistrationBatch::class);
         $studentIds = $data['mode'] === 'cohort'
@@ -436,7 +453,7 @@ class CourseOfferingController extends Controller
         $data = $request->validate(['student_id' => ['required', 'integer', 'min:1']]);
         $studentId = (int) $data['student_id'];
         if (\App\Models\CourseRegistration::query()->where('school_id', $schoolId)->where('course_offering_id', $id)->where('student_id', $studentId)->exists()) {
-            return back()->withErrors(['registration' => 'This student already has a registration record for this Course Offering.']);
+            return back()->withErrors(['registration' => 'This student already has a registration record for this Course Allocation.']);
         }
         if ($reason = $this->roster->ineligibilityReason($offering, $studentId)) {
             return back()->withErrors(['registration' => $reason]);
@@ -446,7 +463,7 @@ class CourseOfferingController extends Controller
         } catch (Throwable $e) {
             return back()->withErrors(['registration' => $this->safeMessage($e)]);
         }
-        return redirect()->route('admin.course_offerings.registrations', $id)->with('success', 'Student registered for this Course Offering.');
+        return redirect()->route('admin.course_offerings.registrations', $id)->with('success', 'Student registered for this Course Allocation.');
     }
 
     public function dropStudent(Request $request, int $id, int $registration)
@@ -467,11 +484,11 @@ class CourseOfferingController extends Controller
         $schoolId=(int)$request->user()->school_id; $this->tenantOffering($schoolId,$id);
         $data=$request->validate(['subject_id'=>['required','integer',Rule::exists('subjects','id')->where('school_id',$schoolId)],'academic_year_id'=>['required','integer',Rule::exists('academic_years','id')->where('school_id',$schoolId)],'academic_period_id'=>['required','integer',Rule::exists('academic_periods','id')->where('school_id',$schoolId)->where('academic_year_id',$request->input('academic_year_id'))]]);
         try {$this->offerings->updateDraft($schoolId,$id,['subject_id'=>(int)$data['subject_id'],'academic_year_id'=>(int)$data['academic_year_id'],'academic_period_id'=>(int)$data['academic_period_id']]);} catch(Throwable $e){return back()->withInput()->withErrors(['offering'=>$this->safeMessage($e)]);}
-        return back()->with('success','Course Offering updated.');
+        return back()->with('success','Course Allocation updated.');
     }
 
-    public function addApplicability(Request $request,int $id){$schoolId=(int)$request->user()->school_id;$this->tenantOffering($schoolId,$id);$d=$request->validate(['curriculum_membership_id'=>['required','integer',Rule::exists('curriculum_memberships','id')->where('school_id',$schoolId)]]);try{$this->offerings->addApplicability($schoolId,$id,(int)$d['curriculum_membership_id']);}catch(Throwable $e){return back()->withErrors(['applicability'=>$this->safeMessage($e)]);}return back()->with('success','Study Plan added to this Course Offering.');}
-    public function removeApplicability(Request $request,int $id,int $membershipId){$schoolId=(int)$request->user()->school_id;$this->tenantOffering($schoolId,$id);try{$this->offerings->removeApplicability($schoolId,$id,$membershipId);}catch(Throwable $e){return back()->withErrors(['applicability'=>$this->safeMessage($e)]);}return back()->with('success','Study Plan removed from this Course Offering.');}
+    public function addApplicability(Request $request,int $id){$schoolId=(int)$request->user()->school_id;$this->tenantOffering($schoolId,$id);$d=$request->validate(['curriculum_membership_id'=>['required','integer',Rule::exists('curriculum_memberships','id')->where('school_id',$schoolId)]]);try{$this->offerings->addApplicability($schoolId,$id,(int)$d['curriculum_membership_id']);}catch(Throwable $e){return back()->withErrors(['applicability'=>$this->safeMessage($e)]);}return back()->with('success','Study Plan added to this Course Allocation.');}
+    public function removeApplicability(Request $request,int $id,int $membershipId){$schoolId=(int)$request->user()->school_id;$this->tenantOffering($schoolId,$id);try{$this->offerings->removeApplicability($schoolId,$id,$membershipId);}catch(Throwable $e){return back()->withErrors(['applicability'=>$this->safeMessage($e)]);}return back()->with('success','Study Plan removed from this Course Allocation.');}
 
     public function lifecycle(Request $request,int $id,string $action)
     {
@@ -481,13 +498,13 @@ class CourseOfferingController extends Controller
         try { $this->offerings->{$action}($schoolId,$id,...(in_array($action,['cancel','startEarly'],true)?[trim($data['reason'])]:[])); }
         catch(Throwable $e){return back()->withErrors(['lifecycle'=>$this->safeMessage($e)]);}
         $messages = [
-            'open' => 'Course Offering opened successfully.',
-            'start' => 'Course Offering started successfully.',
-            'startEarly' => 'Course Offering started early. The Academic Period dates were not changed and the reason has been recorded in the audit trail.',
-            'complete' => 'Course Offering completed successfully.',
-            'cancel' => 'Course Offering cancelled.',
+            'open' => 'Course Allocation opened successfully.',
+            'start' => 'Course Allocation started successfully.',
+            'startEarly' => 'Course Allocation started early. The Academic Period dates were not changed and the reason has been recorded in the audit trail.',
+            'complete' => 'Course Allocation completed successfully.',
+            'cancel' => 'Course Allocation cancelled.',
         ];
-        return back()->with('success', $messages[$action] ?? 'Course Offering updated.');
+        return back()->with('success', $messages[$action] ?? 'Course Allocation updated.');
     }
 
     private function tenantOffering(int $schoolId,int $id): CourseOffering{return CourseOffering::where('school_id',$schoolId)->findOrFail($id);}
@@ -499,7 +516,7 @@ class CourseOfferingController extends Controller
             return $e->getMessage();
         }
         report($e);
-        return 'Something went wrong while processing this Course Offering. Please try again, or contact support if this continues.';
+        return 'Something went wrong while processing this Course Allocation. Please try again, or contact support if this continues.';
     }
 
     private function studentWorkspaceOffering(int $schoolId, int $id): CourseOffering

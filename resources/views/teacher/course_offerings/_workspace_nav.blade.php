@@ -1,7 +1,7 @@
 {{--
     THE LECTURER'S COURSE OFFERING WORKSPACE NAVIGATION.
 
-    One partial, included by every lecturer page inside a Course Offering. It is
+    One partial, included by every lecturer page inside a Course Allocation. It is
     supplied automatically by CourseOfferingWorkspaceNavServiceProvider for the
     whole `teacher.course_offerings.*` namespace, so a page cannot reach
     production without it - the defect this replaces was a hand-written tab strip
@@ -22,7 +22,7 @@
     A tab with no engine behind it renders as a disabled span with no href: never
     a link to a stub page, never a 404. A tab the lecturer may not use is shown
     as unavailable rather than linked and then refused. Every href is a real URL
-    that re-checks the lecturer's own allocation on this exact Course Offering
+    that re-checks the lecturer's own allocation on this exact Course Allocation
     when it is opened, so the navigation is a pointer and never the access control.
 --}}
 @if(!empty($workspaceTabs) && !empty($workspaceNavOffering))
@@ -52,10 +52,10 @@
                 @endif
             </div>
             <a href="{{ route('teacher.course_offerings.index') }}"
-               class="btn btn-sm btn-outline-secondary flex-shrink-0">Back to My Course Offerings</a>
+               class="btn btn-sm btn-outline-secondary flex-shrink-0">Back to My Course Allocations</a>
         </div>
 
-        <nav aria-label="Course Offering workspace">
+        <nav aria-label="Course Allocation workspace">
             <ul class="nav nav-tabs flex-nowrap overflow-auto" style="white-space: nowrap">
                 @foreach($workspaceTabs as $tab)
                     <li class="nav-item">
@@ -72,7 +72,7 @@
                                  cannot be opened must not look like one that can. --}}
                             <span class="nav-link disabled text-muted {{ $tab['coming_soon'] ? '' : 'opacity-75' }}"
                                   aria-disabled="true"
-                                  title="{{ $tab['coming_soon'] ? $tab['description'] : 'Not available for this Course Offering.' }}"
+                                  title="{{ $tab['coming_soon'] ? $tab['description'] : 'Not available for this Course Allocation.' }}"
                                   data-testid="workspace-tab-{{ $tab['key'] }}">{{ $tab['label'] }}@if($tab['coming_soon'])<sup class="ms-1" title="Not built yet">*</sup>@endif</span>
                         @endif
                     </li>

@@ -437,9 +437,9 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
         }
     }
 
-    // ── Offering-backed Google persistence ────────────────────────────────────
+    // ── Allocation-backed Google persistence ────────────────────────────────────
     //
-    // The Offering route (LiveClassController::storeForOffering) used to resolve
+    // The Allocation route (LiveClassController::storeForOffering) used to resolve
     // the meeting through the string-only helper, so a Google class created there
     // recorded NEITHER its Calendar event id NOR its conference state. The class
     // was created and the join link worked, but PIIE kept no handle on the
@@ -470,7 +470,7 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
 
         $row = DB::table('live_classes')->where('course_offering_id', $this->offeringA)->first();
 
-        $this->assertNotNull($row, 'The Offering-backed Google class was not saved.');
+        $this->assertNotNull($row, 'The Allocation-backed Google class was not saved.');
         $this->assertSame('offering-google-event-id', $row->google_calendar_event_id);
         $this->assertSame(GoogleConferenceStatus::READY, $row->google_conference_status);
         $this->assertSame('https://meet.google.com/offering-google-event-id', $row->meeting_url);
@@ -508,7 +508,7 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
      * The central rule: an unconnected lecturer must NOT get the institution's
      * calendar by default.
      *
-     * Before this, choosing Google Meet on an Offering fell straight through to the
+     * Before this, choosing Google Meet on an Allocation fell straight through to the
      * installation-wide .env refresh token, so the conference was created on the
      * institution's calendar while the lecturer believed it was on their own. No
      * message said otherwise. `Http::assertNothingSent()` is the load-bearing
@@ -612,8 +612,8 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
      * The institution-wide credential must still work where it always did.
      *
      * This is the regression guard on requirement 7: refusing the substitution in
-     * the lecturer's Offering workflow must not have removed the shared credential
-     * from the non-Offering path, which is what an administrator uses.
+     * the lecturer's Allocation workflow must not have removed the shared credential
+     * from the non-Allocation path, which is what an administrator uses.
      */
     public function test_the_institution_wide_credential_still_serves_the_non_offering_path(): void
     {
@@ -629,8 +629,8 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
         ]);
 
         $this->actingAs($primary)->post(route('admin.live_classes.store'), [
-            'title' => 'Non-Offering institution credential class',
-            'class_id' => $this->makeClass(1, ['name' => 'Non-Offering credential class']),
+            'title' => 'Non-Allocation institution credential class',
+            'class_id' => $this->makeClass(1, ['name' => 'Non-Allocation credential class']),
             'platform' => 'google_meet',
             'start_date' => '2026-09-26', 'start_time' => '14:00', 'end_time' => '15:00',
             'timezone' => 'UTC', 'status' => 'scheduled', 'is_published' => 0,
@@ -721,7 +721,7 @@ class LiveClassOfferingProviderSecurityTest extends TestCase
     private function offeringPayload(string $platform): array
     {
         return [
-            'title' => 'Offering provider creation', 'teacher_id' => null, 'platform' => $platform,
+            'title' => 'Allocation provider creation', 'teacher_id' => null, 'platform' => $platform,
             'start_date' => '2026-09-26', 'start_time' => '11:00', 'end_time' => '12:00', 'timezone' => 'UTC',
             'status' => 'scheduled', 'is_published' => 0,
         ];

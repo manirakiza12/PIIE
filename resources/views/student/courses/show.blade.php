@@ -53,7 +53,7 @@
         <div class="ch-header-cover">
             @if ($hasCover)
                 {{-- Served by `student.courses.cover`, which re-checks that this
-                     student has a confirmed registration on THIS Offering. The
+                     student has a confirmed registration on THIS Allocation. The
                      bytes live outside the web root, so this is the only way in. --}}
                 <img src="{{ route('student.courses.cover', $offering->id) }}"
                      alt="Course image for {{ $header['title'] }}"

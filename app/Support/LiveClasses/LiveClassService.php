@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
 /**
- * Authoritative foundation operations for Offering-backed Live Classes.
+ * Authoritative foundation operations for Allocation-backed Live Classes.
  * Lecturer-allocation and participant authorization are intentionally handled
  * by a later integration phase.
  */
@@ -23,7 +23,7 @@ class LiveClassService
         'start_date', 'start_time', 'end_time', 'timezone', 'status',
         'is_published', 'attendance_enabled', 'recording_url',
         // Google Calendar bookkeeping. Absent here, meetingAttributes() silently
-        // dropped these, so an Offering-backed Google class was saved with no event
+        // dropped these, so an Allocation-backed Google class was saved with no event
         // id and no conference state - the class existed, but PIIE had no handle on
         // the calendar entry behind it. Listed LAST because the caller only adds
         // them when it has something to record; the intersect simply skips them
@@ -52,7 +52,7 @@ class LiveClassService
 
             if (array_key_exists('subject_id', $attributes)
                 && (int) $attributes['subject_id'] !== (int) $offering->subject_id) {
-                throw new DomainException('The supplied subject conflicts with the Course Offering subject.');
+                throw new DomainException('The supplied subject conflicts with the Course Allocation subject.');
             }
 
             if (! empty($attributes['teacher_id'])) {
@@ -85,14 +85,14 @@ class LiveClassService
         $outcome = DB::transaction(function () use ($actor, $schoolId, $liveClassId, $attributes): array {
             $identity = LiveClass::query()->where('school_id', $schoolId)->whereKey($liveClassId)->first();
             if (! $identity || ! $identity->course_offering_id) {
-                throw new DomainException('The Offering-backed Live Class was not found for this tenant.');
+                throw new DomainException('The Allocation-backed Live Class was not found for this tenant.');
             }
 
             $offering = $this->lockOffering($schoolId, (int) $identity->course_offering_id);
             $this->assertOperationalOffering($offering);
             if (array_key_exists('subject_id', $attributes)
                 && (int) $attributes['subject_id'] !== (int) $offering->subject_id) {
-                throw new DomainException('The supplied subject conflicts with the Course Offering subject.');
+                throw new DomainException('The supplied subject conflicts with the Course Allocation subject.');
             }
             if (! empty($attributes['teacher_id'])) {
                 $this->assertFacilitatorAllocation($offering, (int) $attributes['teacher_id'], $attributes);
@@ -175,7 +175,7 @@ class LiveClassService
      *
      * It only records the fact. It writes no attendance, awards no credit and
      * sends no notification, because official attendance is the certified
-     * Course Offering Attendance workflow and stays lecturer-controlled. The row
+     * Course Allocation Attendance workflow and stays lecturer-controlled. The row
      * and its history are preserved - nothing is deleted.
      */
     public function endMeeting(User $actor, int $liveClassId): LiveClass
@@ -228,7 +228,7 @@ class LiveClassService
         return DB::transaction(function () use ($actor, $schoolId, $liveClassId): LiveClass {
             $identity = LiveClass::query()->where('school_id', $schoolId)->whereKey($liveClassId)->first();
             if (! $identity || ! $identity->course_offering_id) {
-                throw new DomainException('The Offering-backed Live Class was not found for this tenant.');
+                throw new DomainException('The Allocation-backed Live Class was not found for this tenant.');
             }
 
             $this->lockOffering($schoolId, (int) $identity->course_offering_id);
@@ -252,11 +252,11 @@ class LiveClassService
             ->first();
 
         if (! $offering) {
-            throw new DomainException('The selected Course Offering does not belong to the authenticated tenant.');
+            throw new DomainException('The selected Course Allocation does not belong to the authenticated tenant.');
         }
 
         if (! DB::table('subjects')->where('school_id', $schoolId)->where('id', $offering->subject_id)->exists()) {
-            throw new DomainException('The Course Offering subject does not belong to the authenticated tenant.');
+            throw new DomainException('The Course Allocation subject does not belong to the authenticated tenant.');
         }
 
         return $offering;
@@ -265,7 +265,7 @@ class LiveClassService
     private function assertOperationalOffering(CourseOffering $offering): void
     {
         if (! in_array($offering->status, [CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true)) {
-            throw new DomainException('Live Classes may only be scheduled for open or in-progress Course Offerings.');
+            throw new DomainException('Live Classes may only be scheduled for open or in-progress Course Allocations.');
         }
     }
 
@@ -276,7 +276,7 @@ class LiveClassService
      * This deliberately delegates instead of re-deriving the rule.
      * LiveClassAccessService::activeManagerAllocationsForOffering() is the
      * single authority for "is this lecturer currently allocated to this
-     * Offering", and it carries the shared SystemTesterAccess pre-start
+     * Allocation", and it carries the shared SystemTesterAccess pre-start
      * exception. This method used to run its own raw
      * `starts_on <= $date` query, which duplicated that rule and silently
      * denied an authorised pre-start tester lecturer who the controller had
@@ -297,7 +297,7 @@ class LiveClassService
             ->contains(fn ($allocation) => (int) $allocation->user_id === $teacherId);
 
         if (! $isFacilitatorOn($today) || ! $isFacilitatorOn($meetingDate)) {
-            throw new DomainException('The facilitator must have a current Primary or Co Lecturer allocation for this Offering and meeting date.');
+            throw new DomainException('The facilitator must have a current Primary or Co Lecturer allocation for this Allocation and meeting date.');
         }
     }
 
@@ -305,7 +305,7 @@ class LiveClassService
     {
         foreach (self::RESERVED_CONTEXT_FIELDS as $field) {
             if (array_key_exists($field, $attributes) && $attributes[$field] !== null && $attributes[$field] !== '') {
-                throw new DomainException("{$field} is derived or reserved for Offering-backed Live Classes.");
+                throw new DomainException("{$field} is derived or reserved for Allocation-backed Live Classes.");
             }
         }
     }
@@ -317,7 +317,7 @@ class LiveClassService
 
     private function recordAudit(string $action, LiveClass $liveClass, ?array $oldValues, array $newValues): void
     {
-        AuditLog::record($action, 'Live Classes', ucfirst($action) . " Offering-backed Live Class: {$liveClass->title}", [
+        AuditLog::record($action, 'Live Classes', ucfirst($action) . " Allocation-backed Live Class: {$liveClass->title}", [
             'school_id' => $liveClass->school_id,
             'record_type' => LiveClass::class,
             'record_id' => $liveClass->id,

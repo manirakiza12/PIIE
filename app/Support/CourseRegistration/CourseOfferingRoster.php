@@ -25,7 +25,7 @@ class CourseOfferingRoster
 
     /**
      * Unregistered students with a current placement in, or current membership of a
-     * cohort following, a Study Plan linked to this Offering — split by the shared
+     * cohort following, a Study Plan linked to this Allocation — split by the shared
      * eligibility rule. Ineligible students carry an administrator-readable reason.
      */
     public function review(CourseOffering $offering, ?int $cohortId = null, bool $includeClosed = false): array
@@ -99,7 +99,7 @@ class CourseOfferingRoster
     public function ineligibilityReason(CourseOffering $offering, int $studentId): ?string
     {
         if ($offering->status !== CourseOffering::STATUS_OPEN) {
-            return 'Students can be registered only while the Course Offering is open.';
+            return 'Students can be registered only while the Course Allocation is open.';
         }
         $result = $this->eligibility->evaluate($offering, $studentId);
         if (! $result->eligible) return $result->message;

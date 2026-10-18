@@ -24,7 +24,7 @@ use Tests\TestCase;
  *
  * `AssignmentFixture` composes `CourseContentFixture`, which composes
  * `LiveClassFixture`, and between them they build an institution, an in-progress
- * Offering, an allocated lecturer, a co-lecturer and a confirmed student, plus
+ * Allocation, an allocated lecturer, a co-lecturer and a confirmed student, plus
  * every Course Content and Assignment table with its real column set. A Course
  * Home test needs all of that, so this suite composes the chain rather than
  * rebuilding a subtly different copy of it - a fixture that differs in one column
@@ -89,9 +89,9 @@ class StudentCourseHomeTest extends TestCase
      * its name registers on THIS offering and is therefore not an outsider at all.
      *
      * This is the subject for a cross-OFFERING denial: the tenant is the same, so
-     * the school check passes for them, and only the Offering check can refuse
+     * the school check passes for them, and only the Allocation check can refuse
      * them. A cross-tenant student would be refused by the school check and would
-     * not prove the Offering boundary at all.
+     * not prove the Allocation boundary at all.
      */
     private function outsiderInSameSchool(): \App\Models\User
     {
@@ -120,7 +120,7 @@ class StudentCourseHomeTest extends TestCase
      * A confirmed student in ANOTHER INSTITUTION.
      *
      * The subject for a cross-TENANT claim, which is a different failure from
-     * cross-Offering: here the school check alone must be enough.
+     * cross-Allocation: here the school check alone must be enough.
      */
     private function outsiderInOtherTenant(): \App\Models\User
     {
@@ -170,7 +170,7 @@ class StudentCourseHomeTest extends TestCase
         $this->markProgress($lesson, $this->student);
     }
 
-    /** A Live Class on this Offering. */
+    /** A Live Class on this Allocation. */
     private function liveClass(array $attributes = []): LiveClass
     {
         $scheduled = $attributes['scheduled_at'] ?? now()->addHours(3);
@@ -213,7 +213,7 @@ class StudentCourseHomeTest extends TestCase
     {
         // A registration that EXISTS is not a registration that grants access.
         // "Registered" is a state on the way to confirmed, and every read of a
-        // Course Offering has refused it since the domain was built.
+        // Course Allocation has refused it since the domain was built.
         DB::table('course_registrations')
             ->where('student_id', $this->student->id)
             ->update(['status' => CourseRegistration::STATUS_REGISTERED]);
@@ -224,7 +224,7 @@ class StudentCourseHomeTest extends TestCase
     public function test_a_student_registered_elsewhere_cannot_reach_this_course_home(): void
     {
         // Confirmed on ANOTHER OFFERING in the SAME school, so the tenant check
-        // passes for them and only the Offering check can refuse them. That is the
+        // passes for them and only the Allocation check can refuse them. That is the
         // boundary this test is about.
         $outsider = $this->outsiderInSameSchool();
 
@@ -243,7 +243,7 @@ class StudentCourseHomeTest extends TestCase
     {
         // The confusion this project keeps having to close: managing a course and
         // studying it are different relationships. A lecturer allocated to an
-        // Offering has no confirmed REGISTRATION on it, so a student-only route
+        // Allocation has no confirmed REGISTRATION on it, so a student-only route
         // must never SERVE them the student experience.
         //
         // Asserted as "must not succeed" rather than "must be 404", because the
@@ -304,14 +304,14 @@ class StudentCourseHomeTest extends TestCase
         // REVERSED FROM WHAT THIS ONCE ASSERTED, and deliberately.
         //
         // It used to say a future allocation must not appear at all. That was the
-        // reported defect: Offering #5's teacher is allocated from 1 October, and
+        // reported defect: Allocation #5's teacher is allocated from 1 October, and
         // the header therefore read "No lecturer is currently allocated to this
         // course" about him. Not a neutral absence - a false statement about a
         // colleague.
         //
         // The domain already draws this line, in the other direction, in
         // `reachableOfferings()`: ended allocations are kept "so a COMPLETED Course
-        // Offering still shows its TEACHING RECORD". A header is such a record.
+        // Allocation still shows its TEACHING RECORD". A header is such a record.
         //
         // So the name appears, and the STATE is what carries the accuracy: he is not
         // claimed to be teaching, and the date is stated. A reader cannot mistake
@@ -416,7 +416,7 @@ class StudentCourseHomeTest extends TestCase
     {
         // The tenant constraint still has to bite, and it has to bite on the eager
         // path where it previously did not exist at all. A row that claims this
-        // Offering but belongs to another school is corrupt data, and the
+        // Allocation but belongs to another school is corrupt data, and the
         // constraint exists so that corrupt data cannot name a lecturer.
         $theirs = $this->otherTenant();
 
@@ -505,7 +505,7 @@ class StudentCourseHomeTest extends TestCase
 
         // A student of ANOTHER COURSE IN THE SAME SCHOOL is refused, and with a 404
         // rather than a 403 so the response does not confirm that this course exists
-        // at all. The tenant check passes for them, so this really is the Offering
+        // at all. The tenant check passes for them, so this really is the Allocation
         // check doing the refusing.
         $this->actingAs($this->outsiderInSameSchool())
             ->get("/student/courses/{$this->offering->id}/cover-image")
@@ -627,7 +627,7 @@ class StudentCourseHomeTest extends TestCase
     public function test_continue_learning_skips_an_UNRELEASED_lesson(): void
     {
         // An unreleased lesson is not merely deprioritised - it is UNREACHABLE,
-        // because the lesson route refuses to resolve it. Offering it would send a
+        // because the lesson route refuses to resolve it. Allocation it would send a
         // student to a page that 404s.
         $this->moduleWithLessons(3, unreleasedFromSequence: 2);
 
@@ -991,7 +991,7 @@ class StudentCourseHomeTest extends TestCase
 
     public function test_a_link_resource_with_no_usable_url_is_not_offered(): void
     {
-        // A row in a table is not a resource. Offering it would put a dead entry in
+        // A row in a table is not a resource. Allocation it would put a dead entry in
         // front of a student.
         $module = $this->moduleWithLessons(1);
         $this->resource($module->lessons()->firstOrFail(), [

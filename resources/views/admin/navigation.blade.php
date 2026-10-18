@@ -142,7 +142,7 @@
     | no use for, so they are hidden from its sidebar. Their routes, controllers
     | and data are untouched — this only hides the menu entry.
     |
-    |   Assignments       → superseded by Course Offering assignments.
+    |   Assignments       → superseded by Course Allocation assignments.
     |                       AssignmentController@index deliberately lists
     |                       Assignment::k12() rows ONLY, so on a programme-based
     |                       school the screen can never show a real assignment.
@@ -174,6 +174,8 @@
     // ---- Academic: teaching & delivery ----
     $showOfferings = $canSeeProgrammes && $menuAllows('admin.course_offerings.index') && $rbacPermissions->allows($user, 'academic.course_offering.view');
     $showLecturers = $menuAllows('admin.teacher.permission') && $navCan('admin.teacher.permission');
+    $showStandaloneLecturers = $canSeeProgrammes && $menuAllows('admin.lecturer_assignments.index', 'admin.teacher.permission', 'admin.course_offerings.index') && $navCan('admin.lecturer_assignments.index');
+    $showCourseRegistrations = $canSeeProgrammes && $menuAllows('admin.course_registrations.index', 'admin.course_offerings.index') && $navCan('admin.course_registrations.index');
     $showClasses = $canSeeClasses && $menuAllows('admin.class_list') && $navCan('admin.class_list');
     $showTimetable = $menuAllows('admin.routine') && $navCan('admin.routine');
     $showLiveClasses = $menuAllows('admin.live_classes') && $navCan('admin.live_classes.index');
@@ -185,7 +187,7 @@
     $showQuestionBank = $menuAllows('admin.question_bank', 'admin.question_bank.index') && $canManageQuestionBankNav && $navCan('admin.question_bank.index');
 
     $showAcademicStructureAny = $showAcademicYears || $showLegacySessions || $showProgrammes || $showCourseUnits || $showStudyPlans || $showCohorts;
-    $showTeachingAny = $showOfferings || $showLecturers || $showClasses || $showTimetable || $showLiveClasses || $showAttendance || $showAssignments;
+    $showTeachingAny = $showOfferings || $showLecturers || $showStandaloneLecturers || $showCourseRegistrations || $showClasses || $showTimetable || $showLiveClasses || $showAttendance || $showAssignments;
     $showAssessmentAny = $showOnlineExams || $showResults || $showQuestionBank;
 
     // ---- Student affairs ----
@@ -985,7 +987,7 @@
                     @include('shared.page_toolbar')
                 @endunless
                 <div id="page-print-area">
-
+                    @include('admin.partials.academic_workflow_guide')
                     @yield('content')
                 </div>
                 <!-- Start Footer -->

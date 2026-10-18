@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * One student's status in one Course Offering attendance session.
+ * One student's status in one Course Allocation attendance session.
  *
  * `course_registration_id` is the authoritative academic participation anchor:
  * it is what ties the mark to a governed registration rather than to a bare

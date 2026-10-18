@@ -4,14 +4,14 @@
     /**
      * The higher-education "Schedule Live Class" entry point.
      *
-     * A Course Offering is the only academic choice a lecturer makes. Choosing
-     * one here carries it into the real form as route context, so the Offering
+     * A Course Allocation is the only academic choice a lecturer makes. Choosing
+     * one here carries it into the real form as route context, so the Allocation
      * is never re-selected and the class can never end up attached to a
-     * different Offering than the one the lecturer read on this screen.
+     * different Allocation than the one the lecturer read on this screen.
      *
      * Every row is derived from the lecturer's own allocation via
      * LecturerCourseOfferingAccess, so a lecturer who has not been allocated to
-     * an Offering simply cannot see it, and a lecturer whose allocation has not
+     * an Allocation simply cannot see it, and a lecturer whose allocation has not
      * started yet does not see it either - unless they are a governed
      * pre-start tester, in which case it appears exactly as the workspace shows
      * it.
@@ -22,7 +22,7 @@
     <div class="d-flex justify-content-between align-items-start flex-wrap gr-15">
         <div>
             <h4>{{ get_phrase('Schedule Live Class') }}</h4>
-            <p class="text-muted mb-0">{{ get_phrase('Choose the Course Offering this class belongs to.') }}</p>
+            <p class="text-muted mb-0">{{ get_phrase('Choose the Course Allocation this class belongs to.') }}</p>
         </div>
         <a href="{{ route('teacher.live_classes.index') }}" class="eBtn eBtn-dark">{{ get_phrase('Back to Live Classes') }}</a>
     </div>
@@ -36,9 +36,9 @@
         <div class="eSection-wrap">
             @if($offerings->isEmpty())
                 <div class="border rounded p-4 text-center" role="status">
-                    <h6>{{ get_phrase('You have no Course Offering to schedule into yet.') }}</h6>
-                    <p class="text-muted mb-3">{{ get_phrase('A Live Class belongs to a Course Offering. Ask your administrator to allocate you to one, then this page will list it here.') }}</p>
-                    <a href="{{ route('teacher.course_offerings.index') }}" class="eBtn eBtn-primary">{{ get_phrase('Go to My Course Offerings') }}</a>
+                    <h6>{{ get_phrase('You have no Course Allocation to schedule into yet.') }}</h6>
+                    <p class="text-muted mb-3">{{ get_phrase('A Live Class belongs to a Course Allocation. Ask your administrator to allocate you to one, then this page will list it here.') }}</p>
+                    <a href="{{ route('teacher.course_offerings.index') }}" class="eBtn eBtn-primary">{{ get_phrase('Go to My Course Allocations') }}</a>
                 </div>
             @else
                 <div class="row g-3">

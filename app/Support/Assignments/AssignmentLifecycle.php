@@ -14,7 +14,7 @@ use Illuminate\Support\Carbon;
  *                 reach it by id.
  *   scheduled  -> approved, but not open until `released_at`. Invisible to
  *                 students before that instant.
- *   published  -> open to confirmed students on this exact Course Offering.
+ *   published  -> open to confirmed students on this exact Course Allocation.
  *   closed     -> no NEW submissions accepted. Existing submissions and every
  *                 mark already recorded are preserved.
  *
@@ -98,7 +98,7 @@ class AssignmentLifecycle
      * Is this assignment open to a student RIGHT NOW?
      *
      * The single student-visibility rule. Authorisation (a confirmed registration
-     * on the exact Offering) is a separate question answered by
+     * on the exact Allocation) is a separate question answered by
      * AssignmentAccess; this only answers "has the lecturer released it, and is
      * it withdrawn".
      *

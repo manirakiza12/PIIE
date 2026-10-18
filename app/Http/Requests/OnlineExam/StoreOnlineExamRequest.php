@@ -18,19 +18,19 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /**
  * ── TWO MODES, ONE ENGINE ────────────────────────────────────────────────────
  *
- * An exam is EITHER a Course Offering assessment (`course_offering_id` present) OR a
+ * An exam is EITHER a Course Allocation assessment (`course_offering_id` present) OR a
  * legacy Class/Section exam (it NULL). Which one is decided by the presence of that
  * single field, and never by the shape of anything else - not by the tenant, not by
  * the lecturer's role, not by whether some legacy column happens to be filled.
  *
- * In OFFERING mode the Course Unit is DERIVED from the Offering, so `subject_id` is
- * not required of the browser at all; it is written from the authorised Offering.
+ * In OFFERING mode the Course Unit is DERIVED from the Allocation, so `subject_id` is
+ * not required of the browser at all; it is written from the authorised Allocation.
  * In LEGACY mode every legacy rule below applies exactly as it always did.
  *
  * The two are kept apart deliberately rather than merged. A required `subject_id`
- * forced a Course Offering lecturer into the legacy Subject dropdown, and that
+ * forced a Course Allocation lecturer into the legacy Subject dropdown, and that
  * dropdown is populated from `teacher_permissions` - which a lecturer with only a
- * Course Offering allocation does not have. So the page told Daniel Okello "No
+ * Course Allocation allocation does not have. So the page told Daniel Okello "No
  * subjects are assigned to this teacher" about a course he is the PRIMARY LECTURER
  * of. The fix is not to invent a legacy subject for him; it is to stop asking.
  */
@@ -53,8 +53,8 @@ class StoreOnlineExamRequest extends FormRequest
     /**
      * Is this an exam for a COURSE OFFERING?
      *
-     * True whenever a Course Offering was named - from the generic create page's
-     * selector or from the Offering-scoped route, which is merged in below.
+     * True whenever a Course Allocation was named - from the generic create page's
+     * selector or from the Allocation-scoped route, which is merged in below.
      */
     public function isCourseOfferingMode(): bool
     {
@@ -66,7 +66,7 @@ class StoreOnlineExamRequest extends FormRequest
     private bool $offeringResolved = false;
 
     /**
-     * The Offering this exam will belong to, resolved through the lecturer's own
+     * The Allocation this exam will belong to, resolved through the lecturer's own
      * allocation in their own tenant - or NULL when there is none.
      *
      * Asked from both the validator and the controller so that the id that was
@@ -117,15 +117,15 @@ class StoreOnlineExamRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'instructions' => ['nullable', 'string'],
-            // Tenant-scoped. A Course Offering belonging to another institution fails
+            // Tenant-scoped. A Course Allocation belonging to another institution fails
             // here, before any question of allocation is asked.
             'course_offering_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('course_offerings', 'id')->where($schoolId),
             ],
-            // Required only for a LEGACY exam. For a Course Offering exam the Course
-            // Unit comes from the Offering, so asking the browser for it would be
+            // Required only for a LEGACY exam. For a Course Allocation exam the Course
+            // Unit comes from the Allocation, so asking the browser for it would be
             // asking the lecturer to restate something the server already knows.
             'subject_id' => array_values(array_filter([
                 Rule::requiredIf(! $isOffering),
@@ -207,7 +207,7 @@ class StoreOnlineExamRequest extends FormRequest
 
         // ── THE OFFERING SCOPED ROUTE IS THE AUTHORITY, NOT THE BODY ──────────
         //
-        // `POST /teacher/course-offerings/{id}/exams` carries the Offering in the
+        // `POST /teacher/course-offerings/{id}/exams` carries the Allocation in the
         // path. Merging it here means the validation below - and the controller -
         // see the same value, and a body that says nothing about `course_offering_id`
         // still produces an exam bound to the course the lecturer is in.
@@ -215,7 +215,7 @@ class StoreOnlineExamRequest extends FormRequest
         // `routeIs()` and not `$this->route('id')`: that parameter name is used by
         // many routes in this file of routes/web.php, and reading it unguarded would
         // make an admin POST that happens to have an `id` be treated as a Course
-        // Offering exam. Naming the route explicitly cannot fire anywhere else.
+        // Allocation exam. Naming the route explicitly cannot fire anywhere else.
         if ($this->routeIs('teacher.course_offerings.exams.store')) {
             $offeringId = (int) $this->route('id');
 
@@ -251,7 +251,7 @@ class StoreOnlineExamRequest extends FormRequest
             $permissionService = app(OnlineExamPermissionService::class);
 
             // Governance is mode-independent. A lecturer still lands in the Admin
-            // review queue for a Course Offering exam, exactly as for a legacy one.
+            // review queue for a Course Allocation exam, exactly as for a legacy one.
             if ($this->filled('workflow_state') && !$permissionService->has($user, 'publish_online_exams')) {
                 $requestedState = (string) $this->input('workflow_state');
                 if (in_array($requestedState, ['published', 'cancelled'], true)) {
@@ -259,13 +259,13 @@ class StoreOnlineExamRequest extends FormRequest
                 }
             }
 
-            // ── A COURSE OFFERING EXAM: the Offering is the authority ──────────
+            // ── A COURSE OFFERING EXAM: the Allocation is the authority ──────────
             //
             // Everything from here to the end of this callback is the LEGACY
             // subject/class/programme graph, and none of it may be applied to an
-            // Offering exam. Three of those checks would actively reject a correct
+            // Allocation exam. Three of those checks would actively reject a correct
             // submission: `teacherCanUseSubject()` reads `teacher_permissions`, which
-            // a Course Offering lecturer does not have, so requiring it would refuse
+            // a Course Allocation lecturer does not have, so requiring it would refuse
             // the primary lecturer of a course he demonstrably teaches.
             if ($this->isCourseOfferingMode()) {
                 $this->validateCourseOfferingContext($validator);
@@ -310,22 +310,22 @@ class StoreOnlineExamRequest extends FormRequest
     }
 
     /**
-     * Is this lecturer allowed to author an exam in the named Course Offering?
+     * Is this lecturer allowed to author an exam in the named Course Allocation?
      *
      * One question, asked of `resolveOfferingForManager()` - which is the same
      * question `POST /teacher/course-offerings/{id}/exams` asks - so the generic page
-     * and the Offering-scoped page cannot disagree about who may author where.
+     * and the Allocation-scoped page cannot disagree about who may author where.
      *
      * It already covers every rejection the brief lists:
      *
-     *   - another tenant's Offering: refused by the tenant-scoped `exists` rule on
+     *   - another tenant's Allocation: refused by the tenant-scoped `exists` rule on
      *     `course_offering_id` before this runs;
      *   - the lecturer is not allocated: `resolveOffering()` finds no allocation and
      *     a non-admin staff member is a 404;
-     *   - an Offering that is not being taught: `assertCanManage()` composes
+     *   - an Allocation that is not being taught: `assertCanManage()` composes
      *     `canLecturerManage()`, which requires `teachingActionsAllowed()`, which in
      *     turn requires `offeringAllowsOperations()` - so a cancelled or completed
-     *     Offering cannot receive a new paper;
+     *     Allocation cannot receive a new paper;
      *   - a manipulated URL/form id: it is the same lookup, in the actor's own tenant,
      *     so an id from another lecturer's course simply does not resolve.
      *
@@ -343,7 +343,7 @@ class StoreOnlineExamRequest extends FormRequest
         if (! $offering instanceof CourseOffering) {
             // ── A MISSING OFFERING IS A 404 ONLY WHEN IT WAS IN THE URL ───────
             //
-            // `POST /teacher/course-offerings/{id}/exams` names the Offering in the
+            // `POST /teacher/course-offerings/{id}/exams` names the Allocation in the
             // path, and a path that does not resolve is a missing resource - which
             // also tells an outsider nothing, since "not yours" and "not real" are
             // the same answer.
@@ -353,21 +353,21 @@ class StoreOnlineExamRequest extends FormRequest
             // dropdown with a 404 would be baffling, and answering a forged field
             // with a redirect-to-the-form is exactly the right amount of information.
             if ($this->routeIs('teacher.course_offerings.exams.store')) {
-                throw new HttpException(404, 'Course Offering not found.');
+                throw new HttpException(404, 'Course Allocation not found.');
             }
 
             $validator->errors()->add(
                 'course_offering_id',
-                'Choose a Course Offering you are currently allocated to teach.'
+                'Choose a Course Allocation you are currently allocated to teach.'
             );
 
             return;
         }
 
-        // Defence in depth, and free: the Offering resolved inside the actor's own
+        // Defence in depth, and free: the Allocation resolved inside the actor's own
         // tenant must also be in the exam's own tenant.
         if ((int) $offering->school_id !== (int) $user->school_id) {
-            $validator->errors()->add('course_offering_id', 'That Course Offering belongs to another institution.');
+            $validator->errors()->add('course_offering_id', 'That Course Allocation belongs to another institution.');
 
             return;
         }
@@ -375,7 +375,7 @@ class StoreOnlineExamRequest extends FormRequest
         if ($this->filled('subject_id') && (int) $this->input('subject_id') !== (int) $offering->subject_id) {
             $validator->errors()->add(
                 'subject_id',
-                'The Course Unit is taken from the Course Offering and cannot be changed here.'
+                'The Course Unit is taken from the Course Allocation and cannot be changed here.'
             );
         }
 
@@ -383,7 +383,7 @@ class StoreOnlineExamRequest extends FormRequest
             if ($this->filled($legacyField)) {
                 $validator->errors()->add(
                     $legacyField,
-                    'A Course Offering exam does not target a class, programme or academic session. Only students confirmed on the Course Offering will receive it.'
+                    'A Course Allocation exam does not target a class, programme or academic session. Only students confirmed on the Course Allocation will receive it.'
                 );
             }
         }

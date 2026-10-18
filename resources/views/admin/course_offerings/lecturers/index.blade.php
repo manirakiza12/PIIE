@@ -32,9 +32,9 @@
 @if(in_array($offering->status, ['completed', 'cancelled'], true))
     <div class="alert alert-info" role="status">
         @if($offering->status === 'completed')
-            {{ get_phrase('This Offering is complete. Lecturer allocations are retained as history.') }}
+            {{ get_phrase('This Allocation is complete. Lecturer allocations are retained as history.') }}
         @else
-            {{ get_phrase('This Offering is cancelled. Lecturer allocations are read-only.') }}
+            {{ get_phrase('This Allocation is cancelled. Lecturer allocations are read-only.') }}
         @endif
     </div>
 @endif
@@ -50,7 +50,7 @@
         @endif
     </div>
     @if($allocations->isEmpty())
-        <p class="text-muted mb-0">{{ get_phrase('No teaching team members are assigned to this Course Offering yet.') }}</p>
+        <p class="text-muted mb-0">{{ get_phrase('No teaching team members are assigned to this Course Allocation yet.') }}</p>
         @if(!$canManage)<p class="text-muted small mb-0">{{ get_phrase('You have read-only access to this workspace.') }}</p>@endif
     @else
         @include('admin.course_offerings.lecturers._group', ['heading' => get_phrase('Current Teaching Team'), 'items' => $currentAllocations, 'statusLabel' => get_phrase('Active'), 'displayVariant' => 'current'])
@@ -69,7 +69,7 @@
     @else
         <div class="table-responsive mt-3">
             <table class="table align-middle mb-0">
-                <caption class="visually-hidden">{{ get_phrase('Lecturer allocation events for this Course Offering') }}</caption>
+                <caption class="visually-hidden">{{ get_phrase('Lecturer allocation events for this Course Allocation') }}</caption>
                 <thead><tr><th scope="col">{{ get_phrase('Event') }}</th><th scope="col">{{ get_phrase('Lecturer') }}</th><th scope="col">{{ get_phrase('Role / Dates') }}</th><th scope="col">{{ get_phrase('Actor') }}</th><th scope="col">{{ get_phrase('When') }}</th></tr></thead>
                 <tbody>@foreach(array_slice($history, 0, 8) as $event)
                     <tr><td>{{ get_phrase($event['event']) }}@if($event['reason'])<div class="small text-muted">{{ get_phrase('Reason') }}: {{ $event['reason'] }}</div>@endif</td>

@@ -14,8 +14,8 @@ use Illuminate\View\View;
 /**
  * The student's side of Course Content: the first complete reader.
  *
- * Every action resolves the Offering, then the lesson, and BOTH must pass -
- * confirmed registration for that exact Offering, and a lesson that is actually
+ * Every action resolves the Allocation, then the lesson, and BOTH must pass -
+ * confirmed registration for that exact Allocation, and a lesson that is actually
  * released. A draft is a 404 here, not a hidden link: an id that resolves to
  * unpublished content must be indistinguishable from an id that does not exist,
  * or the reader becomes an oracle for what a lecturer has not published yet.

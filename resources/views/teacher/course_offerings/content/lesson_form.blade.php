@@ -292,7 +292,7 @@
                     <p class="small text-muted">
                         @if($isEdit)
                             Files are stored outside the public web folder and are only reachable by students
-                            registered for this Course Offering.
+                            registered for this Course Allocation.
                         @else
                             A lesson can be <strong>only files</strong> &mdash; slides, a handout, a
                             recording. Uploading here saves a draft with your title and notes so far, then

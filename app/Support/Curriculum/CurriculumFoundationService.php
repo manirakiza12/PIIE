@@ -15,6 +15,28 @@ use Illuminate\Validation\ValidationException;
 
 class CurriculumFoundationService
 {
+    public function deleteDraft(Curriculum $curriculum): void
+    {
+        DB::transaction(function () use ($curriculum): void {
+            $locked = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
+            $this->assertDraft($locked);
+            foreach (['student_curriculum_assignments', 'programme_cohorts', 'course_offering_curriculum_memberships'] as $table) {
+                if (\Illuminate\Support\Facades\Schema::hasTable($table)
+                    && DB::table($table)->where('curriculum_id', $locked->id)->exists()) {
+                    $this->fail('curriculum', 'This curriculum is already referenced and cannot be deleted.');
+                }
+            }
+            foreach ($locked->memberships()->get() as $membership) {
+                $this->removeMembership($locked, $membership);
+            }
+            foreach ($locked->stages()->get() as $stage) {
+                $this->removeStage($locked, $stage);
+            }
+            $this->audit('CURRICULUM_DRAFT_DELETED', $locked, $locked->only(['programme_id', 'version', 'status']), []);
+            $locked->delete();
+        });
+    }
+
     public function createDraft(int $schoolId, int $programmeId, string $version, ?int $effectiveAcademicYearId = null): Curriculum
     {
         $this->validate([
@@ -98,7 +120,7 @@ class CurriculumFoundationService
         ]);
 
         if (CurriculumStage::where('curriculum_id', $curriculum->id)->where('sequence', $sequence)->exists()) {
-            $this->fail('sequence', 'That stage position is already used in this Curriculum.');
+            $this->fail('sequence', 'That year position is already used in this Curriculum.');
         }
 
         $stage = new CurriculumStage();
@@ -124,7 +146,7 @@ class CurriculumFoundationService
         ]);
 
         if (CurriculumStage::where('curriculum_id', $curriculum->id)->where('sequence', $sequence)->where('id', '<>', $stage->id)->exists()) {
-            $this->fail('sequence', 'That stage position is already used in this Curriculum.');
+            $this->fail('sequence', 'That year position is already used in this Curriculum.');
         }
 
         $before = $stage->only(['label', 'sequence']);
@@ -142,7 +164,7 @@ class CurriculumFoundationService
         $this->assertDraft($curriculum);
         $this->assertStageInCurriculum($curriculum, $stage);
         if ($stage->memberships()->exists()) {
-            $this->fail('stage', 'Move or remove this Stage’s Course Units before removing the Stage.');
+            $this->fail('stage', 'Move or remove this Programme Year’s Course Units before removing the Programme Year.');
         }
         $before = $stage->only(['id', 'label', 'sequence']);
         $stage->delete();
@@ -192,7 +214,7 @@ class CurriculumFoundationService
             ->whereKey($stageId)
             ->first();
         if (! $stage) {
-            $this->fail('curriculum_stage_id', 'The Stage must belong to this Curriculum and tenant.');
+            $this->fail('curriculum_stage_id', 'The Programme Year must belong to this Curriculum and tenant.');
         }
 
         $data = $this->validatedMembershipAttributes($curriculum, $attributes);
@@ -398,7 +420,7 @@ class CurriculumFoundationService
         $pattern = DB::table('schools')->where('id', $schoolId)->value('academic_calendar_pattern');
         foreach ($memberships as $membership) {
             if (! in_array((int) $membership->curriculum_stage_id, $stageIds, true)) {
-                $blockers['stage_' . $membership->id] = 'Every Course Unit must be assigned to a Stage in this Curriculum.';
+                $blockers['stage_' . $membership->id] = 'Every Course Unit must be assigned to a Programme Year in this Curriculum.';
             }
             if (! Subject::where('school_id', $schoolId)->whereKey($membership->subject_id)->exists()) {
                 $blockers['subject_' . $membership->id] = 'Every Course Unit Subject must belong to this tenant.';
@@ -571,7 +593,7 @@ class CurriculumFoundationService
     private function assertStageIdInCurriculum(Curriculum $curriculum, int $stageId): void
     {
         if (! CurriculumStage::where('school_id', $curriculum->school_id)->where('curriculum_id', $curriculum->id)->whereKey($stageId)->exists()) {
-            $this->fail('curriculum_stage_id', 'The Stage must belong to this Curriculum and tenant.');
+            $this->fail('curriculum_stage_id', 'The Programme Year must belong to this Curriculum and tenant.');
         }
     }
 

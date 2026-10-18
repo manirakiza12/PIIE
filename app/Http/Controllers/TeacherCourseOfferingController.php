@@ -12,13 +12,13 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * The Lecturer academic workspace: My Course Offerings and the teaching
- * workspace for one allocated Course Offering.
+ * The Lecturer academic workspace: My Course Allocations and the teaching
+ * workspace for one allocated Course Allocation.
  *
  * Authorization is entirely server-side and entirely allocation-based
  * (LecturerCourseOfferingAccess): every offering-specific request re-resolves the
  * authenticated lecturer's own allocation, so changing a URL id exposes another
- * lecturer's or another institution's Offering to nobody. A Lecturer gains no
+ * lecturer's or another institution's Allocation to nobody. A Lecturer gains no
  * administrative capability here - registration, confirmation, academic
  * placement and lifecycle remain with the academic office.
  */
@@ -78,14 +78,14 @@ class TeacherCourseOfferingController extends Controller
     }
 
     /**
-     * POST: give this Course Offering a cover image.
+     * POST: give this Course Allocation a cover image.
      *
      * The SERVICE enforces everything - the allocation, the extension allowlist, the
      * 4 MB limit, the private storage location and the disposal of the superseded
      * bytes - and it re-checks the allocation itself rather than trusting the page
      * that rendered this form. The form is a door; the service is the lock.
      *
-     * So this method does three things and no more: resolve the Offering through
+     * So this method does three things and no more: resolve the Allocation through
      * the same access helper the rest of the surface uses, hand the file over, and
      * report what happened. It holds no rule of its own, because a second rule is
      * a second thing to be wrong.
@@ -154,14 +154,14 @@ class TeacherCourseOfferingController extends Controller
                 'terms' => $terms,
                 'canTeach' => $canTeach,
                 'grid' => $empty,
-                'withheld' => 'Student progress becomes available once teaching begins, and remains readable after the Course Offering is completed.',
+                'withheld' => 'Student progress becomes available once teaching begins, and remains readable after the Course Allocation is completed.',
             ]);
         }
 
         // NOT FOUND, NOT A REFUSAL PAGE.
         //
         // This matches every other route in the workspace, and it is the stronger
-        // of the two answers: a 404 does not confirm the Course Offering exists, so
+        // of the two answers: a 404 does not confirm the Course Allocation exists, so
         // the page cannot be used to discover which offerings a lecturer may not
         // see. A polite "you are not allocated to teach this" would confirm all of
         // that, and hand the same information to anyone who guessed an id.
@@ -185,7 +185,7 @@ class TeacherCourseOfferingController extends Controller
                 'terms' => $terms,
                 'canTeach' => false,
                 'roster' => collect(),
-                'withheld' => 'The student roster for this Course Offering becomes available once teaching begins, and remains readable after the Course Offering is completed.',
+                'withheld' => 'The student roster for this Course Allocation becomes available once teaching begins, and remains readable after the Course Allocation is completed.',
             ]);
         }
 
@@ -200,7 +200,7 @@ class TeacherCourseOfferingController extends Controller
 
     /**
      * Allocation + tenant gate. An unallocated, foreign-tenant or cancelled
-     * allocation resolves to the same 404 as a missing Offering.
+     * allocation resolves to the same 404 as a missing Allocation.
      *
      * @return array{0: CourseOffering, 1: array, 2: bool}
      */
@@ -216,7 +216,7 @@ class TeacherCourseOfferingController extends Controller
         ];
     }
     /**
-     * The lecturer's Course Offering workspace navigation.
+     * The lecturer's Course Allocation workspace navigation.
      *
      * DELEGATES TO WorkspaceNav, which is the single definition of the tab list.
      * The same service supplies the navigation to every other page in this
@@ -225,22 +225,22 @@ class TeacherCourseOfferingController extends Controller
      * @return list<array{key:string,label:string,url:?string,available:bool,coming_soon:bool,description:string,active:bool}>
      */
     /**
-     * Serve a Course Offering cover image.
+     * Serve a Course Allocation cover image.
      *
      * The only way to read the bytes: they live outside the web root under a
      * generated name. Authority is re-evaluated on every request - an allocated
-     * lecturer, a CONFIRMED student on this exact Offering, or the academic office
+     * lecturer, a CONFIRMED student on this exact Allocation, or the academic office
      * - and everyone else receives a 404, so the route cannot be used to discover
-     * that another Offering has a cover.
+     * that another Allocation has a cover.
      *
-     * A Course Offering with no cover is a normal state, not an error: the
+     * A Course Allocation with no cover is a normal state, not an error: the
      * relationship is optional, so this returns 404 rather than a placeholder,
      * and no caller should treat a missing cover as a problem to fix.
      */
     public function coverImage(Request $request, int $id)
     {
         // CourseContentAccess::resolveOffering() is the ONE shared rule for
-        // resolving a Course Offering for an actor - the same one Course Content and
+        // resolving a Course Allocation for an actor - the same one Course Content and
         // AssignmentAccess both delegate to. Resolving it any other way would be a
         // second rule, and a second rule eventually disagrees.
         $offering = app(\App\Support\CourseContent\CourseContentAccess::class)
@@ -275,8 +275,8 @@ class TeacherCourseOfferingController extends Controller
 
     /**
      * Only modules that genuinely exist are offered. Attendance and Assignments
-     * are not Course Offering scoped in the current schema, so they are not
-     * presented as Offering actions rather than being faked.
+     * are not Course Allocation scoped in the current schema, so they are not
+     * presented as Allocation actions rather than being faked.
      */
     private function modules(Request $request, CourseOffering $offering, bool $canTeach, array $terms): array
     {
@@ -294,7 +294,7 @@ class TeacherCourseOfferingController extends Controller
                 'key' => 'students',
                 'label' => 'Students',
                 'description' => $this->access->rosterAvailable($offering)
-                    ? 'Confirmed students registered for this Course Offering.'
+                    ? 'Confirmed students registered for this Course Allocation.'
                     : 'The confirmed student roster becomes available when teaching begins.',
                 'available' => $this->access->rosterAvailable($offering),
                 'url' => route('teacher.course_offerings.students', $offering->id),
@@ -302,21 +302,21 @@ class TeacherCourseOfferingController extends Controller
             [
                 'key' => 'attendance',
                 'label' => 'Attendance',
-                'description' => 'Teaching sessions held for this Course Offering and each student register.',
+                'description' => 'Teaching sessions held for this Course Allocation and each student register.',
                 'available' => $canTeach || $offering->status === CourseOffering::STATUS_COMPLETED,
                 'url' => route('teacher.course_offerings.attendance.index', $offering->id),
             ],
             [
                 'key' => 'live_classes',
                 'label' => 'Live Classes',
-                'description' => 'Your Live Classes for this Course Offering are listed below. Scheduling is managed in Live Classes.',
+                'description' => 'Your Live Classes for this Course Allocation are listed below. Scheduling is managed in Live Classes.',
                 'available' => $canTeach,
                 'url' => route('teacher.live_classes.index'),
             ],
             [
                 'key' => 'online_exams',
                 'label' => 'Online Exams',
-                'description' => 'Create, mark and monitor Online Exams. Exams remain scoped to the Course Unit and are not yet attached to a Course Offering.',
+                'description' => 'Create, mark and monitor Online Exams. Exams remain scoped to the Course Unit and are not yet attached to a Course Allocation.',
                 'available' => $canTeach,
                 'url' => route('teacher.online_exams.index'),
             ],
@@ -324,10 +324,10 @@ class TeacherCourseOfferingController extends Controller
     }
 
     /**
-     * Live Classes for this Offering, reusing the existing lecturer visibility
+     * Live Classes for this Allocation, reusing the existing lecturer visibility
      * query (allocation-derived, tenant scoped, capability gated) rather than a
-     * second authorization path. Completed Offerings keep their record; a Draft
-     * or Cancelled Offering shows none.
+     * second authorization path. Completed Allocations keep their record; a Draft
+     * or Cancelled Allocation shows none.
      */
     private function liveClasses(Request $request, CourseOffering $offering, bool $canTeach): \Illuminate\Support\Collection
     {
@@ -346,12 +346,12 @@ class TeacherCourseOfferingController extends Controller
     }
 
     /**
-     * The Offering's Live Class total, plus a breakdown a reader can check.
+     * The Allocation's Live Class total, plus a breakdown a reader can check.
      *
-     * Derived from the SAME Offering-scoped collection the page lists, so the
+     * Derived from the SAME Allocation-scoped collection the page lists, so the
      * number and the list can never disagree - which is the whole point. A bare
      * total is unfalsifiable: a dashboard reading "0" beside five existing
-     * classes is indistinguishable from a genuinely empty Offering, and that is
+     * classes is indistinguishable from a genuinely empty Allocation, and that is
      * exactly the confusion being fixed.
      *
      * Counted from the DERIVED state, so a class whose scheduled time has passed

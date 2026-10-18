@@ -26,7 +26,7 @@ use Tests\TestCase;
  * One test per reported defect, each naming the defect it closes.
  *
  * The class exists to hold the real-world findings from browser testing of
- * Course Offering Live Classes, so every test states the failure it prevents in
+ * Course Allocation Live Classes, so every test states the failure it prevents in
  * its own name and, where the old behaviour was a false CLAIM rather than a
  * crash, asserts the absence of that claim.
  */
@@ -48,7 +48,7 @@ class LiveClassCertificationTest extends TestCase
     {
         // The real piie_main situation, reproduced exactly: an allocation whose
         // agreed start is two days away, on a deliberately early-started
-        // Offering, held by a lecturer carrying the pre-start testing grant.
+        // Allocation, held by a lecturer carrying the pre-start testing grant.
         // The classes are already taught and owned - the classes are the
         // lecturer's own work - and the dashboard said zero.
         DB::table('course_offering_lecturer_allocations')
@@ -61,13 +61,13 @@ class LiveClassCertificationTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         // The grant alone is not enough, and deliberately so: the relaxation only
-        // applies to an Offering somebody deliberately early-started. This is the
+        // applies to an Allocation somebody deliberately early-started. This is the
         // evidence CourseOfferingService::startEarly() leaves behind, and it is
-        // present in piie_main for exactly this Offering.
+        // present in piie_main for exactly this Allocation.
         DB::table('audit_logs')->insert([
             'school_id' => $this->school, 'user_id' => $this->lecturer->id,
             'action' => \App\Support\CourseOffering\SystemTesterAccess::EARLY_START_AUDIT,
-            'module' => 'Course Offerings', 'description' => 'Early start',
+            'module' => 'Course Allocations', 'description' => 'Early start',
             'record_type' => CourseOffering::class, 'record_id' => $this->offering->id,
             'ip_address' => '127.0.0.1', 'created_at' => now(),
         ]);
@@ -95,13 +95,13 @@ class LiveClassCertificationTest extends TestCase
         DB::table('course_offerings')->where('id', $other->id)->update(['status' => 'in_progress']);
 
         $this->class();
-        // A legacy K12 class: no Offering at all.
+        // A legacy K12 class: no Allocation at all.
         (new LiveClass())->forceFill([
             'school_id' => $this->school, 'title' => 'K12 Form 1', 'platform' => 'jitsi',
             'timezone' => 'UTC', 'status' => LiveClass::STATUS_SCHEDULED,
             'scheduled_at' => now()->addDay(), 'ends_at' => now()->addDay()->addHour(),
         ])->save();
-        // A class on a different Offering.
+        // A class on a different Allocation.
         (new LiveClass())->forceFill([
             'school_id' => $this->school, 'title' => 'Other offering', 'platform' => 'jitsi',
             'course_offering_id' => $other->id, 'subject_id' => $this->subject,
@@ -114,7 +114,7 @@ class LiveClassCertificationTest extends TestCase
             ->get(route('teacher.course_offerings.show', $this->offering->id));
 
         $this->assertSame(1, $response->viewData('liveClassCounts')['total'],
-            'only this Offering\'s own class counts - not legacy K12, not another Offering');
+            'only this Allocation\'s own class counts - not legacy K12, not another Allocation');
     }
 
     // ══════════════ DEFECT 2: index/history filters ══════════════
@@ -659,7 +659,7 @@ class LiveClassCertificationTest extends TestCase
         $class = $this->class([
             'scheduled_at' => now()->subMinutes(5), 'ends_at' => now()->addHour(),
             'status' => LiveClass::STATUS_LIVE,
-            // Even with the legacy K12 flag on, an Offering-backed class must not
+            // Even with the legacy K12 flag on, an Allocation-backed class must not
             // turn a join into academic attendance.
             'attendance_enabled' => true,
         ]);
@@ -708,7 +708,7 @@ class LiveClassCertificationTest extends TestCase
         $legacy = $legacy->fresh();
 
         $access = app(LiveClassAccessService::class);
-        $this->assertFalse($access->isOfferingBacked($legacy), 'a K12 class is not Offering-backed');
+        $this->assertFalse($access->isOfferingBacked($legacy), 'a K12 class is not Allocation-backed');
 
         // The lecturer's own K12 index still lists it.
         $seen = $this->actingAs($this->lecturer)
@@ -716,7 +716,7 @@ class LiveClassCertificationTest extends TestCase
             ->viewData('classes');
         $this->assertTrue($seen->contains('id', $legacy->id), 'K12 listing is untouched');
 
-        // And it can still be ended, without needing a Course Offering.
+        // And it can still be ended, without needing a Course Allocation.
         $this->actingAs($this->lecturer)->post(route('teacher.live_classes.end', $legacy->id));
         $this->assertSame(LiveClass::STATUS_ENDED, $legacy->fresh()->status);
         $this->assertNotNull($legacy->fresh()->ended_at, 'a K12 class records its conclusion too');

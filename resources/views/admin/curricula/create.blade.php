@@ -1,7 +1,7 @@
 @extends('admin.navigation')
 
 @section('content')
-<div class="mainSection-title"><h4>{{ get_phrase('Create Programme Curriculum') }}</h4><p class="text-muted">{{ get_phrase('A curriculum defines the stages, course units and credit requirements students follow throughout a programme.') }}</p><p class="text-muted">{{ get_phrase('New curricula start as drafts and become official only after review and approval.') }}</p></div>
+<div class="mainSection-title"><h4>{{ get_phrase('Create Programme Curriculum') }}</h4><p class="text-muted">{{ get_phrase('A curriculum defines the Programme Years, course units and credit requirements students follow throughout a programme.') }}</p><p class="text-muted">{{ get_phrase('New curricula start as drafts and become official only after review and approval. An approved curriculum remains reusable across later Academic Years.') }}</p></div>
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 <div class="eSection-wrap col-xl-8">
     <form method="POST" action="{{ route('admin.curricula.store') }}">@csrf

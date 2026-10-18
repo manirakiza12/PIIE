@@ -38,7 +38,7 @@
 
 @if($markingList->isEmpty())
     <div class="border rounded p-4 text-center" role="status">
-        <h6>Nobody is registered for this Course Offering yet.</h6>
+        <h6>Nobody is registered for this Course Allocation yet.</h6>
         <p class="text-muted mb-0">A marking list is built from confirmed course registrations, so there is nobody to mark yet.</p>
     </div>
 @else

@@ -17,7 +17,7 @@ use Tests\TestCase;
  *
  * ── THE REPORTED SYMPTOM, AND WHY THE OBVIOUS TEST MISSED IT ────────────────
  *
- * Exam 18 ("Final test", Course Offering 5, student Kyeyune Amos):
+ * Exam 18 ("Final test", Course Allocation 5, student Kyeyune Amos):
  *
  *     Q1  qid 40  short_answer  "why testing matters"                     1 mark
  *     Q2  qid 41  short_answer  "write a summarised story about yourself" 5 marks

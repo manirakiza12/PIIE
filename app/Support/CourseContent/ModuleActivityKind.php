@@ -64,7 +64,7 @@ final class ModuleActivityKind
     /** A Quiz. */
     public const QUIZ = 'quiz';
 
-    /** A Course Offering Assignment - the first assessment PIIE evaluates. */
+    /** A Course Allocation Assignment - the first assessment PIIE evaluates. */
     public const ASSIGNMENT = 'assignment';
 
     /** An Online Exam. */

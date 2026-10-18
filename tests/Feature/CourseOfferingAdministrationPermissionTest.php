@@ -65,7 +65,7 @@ class CourseOfferingAdministrationPermissionTest extends TestCase
 
     public function test_view_permission_does_not_authorize_management_or_lifecycle_and_menu_does_not_grant_access(): void
     {
-        $school = $this->makeSchool(['title' => 'Offering RBAC', 'status' => 1]);
+        $school = $this->makeSchool(['title' => 'Allocation RBAC', 'status' => 1]);
         $viewer = User::factory()->create(['role_id'=>3,'school_id'=>$school,'account_status'=>'active','menu_permission'=>null]);
         DB::table('user_permissions')->insert(['school_id'=>$school,'user_id'=>$viewer->id,'permission'=>'academic.course_offering.view']);
         $permissions=app(PermissionService::class);

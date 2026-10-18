@@ -10,20 +10,20 @@
 <div class="mainSection-title">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
         <div>
-            <a href="{{ route('admin.course_offerings.show', $offering->id) }}" class="btn btn-sm btn-outline-secondary mb-2">Back to Course Offering</a>
+            <a href="{{ route('admin.course_registrations.index') }}" class="btn btn-sm btn-outline-secondary mb-2">All Course Registrations</a>
             <h4 class="mb-1">Student Registration</h4>
-            <p class="text-muted mb-0">Register eligible students for this Course Offering, then confirm their registrations. Only confirmed students can join its Live Classes.</p>
+            <p class="text-muted mb-0">Register eligible students for this Course Allocation, then confirm their registrations. Only confirmed students can join its Live Classes.</p>
         </div>
     </div>
 </div>
 
-<section class="eSection-wrap mb-3" aria-label="Course Offering">
+<section class="eSection-wrap mb-3" aria-label="Course Allocation">
     <div class="row g-3">
         <div class="col-12 col-md-6 col-xl-4"><div class="text-muted small">Course Unit</div><div class="fw-semibold">{{ $offering->subject?->code ? $offering->subject->code.' — ' : '' }}{{ $offering->subject?->name }}</div><div class="small text-muted">{{ $offering->reference ?: '' }}</div></div>
         <div class="col-6 col-md-3 col-xl-2"><div class="text-muted small">Academic Year</div><div>{{ $offering->academicYear?->label }}</div></div>
         <div class="col-6 col-md-3 col-xl-2"><div class="text-muted small">Academic Period</div><div>{{ $offering->academicPeriod?->label }}</div></div>
-        <div class="col-6 col-md-6 col-xl-2"><div class="text-muted small">Curriculum Stage</div><div>{{ $stageLabels->isNotEmpty() ? $stageLabels->implode(', ') : 'Not linked yet' }}</div></div>
-        <div class="col-6 col-md-6 col-xl-2"><div class="text-muted small">Offering Status</div><span class="badge bg-{{ $isOpen ? 'success' : 'secondary' }}">{{ ucfirst(str_replace('_', ' ', $offering->status)) }}</span></div>
+        <div class="col-6 col-md-6 col-xl-2"><div class="text-muted small">Programme Year</div><div>{{ $stageLabels->isNotEmpty() ? $stageLabels->implode(', ') : 'Not linked yet' }}</div></div>
+        <div class="col-6 col-md-6 col-xl-2"><div class="text-muted small">Allocation Status</div><span class="badge bg-{{ $isOpen ? 'success' : 'secondary' }}">{{ ucfirst(str_replace('_', ' ', $offering->status)) }}</span></div>
     </div>
     <div class="row g-2 mt-3" aria-label="Student registration summary">
         @foreach(['not_registered' => 'Not Registered', 'registered' => 'Awaiting Confirmation', 'confirmed' => 'Confirmed', 'dropped' => 'Withdrawn'] as $key => $label)
@@ -53,37 +53,18 @@
 
 <section class="eSection-wrap">
 @if($mode === 'eligible')
-    <p class="text-muted">Not Registered lists active students with an academic placement in a linked Curriculum and no registration record for this offering. Intake groups are optional and only help filter existing group records. Withdrawn students appear in Registered Students and History.</p>
+    <p class="text-muted">Not Registered lists active students with an academic placement in a linked Curriculum and no registration record for this offering. Withdrawn students appear in Registered Students and History.</p>
 <h6>Eligible Students ({{ $students->count() }})</h6>
-<p class="text-muted">Eligibility checks each student's academic placement and whether at least 20% of their current academic-session fees are paid. Both checks are repeated when you register, so changed records are skipped with a reason. An authorised admin may waive the payment threshold for a continuing student whose Programme entry year is earlier than this Offering's Academic Year; a reason is required and recorded.</p>
+<p class="text-muted">Eligibility checks each student's academic placement and whether at least 20% of their current academic-session fees are paid. Both checks are repeated when you register, so changed records are skipped with a reason. An authorised admin may waive the payment threshold for a continuing student whose Programme entry year is earlier than this Allocation's Academic Year; a reason is required and recorded.</p>
     @if(!$isOpen)
-        <div class="alert alert-info">Students can be registered only while the Course Offering is open.</div>
-    @endif
-
-    @if($cohorts->isNotEmpty())
-        <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
-            <form method="GET" action="{{ route('admin.course_offerings.eligible_students', $offering->id) }}" class="d-flex flex-wrap gap-2 align-items-end">
-                <div><label class="form-label small mb-1" for="cohort-filter">Optional intake group filter</label>
-                    <select id="cohort-filter" name="cohort_id" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">All eligible students</option>
-                        @foreach($cohorts as $cohort)<option value="{{ $cohort->id }}" @selected($cohortId === (int) $cohort->id)>{{ $cohort->name }}</option>@endforeach
-                    </select></div>
-                <noscript><button class="btn btn-sm btn-outline-secondary">Filter</button></noscript>
-            </form>
-            @if($canManage && $isOpen && $cohortId !== null)
-                <form method="POST" action="{{ route('admin.course_offerings.registrations.bulk', $offering->id) }}" data-single-submit onsubmit="return confirm('Register every eligible current member of this Programme Student Group? Each student is checked individually; ineligible students are skipped.')">
-                    @csrf<input type="hidden" name="mode" value="cohort"><input type="hidden" name="programme_cohort_id" value="{{ $cohortId }}">
-                    <button class="btn btn-sm btn-primary">Register Eligible Cohort Students</button>
-                </form>
-            @endif
-        </div>
+        <div class="alert alert-info">Students can be registered only while the Course Allocation is open.</div>
     @endif
 
     @if($students->isEmpty())
         <div class="alert alert-info mb-0">
-            @if(!$isOpen) This Course Offering is not open for registration.
-            @elseif($stageLabels->isEmpty()) No Programme Curriculum is linked to this Course Offering yet, so no students can be eligible. Link a Curriculum from the Course Offering page.
-            @else No students are currently eligible to register{{ $cohortId ? ' from this Programme Student Group' : '' }}. @if($ineligible->isNotEmpty()) See the students who are not eligible below. @endif
+            @if(!$isOpen) This Course Allocation is not open for registration.
+            @elseif($stageLabels->isEmpty()) No Programme Curriculum is linked to this Course Allocation yet, so no students can be eligible. Link a Curriculum from the Course Allocation page.
+            @else No students are currently eligible to register. @if($ineligible->isNotEmpty()) See the students who are not eligible below. @endif
             @endif
         </div>
     @else
@@ -96,14 +77,14 @@
                 </div>
             @endif
             <div class="table-responsive"><table class="table align-middle">
-                <thead><tr>@if($canManage && $isOpen)<th scope="col"><span class="visually-hidden">Select</span></th>@endif<th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Intake Group (optional)</th><th scope="col">Year of Study (Stage)</th><th scope="col">Registration Status</th>@if($canManage && $isOpen)<th scope="col"><span class="visually-hidden">Action</span></th>@endif</tr></thead>
+                <thead><tr>@if($canManage && $isOpen)<th scope="col"><span class="visually-hidden">Select</span></th>@endif<th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Year</th><th scope="col">Registration Status</th>@if($canManage && $isOpen)<th scope="col"><span class="visually-hidden">Action</span></th>@endif</tr></thead>
                 <tbody>
                 @foreach($students as $student)
                     <tr>
                         @if($canManage && $isOpen)<td><input class="form-check-input" type="checkbox" name="student_ids[]" value="{{ $student->id }}" id="student-{{ $student->id }}" aria-label="Select {{ $student->name }}"></td>@endif
                         <td>{{ $student->code ?: '—' }}</td>
                         <td><label for="student-{{ $student->id }}" class="mb-0">{{ $student->name }}</label>@if($student->roster_fee_waived)<div><span class="badge bg-info text-dark">Continuing-student fee waiver active</span></div>@endif</td>
-                        <td>{{ $student->roster_cohort ?: 'Direct placement' }}</td>
+
                         <td>{{ $student->roster_stage ?: '—' }}</td>
                         <td><span class="badge bg-light text-dark border">Not registered</span></td>
                         @if($canManage && $isOpen)<td><button class="btn btn-sm btn-outline-primary text-nowrap" form="register-one-{{ $student->id }}">Register</button></td>@endif
@@ -132,16 +113,16 @@
 
     @if($ineligible->isNotEmpty())
         <h6 class="mt-4">Not Registered: Needs Attention ({{ $ineligible->count() }})</h6>
-        <p class="text-muted small">These students follow a Curriculum linked to this Course Offering, or belong to a relevant Programme Student Group, but cannot register yet.</p>
+        <p class="text-muted small">These students follow a Curriculum linked to this Course Allocation but cannot register yet.</p>
         <div class="table-responsive"><table class="table table-sm align-middle">
-            <thead><tr><th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Student Group</th><th scope="col">Year of Study (Stage)</th><th scope="col">Reason</th>@if($canManageFeeWaivers)<th scope="col">Fee Waiver</th>@endif</tr></thead>
-            <tbody>@foreach($ineligible as $student)<tr><td>{{ $student->code ?: '—' }}</td><td>{{ $student->name }}</td><td>{{ $student->roster_cohort ?: '—' }}</td><td>{{ $student->roster_stage ?: '—' }}</td><td>{{ $student->roster_reason }}</td>@if($canManageFeeWaivers)<td>@if($student->roster_can_waive_fees)<details><summary class="btn btn-sm btn-outline-warning text-nowrap">Waive 20% rule</summary><form method="POST" action="{{ route('admin.course_offerings.students.fee_waiver.store', [$offering->id, $student->id]) }}" class="mt-2">@csrf<label class="form-label small" for="grant-fee-waiver-{{ $student->id }}">Reason (required)</label><input required minlength="10" maxlength="500" class="form-control form-control-sm mb-1" id="grant-fee-waiver-{{ $student->id }}" name="reason" placeholder="Explain why this continuing student is exempt"><button class="btn btn-sm btn-warning text-nowrap">Grant Fee Waiver</button></form></details>@else<span class="small text-muted">Waiver unavailable</span>@endif</td>@endif</tr>@endforeach</tbody>
+            <thead><tr><th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Year</th><th scope="col">Reason</th>@if($canManageFeeWaivers)<th scope="col">Fee Waiver</th>@endif</tr></thead>
+            <tbody>@foreach($ineligible as $student)<tr><td>{{ $student->code ?: '—' }}</td><td>{{ $student->name }}</td><td>{{ $student->roster_stage ?: '—' }}</td><td>{{ $student->roster_reason }}</td>@if($canManageFeeWaivers)<td>@if($student->roster_can_waive_fees)<details><summary class="btn btn-sm btn-outline-warning text-nowrap">Waive 20% rule</summary><form method="POST" action="{{ route('admin.course_offerings.students.fee_waiver.store', [$offering->id, $student->id]) }}" class="mt-2">@csrf<label class="form-label small" for="grant-fee-waiver-{{ $student->id }}">Reason (required)</label><input required minlength="10" maxlength="500" class="form-control form-control-sm mb-1" id="grant-fee-waiver-{{ $student->id }}" name="reason" placeholder="Explain why this continuing student is exempt"><button class="btn btn-sm btn-warning text-nowrap">Grant Fee Waiver</button></form></details>@else<span class="small text-muted">Waiver unavailable</span>@endif</td>@endif</tr>@endforeach</tbody>
         </table></div>
     @endif
 @else
     <p class="text-muted">Registration and confirmation are separate steps. Students must remain academically eligible and have paid at least 20% of current academic-session fees for either step. Dropped registrations stay in the history.</p>
     @if($students->isEmpty())
-        <div class="alert alert-info mb-0">No students are registered for this Course Offering yet. <a class="alert-link" href="{{ route('admin.course_offerings.eligible_students', $offering->id) }}">Review eligible students</a> to begin registration.</div>
+        <div class="alert alert-info mb-0">No students are registered for this Course Allocation yet. <a class="alert-link" href="{{ route('admin.course_offerings.eligible_students', $offering->id) }}">Review eligible students</a> to begin registration.</div>
     @else
         <form method="POST" action="{{ route('admin.course_offerings.registrations.confirm_bulk', $offering->id) }}" id="bulk-confirm-form" data-single-submit>
             @csrf
@@ -179,7 +160,7 @@
                 <form method="POST" action="{{ route('admin.course_offerings.registrations.confirm', [$offering->id, $registration->id]) }}" id="confirm-one-{{ $registration->id }}" class="d-none" data-single-submit>@csrf</form>
             @endif
             @if($canManage && in_array($registration->status, ['registered', 'confirmed'], true) && in_array($offering->status, ['open', 'in_progress'], true))
-                <form method="POST" action="{{ route('admin.course_offerings.registrations.drop', [$offering->id, $registration->id]) }}" id="drop-{{ $registration->id }}" class="collapse border rounded p-2 mb-2" data-single-submit onsubmit="return confirm('Withdraw this student from the Course Offering? The registration stays in the history.')">
+                <form method="POST" action="{{ route('admin.course_offerings.registrations.drop', [$offering->id, $registration->id]) }}" id="drop-{{ $registration->id }}" class="collapse border rounded p-2 mb-2" data-single-submit onsubmit="return confirm('Withdraw this student from the Course Allocation? The registration stays in the history.')">
                     @csrf<label class="form-label small" for="reason-{{ $registration->id }}">Withdrawal reason for {{ $registration->student_name }}</label>
                     <div class="d-flex flex-wrap gap-2"><input class="form-control form-control-sm" style="max-width: 28rem" id="reason-{{ $registration->id }}" name="reason" required maxlength="1000"><button class="btn btn-sm btn-outline-danger">Withdraw</button></div>
                 </form>

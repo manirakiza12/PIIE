@@ -218,7 +218,7 @@ class LiveClassStudentExperienceTest extends TestCase
     }
 
     /**
-     * A class in the shape of the real #41: an Offering-backed, published,
+     * A class in the shape of the real #41: an Allocation-backed, published,
      * scheduled class starting three days from now.
      */
     private function makeClass(array $overrides = []): LiveClass
@@ -459,7 +459,7 @@ class LiveClassStudentExperienceTest extends TestCase
     public function test_a_registration_for_another_offering_cannot_see_it(): void
     {
         $class = $this->makeClass();
-        $other = $this->makeStudent('Other Offering', $this->makeOffering($this->school, 'OTHER-1'));
+        $other = $this->makeStudent('Other Allocation', $this->makeOffering($this->school, 'OTHER-1'));
 
         $this->actingAs($other)
             ->get(route('student.live_classes.show', $class->id))
@@ -583,7 +583,7 @@ class LiveClassStudentExperienceTest extends TestCase
         $this->assertStringNotContainsString(
             route('teacher.live_classes.destroy', $class->id).'"',
             $html,
-            'no form may post a hard delete for an Offering-backed class'
+            'no form may post a hard delete for an Allocation-backed class'
         );
         $this->assertStringNotContainsString('_method', $html, 'no DELETE method spoof at all');
     }
@@ -678,7 +678,7 @@ class LiveClassStudentExperienceTest extends TestCase
 
     public function test_a_confirmed_student_can_view_a_prestart_class_on_an_early_started_offering(): void
     {
-        // The Offering is in progress and deliberately early-started, while the
+        // The Allocation is in progress and deliberately early-started, while the
         // official Academic Period has not begun. The student is a confirmed
         // registration, so viewing must work; joining is still windowed.
         $futurePeriod = (int) DB::table('academic_periods')->insertGetId([

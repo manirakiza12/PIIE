@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Support\AdmissionsTestHelper;
 
 /**
- * One HEI Course Offering Live Class fixture, shared by the certification suite
+ * One HEI Course Allocation Live Class fixture, shared by the certification suite
  * and the final-corrections suite.
  *
  * Extracted into a trait rather than inherited, because the second suite needed

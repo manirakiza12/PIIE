@@ -40,7 +40,7 @@ use Symfony\Component\HttpFoundation\Response;
  * viewer may see them at all is decided before it is called, by
  * `GradingService::resolveSubmissionForStudent` or
  * `resolveSubmissionForManager` - which is what proves a confirmed registration, or
- * a current allocation, on the exact Offering. The bytes live outside the web root
+ * a current allocation, on the exact Allocation. The bytes live outside the web root
  * under a generated name, so this route is the only way to reach them at all.
  */
 class EvidenceMedia

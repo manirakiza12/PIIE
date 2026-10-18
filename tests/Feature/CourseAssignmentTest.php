@@ -16,11 +16,11 @@ use Tests\Feature\Support\AssignmentFixture;
 use Tests\TestCase;
 
 /**
- * Course-Offering Assignments.
+ * Course-Allocation Assignments.
  *
  * The questions this suite answers, in the order the brief lists them:
  * authority (allocation for a lecturer, confirmed registration for a student),
- * tenant and Offering isolation, the publishing lifecycle, the submission rules,
+ * tenant and Allocation isolation, the publishing lifecycle, the submission rules,
  * protected files, grading, notifications, and the shape a future Gradebook will
  * consume.
  *
@@ -110,7 +110,7 @@ class CourseAssignmentTest extends TestCase
 
     public function test_a_lecturer_cannot_grade_a_submission_in_another_offering(): void
     {
-        // Same school, same lecturer, same tenant — only the Offering differs. A
+        // Same school, same lecturer, same tenant — only the Allocation differs. A
         // second tenant would not prove this, because the school check would
         // catch the request anyway.
         $theirs = $this->secondOfferingAssignment();
@@ -230,7 +230,7 @@ class CourseAssignmentTest extends TestCase
         // THE REGRESSION THIS PINS.
         //
         // The legacy student list selects `class_id IS NULL`, and a Course
-        // Offering assignment has class_id NULL BY DESIGN. Without the domain
+        // Allocation assignment has class_id NULL BY DESIGN. Without the domain
         // partition every HEI assignment in the school would be listed to every
         // K12 student — who could then submit to it through the legacy routes.
         $this->publishedAssignment(['title' => 'HEI work that must stay hidden']);
@@ -252,7 +252,7 @@ class CourseAssignmentTest extends TestCase
         $hei = $this->publishedAssignment(['title' => 'HEI only']);
 
         // The legacy submit route. A K12 student reaching a HEI assignment here
-        // would bypass every Course Offering rule: attempts, the late policy,
+        // would bypass every Course Allocation rule: attempts, the late policy,
         // the deadline and the submission type.
         $this->actingAs($this->student)
             ->post("/student/assignments/{$hei->id}/submit", [
@@ -273,7 +273,7 @@ class CourseAssignmentTest extends TestCase
         // not in it, so the HEI container is not a field the legacy screens can
         // write at all - not even by a hand-crafted POST. That is why the domain
         // partition is a property of the SCHEMA and not merely of the queries:
-        // a legacy row has nowhere to put an Offering id.
+        // a legacy row has nowhere to put an Allocation id.
         $controller = new \App\Http\Controllers\AssignmentController($this->app);
 
         $reflection = new \ReflectionMethod($controller, 'store');
@@ -286,7 +286,7 @@ class CourseAssignmentTest extends TestCase
         $this->assertStringContainsString("\$request->validate(", $source);
         $this->assertStringNotContainsString('course_offering_id', $source);
 
-        // And a legacy row genuinely has no Offering attached.
+        // And a legacy row genuinely has no Allocation attached.
         $legacy = $this->k12Assignment();
         $this->assertNull($legacy->course_offering_id);
         $this->assertTrue(Assignment::k12()->whereKey($legacy->id)->exists());

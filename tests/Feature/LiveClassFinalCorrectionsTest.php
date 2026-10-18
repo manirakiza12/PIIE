@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 /**
  * Focused regression tests for the corrections found in the FINAL manual test of
- * real Course Offering Live Class #46.
+ * real Course Allocation Live Class #46.
  *
  * Each test names the defect it closes. Where the defect was a false CLAIM
  * rather than a crash, the test asserts the absence of the claim - because a
@@ -249,7 +249,7 @@ class LiveClassFinalCorrectionsTest extends TestCase
 
     public function test_a_k12_completed_class_also_cannot_be_cancelled(): void
     {
-        // The Offering-backed path is already refused by canLecturerManage(),
+        // The Allocation-backed path is already refused by canLecturerManage(),
         // which excludes an ended class - so cancelling one of those would pass
         // even with the transition guard removed. The LEGACY K12 path is the one
         // that matters: it falls through to a generic policy with no lifecycle
@@ -477,7 +477,7 @@ class LiveClassFinalCorrectionsTest extends TestCase
                 ->assertOk();
         }
 
-        // (d) joining never writes official Course Offering attendance
+        // (d) joining never writes official Course Allocation attendance
         $this->assertSame(0, DB::table('course_offering_attendance_records')->count());
 
         // (e) no provider secret leaks
@@ -527,7 +527,7 @@ class LiveClassFinalCorrectionsTest extends TestCase
             ['school_id' => $this->school, 'user_id' => $unallocated->id, 'permission' => 'live_classes.create', 'created_at' => now(), 'updated_at' => now()],
         ]);
         $this->assertFalse($access->canLecturerHost($unallocated, $class),
-            'capability alone is not authority; the Offering allocation is');
+            'capability alone is not authority; the Allocation allocation is');
         $this->assertFalse($access->canManagePostClassResources($unallocated, $class));
     }
 
@@ -546,7 +546,7 @@ class LiveClassFinalCorrectionsTest extends TestCase
         $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
         $this->assertFalse($access->isOfferingBacked($legacy));
         $this->assertFalse($access->canManagePostClassResources($this->lecturer, $legacy),
-            'the post-class Offering authority must not leak onto K12 classes');
+            'the post-class Allocation authority must not leak onto K12 classes');
 
         $this->actingAs($this->lecturer)->get(route('teacher.live_classes.show', $legacy->id))->assertOk();
 

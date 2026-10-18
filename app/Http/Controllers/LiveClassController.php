@@ -63,7 +63,7 @@ class LiveClassController extends Controller
         // ended) is the default; staff explicitly asks for "completed",
         // "cancelled" or "all" to see the rest.
         $view = $request->input('view', $status ? 'all' : 'upcoming');
-        // HEI filters. A Course Offering and an academic period are the
+        // HEI filters. A Course Allocation and an academic period are the
         // instruments an HEI lecturer actually filters by; Class/Section/Session
         // mean nothing in an HEI timetable.
         $courseOfferingId = $request->input('course_offering_id');
@@ -89,7 +89,7 @@ class LiveClassController extends Controller
             ->when($platform, fn($q) => $q->where('platform', $platform))
             ->when($status, fn($q) => $q->where('status', $status))
             ->when($date, fn($q) => $q->whereDate('start_date', $date))
-            // Offering-aware filters for the higher-education view. An Offering
+            // Allocation-aware filters for the higher-education view. An Allocation
             // and an academic period are what an HEI lecturer actually thinks
             // in; Class/Section/Session are meaningless in an HEI timetable.
             ->when($courseOfferingId, fn($q) => $q->where('course_offering_id', (int) $courseOfferingId))
@@ -106,9 +106,9 @@ class LiveClassController extends Controller
             ->when(!$status, fn($q) => $this->applyQuickView($q, $view))
             ->with(array_merge(
                 ['subject', 'teacher', 'programme', 'academicSession'],
-                // Only eager-load the Offering when the table is actually
+                // Only eager-load the Allocation when the table is actually
                 // present, so a K12 install (or a minimal fixture) that has
-                // never adopted Course Offerings is not broken by a listing
+                // never adopted Course Allocations is not broken by a listing
                 // feature it does not use.
                 \Illuminate\Support\Facades\Schema::hasTable('course_offerings') ? ['courseOffering'] : []
             ))
@@ -121,9 +121,9 @@ class LiveClassController extends Controller
         $programmes = Programme::where('school_id', $this->school_id)->where('is_active', 1)->orderBy('name')->get();
         $sessions = Session::where('school_id', $this->school_id)->orderByDesc('id')->get();
 
-        // The lecturer's own manageable Offerings, so the Course Offering filter
+        // The lecturer's own manageable Allocations, so the Course Allocation filter
         // can never offer a class the lecturer may not see. Skipped entirely
-        // when the institution has not adopted Course Offerings.
+        // when the institution has not adopted Course Allocations.
         $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
         $offeringAware = \Illuminate\Support\Facades\Schema::hasTable('course_offerings')
             && \Illuminate\Support\Facades\Schema::hasTable('academic_periods');
@@ -166,7 +166,7 @@ class LiveClassController extends Controller
             'googleConfigured' => GoogleOAuthCredentials::isConfigured(),
             'view' => $view,
             'emptyState' => $this->emptyStateForView($view),
-            // HEI Offering-aware filtering
+            // HEI Allocation-aware filtering
             'isHei' => $isHei,
             'filterOfferings' => $filterOfferings,
             'filterPeriods' => $filterPeriods,
@@ -233,10 +233,10 @@ class LiveClassController extends Controller
 
         $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
 
-        // A higher-education lecturer schedules through a Course Offering, not
+        // A higher-education lecturer schedules through a Course Allocation, not
         // through Class/Section/Programme/Session. Rather than serve them the
         // legacy form and let them pick a "Class" that has no meaning in an
-        // HEI timetable, this screen asks which Course Offering first and
+        // HEI timetable, this screen asks which Course Allocation first and
         // carries that choice into the real form as route context.
         //
         // The legacy K12 form below is untouched and still served to K12
@@ -327,7 +327,7 @@ class LiveClassController extends Controller
         $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
         $requiresOffering = $scheduling->isHigherEducation(Auth::user());
 
-        // A K12 institution still may not smuggle Offering context onto this
+        // A K12 institution still may not smuggle Allocation context onto this
         // legacy endpoint. A higher-education one MUST supply it - that is what
         // stops an instant meeting from existing outside every academic record.
         if (! $requiresOffering) {
@@ -347,7 +347,7 @@ class LiveClassController extends Controller
                 ? ['required', 'integer', 'exists:course_offerings,id']
                 : ['nullable', 'integer', 'exists:course_offerings,id'],
         ], [
-            'course_offering_id.required' => get_phrase('Choose the Course Offering this meeting belongs to.'),
+            'course_offering_id.required' => get_phrase('Choose the Course Allocation this meeting belongs to.'),
         ]);
 
         $platform = $validated['platform'] ?? $this->defaultPlatform();
@@ -466,11 +466,11 @@ class LiveClassController extends Controller
         ];
 
         // An instant meeting in a higher-education institution must belong to a
-        // Course Offering. Creating one with only Class/Section/Programme/Session
+        // Course Allocation. Creating one with only Class/Section/Programme/Session
         // produced a class that belongs to no academic record at all: invisible
-        // to the Offering workspace, to the lecturer's own Course Offerings,
+        // to the Allocation workspace, to the lecturer's own Course Allocations,
         // and to every Attendance or notification rule that keys on the
-        // Offering. For a K12 institution the legacy behaviour is unchanged.
+        // Allocation. For a K12 institution the legacy behaviour is unchanged.
         if ($requiresOffering) {
             $offeringId = (int) $request->input('course_offering_id');
             $offering = $this->tenantOfferingOrFail($offeringId);
@@ -482,7 +482,7 @@ class LiveClassController extends Controller
             );
 
             // Build it through the same governed service the scheduled path
-            // uses, so the Offering context, the subject match and the
+            // uses, so the Allocation context, the subject match and the
             // facilitator-allocation rules all apply identically.
             $liveClass = app(\App\Support\LiveClasses\LiveClassService::class)->createForOffering(
                 Auth::user(),
@@ -517,7 +517,7 @@ class LiveClassController extends Controller
         $this->authorizeClassView($liveClass);
 
         // courseOffering (and its year/period) is what supplies the academic
-        // context for an Offering-backed class. Without it the detail page could
+        // context for an Allocation-backed class. Without it the detail page could
         // only ever show "Programme: —", because programme_id is deliberately
         // null on such a class. Guarded on table existence so an installation
         // (or fixture) without an academic calendar still renders the class.
@@ -677,7 +677,7 @@ class LiveClassController extends Controller
     {
         abort_unless((int) $liveClass->school_id === (int) $this->school_id, 404);
         $this->authorizeClassManage($liveClass);
-        abort_if($liveClass->course_offering_id !== null, 403, get_phrase('Offering-backed Live Classes are preserved; cancel the meeting instead.'));
+        abort_if($liveClass->course_offering_id !== null, 403, get_phrase('Allocation-backed Live Classes are preserved; cancel the meeting instead.'));
 
         AuditLog::record('delete', 'Live Classes', "Deleted live class: {$liveClass->title}");
         $liveClass->delete();
@@ -943,7 +943,7 @@ class LiveClassController extends Controller
                     || $access->canLecturerJoin($user, $liveClass));
             if (! $canJoin) {
                 if ($isStudent && ! $access->confirmedStudentRegistration($user, $liveClass)) {
-                    return redirect()->back()->with('error', get_phrase('A confirmed registration for this Course Offering is required.'));
+                    return redirect()->back()->with('error', get_phrase('A confirmed registration for this Course Allocation is required.'));
                 }
                 return redirect()->back()->with('error', get_phrase('Joining is not available for this meeting right now.'));
             }
@@ -965,7 +965,7 @@ class LiveClassController extends Controller
             // the record distinguishes "the meeting was opened" from "the
             // scheduled time passed", which is the whole point of the column.
             // It is participation telemetry only: it NEVER writes official Course
-            // Offering Attendance, which stays lecturer-finalised.
+            // Allocation Attendance, which stays lecturer-finalised.
             $this->recordClassroomOpened($liveClass);
 
             $attendance = $this->recordJoin($liveClass);
@@ -1028,7 +1028,7 @@ class LiveClassController extends Controller
                 //
                 //  - the scheduling lecturer's OWN connected account, now the
                 //    required path for a lecturer scheduling against a Course
-                //    Offering. A Calendar event id is recorded for it.
+                //    Allocation. A Calendar event id is recorded for it.
                 //  - the installation-wide credential
                 //    (services.google_meet.refresh_token — see
                 //    createGoogleMeetUrl()), which returns a bare hangoutLink
@@ -1088,7 +1088,7 @@ class LiveClassController extends Controller
      * classes nobody asked to track don't accumulate rows regardless.
      *
      * This table is PARTICIPATION TELEMETRY, not academic attendance. It is
-     * offered to a lecturer as evidence beside a Course Offering Attendance
+     * offered to a lecturer as evidence beside a Course Allocation Attendance
      * session and never written to one: official attendance remains a separate,
      * lecturer-finalised record.
      */
@@ -1234,7 +1234,7 @@ class LiveClassController extends Controller
         ));
     }
 
-    /** Render the small, Offering-contextual creation entry point. */
+    /** Render the small, Allocation-contextual creation entry point. */
     public function createForOffering(Request $request, int $courseOffering)
     {
         $offering = $this->tenantOfferingOrFail($courseOffering);
@@ -1244,7 +1244,7 @@ class LiveClassController extends Controller
         abort_unless($isAdmin || $access->canLecturerCreateForOffering($actor, $offering), 403);
 
         $allocations = $access->activeManagerAllocationsForOffering($offering);
-        abort_if($allocations->isEmpty(), 403, get_phrase('This Offering has no current Primary or Co Lecturer facilitator allocation.'));
+        abort_if($allocations->isEmpty(), 403, get_phrase('This Allocation has no current Primary or Co Lecturer facilitator allocation.'));
         $facilitators = $allocations->pluck('lecturer')->unique('id')->values();
         if (! $isAdmin) {
             $facilitators = $facilitators->where('id', $actor->id)->values();
@@ -1262,14 +1262,14 @@ class LiveClassController extends Controller
             'course_offering_id' => $offering->id,
         ]);
 
-        // Only offer "Change Course Offering" when there is somewhere to change
-        // to. With a single manageable Offering the link is just noise.
+        // Only offer "Change Course Allocation" when there is somewhere to change
+        // to. With a single manageable Allocation the link is just noise.
         $otherManageableOfferings = $scheduling->isHigherEducation($actor)
             ? $scheduling->manageableOfferings($actor)->where('id', '!=', $offering->id)->count()
             : 0;
 
         // The academic context shown on the form is derived by the same code
-        // that decorates "My Course Offerings", so the two can never disagree.
+        // that decorates "My Course Allocations", so the two can never disagree.
         $contextOffering = $scheduling->offeringContext($actor, $offering);
 
         // Prefer the derived count; fall back to a direct read only when the
@@ -1307,8 +1307,8 @@ class LiveClassController extends Controller
             // so this cannot surface another lecturer's grant.
             'googleConnection' => app(GoogleAccountService::class)->forUser($actor),
             'googleConfigured' => GoogleOAuthCredentials::isConfigured(),
-            // Offering context survives the OAuth round trip: a lecturer who
-            // connects from this form is returned to THIS form for THIS Offering
+            // Allocation context survives the OAuth round trip: a lecturer who
+            // connects from this form is returned to THIS form for THIS Allocation
             // rather than being dropped onto the generic Live Classes list.
             //
             // `route()` yields an ABSOLUTE url (scheme + host), and the return path
@@ -1327,7 +1327,7 @@ class LiveClassController extends Controller
         ]);
     }
 
-    /** The route supplies the Offering; no academic/tenant identity comes from the form. */
+    /** The route supplies the Allocation; no academic/tenant identity comes from the form. */
     public function storeForOffering(StoreOfferingLiveClassRequest $request, int $courseOffering)
     {
         foreach ([
@@ -1336,7 +1336,7 @@ class LiveClassController extends Controller
         ] as $reserved) {
             if ($request->exists($reserved)) {
                 throw ValidationException::withMessages([
-                    $reserved => get_phrase('Offering context is derived by PIIE and cannot be submitted.'),
+                    $reserved => get_phrase('Allocation context is derived by PIIE and cannot be submitted.'),
                 ]);
             }
         }
@@ -1369,13 +1369,13 @@ class LiveClassController extends Controller
 
         if (! $isAdmin && array_key_exists('teacher_id', $validated)
             && (int) $validated['teacher_id'] !== (int) $actor->id) {
-            throw ValidationException::withMessages(['teacher_id' => get_phrase('Lecturers may only facilitate their own Offering-backed class.')]);
+            throw ValidationException::withMessages(['teacher_id' => get_phrase('Lecturers may only facilitate their own Allocation-backed class.')]);
         }
         $facilitatorId = $isAdmin
             ? (int) ($validated['teacher_id'] ?? (count($facilitatorIds) === 1 ? $facilitatorIds[0] : 0))
             : (int) $actor->id;
         if (! in_array($facilitatorId, $facilitatorIds, true)) {
-            throw ValidationException::withMessages(['teacher_id' => get_phrase('Choose a current Primary or Co Lecturer allocated to this exact Offering and meeting date.')]);
+            throw ValidationException::withMessages(['teacher_id' => get_phrase('Choose a current Primary or Co Lecturer allocated to this exact Allocation and meeting date.')]);
         }
 
         $platform = $validated['platform'];
@@ -1388,7 +1388,7 @@ class LiveClassController extends Controller
         $googleConferenceStatus = null;
 
         if (empty($meetingUrl) && in_array($platform, ['jitsi', 'zoom', 'google_meet'], true)) {
-            // The FULL resolution, not just the URL — same call the non-Offering
+            // The FULL resolution, not just the URL — same call the non-Allocation
             // path makes. This route previously used resolveMeetingUrl(), which
             // returns only a string, so a Google event created here recorded
             // neither its Calendar event id nor its conference state. The result
@@ -1404,7 +1404,7 @@ class LiveClassController extends Controller
                 $timezone,
                 null,
                 $validated['description'] ?? null,
-                // A lecturer scheduling against a Course Offering gets the
+                // A lecturer scheduling against a Course Allocation gets the
                 // conference on their OWN calendar or not at all. The
                 // installation-wide credential is never substituted for a missing
                 // personal connection here.
@@ -1463,9 +1463,9 @@ class LiveClassController extends Controller
             'timezone' => $timezone,
             'status' => $status,
             'is_published' => $published,
-            // Participation evidence is a K12 habit. For an Offering-backed
+            // Participation evidence is a K12 habit. For an Allocation-backed
             // class it stays off, because official Attendance is the certified
-            // Course Offering Attendance workflow and is always
+            // Course Allocation Attendance workflow and is always
             // lecturer-controlled - joining must never mark anyone present.
             'attendance_enabled' => false,
             // A recording is an AFTER-class action, not something known at
@@ -1477,7 +1477,7 @@ class LiveClassController extends Controller
         /**
          * Google Calendar bookkeeping, added ONLY when there is something to record.
          *
-         * Identical reasoning, and identical conditional shape, to the non-Offering
+         * Identical reasoning, and identical conditional shape, to the non-Allocation
          * path in buildPayload(): writing an explicit NULL names a column that some
          * of this application's test fixtures do not define, and a payload naming an
          * absent column is a hard SQL error rather than a skipped write. Omitting the
@@ -1780,7 +1780,7 @@ class LiveClassController extends Controller
      * Separates two different intentions that were previously conflated:
      *
      *  - VIEW  - "tell me about this class". Governed by publication and, for an
-     *            Offering-backed class, a confirmed registration. A student can
+     *            Allocation-backed class, a confirmed registration. A student can
      *            read a scheduled class long before it starts.
      *  - JOIN  - "put me in the meeting". Governed additionally by the join
      *            window, and it is where the provider link is disclosed.
@@ -1995,12 +1995,12 @@ class LiveClassController extends Controller
         return $payload;
     }
 
-    /** Legacy/K12 forms cannot attach an HEI Offering by supplying a raw ID. */
+    /** Legacy/K12 forms cannot attach an HEI Allocation by supplying a raw ID. */
     private function rejectOfferingContextOnLegacyWorkflow(Request $request): void
     {
         if ($request->exists('course_offering_id')) {
             throw ValidationException::withMessages([
-                'course_offering_id' => get_phrase('Offering-backed Live Classes must be created through the Course Offering workflow.'),
+                'course_offering_id' => get_phrase('Allocation-backed Live Classes must be created through the Course Allocation workflow.'),
             ]);
         }
     }
@@ -2322,7 +2322,7 @@ class LiveClassController extends Controller
             }
 
             /**
-             * NO SILENT SUBSTITUTION — the Course Offering workflow.
+             * NO SILENT SUBSTITUTION — the Course Allocation workflow.
              *
              * An unconnected lecturer used to fall straight through to the
              * installation-wide credential below, so choosing Google Meet quietly
@@ -2333,7 +2333,7 @@ class LiveClassController extends Controller
              * it is a substitution, and it is refused here rather than performed.
              *
              * The shared credential is left completely intact: it still serves the
-             * non-Offering path and an administrator scheduling on someone's behalf.
+             * non-Allocation path and an administrator scheduling on someone's behalf.
              * Only the lecturer's own automatic creation is refused, and it is
              * refused LOUDLY and BEFORE any Google request, so nothing is written to
              * any calendar as a side effect of the mistake.
@@ -2600,9 +2600,9 @@ class LiveClassController extends Controller
 
         if ($liveClass->course_offering_id !== null) {
             // Recipient-scoped and deduplicated. A school-wide Noticeboard entry
-            // would disclose an Offering's class to every student in the
-            // institution, so the Offering-backed path never uses one: it goes
-            // only to CONFIRMED registrations for that exact Offering, and the
+            // would disclose an Allocation's class to every student in the
+            // institution, so the Allocation-backed path never uses one: it goes
+            // only to CONFIRMED registrations for that exact Allocation, and the
             // live_class_notifications unique index stops a repeated publish or
             // a repeated save from re-notifying the same students.
             return \App\Support\LiveClasses\LiveClassNotifier::announcePublished($liveClass);

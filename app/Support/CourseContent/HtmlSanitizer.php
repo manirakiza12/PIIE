@@ -542,7 +542,7 @@ class HtmlSanitizer
      * default character list. So:
      *
      *   - a BLANK styled question passed the "must not be empty" rule and was saved
-     *     as an unanswerable question (this is the row that reached Offering 5);
+     *     as an unanswerable question (this is the row that reached Allocation 5);
      *   - U+200B, U+200C, U+200D and U+00A0 behave the same way and are equally
      *     invisible to a reader.
      *

@@ -350,7 +350,7 @@ class StudentController extends Controller
                 $discovery = app(StudentCourseOfferingDiscovery::class);
                 $membershipId = $discovery->assignmentMembershipForOffering($student, (int) $validated['course_offering_id']);
                 if ($membershipId === null) {
-                    return redirect()->route('student.my_courses')->with('error', 'That Course Offering is no longer available for your current academic context. Refresh the page or contact the academic office.');
+                    return redirect()->route('student.my_courses')->with('error', 'That Course Allocation is no longer available for your current academic context. Refresh the page or contact the academic office.');
                 }
                 app(CourseRegistrationService::class)->registerStudentForOffering(
                     (int) $schoolId,
@@ -363,7 +363,7 @@ class StudentController extends Controller
             } catch (DomainException $exception) {
                 $message = $exception->getMessage() === 'Pay at least 20% of the current academic-session fees before registering for courses.'
                     ? $exception->getMessage()
-                    : 'The Course Offering could not be registered. Refresh the page or contact the academic office.';
+                    : 'The Course Allocation could not be registered. Refresh the page or contact the academic office.';
                 return redirect()->route('student.my_courses')->with('error', $message);
             }
         }
@@ -418,7 +418,7 @@ class StudentController extends Controller
             $offering = $registration->courseOffering()->first();
             if (! $offering) abort(404);
             if ($offering->status === \App\Models\CourseOffering::STATUS_IN_PROGRESS) {
-                return redirect()->back()->with('error', 'Withdrawal from an in-progress Course Offering requires Academic Office assistance.');
+                return redirect()->back()->with('error', 'Withdrawal from an in-progress Course Allocation requires Academic Office assistance.');
             }
             try {
                 app(CourseRegistrationService::class)->dropRegistration((int) $student->school_id, (int) $registration->id, (int) $student->id);

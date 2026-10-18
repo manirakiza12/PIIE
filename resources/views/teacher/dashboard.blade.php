@@ -40,16 +40,16 @@
 
         @if((app(\App\Support\TenantConfiguration::class)->terminology(auth()->user()->school)['profile'] ?? 'k12') !== 'k12')
         @php $myOfferings = app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)->offerings(auth()->user()); $currentCount = $myOfferings->filter(fn ($offering) => $offering->my_allocation_is_current)->count(); @endphp
-        <section class="eSection-wrap mb-3" aria-label="My Course Offerings">
+        <section class="eSection-wrap mb-3" aria-label="My Course Allocations">
           <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
-              <h5 class="mb-1">My Course Offerings</h5>
-              <p class="text-muted mb-0">{{ $myOfferings->count() }} {{ \Illuminate\Support\Str::plural('Course Offering', $myOfferings->count()) }} allocated to you &middot; {{ $currentCount }} currently in force.</p>
+              <h5 class="mb-1">My Course Allocations</h5>
+              <p class="text-muted mb-0">{{ $myOfferings->count() }} {{ \Illuminate\Support\Str::plural('Course Allocation', $myOfferings->count()) }} allocated to you &middot; {{ $currentCount }} currently in force.</p>
             </div>
-            <a class="btn btn-primary" href="{{ route('teacher.course_offerings.index') }}">View My Course Offerings</a>
+            <a class="btn btn-primary" href="{{ route('teacher.course_offerings.index') }}">View My Course Allocations</a>
           </div>
           @if($myOfferings->isEmpty())
-            <p class="text-muted mb-0 mt-3">You do not currently have any Course Offerings assigned.</p>
+            <p class="text-muted mb-0 mt-3">You do not currently have any Course Allocations assigned.</p>
           @else
           <div class="row g-2 mt-1">
             @foreach($myOfferings->take(6) as $myOffering)

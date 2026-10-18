@@ -10,7 +10,7 @@ use Tests\Feature\Support\AssignmentFixture;
 use Tests\TestCase;
 
 /**
- * The lecturer's Course Offering workspace navigation.
+ * The lecturer's Course Allocation workspace navigation.
  *
  * THE DEFECT THIS SUITE EXISTS FOR
  *
@@ -59,7 +59,7 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
         $this->actingAs($this->lecturer)
             ->get("/teacher/course-offerings/{$this->offering->id}/content")
             ->assertOk()
-            ->assertSee('Course Offering workspace')
+            ->assertSee('Course Allocation workspace')
             ->assertSee('Assignments')
             ->assertSee(route('teacher.course_offerings.assignments.index', $this->offering->id), false);
     }
@@ -81,8 +81,8 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
                 ->get($path)
                 ->assertOk("{$label} should render")
                 // The navigation landmark itself, on every page.
-                ->assertSee('Course Offering workspace')
-                // And the Course Offering context a lecturer needs to stay oriented.
+                ->assertSee('Course Allocation workspace')
+                // And the Course Allocation context a lecturer needs to stay oriented.
                 ->assertSee('offering-context-title', false)
                 ->assertSee($this->offering->subject->code)
                 ->assertSee($this->offering->subject->name)
@@ -124,12 +124,12 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
         $this->actingAs($this->lecturer)
             ->get("{$base}/{$lesson->id}/edit")
             ->assertOk()
-            ->assertSee('Course Offering workspace');
+            ->assertSee('Course Allocation workspace');
 
         $this->actingAs($this->lecturer)
             ->get("{$base}/{$lesson->id}/preview")
             ->assertOk()
-            ->assertSee('Course Offering workspace');
+            ->assertSee('Course Allocation workspace');
     }
 
     public function test_the_navigation_is_present_on_the_assignment_workspace_pages(): void
@@ -153,7 +153,7 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
             $this->actingAs($this->lecturer)
                 ->get($path)
                 ->assertOk()
-                ->assertSee('Course Offering workspace');
+                ->assertSee('Course Allocation workspace');
         }
     }
 
@@ -185,7 +185,7 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
         );
 
         // Live Classes reuses the EXISTING workflow, pre-filtered to this Course
-        // Offering by the query parameter that workflow already supports. It is
+        // Allocation by the query parameter that workflow already supports. It is
         // not a new route and not a second Live Class system.
         $this->assertSame(
             route('teacher.live_classes.index', ['course_offering_id' => $this->offering->id]),
@@ -304,7 +304,7 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
             ->assertOk();
 
         $this->assertStringContainsString('aria-current="page"', $response->getContent());
-        $this->assertStringContainsString('aria-label="Course Offering workspace"', $response->getContent());
+        $this->assertStringContainsString('aria-label="Course Allocation workspace"', $response->getContent());
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -449,7 +449,7 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
         //
         // PIIE has a real, working, site-wide `teacher/gradebook` page linked from
         // the main sidebar. That link is a genuine feature and must keep working -
-        // it is a different thing entirely from the Course Offering workspace tab
+        // it is a different thing entirely from the Course Allocation workspace tab
         // that never had an engine behind it. Asserting on the whole document
         // conflated the two and failed on a page that is working correctly.
         $this->assertNotFalse(
@@ -496,7 +496,7 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
     public function test_an_unallocated_lecturer_is_shown_no_workspace_navigation(): void
     {
         // The navigation is a pointer, never a permission. A lecturer with no
-        // allocation on this Offering is not offered tabs they cannot use, and
+        // allocation on this Allocation is not offered tabs they cannot use, and
         // still cannot reach the destinations by typing the URLs.
         DB::table('course_offering_lecturer_allocations')
             ->where('user_id', $this->otherLecturer->id)->delete();
@@ -552,12 +552,12 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
 
     public function test_a_lecturer_gets_no_navigation_on_their_own_offering_list(): void
     {
-        // The list of Offerings is not a section of one, so it has no workspace
+        // The list of Allocations is not a section of one, so it has no workspace
         // navigation - and the partial must fail quietly rather than error.
         $this->actingAs($this->lecturer)
             ->get(route('teacher.course_offerings.index'))
             ->assertOk()
-            ->assertDontSee('aria-label="Course Offering workspace"', false);
+            ->assertDontSee('aria-label="Course Allocation workspace"', false);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -566,20 +566,20 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
 
     public function test_the_legacy_k12_assignment_screens_are_unchanged(): void
     {
-        // The workspace navigation is a Course Offering surface. A legacy K12
-        // assignment is not inside a Course Offering, so the composer resolves no
+        // The workspace navigation is a Course Allocation surface. A legacy K12
+        // assignment is not inside a Course Allocation, so the composer resolves no
         // offering and the partial must render nothing at all - not a broken
         // partial, and not a tab strip whose links would mean nothing here.
         $k12 = $this->k12Assignment();
 
-        $this->assertNull($k12->course_offering_id, 'a legacy row belongs to no Course Offering');
+        $this->assertNull($k12->course_offering_id, 'a legacy row belongs to no Course Allocation');
 
         // The legacy K12 student list, reached as a student, is unchanged and
-        // carries no Course Offering workspace navigation.
+        // carries no Course Allocation workspace navigation.
         $this->actingAs($this->student)
             ->get(route('student.assignments.list'))
             ->assertOk()
-            ->assertDontSee('aria-label="Course Offering workspace"', false);
+            ->assertDontSee('aria-label="Course Allocation workspace"', false);
     }
 
     // ══════════════════════════════════════════════════════════════════════
