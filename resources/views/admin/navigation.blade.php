@@ -985,7 +985,7 @@
                     @include('shared.page_toolbar')
                 @endunless
                 <div id="page-print-area">
-                    @include('admin.partials.academic_workflow_guide')
+
                     @yield('content')
                 </div>
                 <!-- Start Footer -->

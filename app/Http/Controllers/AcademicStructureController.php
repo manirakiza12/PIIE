@@ -61,7 +61,7 @@ class AcademicStructureController extends Controller
         }
 
         AcademicPeriod::query()->create(['school_id' => $this->schoolId, 'status' => 'planned'] + $data);
-        return redirect()->route('admin.academic_structure.index')->with('success', 'Academic period created.');
+        return redirect()->route('admin.academic_structure.index', ['section' => 'semesters'])->with('success', 'Academic period created.');
     }
 
     public function setCurrent(Request $request, AcademicContextManager $manager)
@@ -71,7 +71,7 @@ class AcademicStructureController extends Controller
             'current_academic_period_id' => ['nullable', 'integer'],
         ]);
         $manager->setCurrent($this->schoolId, $data['current_academic_year_id'] ?? null, $data['current_academic_period_id'] ?? null);
-        return redirect()->route('admin.academic_structure.index')->with('success', 'Current academic context updated.');
+        return redirect()->route('admin.academic_structure.index', $request->input('section') === 'semesters' ? ['section' => 'semesters'] : [])->with('success', 'Current academic context updated.');
     }
 
     public function transitionYear(Request $request, int $yearId, AcademicContextManager $manager)
@@ -85,7 +85,7 @@ class AcademicStructureController extends Controller
     {
         $data = $this->validatedTransition($request);
         $manager->transitionPeriod($this->schoolId, $periodId, $data['status']);
-        return redirect()->route('admin.academic_structure.index')->with('success', 'Academic period status updated.');
+        return redirect()->route('admin.academic_structure.index', ['section' => 'semesters'])->with('success', 'Academic period status updated.');
     }
 
     private function validatedTransition(Request $request): array

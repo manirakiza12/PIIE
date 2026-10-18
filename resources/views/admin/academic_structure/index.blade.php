@@ -23,14 +23,10 @@
 @endif
 
 <div class="academic-calendar-page">
-<nav class="nav nav-pills gap-2 mb-3" aria-label="Academic calendar sections">
-    <a class="nav-link {{ !$showPeriods ? 'active' : '' }}" href="{{ route('admin.academic_structure.index') }}">Academic Years</a>
-    <a class="nav-link {{ $showPeriods ? 'active' : '' }}" href="{{ route('admin.academic_structure.index', ['section'=>'semesters']) }}">{{ $academicPeriodLabel }}s</a>
-</nav>
 @if($years->groupBy(fn ($year) => mb_strtolower(trim($year->label)))->contains(fn ($group) => $group->count() > 1))
 <div class="alert alert-warning" role="status">Some Academic Years share the same name. Check their dates before choosing a year. Existing records are preserved; do not create another copy.</div>
 @endif
-<p class="text-muted">Academic Years set the calendar dates. {{ $academicPeriodLabel }}s divide each year. Choose the current year and {{ strtolower($academicPeriodLabel) }} below.</p>
+
 <div class="row g-3">
     <div class="col-lg-5">
         <div class="eSection-wrap {{ $showPeriods ? 'd-none' : '' }}">
@@ -54,11 +50,16 @@
             </div></div>
         </div>
         <div class="eSection-wrap mt-3">
-            <h5>Current Academic Year &amp; {{ $academicPeriodLabel }}</h5>
+            <h5>{{ $showPeriods ? 'Current '.$academicPeriodLabel : 'Current Academic Year' }}</h5>
             <form method="post" action="{{ route('admin.academic_structure.current') }}">
                 @csrf
                 <div class="mb-3"><label class="form-label">Current year</label><select class="form-select" name="current_academic_year_id" id="current_year"><option value="">No current year</option>@foreach($years->where('status', 'active') as $year)<option value="{{ $year->id }}" @selected((int)$school->current_academic_year_id === (int)$year->id)>{{ $year->label }} ({{ $year->start_date->format('Y-m-d') }} — {{ $year->end_date->format('Y-m-d') }})</option>@endforeach</select></div>
+                @if($showPeriods)
+                <input type="hidden" name="section" value="semesters">
                 <div class="mb-3"><label class="form-label">Current {{ strtolower($academicPeriodLabel) }}</label><select class="form-select" name="current_academic_period_id" id="current_period"><option value="">No current period (break)</option>@foreach($years as $year)@foreach($year->periods->where('status', 'active') as $period)<option data-year="{{ $year->id }}" value="{{ $period->id }}" @selected((int)$school->current_academic_period_id === (int)$period->id)>{{ $year->label }} ({{ $year->start_date->format('Y-m-d') }}) — {{ ucfirst($period->type) }} {{ $period->sequence }} ({{ $period->start_date->format('Y-m-d') }} — {{ $period->end_date->format('Y-m-d') }})</option>@endforeach @endforeach</select></div>
+                @else
+                <input type="hidden" name="current_academic_period_id" id="current_period" value="{{ $school->current_academic_period_id }}">
+                @endif
                 <button class="eBtn eBtn-primary" type="submit">Save current selection</button>
             </form>
         </div>
@@ -98,9 +99,7 @@
                     @if(in_array($year->status, ['planned', 'active'], true))
                         <form method="post" action="{{ route('admin.academic_structure.years.status', $year->id) }}" class="d-inline-block mt-2" onsubmit="return confirm('Cancel this academic year? Historical academic records will be preserved.');">@csrf<input type="hidden" name="status" value="cancelled"><input type="hidden" name="confirm_cancellation" value="1"><button class="btn btn-sm btn-outline-danger" type="submit">Cancel year</button></form>
                     @endif
-                    @if(!$showPeriods)<a class="btn btn-sm btn-outline-secondary mt-2" href="{{ route('admin.academic_structure.index', ['section'=>'semesters', 'year_id'=>$year->id]) }}">View {{ $academicPeriodLabel }}s</a>@endif
                     @if($showPeriods && $year->periods->isNotEmpty())<ul class="mb-0 mt-2">@foreach($year->periods as $period)<li>{{ $academicPeriodLabel }} {{ $period->sequence }} · {{ $period->start_date->format('Y-m-d') }} — {{ $period->end_date->format('Y-m-d') }} · {{ ucfirst($period->status) }}
-                        @if(app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'academic.course_offering.view'))<a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.course_offerings.index', ['year_id' => $year->id, 'period_id' => $period->id]) }}">Course Offerings</a>@endif
                         @if($period->status === 'planned')
                             <form method="post" action="{{ route('admin.academic_structure.periods.status', $period->id) }}" class="d-inline-block">@csrf<input type="hidden" name="status" value="active"><button class="btn btn-sm btn-outline-primary" type="submit">Activate</button></form>
                         @elseif($period->status === 'active')
@@ -119,6 +118,7 @@
 function filterCurrentPeriods() {
     const year = document.getElementById('current_year').value;
     const periods = document.getElementById('current_period');
+    if (periods.tagName !== 'SELECT') return;
     Array.from(periods.options).forEach(option => {
         if (!option.dataset.year) return;
         option.hidden = option.dataset.year !== year;
@@ -126,7 +126,10 @@ function filterCurrentPeriods() {
         if (option.hidden && option.selected) periods.value = '';
     });
 }
-document.getElementById('current_year').addEventListener('change', filterCurrentPeriods);
+document.getElementById('current_year').addEventListener('change', function () {
+    document.getElementById('current_period').value = '';
+    filterCurrentPeriods();
+});
 filterCurrentPeriods();
 @if($errors->any())
 document.addEventListener('DOMContentLoaded', function () {
