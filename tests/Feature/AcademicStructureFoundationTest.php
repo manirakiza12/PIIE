@@ -119,6 +119,65 @@ class AcademicStructureFoundationTest extends TestCase
         return $controller;
     }
 
+    public function test_day_first_dates_are_saved_as_iso_without_swapping_month_and_day(): void
+    {
+        $school = $this->school('semester');
+        $controller = $this->controllerFor($school);
+        $controller->storeYear(Request::create('/', 'POST', ['label' => 'October intake', 'start_date' => '01/10/26', 'end_date' => '30/09/27']));
+        $year = AcademicYear::where('school_id', $school->id)->firstOrFail();
+        $this->assertSame('2026-10-01', $year->start_date->toDateString());
+        $this->assertSame('2027-09-30', $year->end_date->toDateString());
+        $controller->storePeriod(Request::create('/', 'POST', ['academic_year_id' => $year->id, 'type' => 'semester', 'sequence' => 1,
+            'label' => 'Semester 1', 'start_date' => '01/10/26', 'end_date' => '31/03/27']));
+        $this->assertSame('2027-03-31', AcademicPeriod::firstOrFail()->end_date->toDateString());
+        $controller->update(Request::create('/', 'PUT', ['label' => 'October intake revised', 'start_date' => '01/10/26', 'end_date' => '30/09/27']), 'years', $year->id);
+        $this->assertSame('October intake revised', $year->fresh()->label);
+    }
+
+    public function test_day_first_invalid_calendar_dates_are_rejected(): void
+    {
+        foreach (['29/02/27', '31/04/26', '10/13/26', '10/01/2026', "01\0/10/26"] as $date) {
+            try {
+                \App\Support\Academic\AcademicDate::normalize(Request::create('/', 'POST', ['start_date' => $date]));
+                $this->fail('Invalid date must not be normalised: '.$date);
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('start_date', $exception->errors());
+                $this->assertStringContainsString('DD/MM/YY', $exception->errors()['start_date'][0]);
+            }
+        }
+        $request = Request::create('/', 'POST', ['start_date' => '29/02/28']);
+        \App\Support\Academic\AcademicDate::normalize($request);
+        $this->assertSame('2028-02-29', $request->input('start_date'));
+    }
+
+    public function test_day_first_reversed_dates_and_outside_periods_still_fail_validation(): void
+    {
+        $school = $this->school('semester');
+        $controller = $this->controllerFor($school);
+        try {
+            $controller->storeYear(Request::create('/', 'POST', ['label' => 'Invalid', 'start_date' => '30/09/27', 'end_date' => '01/10/26']));
+            $this->fail('Reversed dates must be refused.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('end_date', $exception->errors());
+        }
+        $year = $this->year($school);
+        try {
+            $controller->storePeriod(Request::create('/', 'POST', ['academic_year_id' => $year->id, 'type' => 'semester', 'sequence' => 1,
+                'label' => 'Invalid', 'start_date' => '01/09/26', 'end_date' => '01/09/27']));
+            $this->fail('A semester outside the year must be refused.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('end_date', $exception->errors());
+        }
+    }
+
+    public function test_calendar_inputs_format_iso_old_input_and_model_dates_consistently(): void
+    {
+        $year = $this->year($this->school('semester'));
+        $this->assertSame('01/09/26', \App\Support\Academic\AcademicDate::input($year->start_date));
+        $this->assertSame('01/10/26', \App\Support\Academic\AcademicDate::input('2026-10-01'));
+        $this->assertSame('31/02/26', \App\Support\Academic\AcademicDate::input('31/02/26'));
+    }
+
     public function test_years_are_school_owned_and_duplicate_labels_are_tenant_local(): void
     {
         $a = $this->school('semester');

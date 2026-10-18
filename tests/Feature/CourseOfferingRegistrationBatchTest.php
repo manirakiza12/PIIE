@@ -172,6 +172,129 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->post(route('admin.course_offerings.registrations.confirm_bulk', 2), ['registration_ids' => [1]])->assertNotFound();
     }
 
+    private function programmeFilters(): array
+    {
+        return ['programme_id' => $this->fixture['programme'], 'curriculum_id' => 1, 'stage_id' => 1, 'academic_year_id' => 1, 'period_id' => 1];
+    }
+
+    public function test_programme_workspace_includes_students_without_placements(): void
+    {
+        $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
+        $this->actingAs($viewer);
+        $request = \Illuminate\Http\Request::create('/admin/course-registrations', 'GET', $this->programmeFilters());
+        $request->setUserResolver(fn () => $viewer);
+        $view = app(\App\Http\Controllers\AcademicDeliveryWorkspaceController::class)->registrations($request);
+        $data = $view->getData();
+        $this->assertTrue((bool) $data['ready']);
+        $this->assertCount(4, $data['students']);
+        $this->assertTrue($data['students']->contains('id', $this->fixture['studentIneligible']->id));
+        $this->assertStringContainsString('no academic placement', $data['cells'][$this->fixture['studentIneligible']->id][1]['reason']);
+        $this->assertTrue($data['cells'][$this->fixture['studentA']->id][1]['ready']);
+        $this->assertSame('registered', $data['cells'][$this->fixture['studentAlready']->id][1]['registration']->status);
+        $source = str_replace(["@extends('admin.navigation')", "@section('content')", '@endsection'], '', file_get_contents(resource_path('views/admin/academic/programme_registration.blade.php')));
+        $html = \Illuminate\Support\Facades\Blade::render($source, $data + ['errors' => new \Illuminate\Support\ViewErrorBag]);
+        $this->assertStringContainsString('Register Students for Courses', $html);
+        $this->assertStringContainsString('Year of study missing', $html);
+        $this->assertStringContainsString('Research Methods', $html);
+        $this->assertStringNotContainsString('Set Year 1 for 2026', $html);
+    }
+
+    public function test_programme_registration_registers_selected_students_and_reports_blockers(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage']);
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id, $this->fixture['studentIneligible']->id], 'offering_ids' => [1],
+        ])->assertRedirect(route('admin.course_registrations.index', $this->programmeFilters()));
+        $summary = session('programme_registration_results')[0]['summary'];
+        $this->assertSame(1, $summary['registered']);
+        $this->assertSame(1, $summary['skipped']);
+        $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id]);
+    }
+
+    public function test_programme_workspace_http_page_renders_with_navigation(): void
+    {
+        $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
+        $this->actingAs($viewer)->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Register Students for Courses');
+        $this->get(route('admin.course_registrations.index', $this->programmeFilters()))->assertOk()
+            ->assertSee('Year of study missing')->assertSee('Student Ineligible')->assertSee('Research Methods');
+    }
+
+    public function test_programme_registration_can_register_multiple_courses_together(): void
+    {
+        DB::table('course_offerings')->insert(['id' => 3, 'school_id' => $this->fixture['school'], 'subject_id' => $this->fixture['subject'], 'academic_year_id' => 1, 'academic_period_id' => 1, 'status' => 'open']);
+        DB::table('course_offering_curriculum_memberships')->insert(['school_id' => $this->fixture['school'], 'course_offering_id' => 3, 'curriculum_id' => 1, 'curriculum_membership_id' => 1, 'subject_id' => $this->fixture['subject']]);
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage']);
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1, 3],
+        ])->assertRedirect();
+        $this->assertCount(2, session('programme_registration_results'));
+        $this->assertSame(2, CourseRegistration::where('student_id', $this->fixture['studentA']->id)->count());
+    }
+
+    public function test_programme_registration_rejects_foreign_courses_and_students(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage']);
+        $foreign = User::factory()->create(['role_id' => 7, 'school_id' => $this->fixture['foreignSchool']]);
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [2],
+        ])->assertStatus(422);
+        $this->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$foreign->id], 'offering_ids' => [1],
+        ])->assertStatus(422);
+        $this->assertDatabaseMissing('course_registrations', ['student_id' => $foreign->id]);
+    }
+
+    public function test_programme_routes_preserve_separate_permissions(): void
+    {
+        $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
+        foreach (['register', 'place', 'confirm'] as $action) {
+            $this->actingAs($viewer)->post(route('admin.course_registrations.'.$action), $this->programmeFilters())->assertForbidden();
+        }
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage']);
+        $this->actingAs($manager)->post(route('admin.course_registrations.place'), $this->programmeFilters())->assertForbidden();
+        $this->post(route('admin.course_registrations.confirm'), $this->programmeFilters())->assertForbidden();
+    }
+
+    public function test_programme_confirmation_happens_on_same_page(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.confirm']);
+        $this->actingAs($manager)->post(route('admin.course_registrations.confirm'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentAlready']->id], 'offering_ids' => [1],
+        ])->assertRedirect(route('admin.course_registrations.index', $this->programmeFilters()));
+        $this->assertSame(1, session('programme_registration_results')[0]['summary']['confirmed']);
+    }
+
+    public function test_programme_workspace_sets_missing_year_without_overwriting_existing_placement(): void
+    {
+        $manager = User::factory()->create(['role_id' => 2, 'school_id' => $this->fixture['school'], 'account_status' => 'active']);
+        $this->actingAs($manager)->post(route('admin.course_registrations.place'), $this->programmeFilters() + [
+            'student_id' => $this->fixture['studentIneligible']->id,
+        ])->assertRedirect(route('admin.course_registrations.index', $this->programmeFilters()));
+        $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id, 'entry_curriculum_stage_id' => 1, 'entry_academic_year_id' => 1]);
+        $count = DB::table('student_curriculum_assignments')->count();
+        $this->post(route('admin.course_registrations.place'), $this->programmeFilters() + [
+            'student_id' => $this->fixture['studentA']->id,
+        ])->assertSessionHasErrors('placement');
+        $this->assertSame($count, DB::table('student_curriculum_assignments')->count());
+    }
+
+    public function test_programme_registration_preserves_closed_allocation_and_fee_rules(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage']);
+        DB::table('course_offerings')->where('id', 1)->update(['status' => 'draft']);
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1],
+        ])->assertRedirect();
+        $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
+        DB::table('course_offerings')->where('id', 1)->update(['status' => 'open']);
+        DB::table('student_fee_managers')->where('student_id', $this->fixture['studentA']->id)->update(['paid_amount' => 0]);
+        $this->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1],
+        ])->assertRedirect();
+        $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
+        $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentA']->id]);
+    }
+
     private function makeFixture(): array
     {
         $school = $this->makeSchool(['school_type' => 'higher_ed']);

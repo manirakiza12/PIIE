@@ -55,7 +55,7 @@ class DirectAcademicPlacementController extends Controller
             ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('student_curriculum_assignments as active_placement')
                 ->whereColumn('active_placement.student_id', 'users.id')->where('active_placement.school_id', $schoolId)->whereNull('active_placement.ended_at'))
             ->orderBy('name')->get(['id', 'name', 'email']);
-        $years = AcademicYear::where('school_id', $schoolId)->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")->orderByDesc('start_date')->get(['id', 'label', 'status']);
+        $years = AcademicYear::where('school_id', $schoolId)->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")->orderByDesc('start_date')->get(['id', 'label', 'status', 'start_date', 'end_date']);
         $curricula = Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with('programme')->orderByDesc('created_at')->get(['id', 'programme_id', 'version']);
         $stages = CurriculumStage::where('curriculum_stages.school_id', $schoolId)
             ->join('curricula', function ($join) use ($schoolId): void {

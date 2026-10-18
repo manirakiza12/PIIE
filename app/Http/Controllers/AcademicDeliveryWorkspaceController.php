@@ -10,6 +10,9 @@ class AcademicDeliveryWorkspaceController extends Controller
 {
     public function registrations(Request $request)
     {
+        if (! $request->filled('allocation_id')) {
+            return app(ProgrammeRegistrationController::class)->index($request, app(\App\Support\CourseRegistration\CourseOfferingRoster::class));
+        }
         return $this->workspace($request, 'Course Registrations', 'admin.course_registrations.index', 'registrations');
     }
 

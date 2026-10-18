@@ -1,14 +1,18 @@
 # Programme CRUD and student registration flow
 
-Student Placement is a standalone module. Staff create an account under Students,
-then place that student in an approved Programme Curriculum, Programme Year and
-entry Academic Year. An open Course Allocation linked to the matching curriculum
-course unit and teaching period reviews the student automatically. Placement does
-not itself create a course registration.
+Staff create student accounts under Students and assign their programme on the
+profile. A missing academic placement can be recorded directly in Course
+Registrations, using the selected approved curriculum, year of study and academic
+year. Student Placement remains available for detailed placement administration.
+Placement does not itself create a course registration.
 
-Course Registrations opens on Not Registered. Eligible candidates can be registered
-individually or in bulk; failed placement or fee checks appear under Needs Attention.
-Registration moves the student to Registered Students awaiting confirmation.
+Course Registrations now starts with the programme, year of study and teaching
+period. It shows programme students and all matching allocated courses together,
+including students without placements. Authorised staff can set a missing year of
+study directly on this page. Select students and courses to register them in one
+action, then confirm pending registrations on the same page. Every course displays
+its current status or the reason registration is blocked. The allocation-specific
+workspace remains accessible through Details for fee waivers and exceptional work.
 Confirmation activates course access. Withdrawn registrations remain in History.
 Registration and confirmation recheck placement and the current-session 20% fee
 threshold, including the existing authorised waiver rules.
@@ -32,5 +36,4 @@ initial placement, a matching approved curriculum/year, and an audit reason; it
 also synchronises the profile programme and year of study. Mutations write audit
 records. All new routes use the existing academic permission registry.
 
-No database migration is needed. Existing standalone navigation and guidance are
-preserved; no cross-module quick links are added.
+No database migration is needed. Existing standalone navigation is preserved.
