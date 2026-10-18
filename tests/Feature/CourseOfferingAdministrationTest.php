@@ -588,7 +588,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             ->assertOk()->assertSee('PROGRAMME-A')->assertDontSee('PROGRAMME-B');
     }
 
-    public function test_academic_structure_context_link_carries_year_and_period_filters(): void
+    public function test_semesters_omit_quick_links_and_offering_filters_still_work(): void
     {
         $tenant = $this->tenants[1];
         $secondPeriod = (int) DB::table('academic_periods')->insertGetId([
@@ -601,7 +601,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $this->actingAs($viewer);
 
         $structure = $this->get(route('admin.academic_structure.index', ['section'=>'semesters']));
-        $structure->assertOk()->assertSee(route('admin.course_offerings.index', ['year_id' => $tenant['year'], 'period_id' => $tenant['period']]));
+        $structure->assertOk()->assertDontSee(route('admin.course_offerings.index', ['year_id' => $tenant['year'], 'period_id' => $tenant['period']]));
         $this->get(route('admin.course_offerings.index', ['year_id' => $tenant['year'], 'period_id' => $tenant['period']]))
             ->assertOk()->assertSee('YEAR-PERIOD-ONE')->assertDontSee('YEAR-PERIOD-TWO');
         $this->assertNotSame($offeringOne->id, $offeringTwo->id);
@@ -737,7 +737,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             'current_academic_period_id' => $tenantA['period'],
         ]);
 
-        $this->get(route('admin.academic_structure.index'))
+        $this->get(route('admin.academic_structure.index', ['section' => 'semesters']))
             ->assertOk()
             ->assertSee('Current academic context updated.')
             ->assertSee('2026 (2026-01-01) — Semester 1')

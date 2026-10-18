@@ -173,10 +173,10 @@ class CourseUnitSetupTest extends TestCase
         $member = $this->existingPlacement('BBA102');
         $before = $member->getAttributes();
         $response = $this->get(route('admin.subject.setup', $member->subject_id))->assertOk()
-            ->assertSee('Curriculum applies from Academic Year')->assertSee('2026/2027')->assertSee('data-curriculum-year',false)
-            ->assertSee('Schedule this Course Unit')->assertSee('Academic setup order and next steps');
+            ->assertSee('Curriculum applies from Academic Year')->assertSee('2026\/2027', false)->assertSee('data-curriculum-year',false)
+            ->assertSee('Schedule this Course Unit')->assertDontSee('Academic setup order and next steps');
         $doc = new \DOMDocument(); @$doc->loadHTML($response->getContent()); $xpath = new \DOMXPath($doc);
-        $this->assertSame(1,$xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
+        $this->assertSame(0,$xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
         $this->assertSame(1,$xpath->query('//input[@id="unit-curriculum-academic-year" and @readonly and not(@name)]')->length);
         $this->assertSame(0,$xpath->query('//li[@class="nav-links-li"]//a[contains(@href,"programme-cohorts")]')->length);
         $this->assertEquals($before,$member->fresh()->getAttributes());
