@@ -4,7 +4,7 @@
 
 @php
     /**
-     * The lecturer's Content builder for one Course Offering.
+     * The lecturer's Content builder for one Course Allocation.
      *
      * THE FIRST THING ON THE PAGE IS AN EXPLANATION, not an empty table.
      *
@@ -26,7 +26,7 @@
 
 <div class="mainSection-title">
     <a href="{{ route('teacher.course_offerings.show', $offering->id) }}" class="btn btn-sm btn-outline-secondary mb-2">
-        Back to {{ $offering->subject?->code ?? 'Course Offering' }}
+        Back to {{ $offering->subject?->code ?? 'Course Allocation' }}
     </a>
     <h4 class="mb-1">Course Content &mdash; {{ $unitName }}</h4>
     <p class="text-muted mb-0">
@@ -56,7 +56,7 @@
          about state, not the security boundary. --}}
     <div class="alert alert-warning" role="status">
         <strong>You are viewing this content read-only.</strong>
-        You are not currently allocated to teach this Course Offering, so the authoring
+        You are not currently allocated to teach this Course Allocation, so the authoring
         actions are not available to you.
     </div>
 @endif
@@ -256,7 +256,7 @@
                     Add your first module above. Lessons live inside a module, which is how
                     students see where they are in the course.
                 @else
-                    The lecturer for this Course Offering has not published any content yet.
+                    The lecturer for this Course Allocation has not published any content yet.
                 @endif
             </p>
         </div>
@@ -313,8 +313,8 @@
                                  Assignments already carry `course_offering_module_id`,
                                  so this arrives with the module already selected.
                                  Online exams deliberately have NO module column - the
-                                 exam belongs to the Offering and its Course Unit - so
-                                 the exam link goes to the Offering's own create page.
+                                 exam belongs to the Allocation and its Course Unit - so
+                                 the exam link goes to the Allocation's own create page.
                                  Neither duplicates an engine. --}}
                             <a class="btn btn-sm btn-outline-secondary"
                                data-testid="cc-module-assignment"

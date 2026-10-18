@@ -115,7 +115,7 @@ class AssignmentNotifier
     }
 
     /**
-     * CONFIRMED students on this exact Offering, and nobody else.
+     * CONFIRMED students on this exact Allocation, and nobody else.
      *
      * Never Programme, Cohort, Study Plan or legacy Class membership. A student
      * awaiting confirmation is not told about work they cannot open.

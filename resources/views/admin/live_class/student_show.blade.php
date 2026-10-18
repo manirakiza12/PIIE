@@ -13,8 +13,8 @@
      * linked, and the actual link is reached only through the authorised join
      * action, which re-checks access at that moment.
      *
-     * The academic context is DERIVED from the Course Offering - never stored on
-     * live_classes - so a class can never disagree with the Offering it belongs
+     * The academic context is DERIVED from the Course Allocation - never stored on
+     * live_classes - so a class can never disagree with the Allocation it belongs
      * to.
      */
     $offering = $liveClass->courseOffering;

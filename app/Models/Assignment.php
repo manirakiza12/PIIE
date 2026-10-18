@@ -15,7 +15,7 @@ use Illuminate\Support\Carbon;
  * An Assignment.
  *
  * ONE product, two contexts. This table already existed for the legacy K12
- * flow, keyed to Subject / Class / Teacher. Course Offering assignments were
+ * flow, keyed to Subject / Class / Teacher. Course Allocation assignments were
  * added to the SAME table rather than as a parallel one, so there is a single
  * submission model, a single grading path and no "which is authoritative?"
  * question for the academic office.
@@ -23,7 +23,7 @@ use Illuminate\Support\Carbon;
  * The partition is one nullable column:
  *
  *   course_offering_id IS NULL -> a legacy K12 assignment
- *   course_offering_id IS SET  -> a Course Offering assignment
+ *   course_offering_id IS SET  -> a Course Allocation assignment
  *
  * `scopeK12()` makes that partition EXPLICIT at every legacy call site. The
  * alternative - a global scope - was rejected: it would hide HEI assignments
@@ -34,7 +34,7 @@ use Illuminate\Support\Carbon;
  * WHY THE DOMAIN SEPARATION IS A SECURITY MATTER, NOT COSMETICS
  *
  * The legacy student list selects `is_published = 1` and
- * `(class_id IS NULL OR class_id = <the student's class>)`. A Course Offering
+ * `(class_id IS NULL OR class_id = <the student's class>)`. A Course Allocation
  * assignment has `class_id IS NULL` by design, so without the partition it
  * matches EVERY K12 student in the school - and a K12 student could then open
  * its submit modal and post a submission. Legacy K12 rows all have
@@ -147,7 +147,7 @@ class Assignment extends Model
      * RULES PIIE CAN ACTUALLY OBSERVE.
      *
      * A rule is listed only if satisfaction is derivable from data PIIE already
-     * stores. Offering a rule it cannot evaluate would be the same error as
+     * stores. Allocation a rule it cannot evaluate would be the same error as
      * faking one: the platform would report a task as permanently blocked on a
      * state it can never reach, and the student would be stuck with no way out.
      *
@@ -250,7 +250,7 @@ class Assignment extends Model
     protected $fillable = [        // legacy K12 shape - unchanged
         'school_id', 'title', 'subject_id', 'class_id', 'teacher_id',
         'instructions', 'due_date', 'max_marks', 'submission_type', 'is_published',
-        // Course Offering shape
+        // Course Allocation shape
         'course_offering_id', 'learning_objectives', 'status', 'released_at',
         'closes_at', 'allowed_attempts', 'late_policy', 'created_by', 'updated_by',
         'closed_at', 'closed_by',
@@ -286,7 +286,7 @@ class Assignment extends Model
         return $query->whereNull('course_offering_id');
     }
 
-    /** Course Offering assignments only. */
+    /** Course Allocation assignments only. */
     public function scopeForOffering(Builder $query, int $offeringId): Builder
     {
         return $query->where('course_offering_id', $offeringId);
@@ -294,7 +294,7 @@ class Assignment extends Model
 
     /**
      * The module this task belongs to, or null when it belongs to the Course
-     * Offering as a whole.
+     * Allocation as a whole.
      *
      * Reuses the EXISTING `course_offering_modules` entity. There is no
      * "module task" product: a module task IS an assignment, pointing at the
@@ -450,7 +450,7 @@ class Assignment extends Model
         return $this->belongsTo(CourseOffering::class, 'course_offering_id');
     }
 
-    /** Lecturer who authored it, for Course Offering assignments. */
+    /** Lecturer who authored it, for Course Allocation assignments. */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

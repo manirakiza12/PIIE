@@ -9,12 +9,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * A Lesson: one piece of learning content inside a module of a Course Offering.
+ * A Lesson: one piece of learning content inside a module of a Course Allocation.
  *
  * `course_offering_id` is carried on the row as well as being reachable through
- * the module, so every read can be scoped "this Offering, this tenant" with one
+ * the module, so every read can be scoped "this Allocation, this tenant" with one
  * indexed predicate. The booted hook below is what keeps the two honest: a
- * lesson can never be saved pointing at a module from a different Offering or a
+ * lesson can never be saved pointing at a module from a different Allocation or a
  * different institution, which is the mistake that would let content be read or
  * moved across a tenant boundary.
  *
@@ -182,7 +182,7 @@ class CourseOfferingLesson extends Model
             }
 
             if ((int) $lesson->course_offering_id !== (int) $module->course_offering_id) {
-                throw new \DomainException('A lesson cannot be moved to a module belonging to a different Course Offering.');
+                throw new \DomainException('A lesson cannot be moved to a module belonging to a different Course Allocation.');
             }
 
             if ((int) $lesson->school_id !== (int) $module->school_id) {

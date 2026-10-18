@@ -34,7 +34,7 @@ use App\Support\CourseContent\ProgressionGate;
  *
  * AND THE GATE MAY BE OFF
  *
- * Gating is opt-in per Course Offering. When it is off a student was never going to
+ * Gating is opt-in per Course Allocation. When it is off a student was never going to
  * be stopped, so the pass unlocks nothing here either, and the line says what the
  * pass actually means rather than inventing a consequence.
  */

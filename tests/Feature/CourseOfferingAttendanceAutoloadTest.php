@@ -12,7 +12,7 @@ use Tests\TestCase;
 /**
  * Regression for the lecturer Attendance create 500.
  *
- * The four HEI Course Offering attendance vocabularies were all declared inside
+ * The four HEI Course Allocation attendance vocabularies were all declared inside
  * CourseOfferingAttendanceStatus.php. PSR-4 maps a class name to a file of the
  * same name, so CourseOfferingAttendanceSessionType could only be found if
  * CourseOfferingAttendanceStatus had already been loaded. TeacherCourseOfferingAttendance

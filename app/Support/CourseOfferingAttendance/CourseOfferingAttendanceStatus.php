@@ -3,7 +3,7 @@
 namespace App\Support\CourseOfferingAttendance;
 
 /**
- * Governed vocabularies for HEI Course Offering attendance.
+ * Governed vocabularies for HEI Course Allocation attendance.
  *
  * Statuses are named constants, never magic numbers in controllers or views.
  *

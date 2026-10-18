@@ -24,7 +24,7 @@
     <div class="alert alert-{{ $session->acceptsMarking() ? 'warning' : 'info' }}" role="status">
         <strong>This Attendance Session is {{ strtolower($session->statusLabel()) }}.</strong>
         @if(!$canTeach)
-            Attendance can only be marked by a lecturer with a current teaching allocation while the Course Offering is in progress.
+            Attendance can only be marked by a lecturer with a current teaching allocation while the Course Allocation is in progress.
         @else
             A finalised register is read-only. Ask the academic office if it needs to be corrected.
         @endif
@@ -53,7 +53,7 @@
 @if($roster->isEmpty())
     <section class="eSection-wrap">
         <div class="border rounded p-4 text-center" role="status">
-            <h6>No confirmed students are currently registered for this Course Offering.</h6>
+            <h6>No confirmed students are currently registered for this Course Allocation.</h6>
             <p class="text-muted mb-0">Attendance can only be marked for confirmed course registrations.</p>
         </div>
     </section>
@@ -74,7 +74,7 @@
                         <th scope="col">Student Number</th>
                         <th scope="col">Student Name</th>
                         <th scope="col">{{ $programmeLabel }}</th>
-                        <th scope="col">Year / Stage</th>
+                        <th scope="col">Programme Year</th>
                         <th scope="col">Status</th>
                     </tr>
                 </thead>

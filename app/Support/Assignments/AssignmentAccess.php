@@ -12,24 +12,24 @@ use App\Support\Permissions\PermissionService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * Who may see and change Course Offering Assignments.
+ * Who may see and change Course Allocation Assignments.
  *
  * THIS CLASS INTRODUCES NO NEW AUTHORITY
  *
  * A LECTURER's access is decided by LecturerCourseOfferingAccess - the same
  * service the lecturer workspace, the roster and Course Content already use - so
- * a lecturer can only author and grade for Offerings they are legitimately
+ * a lecturer can only author and grade for Allocations they are legitimately
  * allocated to. Two lecturers who happen to teach the same Subject are still
  * two different allocations, and neither can grade the other's work.
  *
- * A STUDENT's access is a CONFIRMED course registration for that exact Offering,
+ * A STUDENT's access is a CONFIRMED course registration for that exact Allocation,
  * in that exact tenant - the identical test Course Content and Live Classes use.
  * A student registered elsewhere, awaiting confirmation, or in another
  * institution is refused, and the refusal is indistinguishable from the record
  * not existing.
  *
- * Administration reuses the Course Offering capabilities, so there is no new
- * admin role to hand out and no way to hold "manage this Offering" without also
+ * Administration reuses the Course Allocation capabilities, so there is no new
+ * admin role to hand out and no way to hold "manage this Allocation" without also
  * being able to author its assignments.
  */
 class AssignmentAccess
@@ -45,12 +45,12 @@ class AssignmentAccess
     ) {}
 
     /**
-     * The Offering, resolved for this actor, or a 404.
+     * The Allocation, resolved for this actor, or a 404.
      *
-     * Delegates to the shared Course Content resolver so an Offering is looked
+     * Delegates to the shared Course Content resolver so an Allocation is looked
      * up by exactly one rule: a lecturer with an allocation is annotated with
      * theirs, and a staff member who is neither allocated nor an administrator
-     * learns nothing about Offerings they were not given.
+     * learns nothing about Allocations they were not given.
      */
     public function resolveOffering(User $actor, int $offeringId): CourseOffering
     {
@@ -58,12 +58,12 @@ class AssignmentAccess
     }
 
     /**
-     * May this lecturer author and grade for this Offering?
+     * May this lecturer author and grade for this Allocation?
      *
-     * The Offering is re-resolved through the lecturer resolver rather than read
+     * The Allocation is re-resolved through the lecturer resolver rather than read
      * off the passed row, because `teachingActionsAllowed()` reads the
      * `my_allocation_id` attribute that only that resolver attaches. A caller
-     * holding a plainly loaded Offering would otherwise be denied a permission
+     * holding a plainly loaded Allocation would otherwise be denied a permission
      * they genuinely hold - safe, but baffling.
      */
     public function canLecturerManage(User $actor, CourseOffering $offering): bool
@@ -82,7 +82,7 @@ class AssignmentAccess
     }
 
     /**
-     * May this ADMINISTRATOR author or grade for this Offering?
+     * May this ADMINISTRATOR author or grade for this Allocation?
      *
      * `course_assignments.manage` is deliberately NOT accepted here. The
      * role-based compatibility layer in PermissionService grants that capability
@@ -92,12 +92,12 @@ class AssignmentAccess
      *
      * That is a trap worth naming. This method means "the academic office", it is
      * public, and any future caller reaching for it would hand every teacher
-     * admin rights over every Offering in the school. It is the same trap already
+     * admin rights over every Allocation in the school. It is the same trap already
      * found and fixed in Course Content.
      *
      * So it delegates to administersOfferings() - the SAME question
      * assertCanManage() already asks to choose between the two paths. There is
-     * therefore exactly one definition of "administers Course Offerings" in this
+     * therefore exactly one definition of "administers Course Allocations" in this
      * feature, and this predicate cannot drift away from it. Lecturer authority
      * is the allocation, checked in canLecturerManage().
      */
@@ -113,7 +113,7 @@ class AssignmentAccess
     /**
      * The single mutation gate. Administrators and lecturers are routed to
      * DIFFERENT checks and never unioned: a lecturer's authority is their
-     * allocation on this exact Offering, so a lecturer who fails the allocation
+     * allocation on this exact Allocation, so a lecturer who fails the allocation
      * check must not fall through to a path their role alone satisfies.
      */
     public function assertCanManage(User $actor, CourseOffering $offering): void
@@ -123,12 +123,12 @@ class AssignmentAccess
             : $this->canLecturerManage($actor, $offering);
 
         if (! $allowed) {
-            throw new HttpException(403, 'You are not authorized to manage assignments for this Course Offering.');
+            throw new HttpException(403, 'You are not authorized to manage assignments for this Course Allocation.');
         }
     }
 
     /**
-     * Administration is asked with Course Offering capabilities rather than a
+     * Administration is asked with Course Allocation capabilities rather than a
      * role number, for the same reason Course Content does it: the role-based
      * compatibility layer grants the shared capability to every teaching role,
      * so it cannot be used to tell an administrator from a lecturer.
@@ -147,7 +147,7 @@ class AssignmentAccess
         $this->assertCanManage($actor, $offering);
     }
 
-    /** Confirmed registration for this exact Offering, in this exact tenant. */
+    /** Confirmed registration for this exact Allocation, in this exact tenant. */
     public function canStudentAccess(User $actor, CourseOffering $offering): bool
     {
         if ($this->permissions->isStaffRole((int) $actor->role_id)) {
@@ -171,9 +171,9 @@ class AssignmentAccess
     }
 
     /**
-     * Resolve an assignment for a LECTURER, inside the Offering in the URL.
+     * Resolve an assignment for a LECTURER, inside the Allocation in the URL.
      *
-     * A wrong Offering id is a 404 rather than a 403: the lecturer is entitled
+     * A wrong Allocation id is a 404 rather than a 403: the lecturer is entitled
      * to know the assignment does not exist at that address, and a 403 would
      * confirm it exists somewhere.
      */
@@ -198,7 +198,7 @@ class AssignmentAccess
     /**
      * Resolve an assignment for a STUDENT.
      *
-     * All three are required: an Offering the student is confirmed on, and a
+     * All three are required: an Allocation the student is confirmed on, and a
      * status the lecturer has actually released. A draft is a 404, not a 403,
      * so the student-facing pages cannot be used to discover what has not been
      * published.
@@ -226,7 +226,7 @@ class AssignmentAccess
 
     /**
      * The students a lecturer may grade for this assignment: CONFIRMED
-     * registrations on this exact Offering.
+     * registrations on this exact Allocation.
      *
      * Never Programme, Cohort, Study Plan or legacy Class membership - the same
      * eligibility Course Content and Live Classes use, so a student cannot be

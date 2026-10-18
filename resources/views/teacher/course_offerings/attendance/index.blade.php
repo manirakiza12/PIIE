@@ -8,7 +8,7 @@
 @endphp
 
 <div class="mainSection-title">
-    <a href="{{ route('teacher.course_offerings.show', $offering->id) }}" class="btn btn-sm btn-outline-secondary mb-2">Back to Course Offering</a>
+    <a href="{{ route('teacher.course_offerings.show', $offering->id) }}" class="btn btn-sm btn-outline-secondary mb-2">Back to Course Allocation</a>
     <h4 class="mb-1">Attendance &mdash; {{ $offering->subject?->code }} {{ $offering->subject?->name }}</h4>
     <p class="text-muted mb-0">{{ $offering->academicYear?->label }} &middot; {{ $offering->academicPeriod?->label }} &middot; {{ $offering->my_role_label }}</p>
 </div>
@@ -20,14 +20,14 @@
     <div class="alert alert-warning" role="status">
         <strong>Attendance is read-only.</strong>
         @if($offering->status === 'completed')
-            This Course Offering is completed; its attendance history remains available for reference.
+            This Course Allocation is completed; its attendance history remains available for reference.
         @else
-            Recording attendance requires a current teaching allocation while the Course Offering is in progress.
+            Recording attendance requires a current teaching allocation while the Course Allocation is in progress.
         @endif
     </div>
 @endif
 
-<section class="eSection-wrap mb-3" aria-label="Course Offering summary">
+<section class="eSection-wrap mb-3" aria-label="Course Allocation summary">
     <div class="row g-3 align-items-stretch">
         <div class="col-12 col-lg-7">
             <dl class="row mb-0">
@@ -37,9 +37,9 @@
                 <dd class="col-7 col-sm-8">{{ $offering->academicYear?->label }}</dd>
                 <dt class="col-5 col-sm-4">{{ $periodLabel }}</dt>
                 <dd class="col-7 col-sm-8">{{ $offering->academicPeriod?->label }}</dd>
-                <dt class="col-5 col-sm-4">Stage / Year of Study</dt>
+                <dt class="col-5 col-sm-4">Programme Year</dt>
                 <dd class="col-7 col-sm-8">{{ $offering->my_stages->isNotEmpty() ? $offering->my_stages->implode(', ') : 'Not recorded' }}</dd>
-                <dt class="col-5 col-sm-4">Offering Status</dt>
+                <dt class="col-5 col-sm-4">Allocation Status</dt>
                 <dd class="col-7 col-sm-8">{{ ucfirst(str_replace('_', ' ', $offering->status)) }}</dd>
             </dl>
         </div>

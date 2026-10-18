@@ -260,7 +260,7 @@
                  * This module's completion row.
                  *
                  * `forCourseOffering()` and `studentContent()` read the SAME
-                 * modules from the SAME Offering, so the key is always present -
+                 * modules from the SAME Allocation, so the key is always present -
                  * the fallback is here because the alternative is a null that is
                  * then dereferenced a dozen lines below, which is a crash dressed
                  * up as a guard. If the two ever do disagree, the page degrades
@@ -402,13 +402,13 @@
                 @endif
 
                 {{-- ══ THE ASSESSMENTS ON THIS MODULE ═══════════════════════
-                     The student's real Course Offering assignments, linked to
+                     The student's real Course Allocation assignments, linked to
                      the workflow that already exists. No second implementation,
                      no separate submission route: this is a list OF the real
                      thing, and the button opens it.
 
                      Only assessments a student can SEE are here. A draft, an
-                     unreleased assessment and one from another Offering, module
+                     unreleased assessment and one from another Allocation, module
                      or tenant never reach this list, and - the part that matters
                      for correctness rather than privacy - a required assessment
                      the student cannot see also does not BLOCK them. --}}

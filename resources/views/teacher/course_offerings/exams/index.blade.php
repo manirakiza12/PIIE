@@ -3,11 +3,11 @@
 @section('title', 'Quizzes &amp; Exams — ' . $offering->reference)
 
 @section('content')
-    {{-- The breadcrumb is the Offering, because that is where the lecturer came
+    {{-- The breadcrumb is the Allocation, because that is where the lecturer came
          from and where they will go back to. An assessment is a document inside a
          course, not a separate product. --}}
     <nav class="mb-3" aria-label="Breadcrumb">
-        <a href="{{ route('teacher.course_offerings.index') }}">My Course Offerings</a>
+        <a href="{{ route('teacher.course_offerings.index') }}">My Course Allocations</a>
         <span aria-hidden="true"> / </span>
         <a href="{{ route('teacher.course_offerings.show', $offering) }}">{{ $offering->reference }}</a>
         <span aria-hidden="true"> / </span>
@@ -21,21 +21,21 @@
                 {{ get_phrase('Quizzes & Exams') }}
             </h1>
             {{-- The course and its term, in the page's own subtitle, so a lecturer who
-                 clicked in from the Course Offering tabs is still told which course and
+                 clicked in from the Course Allocation tabs is still told which course and
                  which term they are looking at. Without it the tab reads as a generic
                  examination list that happens to be nearby, which is precisely the
                  "thrown back into an unrelated legacy system" feeling. Read from the
-                 Offering, never from an exam row, so it is right even when the list
+                 Allocation, never from an exam row, so it is right even when the list
                  below is empty. --}}
             <p class="text-muted mb-1" data-testid="exams-period">
                 @if($offering->academicYear || $offering->academicPeriod)
                     {{ $offering->academicYear?->label ?? '—' }}@if($offering->academicPeriod) — {{ $offering->academicPeriod->label }}@endif
                 @else
-                    {{ get_phrase('Academic period not set on this Course Offering') }}
+                    {{ get_phrase('Academic period not set on this Course Allocation') }}
                 @endif
             </p>
             <p class="text-muted mb-0">
-                {{ get_phrase('Every assessment below belongs to this Course Offering, and is marked and published through the existing online exam governance. Only students confirmed on this course receive them.') }}
+                {{ get_phrase('Every assessment below belongs to this Course Allocation, and is marked and published through the existing online exam governance. Only students confirmed on this course receive them.') }}
             </p>
         </div>
 
@@ -54,7 +54,7 @@
                 <h2 class="h6">No assessments in this course yet</h2>
                 <p class="text-muted mb-3">
                     Create a quiz, CAT, mid-term or final exam. It is added to this Course
-                    Offering, and only students confirmed on this Offering will see it.
+                    Allocation, and only students confirmed on this Allocation will see it.
                 </p>
                 @if ($canCreate)
                     <a href="{{ route('teacher.course_offerings.exams.create', $offering) }}"
@@ -71,7 +71,7 @@
             <div class="table-responsive">
                 <table class="table align-middle mb-0" data-testid="exams-table">
                     <caption class="visually-hidden">
-                        Assessments in this Course Offering, with their state, window and
+                        Assessments in this Course Allocation, with their state, window and
                         question count.
                     </caption>
                     <thead>
@@ -144,7 +144,7 @@
                                 <td class="text-end">{{ $row['submissions'] }}</td>
                                 <td class="text-nowrap">
                                     {{-- Every one of these is the EXISTING engine's
-                                         route, not a Course Offering copy. There is
+                                         route, not a Course Allocation copy. There is
                                          one question editor, one marking queue and
                                          one publication gate in PIIE. --}}
                                     <a class="btn btn-sm btn-outline-primary"

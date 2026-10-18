@@ -12,10 +12,10 @@ use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
- * Regression: a Course Offering's reference must always correspond to its
+ * Regression: a Course Allocation's reference must always correspond to its
  * PERSISTED Course Unit / Academic Year / Academic Period.
  *
- * The defect, found on production Offering #5: it ended up as
+ * The defect, found on production Allocation #5: it ended up as
  *
  *     reference = BBIT1103-2026-S1   (the ORIGINAL Course Unit)
  *     subject_id = 97 = BBIT4201    (the Course Unit saved afterwards)
@@ -177,7 +177,7 @@ class CourseOfferingReferenceIntegrityTest extends TestCase
         // Moving the second onto the first's identity must not overwrite it.
         $this->service->updateDraft(1, $second->id, ['subject_id' => $subject]);
         $this->assertSame('BBIT1101-2026-S1-2', $second->fresh()->reference, 'the collision is resolved, not overwriting');
-        $this->assertSame('BBIT1101-2026-S1', $first->fresh()->reference, 'the other Offering is untouched');
+        $this->assertSame('BBIT1101-2026-S1', $first->fresh()->reference, 'the other Allocation is untouched');
         $this->assertNotSame($first->reference, $second->fresh()->reference, 'references stay distinct');
     }
 
@@ -189,12 +189,12 @@ class CourseOfferingReferenceIntegrityTest extends TestCase
         $curriculum = $this->curriculum(1, 11, 'approved', '2026-V1');
         $membership = $this->membership(1, $curriculum, $subject, 'semester', 1);
 
-        // Opening requires a linked Study Plan, so each Offering is linked first.
+        // Opening requires a linked Study Plan, so each Allocation is linked first.
         $open = $this->service->createDraft(1, $subject, 11, 101);
         $this->service->addApplicability(1, $open->id, $membership);
         $this->service->open(1, $open->id);
         $this->assertDomainFailure(fn () => $this->service->updateDraft(1, $open->id, ['subject_id' => $other]));
-        $this->assertSame('BBIT1101-2026-S1', $open->fresh()->reference, 'a frozen Offering cannot be re-identified');
+        $this->assertSame('BBIT1101-2026-S1', $open->fresh()->reference, 'a frozen Allocation cannot be re-identified');
 
         $inProgress = $this->service->createDraft(1, $subject, 11, 101);
         $this->service->addApplicability(1, $inProgress->id, $membership);
@@ -254,7 +254,7 @@ class CourseOfferingReferenceIntegrityTest extends TestCase
             $offering->fresh()->only(['subject_id', 'academic_year_id', 'academic_period_id', 'reference'])
         );
 
-        // Another tenant's Offering is not reachable at all.
+        // Another tenant's Allocation is not reachable at all.
         $foreign = $this->service->createDraft(2, $this->subject(2, ['code' => 'FOREIGN']), 21, 201);
         $this->assertDomainFailure(fn () => $this->service->updateDraft(1, $foreign->id, ['subject_id' => $subject]));
     }
@@ -288,7 +288,7 @@ class CourseOfferingReferenceIntegrityTest extends TestCase
     {
         try {
             $operation();
-            $this->fail('Expected the Course Offering domain operation to be rejected.');
+            $this->fail('Expected the Course Allocation domain operation to be rejected.');
         } catch (DomainException $exception) {
             $this->assertNotSame('', trim($exception->getMessage()), 'a human-readable reason is given');
         }

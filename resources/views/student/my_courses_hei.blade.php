@@ -168,7 +168,7 @@
                      controller still supplies it and multi-tenant terminology is not
                      something a card grid should hard-code away. --}}
                 <p class="text-muted small">
-                    {{ get_phrase('Choose one Offering per course unit. Parallel Offerings are listed separately.') }}
+                    {{ get_phrase('Choose one Allocation per course unit. Parallel Allocations are listed separately.') }}
                     <span class="d-block">
                         {{ $courseUnitLabel }}: {{ $year->label }} &middot; {{ $period->label }}
                     </span>
@@ -196,7 +196,7 @@
                                 @else
                                     {{-- Neutral PIIE placeholder. The course code is set in
                                          type rather than a repeated stock image, and the
-                                         tone is derived from the Offering so a course keeps
+                                         tone is derived from the Allocation so a course keeps
                                          the same colour between loads. --}}
                                     <div class="sc-card__fallback sc-card__fb-{{ $card['tone'] }}">
                                         <span class="sc-card__fb-mark" aria-hidden="true">
@@ -234,7 +234,7 @@
                                     @if($card['credits'] !== null)
                                         <span>&middot; {{ number_format((float) $card['credits'], 2) }} {{ get_phrase('credits') }}</span>
                                     @endif
-                                    {{-- The Offering reference is the identifier the academic
+                                    {{-- The Allocation reference is the identifier the academic
                                          office quotes, so it belongs on the card rather than
                                          only in a form the student cannot see. --}}
                                     @if($card['reference'] !== '')
@@ -266,7 +266,7 @@
                                                 @csrf
                                                 <input type="hidden" name="course_offering_id" value="{{ $card['offering_id'] }}">
                                                 <button type="submit" class="eBtn eBtn-primary w-100">
-                                                    {{ get_phrase('Register for this Offering') }}
+                                                    {{ get_phrase('Register for this Allocation') }}
                                                 </button>
                                             </form>
                                             @break
@@ -305,7 +305,7 @@
                                     @endswitch
 
                                     {{-- Withdrawal rules are unchanged and still keyed off the
-                                         Offering's own status, not the registration's. --}}
+                                         Allocation's own status, not the registration's. --}}
                                     @if(in_array($card['section'], ['pending', 'confirmed'], true) && $card['registration_id'] !== null)
                                         @if($card['offering_status'] === 'open')
                                             <form method="POST" action="{{ route('student.my_courses.drop', $card['registration_id']) }}"

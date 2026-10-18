@@ -12,6 +12,27 @@ use DomainException;
 
 class CourseOfferingService
 {
+    public function deleteDraft(int $schoolId, int $offeringId): void
+    {
+        DB::transaction(function () use ($schoolId, $offeringId): void {
+            $offering = $this->offering($schoolId, $offeringId, true, true);
+            // Retain every delivery, registration and lecturer history record.
+            // Inspect references so new modules cannot silently become orphaned.
+            foreach (Schema::getTableListing() as $table) {
+                $unqualifiedTable = substr(strrchr('.'.$table, '.'), 1);
+                if ($unqualifiedTable === 'course_offering_curriculum_memberships' || ! Schema::hasColumn($table, 'course_offering_id')) {
+                    continue;
+                }
+                if (DB::table($table)->where('course_offering_id', $offeringId)->exists()) {
+                    throw new DomainException('This Course Allocation has related records. Cancel it to preserve its history.');
+                }
+            }
+            $this->audit('COURSE_OFFERING_DRAFT_DELETED', $offering, $offering->only(['subject_id', 'academic_year_id', 'academic_period_id', 'reference', 'status']), []);
+            DB::table('course_offering_curriculum_memberships')->where('school_id', $schoolId)->where('course_offering_id', $offeringId)->delete();
+            DB::table('course_offerings')->where('school_id', $schoolId)->where('id', $offeringId)->delete();
+        });
+    }
+
     /**
      * University-facing lifecycle wording, shared by the domain messages and the
      * administrator screens so administrators never see raw status slugs.
@@ -63,7 +84,7 @@ class CourseOfferingService
      * Identity-only draft edit.
      *
      * Identity (Course Unit, Academic Year, Academic Period) may change while the
-     * Offering is DRAFT; the lifecycle freeze for open/in-progress/completed is
+     * Allocation is DRAFT; the lifecycle freeze for open/in-progress/completed is
      * enforced by offering(..., draftOnly: true) below and is unchanged.
      *
      * The reference is SERVER-AUTHORITATIVE and is regenerated here from the
@@ -74,7 +95,7 @@ class CourseOfferingService
      *
      * Previously this method left `reference` untouched while freely changing
      * subject_id / academic_year_id / academic_period_id, so a draft's reference
-     * and its Course Unit could and did disagree: production Offering #5 ended up
+     * and its Course Unit could and did disagree: production Allocation #5 ended up
      * as reference BBIT1103-2026-S1 against subject BBIT4201. Regenerating from
      * the persisted identity makes that state unreachable, and it also repairs
      * any existing mismatch on the next save, because a no-op edit recomputes
@@ -91,7 +112,7 @@ class CourseOfferingService
             $offering = $this->offering($schoolId, $offeringId, true, true);
             $allowed = ['subject_id', 'academic_year_id', 'academic_period_id'];
             if (array_diff(array_keys($changes), $allowed)) {
-                throw new DomainException('Only the Offering Course Unit, Academic Year and Academic Period may be updated while draft.');
+                throw new DomainException('Only the Allocation Course Unit, Academic Year and Academic Period may be updated while draft.');
             }
 
             // 'reference' is in the audited set but never in $allowed, so it is
@@ -122,7 +143,7 @@ class CourseOfferingService
             }
 
             // Authoritative reference for the FINAL identity, ignoring this
-            // Offering's own current row so a no-op edit does not bump itself.
+            // Allocation's own current row so a no-op edit does not bump itself.
             $reference = $this->generatedReference($schoolId, $subjectId, $yearId, $periodId, $offeringId);
             $this->assertDraftIdentity($schoolId, $subjectId, $yearId, $periodId, $reference, $offeringId);
 
@@ -146,12 +167,12 @@ class CourseOfferingService
     }
 
     /**
-     * Turn the progression gate on or off for one Course Offering.
+     * Turn the progression gate on or off for one Course Allocation.
      *
      * WHY THIS IS A SERVICE METHOD AND NOT `$offering->save()`
      *
      * `CourseOffering` is `$guarded = ['*']` and its `updating` hook refuses every
-     * direct write, because an Offering is historical record: subject, year,
+     * direct write, because an Allocation is historical record: subject, year,
      * period and reference have to move together, under audit. A controller that
      * assigns and saves looks like it works and throws a DomainException on the
      * first request - which is a far worse failure than a refusal, because the
@@ -162,7 +183,7 @@ class CourseOfferingService
      * same single-statement discipline as the rest of this class, and - unlike
      * `updateDraft` - it is deliberately available on a RUNNING course. Gating is
      * about how students move through teaching that is already happening, and an
-     * Offering that could only be configured while a draft would be configured
+     * Allocation that could only be configured while a draft would be configured
      * months before anyone knew whether it was right.
      *
      * AUDITED, because it changes what students can reach.
@@ -172,7 +193,7 @@ class CourseOfferingService
     public function setProgressionGate(int $schoolId, int $offeringId, bool $enabled): CourseOffering
     {
         return DB::transaction(function () use ($schoolId, $offeringId, $enabled): CourseOffering {
-            // `$draftOnly` is FALSE, deliberately. Every other mutator on this Offering is
+            // `$draftOnly` is FALSE, deliberately. Every other mutator on this Allocation is
             // draft-only because subject, year, period and reference are identity:
             // changing them mid-course would rewrite history. This column is not
             // identity and has no knock-on effect on applicability, and gating is
@@ -217,7 +238,7 @@ class CourseOfferingService
             $offering = $this->offering($schoolId, $offeringId, true, true);
             $membership = $this->validateApplicability($offering, $membershipId);
             if ($offering->applicability()->where('curriculum_membership_id', $membership->id)->exists()) {
-                throw new DomainException('This Study Plan is already linked to this Course Offering.');
+                throw new DomainException('This Study Plan is already linked to this Course Allocation.');
             }
 
             DB::table('course_offering_curriculum_memberships')->insert([
@@ -243,7 +264,7 @@ class CourseOfferingService
             $offering = $this->offering($schoolId, $offeringId, true, true);
             $link = $offering->applicability()->where('curriculum_membership_id', $membershipId)->first();
             if (! $link) {
-                throw new DomainException('This Study Plan link was not found for this Course Offering.');
+                throw new DomainException('This Study Plan link was not found for this Course Allocation.');
             }
             DB::table('course_offering_curriculum_memberships')->where('school_id', $schoolId)
                 ->where('course_offering_id', $offeringId)->where('curriculum_membership_id', $membershipId)->delete();
@@ -260,7 +281,7 @@ class CourseOfferingService
         return $this->transition($schoolId, $offeringId, CourseOffering::STATUS_DRAFT, CourseOffering::STATUS_OPEN, function (CourseOffering $offering): void {
             $links = $offering->applicability()->get();
             if ($links->isEmpty()) {
-                throw new DomainException('At least one Study Plan must be linked before this Course Offering can be opened.');
+                throw new DomainException('At least one Study Plan must be linked before this Course Allocation can be opened.');
             }
             foreach ($links as $link) {
                 $this->validateApplicability($offering, (int) $link->curriculum_membership_id);
@@ -272,7 +293,7 @@ class CourseOfferingService
     {
         return $this->transition($schoolId, $offeringId, CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS, function (CourseOffering $offering): void {
             // Institutional date governance stays authoritative and comes first:
-            // there is deliberately no per-Offering override, so an institution
+            // there is deliberately no per-Allocation override, so an institution
             // that needs to teach earlier must move the Academic Period through
             // the governed Academic Years & Periods workflow instead.
             $this->assertAcademicPeriodHasBegun($offering);
@@ -281,15 +302,15 @@ class CourseOfferingService
     }
 
     /**
-     * Governed early start: an authorised Course Offering administrator may move
-     * an OPEN Offering to IN PROGRESS before its Academic Period begins.
+     * Governed early start: an authorised Course Allocation administrator may move
+     * an OPEN Allocation to IN PROGRESS before its Academic Period begins.
      *
      * This is a deliberate, audited exception to date governance, not a removal
      * of it. The normal start() rule is untouched and still refuses an early
      * start; there is no bypass parameter on that path. What this method does
      * NOT do is the important part: it does not move the Academic Period, the
      * Study Plan, the Programme Cohort, Academic Placement, any student
-     * registration, or any lecturer allocation date. Only the Offering's own
+     * registration, or any lecturer allocation date. Only the Allocation's own
      * status changes, so the institution's real dates are never falsified.
      *
      * A cancelled Academic Period is still refused: an administrator override
@@ -299,7 +320,7 @@ class CourseOfferingService
     {
         $reason = trim($reason);
         if ($reason === '') {
-            throw new DomainException('A nonblank reason is required to start this Course Offering before its Academic Period begins.');
+            throw new DomainException('A nonblank reason is required to start this Course Allocation before its Academic Period begins.');
         }
 
         $period = $this->academicPeriod($schoolId, $offeringId);
@@ -338,30 +359,30 @@ class CourseOfferingService
     public function earlyStartBlockers(CourseOffering $offering): array
     {
         if ($offering->status !== CourseOffering::STATUS_OPEN) {
-            return ['Only an Open Course Offering can be started early.'];
+            return ['Only an Open Course Allocation can be started early.'];
         }
 
         $period = DB::table('academic_periods')->where('school_id', $offering->school_id)
             ->where('academic_year_id', $offering->academic_year_id)->where('id', $offering->academic_period_id)
             ->first(['label', 'start_date', 'status']);
         if (! $period) {
-            return ['The Academic Period for this Course Offering could not be found.'];
+            return ['The Academic Period for this Course Allocation could not be found.'];
         }
         if (strtolower((string) $period->status) === 'cancelled') {
-            return ['This Course Offering cannot be started early because its Academic Period has been cancelled.'];
+            return ['This Course Allocation cannot be started early because its Academic Period has been cancelled.'];
         }
         if (! $period->start_date) {
             return [];
         }
         if ($this->academicPeriodHasBegun($offering)) {
-            return ['The Academic Period has already begun, so this Course Offering should be started normally.'];
+            return ['The Academic Period has already begun, so this Course Allocation should be started normally.'];
         }
 
         return [];
     }
 
     /**
-     * Read-only: whether today is on or after the Offering's Academic Period
+     * Read-only: whether today is on or after the Allocation's Academic Period
      * start date. The same test assertAcademicPeriodHasBegun() enforces, exposed
      * so the workspace can decide which of the two start controls to show
      * instead of guessing and offering a button that would be refused.
@@ -385,16 +406,16 @@ class CourseOfferingService
             ->where('academic_year_id', $offering->academic_year_id)->where('id', $offering->academic_period_id)
             ->first(['label', 'start_date', 'status']);
         if (! $period) {
-            throw new DomainException('The Academic Period for this Course Offering could not be found.');
+            throw new DomainException('The Academic Period for this Course Allocation could not be found.');
         }
 
         return $period;
     }
 
     /**
-     * An Offering cannot start under a cancelled Academic Period. The period
+     * An Allocation cannot start under a cancelled Academic Period. The period
      * itself is only ever changed through the governed Academic Years & Periods
-     * workflow; an individual Course Offering can never bypass it.
+     * workflow; an individual Course Allocation can never bypass it.
      */
     private function assertAcademicPeriodIsUsable(CourseOffering $offering): void
     {
@@ -404,7 +425,7 @@ class CourseOfferingService
             ->value('status');
 
         if ($status !== null && strtolower((string) $status) === 'cancelled') {
-            throw new DomainException('This Course Offering cannot start because its Academic Period has been cancelled. Update the Course Offering to a valid Academic Period through the governed Academic Years & Periods workflow.');
+            throw new DomainException('This Course Allocation cannot start because its Academic Period has been cancelled. Update the Course Allocation to a valid Academic Period through the governed Academic Years & Periods workflow.');
         }
     }
 
@@ -430,7 +451,7 @@ class CourseOfferingService
         }
         $startDate = \Illuminate\Support\Carbon::parse($period->start_date);
         if (now()->startOfDay()->lt($startDate->startOfDay())) {
-            throw new DomainException("This Course Offering cannot start before {$period->label} begins on {$startDate->format('j F Y')}.");
+            throw new DomainException("This Course Allocation cannot start before {$period->label} begins on {$startDate->format('j F Y')}.");
         }
     }
 
@@ -442,7 +463,7 @@ class CourseOfferingService
     }
 
     /**
-     * A Course Offering cannot be completed while lecturers are still allocated to
+     * A Course Allocation cannot be completed while lecturers are still allocated to
      * it. Allocations are never ended automatically: the administrator ends them
      * from the Teaching Team page, so the allocation history stays an accurate
      * record of who taught the Course Unit.
@@ -459,7 +480,7 @@ class CourseOfferingService
         if ($active > 0) {
             $noun = \Illuminate\Support\Str::plural('allocation', $active);
             $verb = $active === 1 ? 'remains' : 'remain';
-            throw new DomainException("This Course Offering cannot be completed yet: {$active} lecturer {$noun} {$verb} active. End the remaining teaching team allocations first, from the Teaching Team page.");
+            throw new DomainException("This Course Allocation cannot be completed yet: {$active} lecturer {$noun} {$verb} active. End the remaining teaching team allocations first, from the Teaching Team page.");
         }
     }
 
@@ -473,7 +494,7 @@ class CourseOfferingService
         if ($unresolved > 0) {
             $noun = \Illuminate\Support\Str::plural('registration', $unresolved);
             $verb = $unresolved === 1 ? 'requires' : 'require';
-            throw new DomainException("This Course Offering cannot be completed yet: {$unresolved} student {$noun} still {$verb} confirmation or withdrawal.");
+            throw new DomainException("This Course Allocation cannot be completed yet: {$unresolved} student {$noun} still {$verb} confirmation or withdrawal.");
         }
     }
 
@@ -487,7 +508,7 @@ class CourseOfferingService
         return DB::transaction(function () use ($schoolId, $offeringId, $reason): CourseOffering {
             $offering = $this->offering($schoolId, $offeringId, false, true);
             if (! in_array($offering->status, [CourseOffering::STATUS_DRAFT, CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true)) {
-                throw new DomainException('A Course Offering in this state cannot be cancelled.');
+                throw new DomainException('A Course Allocation in this state cannot be cancelled.');
             }
             $before = ['status' => $offering->status];
             DB::table('course_offerings')->where('school_id', $schoolId)->where('id', $offeringId)
@@ -504,7 +525,7 @@ class CourseOfferingService
         return DB::transaction(function () use ($schoolId, $offeringId, $from, $to, $beforeTransition, $event): CourseOffering {
             $offering = $this->offering($schoolId, $offeringId, false, true);
             if ($offering->status !== $from) {
-                throw new DomainException('Only a Course Offering in the '.self::statusLabel($from).' state can be moved to '.self::statusLabel($to).'.');
+                throw new DomainException('Only a Course Allocation in the '.self::statusLabel($from).' state can be moved to '.self::statusLabel($to).'.');
             }
             if ($beforeTransition) {
                 $beforeTransition($offering);
@@ -532,7 +553,7 @@ class CourseOfferingService
             throw new DomainException('The selected Academic Period does not belong to this institution or the chosen Academic Year.');
         }
         if ($reference !== null && (mb_strlen($reference) > 50 || DB::table('course_offerings')->where('school_id', $schoolId)->where('reference', $reference)->when($ignoreOfferingId, fn ($query) => $query->where('id', '<>', $ignoreOfferingId))->exists())) {
-            throw new DomainException('The optional Offering reference must be at most 50 characters and unique within the tenant.');
+            throw new DomainException('The optional Allocation reference must be at most 50 characters and unique within the tenant.');
         }
     }
 
@@ -548,7 +569,7 @@ class CourseOfferingService
     /**
      * The server-side, authoritative reference for an identity.
      *
-     * $ignoreOfferingId excludes an Offering from the collision check so an
+     * $ignoreOfferingId excludes an Allocation from the collision check so an
      * update can recompute its own reference without colliding with the row it
      * is replacing. Collisions are resolved with the established parallel-
      * delivery suffix (-2, -3, ...), not by overwriting or rejecting.
@@ -560,7 +581,7 @@ class CourseOfferingService
         $period = DB::table('academic_periods')->where('school_id', $schoolId)->where('academic_year_id', $yearId)->where('id', $periodId)->first(['type', 'sequence']);
 
         if (! $subject || ! $year || ! $period) {
-            throw new DomainException('A valid Course Unit, Academic Year and Academic Period are required to generate the Course Offering reference.');
+            throw new DomainException('A valid Course Unit, Academic Year and Academic Period are required to generate the Course Allocation reference.');
         }
 
         $code = strtoupper(trim((string) $subject->code));
@@ -603,25 +624,25 @@ class CourseOfferingService
         }
         $curriculum = Curriculum::where('school_id', $offering->school_id)->whereKey($membership->curriculum_id)->first();
         if (! $curriculum || $curriculum->status !== 'approved') {
-            throw new DomainException('Only an approved Study Plan may be linked to this Course Offering.');
+            throw new DomainException('Only an approved Study Plan may be linked to this Course Allocation.');
         }
         $academicYear = DB::table('academic_years')->where('school_id', $offering->school_id)->where('id', $offering->academic_year_id)->first();
         if (! $academicYear) {
-            throw new DomainException('This Course Offering has an invalid Academic Year. The academic office should review it.');
+            throw new DomainException('This Course Allocation has an invalid Academic Year. The academic office should review it.');
         }
         if ($curriculum->effective_academic_year_id !== null) {
             $effectiveYear = DB::table('academic_years')->where('school_id', $offering->school_id)->where('id', $curriculum->effective_academic_year_id)->first();
             if (! $effectiveYear || $academicYear->start_date < $effectiveYear->start_date) {
-                throw new DomainException('This Study Plan is not yet effective for the Offering Academic Year.');
+                throw new DomainException('This Study Plan is not yet effective for the Allocation Academic Year.');
             }
         }
         $period = DB::table('academic_periods')->where('school_id', $offering->school_id)
             ->where('academic_year_id', $offering->academic_year_id)->where('id', $offering->academic_period_id)->first();
         if (! $period || $membership->period_type === null || $membership->period_sequence === null) {
-            throw new DomainException('This Study Plan entry must have a placement, and the Offering must have a valid Academic Period.');
+            throw new DomainException('This Study Plan entry must have a placement, and the Allocation must have a valid Academic Period.');
         }
         if ($membership->period_type !== $period->type || (int) $membership->period_sequence !== (int) $period->sequence) {
-            throw new DomainException('This Study Plan entry is not scheduled for the Offering Academic Period.');
+            throw new DomainException('This Study Plan entry is not scheduled for the Allocation Academic Period.');
         }
 
         return $membership;
@@ -635,10 +656,10 @@ class CourseOfferingService
         }
         $offering = $query->first();
         if (! $offering) {
-            throw new DomainException('This Course Offering could not be found in this institution.');
+            throw new DomainException('This Course Allocation could not be found in this institution.');
         }
         if ($draftOnly && $offering->status !== CourseOffering::STATUS_DRAFT) {
-            throw new DomainException('Only a draft Course Offering can be changed in this way.');
+            throw new DomainException('Only a draft Course Allocation can be changed in this way.');
         }
 
         return $offering;
@@ -646,7 +667,7 @@ class CourseOfferingService
 
     private function audit(string $action, CourseOffering $offering, array $old, array $new): void
     {
-        AuditLog::record($action, 'Course Offerings', "{$action} for Course Offering #{$offering->id}.", [
+        AuditLog::record($action, 'Course Allocations', "{$action} for Course Allocation #{$offering->id}.", [
             'school_id' => $offering->school_id,
             'record_type' => CourseOffering::class,
             'record_id' => $offering->id,

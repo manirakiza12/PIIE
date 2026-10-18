@@ -161,7 +161,7 @@ class StudentCourseCatalogueUiTest extends TestCase
         $response = $this->page();
 
         $response->assertOk();
-        // Offering 11 is the Year 1 unit for a Year 1 student on cohort 1, and it is
+        // Allocation 11 is the Year 1 unit for a Year 1 student on cohort 1, and it is
         // the ONLY eligible one: offering 12 is the same unit but in 2027/2028, and
         // 21/31 belong to other stages.
         $this->assertSame(['BBIT1101'], $this->cardTitles($response->getContent()));
@@ -181,7 +181,7 @@ class StudentCourseCatalogueUiTest extends TestCase
         $this->assertStringContainsString('Dr Amina Okello', $html);
         // Status.
         $this->assertStringContainsString('Available to Register', $html);
-        // Academic context and the Offering reference.
+        // Academic context and the Allocation reference.
         $this->assertStringContainsString('2026/2027', $html);
         $this->assertStringContainsString('Semester 1', $html);
         $this->assertStringContainsString('REF-11', $html);
@@ -191,7 +191,7 @@ class StudentCourseCatalogueUiTest extends TestCase
 
     public function test_a_student_never_sees_a_course_they_are_not_placed_for(): void
     {
-        // A Year 3 student on the same curriculum. Offering 21 is the Year 2 unit
+        // A Year 3 student on the same curriculum. Allocation 21 is the Year 2 unit
         // and 11 is Year 1, so eligibility — not visibility luck — must exclude them.
         $year3 = $this->placedStudent(3);
 
@@ -324,7 +324,7 @@ class StudentCourseCatalogueUiTest extends TestCase
         $html = $this->page()->getContent();
 
         $this->assertStringContainsString('name="course_offering_id"', $html);
-        // The form must submit only the Offering, never a curriculum membership —
+        // The form must submit only the Allocation, never a curriculum membership —
         // the controller chooses the membership server-side.
         $this->assertStringNotContainsString('name="curriculum_membership_id"', $html);
     }
@@ -568,7 +568,7 @@ class StudentCourseCatalogueUiTest extends TestCase
         $catalogue = app(\App\Support\CourseRegistration\StudentCourseCatalogue::class, ['schoolId' => $this->school])
             ->build($view);
 
-        // Exactly one card per confirmed registration, keyed to the same Offering.
+        // Exactly one card per confirmed registration, keyed to the same Allocation.
         $this->assertCount(1, $catalogue['sections']['confirmed']['cards']);
         $this->assertSame(
             $view['confirmed']->pluck('offering_id')->map(fn ($id) => (int) $id)->all(),

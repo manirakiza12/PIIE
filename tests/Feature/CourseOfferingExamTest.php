@@ -25,7 +25,7 @@ use Tests\TestCase;
  * Not "the pages render". Every claim below is one of:
  *
  *   - the EXISTING engine is reused, and reused as a single engine;
- *   - the Offering, not the legacy Class/Section graph, is what scopes an
+ *   - the Allocation, not the legacy Class/Section graph, is what scopes an
  *     assessment, and the legacy path is untouched for legacy exams;
  *   - a student's eligibility is a CONFIRMED Course Registration;
  *   - opening an assessment is not submitting it, and a refresh or a lost
@@ -75,7 +75,7 @@ class CourseOfferingExamTest extends TestCase
     }
 
     /**
-     * An assessment in this Offering, published and inside its window.
+     * An assessment in this Allocation, published and inside its window.
      *
      * OWNED BY THE LECTURER, and that is load-bearing rather than decorative.
      *
@@ -169,7 +169,7 @@ class CourseOfferingExamTest extends TestCase
         $exam = $this->offeringExam();
 
         // The same table, the same model, the same lifecycle. Nothing about an
-        // Offering assessment is a different kind of thing.
+        // Allocation assessment is a different kind of thing.
         $this->assertSame('online_exams', $exam->getTable());
         $this->assertSame(OnlineExam::class, $exam::class);
         $this->assertTrue($exam->exists);
@@ -209,7 +209,7 @@ class CourseOfferingExamTest extends TestCase
             );
         }
 
-        // And there is exactly one of each, not an Offering-scoped duplicate.
+        // And there is exactly one of each, not an Allocation-scoped duplicate.
         $all = collect(\Illuminate\Support\Facades\Route::getRoutes())
             ->filter(fn ($r) => in_array($r->getName(), [
                 'teacher.online_exams.questions.index',
@@ -302,7 +302,7 @@ class CourseOfferingExamTest extends TestCase
         $exam = $this->offeringExam();
 
         // The bank's own table and model, with its own rich-text prompt and its own
-        // versioned contract - not a Course Offering copy of a question bank.
+        // versioned contract - not a Course Allocation copy of a question bank.
         $bankId = (int) DB::table('question_banks')->insertGetId([
             'school_id' => 1,
             'subject_id' => $this->offering->subject_id,
@@ -356,7 +356,7 @@ class CourseOfferingExamTest extends TestCase
     {
         // The contract is versioned and the engine has ten types. Each is created
         // through the ENGINE's own authoring contract and read back, which proves
-        // the Offering integration did not narrow the type vocabulary.
+        // the Allocation integration did not narrow the type vocabulary.
         $exam = $this->offeringExam();
 
         foreach (array_keys((new \ReflectionClass(QuestionContract::class))->getConstants()) as $ignored) {
@@ -374,7 +374,7 @@ class CourseOfferingExamTest extends TestCase
         // exist when `question_schema_version` is set, which is what
         // `QuestionContract::authoring()` does.
         //
-        // The claim worth making is that the Offering integration did not NARROW
+        // The claim worth making is that the Allocation integration did not NARROW
         // the vocabulary, so it is asserted twice: the legacy names round-trip, and
         // every structured name is produced by the engine's own authoring contract.
         $legacyRoundTrip = [
@@ -410,8 +410,8 @@ class CourseOfferingExamTest extends TestCase
         // rejects proves nothing about this feature.
         //
         // The claim that actually matters is narrower and is asserted directly: the
-        // Course Offering integration did not NARROW the engine's type vocabulary.
-        // A versioned question written under the Offering comes back with its own
+        // Course Allocation integration did not NARROW the engine's type vocabulary.
+        // A versioned question written under the Allocation comes back with its own
         // type name, for every one of the ten.
         // The types whose config shape this test can build.
         //
@@ -420,7 +420,7 @@ class CourseOfferingExamTest extends TestCase
         // `validateMatchingShape()` and `validateOrderingShape()`, each of which
         // rejects a two-option config ("Structured Fill Blank blanks are invalid").
         // Building a valid one for each would be a test of those validators, not of
-        // whether the Course Offering integration narrowed the vocabulary - and all
+        // whether the Course Allocation integration narrowed the vocabulary - and all
         // three are already proven to round-trip through the legacy column in the
         // assertion above.
         $types = [
@@ -457,7 +457,7 @@ class CourseOfferingExamTest extends TestCase
             $this->assertSame(
                 $type,
                 $question->normalized_type,
-                "the structured [{$type}] type must survive the Course Offering path"
+                "the structured [{$type}] type must survive the Course Allocation path"
             );
         }
     }
@@ -489,7 +489,7 @@ class CourseOfferingExamTest extends TestCase
 
         $exam = OnlineExam::query()->where('title', 'Midterm paper')->firstOrFail();
 
-        // Each of these, populated, would enrol students the Offering never
+        // Each of these, populated, would enrol students the Allocation never
         // confirmed - the class cohort, the programme, the legacy session - and
         // would bypass Course Registration entirely.
         $this->assertNull($exam->class_id, 'class_id must stay NULL: HEI delivery is never faked through Class');
@@ -518,9 +518,9 @@ class CourseOfferingExamTest extends TestCase
 
         // 404, not 403, and deliberately: `CourseContentAccess::resolveOffering()`
         // refuses a lecturer who is not allocated with "does not exist", so a
-        // guessed Offering id reveals nothing about another institution's courses.
+        // guessed Allocation id reveals nothing about another institution's courses.
         // Asserting 403 here would have been asserting the WRONG security property -
-        // a 403 on this route would confirm the Offering is real.
+        // a 403 on this route would confirm the Allocation is real.
         $this->actingAs($this->lecturer)->post(
             route('teacher.course_offerings.exams.store', $theirs['offering']->id),
             $this->validStorePayload()
@@ -715,12 +715,12 @@ class CourseOfferingExamTest extends TestCase
      *
      * The engine's original student eligibility rule matched any exam whose
      * `class_id`, `programme_id` and `session_id` were all NULL - which is
-     * precisely the shape a Course Offering assessment must have. Extended
+     * precisely the shape a Course Allocation assessment must have. Extended
      * unchanged, it would have published this course's paper to every student in
      * the institution.
      *
      * The test states both halves: this course's paper is NOT visible to a student
-     * on another Offering in the SAME institution (the case the NULL rule would
+     * on another Allocation in the SAME institution (the case the NULL rule would
      * have leaked), and a legacy school-wide exam with no class still is.
      */
     public function test_a_NULL_class_exam_is_NOT_school_wide_when_it_belongs_to_an_OFFERING(): void
@@ -1217,7 +1217,7 @@ class CourseOfferingExamTest extends TestCase
 
     public function test_a_lecturer_whose_allocation_HAS_NOT_STARTED_cannot_MANAGE_but_is_not_refused_AS_MANAGER(): void
     {
-        // A future allocation reaches the Offering but does not yet grant teaching
+        // A future allocation reaches the Allocation but does not yet grant teaching
         // authority - the Course Home's own rule, unchanged by this feature.
         $future = $this->makeOffering(1, ['reference' => 'NEXT-TERM-2026-S1']);
         $lecturer = $this->makeUser(3, 1, 'active', 'Next Term Lecturer');
@@ -1229,9 +1229,9 @@ class CourseOfferingExamTest extends TestCase
         // 403, and deliberately - the 404 is reserved for a DIFFERENT refusal.
         //
         // `CourseContentAccess::assertCanManage()` throws 403 for an actor in the
-        // same tenant who is not currently allocated: the Offering is real, this
+        // same tenant who is not currently allocated: the Allocation is real, this
         // lecturer may see that it exists, and they simply may not teach it yet. A
-        // 404 here is reserved for a CROSS-TENANT Offering, where a 403 would
+        // 404 here is reserved for a CROSS-TENANT Allocation, where a 403 would
         // confirm that it exists at all.
         //
         // The two codes are not interchangeable, and the difference IS the security
@@ -1272,7 +1272,7 @@ class CourseOfferingExamTest extends TestCase
 
         $this->offeringExam(['title' => 'Ours']);
 
-        // A row claiming OUR Offering but belonging to ANOTHER institution is corrupt
+        // A row claiming OUR Allocation but belonging to ANOTHER institution is corrupt
         // data, and it must not surface on our tab.
         DB::table('online_exams')->insert([
             'school_id' => $theirs['schoolId'],
@@ -1484,7 +1484,7 @@ class CourseOfferingExamTest extends TestCase
     public function test_the_ENGINES_OWN_publication_READINESS_still_governs_an_OFFERING_paper(): void
     {
         // An exam with no questions cannot publish, and the lecturer is told so by
-        // the engine's own list rather than by a Course Offering rule.
+        // the engine's own list rather than by a Course Allocation rule.
         $exam = $this->offeringExam(['total_marks' => 20, 'pass_mark' => 10]);
 
         $this->assertNotSame([], $exam->publicationReadinessErrors());
@@ -1549,7 +1549,7 @@ class CourseOfferingExamTest extends TestCase
 
     public function test_the_legacy_K12_exam_flow_is_UNTOUCHED(): void
     {
-        // No Offering, a real class, a real enrolment: exactly the shape the engine
+        // No Allocation, a real class, a real enrolment: exactly the shape the engine
         // served before this feature existed.
         $classId = $this->makeClass(1);
         $student = $this->makeUser(7, 1, 'active', 'K12 Student');

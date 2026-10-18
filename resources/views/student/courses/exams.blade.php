@@ -45,7 +45,7 @@
     @if (count($rows) === 0)
         {{-- The honest absence. "None set yet" and "none available to you" are
              different, but this service only ever returns assessments the
-             institution has PUBLISHED for this Offering, so from a student's point
+             institution has PUBLISHED for this Allocation, so from a student's point
              of view there is one truthful thing to say. --}}
         <div class="border rounded p-4 text-center" role="status" data-testid="exams-empty">
             <h6>No quizzes or exams have been set for this course yet.</h6>

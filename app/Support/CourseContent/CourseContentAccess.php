@@ -18,20 +18,20 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  *
  *  - A LECTURER's access is decided by LecturerCourseOfferingAccess, the same
  *    service the lecturer workspace, the roster and the attendance screens
- *    already use. A lecturer with no allocation on an Offering cannot author
+ *    already use. A lecturer with no allocation on an Allocation cannot author
  *    content for it here either, and a pre-start tester is treated identically in
  *    both places because it is literally the same call.
  *
- *  - An ADMINISTRATOR's access is decided by the existing Course Offering
- *    capabilities, so the RBAC matrix that governs Offerings governs their
+ *  - An ADMINISTRATOR's access is decided by the existing Course Allocation
+ *    capabilities, so the RBAC matrix that governs Allocations governs their
  *    content too. No content-specific admin role is invented.
  *
  *  - A STUDENT's access is decided by a CONFIRMED course registration for that
- *    exact Offering, in that exact tenant - the same test Live Classes uses for
+ *    exact Allocation, in that exact tenant - the same test Live Classes uses for
  *    participation, so a student can never be able to read content for a course
  *    they are not registered on.
  *
- * Every method also takes the Offering's own school_id from the Offering row
+ * Every method also takes the Allocation's own school_id from the Allocation row
  * rather than from the request, so a mismatched id fails closed rather than
  * reaching a row it should not.
  */
@@ -49,20 +49,20 @@ class CourseContentAccess
     ) {}
 
     /**
-     * The Offering, resolved in the ACTOR's tenant, or a 404.
+     * The Allocation, resolved in the ACTOR's tenant, or a 404.
      *
-     * A LECTURER's Offering is resolved through the existing
+     * A LECTURER's Allocation is resolved through the existing
      * `resolveForLecturer()`, not through a plain lookup. That is not a
      * convenience: `teachingActionsAllowed()` reads the `my_allocation_id`
      * attribute that only `resolveForLecturer()` sets, so a Course Content
-     * service that resolved the Offering itself would find no allocation and
+     * service that resolved the Allocation itself would find no allocation and
      * deny a lecturer who legitimately holds one. Reusing the one resolver is
      * what keeps the two surfaces agreeing.
      *
      * There is no "is this actor a lecturer?" test here, and deliberately so.
      * Both resolvers are safe to attempt: a lecturer with an allocation gets the
      * annotated row, and everyone else falls through to a tenant-scoped lookup
-     * against the Offering's OWN school_id - never a request field - and is then
+     * against the Allocation's OWN school_id - never a request field - and is then
      * refused by the authority check, which is evaluated on the same footing for
      * every role. Deciding by role number here would put "who is a lecturer" in a
      * second place, which the role-registry guard test exists to prevent.
@@ -82,9 +82,9 @@ class CourseContentAccess
         //
         // Administrators are excluded from that rule, and must be: they hold no
         // lecturer allocation by definition, so applying it to them would lock
-        // the academic office out of every Course Offering.
+        // the academic office out of every Course Allocation.
         if ($this->permissions->isStaffRole((int) $actor->role_id) && ! $this->administersOfferings($actor)) {
-            throw new HttpException(404, 'Course Offering not found.');
+            throw new HttpException(404, 'Course Allocation not found.');
         }
 
         $offering = CourseOffering::query()
@@ -93,23 +93,23 @@ class CourseContentAccess
             ->first();
 
         if (! $offering) {
-            throw new HttpException(404, 'Course Offering not found.');
+            throw new HttpException(404, 'Course Allocation not found.');
         }
 
         return $offering;
     }
 
     /**
-     * May this lecturer AUTHOR content for this Offering?
+     * May this lecturer AUTHOR content for this Allocation?
      *
-     * Capability AND a current allocation on the Offering, which is the same pair
+     * Capability AND a current allocation on the Allocation, which is the same pair
      * Live Class scheduling requires. Tenants stay apart because the allocation
-     * lookup is tenant-scoped and the Offering was resolved in the actor's own
+     * lookup is tenant-scoped and the Allocation was resolved in the actor's own
      * school.
      *
-     * The allocation is resolved HERE rather than read off the Offering, because
+     * The allocation is resolved HERE rather than read off the Allocation, because
      * `teachingActionsAllowed()` reads a `my_allocation_id` attribute that only
-     * `resolveForLecturer()` attaches. A caller that loaded the Offering plainly
+     * `resolveForLecturer()` attaches. A caller that loaded the Allocation plainly
      * would otherwise be denied a permission they genuinely hold - a failure
      * that is safe but baffling. Re-resolving costs one indexed lookup and makes
      * the answer depend only on who the actor is, never on how the caller found
@@ -142,10 +142,10 @@ class CourseContentAccess
     }
 
     /**
-     * May this administrator change content for this Offering?
+     * May this administrator change content for this Allocation?
      *
-     * Governed by the Course Offering capabilities that already control the
-     * Offering itself, so there is no way to hold "manage this Offering" without
+     * Governed by the Course Allocation capabilities that already control the
+     * Allocation itself, so there is no way to hold "manage this Allocation" without
      * also being able to author its content, and no new admin grant to forget
      * to hand out.
      *
@@ -179,9 +179,9 @@ class CourseContentAccess
     }
 
     /**
-     * May this student READ published content for this Offering?
+     * May this student READ published content for this Allocation?
      *
-     * A CONFIRMED registration for that exact Offering, in that exact tenant.
+     * A CONFIRMED registration for that exact Allocation, in that exact tenant.
      * "registered" (awaiting confirmation) is not enough: the brief's chain puts
      * Course Registration - and specifically a valid one - before the student,
      * and confirmed is what the Live Class participation rule uses.
@@ -311,7 +311,7 @@ class CourseContentAccess
     }
 
     /**
-     * Does this actor ADMINISTER Course Offerings, rather than teach one?
+     * Does this actor ADMINISTER Course Allocations, rather than teach one?
      *
      * This is the question that decides which authority applies, and it is
      * asked with CAPABILITIES rather than a role number. The distinction is
@@ -324,7 +324,7 @@ class CourseContentAccess
      * administrator from a lecturer, a lecturer who failed the ALLOCATION
      * check would fall through to the admin path and be let in by their role
      * alone, which defeats the whole gate. So the question uses the academic
-     * Course Offering capabilities, which only academic administrators hold.
+     * Course Allocation capabilities, which only academic administrators hold.
      */
     private function administersOfferings(User $actor): bool
     {
@@ -340,7 +340,7 @@ class CourseContentAccess
      *
      * Administrators and lecturers are routed to DIFFERENT checks, never to
      * "either will do". A lecturer's authority is their allocation on this exact
-     * Offering; an administrator's is the academic Course Offering capabilities.
+     * Allocation; an administrator's is the academic Course Allocation capabilities.
      * Unioning them would let a lecturer in on their role as soon as the
      * allocation check failed, so the two paths are kept apart deliberately.
      *
@@ -353,7 +353,7 @@ class CourseContentAccess
             : $this->canLecturerManage($actor, $offering);
 
         if (! $allowed) {
-            throw new HttpException(403, 'You are not authorized to manage content for this Course Offering.');
+            throw new HttpException(403, 'You are not authorized to manage content for this Course Allocation.');
         }
     }
 
@@ -363,7 +363,7 @@ class CourseContentAccess
         try {
             $this->assertCanManage($actor, $offering);
         } catch (HttpException $exception) {
-            throw new DomainException('You are not authorized to manage content for this Course Offering.');
+            throw new DomainException('You are not authorized to manage content for this Course Allocation.');
         }
     }
 }

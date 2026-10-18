@@ -20,7 +20,7 @@ use Tests\TestCase;
 /**
  * Step 4: the HEI Lecturer academic workspace.
  *
- * Two institutions, two lecturers, parallel Course Offerings. Everything a
+ * Two institutions, two lecturers, parallel Course Allocations. Everything a
  * lecturer may reach must be derived from that lecturer's own
  * CourseOfferingLecturerAllocation, tenant-checked, and nothing else.
  */
@@ -74,7 +74,7 @@ class LecturerWorkspaceTest extends TestCase
 
         $response = $this->actingAs($this->lecturerA)->get(route('teacher.course_offerings.index'));
         $response->assertOk()
-            ->assertSee('My Course Offerings')
+            ->assertSee('My Course Allocations')
             ->assertSee('BBIT3102')
             ->assertSee('MATH1101')
             ->assertDontSee('BBIT2201');
@@ -110,11 +110,11 @@ class LecturerWorkspaceTest extends TestCase
 
         $this->actingAs($this->lecturerA)->get(route('teacher.course_offerings.show', $mine->id))->assertOk();
 
-        // Lecturer A reaching Lecturer B's Offering.
+        // Lecturer A reaching Lecturer B's Allocation.
         $theirs = $this->allocated($this->tenants['a'], $this->lecturerB, 'BBIT2201', CourseOfferingLecturerAllocation::ROLE_CO_LECTURER, 'in_progress');
         $this->get(route('teacher.course_offerings.show', $theirs->id))->assertNotFound();
 
-        // Lecturer A reaching another institution's Offering.
+        // Lecturer A reaching another institution's Allocation.
         $this->get(route('teacher.course_offerings.show', $foreign->id))->assertNotFound();
         $this->get(route('teacher.course_offerings.students', $foreign->id))->assertNotFound();
 
@@ -161,11 +161,11 @@ class LecturerWorkspaceTest extends TestCase
             'cancelled' => false,
         ];
         $headlines = [
-            'draft' => 'This Course Offering is still being prepared.',
-            'open' => 'Registration is open for this Course Offering.',
-            'in_progress' => 'Teaching is currently in progress for this Course Offering.',
-            'completed' => 'This Course Offering has been completed. Teaching records remain available for reference.',
-            'cancelled' => 'This Course Offering was cancelled.',
+            'draft' => 'This Course Allocation is still being prepared.',
+            'open' => 'Registration is open for this Course Allocation.',
+            'in_progress' => 'Teaching is currently in progress for this Course Allocation.',
+            'completed' => 'This Course Allocation has been completed. Teaching records remain available for reference.',
+            'cancelled' => 'This Course Allocation was cancelled.',
         ];
         foreach ($cases as $status => $expected) {
             $offering = $this->allocated($this->tenants['a'], $this->lecturerA, 'UNIT-'.strtoupper($status), CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER, $status);
@@ -184,14 +184,14 @@ class LecturerWorkspaceTest extends TestCase
         $this->confirmStudent($completed, 'S-100', 'Confirmed Student');
         $this->actingAs($this->lecturerA)->get(route('teacher.course_offerings.show', $completed->id))
             ->assertOk()
-            ->assertSee('This Course Offering has been completed. Teaching records remain available for reference.')
+            ->assertSee('This Course Allocation has been completed. Teaching records remain available for reference.')
             ->assertSee('View students');
 
         $cancelled = $this->allocated($this->tenants['a'], $this->lecturerA, 'BBIT1105', CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER, 'cancelled');
         $this->actingAs($this->lecturerA)->get(route('teacher.course_offerings.show', $cancelled->id))
             ->assertOk()
-            ->assertSee('This Course Offering was cancelled.')
-            ->assertSee('Not available for this Course Offering');
+            ->assertSee('This Course Allocation was cancelled.')
+            ->assertSee('Not available for this Course Allocation');
     }
 
     // ------------------------------------------------------------- 6: roster
@@ -203,14 +203,14 @@ class LecturerWorkspaceTest extends TestCase
 
         $this->confirmStudent($offering, 'S-100', 'Confirmed Student');
         $this->confirmStudent($offering, 'S-200', 'Registered Only Student', CourseRegistration::STATUS_REGISTERED);
-        $this->confirmStudent($other, 'S-300', 'Other Offering Student');
-        // Same programme, same cohort, same institution - but a different Offering.
+        $this->confirmStudent($other, 'S-300', 'Other Allocation Student');
+        // Same programme, same cohort, same institution - but a different Allocation.
         $this->confirmStudent($offering, 'S-999', 'Foreign Tenant Student', CourseRegistration::STATUS_CONFIRMED, $this->tenants['b']);
 
         $this->actingAs($this->lecturerA)->get(route('teacher.course_offerings.students', $offering->id))
             ->assertOk()
             ->assertSee('S-100')->assertSee('Confirmed Student')
-            // Not confirmed, different Offering, or another tenant.
+            // Not confirmed, different Allocation, or another tenant.
             ->assertDontSee('S-200')
             ->assertDontSee('S-300')
             ->assertDontSee('S-999');
@@ -240,7 +240,7 @@ class LecturerWorkspaceTest extends TestCase
         );
 
         // And the administrator's own endpoints refuse a lecturer outright, both
-        // for their own Offering and for one belonging to somebody else.
+        // for their own Allocation and for one belonging to somebody else.
         $this->post(route('admin.course_offerings.registrations.store', $offering->id), ['student_id' => 1])->assertForbidden();
         $this->post(route('admin.course_offerings.registrations.bulk', $offering->id), ['mode' => 'selected', 'student_ids' => [1]])->assertForbidden();
         $this->post(route('admin.course_offerings.registrations.confirm', [$offering->id, 1]))->assertForbidden();
@@ -280,7 +280,7 @@ class LecturerWorkspaceTest extends TestCase
         $content = $this->actingAs($this->lecturerA)->get(route('teacher.course_offerings.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString('teacher/course-offerings/'.$offering->id, $content, 'The offering is addressable by its own route.');
-        $this->assertStringNotContainsString('Course Offering #', $content);
+        $this->assertStringNotContainsString('Course Allocation #', $content);
         $this->assertStringNotContainsString('Allocation #', $content);
     }
 
@@ -290,12 +290,12 @@ class LecturerWorkspaceTest extends TestCase
     {
         $this->actingAs($this->lecturerA)->get(route('teacher.course_offerings.index'))
             ->assertOk()
-            ->assertSee('You do not currently have any Course Offerings assigned.');
+            ->assertSee('You do not currently have any Course Allocations assigned.');
 
         $offering = $this->allocated($this->tenants['a'], $this->lecturerA, 'BBIT3102', CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER, 'in_progress');
         $this->get(route('teacher.course_offerings.students', $offering->id))
             ->assertOk()
-            ->assertSee('No confirmed students are currently registered for this Course Offering.');
+            ->assertSee('No confirmed students are currently registered for this Course Allocation.');
         $this->get(route('teacher.course_offerings.show', $offering->id))
             ->assertOk()
             ->assertSee('No Live Classes have been scheduled yet.');
@@ -309,20 +309,20 @@ class LecturerWorkspaceTest extends TestCase
 
         $this->actingAs($this->lecturerA)->get(route('teacher.dashboard'))
             ->assertOk()
-            ->assertSee('View My Course Offerings')
-            ->assertSee('My Course Offerings')
+            ->assertSee('View My Course Allocations')
+            ->assertSee('My Course Allocations')
             ->assertSee(route('teacher.course_offerings.index'), false);
 
         $this->get(route('teacher.course_offerings.index'))
             ->assertOk()
-            ->assertSee('My Course Offerings', false);
+            ->assertSee('My Course Allocations', false);
     }
 
     public function test_k12_institution_keeps_teacher_terminology_and_no_course_offering_navigation(): void
     {
         $this->actingAs($this->k12Teacher)->get(route('teacher.dashboard'))
             ->assertOk()
-            ->assertDontSee('View My Course Offerings');
+            ->assertDontSee('View My Course Allocations');
 
         $this->get(route('teacher.course_offerings.index'))->assertOk()->assertSee('Subject');
     }
@@ -381,8 +381,8 @@ class LecturerWorkspaceTest extends TestCase
 
         $html = $this->actingAs($this->lecturerA)->get(route('teacher.dashboard'))->assertOk()->getContent();
 
-        // The My Course Offerings section is preserved.
-        $this->assertStringContainsString('My Course Offerings', $html);
+        // The My Course Allocations section is preserved.
+        $this->assertStringContainsString('My Course Allocations', $html);
         $this->assertStringContainsString(route('teacher.course_offerings.index'), $html);
 
         // Exactly two short-detail cards remain, not four and not none. Counted on
@@ -479,7 +479,7 @@ class LecturerWorkspaceTest extends TestCase
         $notMine = $this->allocated($this->tenants['a'], $this->lecturerB, 'BBIT2201', CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER, 'in_progress');
         $this->liveClass($offering, 'A Class');
 
-        // The workspace lists only this Offering's Live Classes; it does not become
+        // The workspace lists only this Allocation's Live Classes; it does not become
         // a way around the existing Live Class authorization.
         $this->actingAs($this->lecturerA)->get(route('teacher.course_offerings.show', $offering->id))
             ->assertOk()
@@ -489,7 +489,7 @@ class LecturerWorkspaceTest extends TestCase
 
         $this->get(route('teacher.course_offerings.show', $notMine->id))->assertNotFound();
 
-        // Existing Live Class rules still apply unchanged to a visible Offering.
+        // Existing Live Class rules still apply unchanged to a visible Allocation.
         $this->assertSame(1, DB::table('live_classes')->where('course_offering_id', $offering->id)->count());
     }
 
@@ -541,12 +541,12 @@ class LecturerWorkspaceTest extends TestCase
         $allocations = app(CourseOfferingLecturerAllocationService::class);
 
         // The administrator's real order: allocate first, then teach, then close.
-        // A completed Offering is reached only after its allocation is ended,
+        // A completed Allocation is reached only after its allocation is ended,
         // which is the same completion-consistency rule Step 3 governs.
         if ($offeringStatus === 'in_progress' || $offeringStatus === 'completed') {
             app(CourseOfferingService::class)->start($institution['school'], $offering->id);
         }
-        // A cancelled Offering is reached only while the lecturer is still
+        // A cancelled Allocation is reached only while the lecturer is still
         // allocated: the academic office withdraws the delivery, not the person.
         $writable = true;
         if ($writable) {

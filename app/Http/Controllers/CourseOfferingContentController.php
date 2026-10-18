@@ -28,10 +28,10 @@ use Illuminate\Validation\ValidationException;
  * producing, and a modal that scrolls internally is the single most common way
  * real content gets lost.
  *
- * The route carries the Offering id for every action INCLUDING lesson and module
+ * The route carries the Allocation id for every action INCLUDING lesson and module
  * mutations, so the container is context rather than a client-supplied field,
  * and every write re-resolves the parent by id and re-checks authority. A
- * tampered form cannot move a lesson into another module, another Offering or
+ * tampered form cannot move a lesson into another module, another Allocation or
  * another tenant.
  */
 class CourseOfferingContentController extends Controller
@@ -161,7 +161,7 @@ class CourseOfferingContentController extends Controller
 
         // Through the service, NOT `$offering->save()`. `CourseOffering` is
         // `$guarded = ['*']` with an `updating` hook that refuses every direct
-        // write, because an Offering is historical record. A direct assign-and-save
+        // write, because an Allocation is historical record. A direct assign-and-save
         // here reads as correct and throws a DomainException on the first click -
         // a switch that appears broken rather than one that is absent.
         app(\App\Support\CourseOffering\CourseOfferingService::class)
@@ -223,7 +223,7 @@ class CourseOfferingContentController extends Controller
 
     /**
      * POST reorder. Server-authoritative, validated against the ids this
-     * Offering actually owns - see CourseContentService::reorderModules().
+     * Allocation actually owns - see CourseContentService::reorderModules().
      */
     /**
      * THE MODULE LIFECYCLE: publish now, schedule, or return to draft.
@@ -244,10 +244,10 @@ class CourseOfferingContentController extends Controller
      *
      * ── AUTHORISATION IS NOT RELAXED, IT IS REUSED ──────────────────────────
      *
-     * The module is re-resolved inside the Offering in the URL and scoped to the
+     * The module is re-resolved inside the Allocation in the URL and scoped to the
      * actor's own school - byte-identical to `updateModule()` - and `assertCanManage`
      * is called exactly as it is there. A lecturer can therefore only move a module
-     * in an Offering they are currently allocated to, and one they are not gets the
+     * in an Allocation they are currently allocated to, and one they are not gets the
      * same refusal as for editing.
      *
      * The target state arrives from a `whereIn` on the route, so only 'draft' and
@@ -433,8 +433,8 @@ class CourseOfferingContentController extends Controller
 
         $validated = $request->validate($this->lessonRules($request, $row));
 
-        // A lesson may be moved between modules of the SAME Offering. The id is
-        // re-resolved under the Offering, so a module id from another Offering or
+        // A lesson may be moved between modules of the SAME Allocation. The id is
+        // re-resolved under the Allocation, so a module id from another Allocation or
         // tenant cannot be substituted here.
         if (! empty($validated['course_offering_module_id'])) {
             $row->course_offering_module_id = $this->resolveModule($offering, $validated['course_offering_module_id'])->id;
@@ -772,7 +772,7 @@ class CourseOfferingContentController extends Controller
         return $rules;
     }
 
-    /** Re-resolve a module inside the Offering; a foreign id is a 404, not a move. */
+    /** Re-resolve a module inside the Allocation; a foreign id is a 404, not a move. */
     private function resolveModule(\App\Models\CourseOffering $offering, $moduleId): CourseOfferingModule
     {
         return CourseOfferingModule::query()

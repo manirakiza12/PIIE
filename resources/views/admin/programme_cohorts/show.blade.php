@@ -18,7 +18,7 @@
         <strong>All current students have Academic Placement recorded.</strong>
         You can add more eligible students
         @if(auth()->user()->hasPermission('academic.course_offering.view'))
-            or continue to <a href="{{ route('admin.course_offerings.index') }}">Course Offerings</a>
+            or continue to <a href="{{ route('admin.course_offerings.index') }}">Course Allocations</a>
         @endif.
     </div>
 @elseif(in_array($cohort->status,['completed','cancelled'],true))<div class="alert alert-secondary" role="status">This Programme Student Group is {{ $cohort->status }} and closed. Its membership and academic placement history are read-only.</div>@endif

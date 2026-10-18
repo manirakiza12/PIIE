@@ -22,20 +22,20 @@ use Illuminate\Support\Facades\Schema;
  * What it actually relaxes
  * -----------------------
  * Exactly one condition, and only in this situation: an allocation that is
- * genuinely ACTIVE for this exact Course Offering, on an Offering that is
+ * genuinely ACTIVE for this exact Course Allocation, on an Allocation that is
  * IN_PROGRESS and carries durable evidence of the governed
  * COURSE_OFFERING_EARLY_START workflow, is treated as in force from today even
  * though today is before its starts_on.
  *
  * What it never relaxes
  * ---------------------
- * Authentication, tenant isolation, Lecturer identity, Offering lifecycle,
+ * Authentication, tenant isolation, Lecturer identity, Allocation lifecycle,
  * allocation existence, allocation status (planned/ended/cancelled stay
  * refused), and IDOR protection are all still required and are re-checked here.
  * There is no "tester => allow" branch anywhere in this class.
  *
  * No allocation date is ever written. starts_on, ends_on, the Academic Period
- * and the Course Offering are all left exactly as the institution set them; the
+ * and the Course Allocation are all left exactly as the institution set them; the
  * lecturer's contractual appointment keeps its original meaning.
  */
 class SystemTesterAccess
@@ -44,7 +44,7 @@ class SystemTesterAccess
 
     /**
      * The audit action written by the governed early-start workflow. Its presence
-     * on an Offering is the durable evidence that the Offering was deliberately
+     * on an Allocation is the durable evidence that the Allocation was deliberately
      * started early, rather than a flag we could drift out of step.
      */
     public const EARLY_START_AUDIT = 'COURSE_OFFERING_EARLY_START';
@@ -124,7 +124,7 @@ class SystemTesterAccess
     }
 
     /**
-     * The Offering this allocation belongs to, scoped to the lecturer's tenant.
+     * The Allocation this allocation belongs to, scoped to the lecturer's tenant.
      * Returns null when it does not exist in that tenant, so a guessed
      * course_offering_id cannot reveal or cross into another institution.
      */
@@ -216,7 +216,7 @@ class SystemTesterAccess
         return $this->allowsPreStartFor($lecturer, $allocation, $offering);
     }
 
-    /** This lecturer's allocation for one Offering, scoped to their tenant. */
+    /** This lecturer's allocation for one Allocation, scoped to their tenant. */
     private function allocationFor(User $lecturer, CourseOffering $offering): ?object
     {
         if (empty($lecturer->school_id)) {
@@ -237,7 +237,7 @@ class SystemTesterAccess
         $date ??= Carbon::today()->toDateString();
 
         return 'Testing access active — pre-start access has been granted for authorised system testing. '
-            .'This Course Offering was deliberately started early, and your lecturer allocation takes effect from '
+            .'This Course Allocation was deliberately started early, and your lecturer allocation takes effect from '
             .$date.' even though its agreed start date is later. Your allocation dates and the Academic Period are unchanged.';
     }
 

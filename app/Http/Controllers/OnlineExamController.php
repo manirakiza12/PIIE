@@ -779,7 +779,7 @@ class OnlineExamController extends Controller
             // nothing. See `CourseOffering::academicYear()` for the full account.
             //
             // And it is loaded ONLY when the table exists. Most of this engine's suites
-            // hand-roll a partial schema that predates the Course Offering work -
+            // hand-roll a partial schema that predates the Course Allocation work -
             // `TeacherOnlineExamTest` among them - and an eager load of a relation onto
             // a table that was never created is an unconditional 500 on the list every
             // lecturer opens. Guarded, not assumed: see the identical guard on
@@ -824,7 +824,7 @@ class OnlineExamController extends Controller
             $query->where('class_id', $classId);
         }
 
-        // Course Offering filter, offered only for Offerings this lecturer actually
+        // Course Allocation filter, offered only for Allocations this lecturer actually
         // teaches. The id is intersected with their own allocations before it reaches
         // the query, so a forged value narrows to nothing rather than exposing
         // another course's exams.
@@ -873,7 +873,7 @@ class OnlineExamController extends Controller
         $sessions = Session::where('school_id', $this->school_id)->orderByDesc('id')->get();
         $topics = QuestionTopic::where('school_id',$this->school_id)->where('is_active',1)->whereNull('parent_id')->orderBy('name')->get(); $subtopics = QuestionTopic::where('school_id',$this->school_id)->where('is_active',1)->whereNotNull('parent_id')->orderBy('name')->get(); $tags = QuestionTag::where('school_id',$this->school_id)->where('is_active',1)->orderBy('name')->get();
 
-        // The Course Offerings this lecturer is allocated to, so the page can be
+        // The Course Allocations this lecturer is allocated to, so the page can be
         // OFFERED them and can tell a lecturer who has none whether that matters.
         // This is the same list the create page offers, from the same authority -
         // their own allocations - so a lecturer cannot be shown a course here that
@@ -953,7 +953,7 @@ class OnlineExamController extends Controller
      * institution already records: which course they are teaching, which Course Unit
      * that course carries, and which year and semester it sits in. It asked for them
      * through `teacher_permissions` - the legacy teacher -> class graph - which is
-     * empty for a lecturer appointed through a Course Offering. So for Daniel Okello,
+     * empty for a lecturer appointed through a Course Allocation. So for Daniel Okello,
      * the primary lecturer of BBIT1103, the page said "No subjects are assigned to
      * this teacher" while he was standing on the create form for the course he runs.
      *
@@ -961,13 +961,13 @@ class OnlineExamController extends Controller
      * hold legacy class assignments still has a genuine legacy workflow, and the two
      * have to coexist. What changed is the ORDER, and what is asked:
      *
-     *   - a Course Offering is chosen FIRST, from the lecturer's own allocations only
+     *   - a Course Allocation is chosen FIRST, from the lecturer's own allocations only
      *     (`CourseOfferingExamAccess::teachableOfferings()`);
      *   - choosing one makes the Course Unit, academic year, period and lecturer a
      *     read-only DERIVED summary, and hides the legacy selectors entirely;
      *   - the legacy selectors remain reachable, below it, for a legacy exam - and
      *     their empty-state warning now appears only when the lecturer has neither a
-     *     Course Offering nor a legacy subject, which is the case it was written for.
+     *     Course Allocation nor a legacy subject, which is the case it was written for.
      *
      * The derivation is a SERVER round trip (`?course_offering_id=`), not client-side
      * guesswork. The summary is therefore derived from the same authoritative read
@@ -1046,7 +1046,7 @@ class OnlineExamController extends Controller
 
         // ── THE ONE PLACE THE TWO MODES DIVERGE ──────────────────────────────
         //
-        // Course Offering: the academic context is READ from the Offering that
+        // Course Allocation: the academic context is READ from the Allocation that
         // `StoreOnlineExamRequest` already resolved and authorised. Not one of
         // `subject_id`, `class_id`, `programme_id`, `session_id`, `school_id` or
         // `course_offering_id` comes from the request in this branch.
@@ -1059,7 +1059,7 @@ class OnlineExamController extends Controller
             abort_if(
                 $offering === null,
                 404,
-                'Course Offering not found, or you are not allocated to teach it.'
+                'Course Allocation not found, or you are not allocated to teach it.'
             );
 
             $payload = array_merge(
@@ -1067,7 +1067,7 @@ class OnlineExamController extends Controller
                 app(CourseOfferingExamAccess::class)->authoritativeFieldsFor($offering)
             );
 
-            // Same value the Offering-scoped controller writes, and for the same
+            // Same value the Allocation-scoped controller writes, and for the same
             // reason: `StoreOnlineExamRequest::validated()` resolves it to
             // `pending_review` for anyone who cannot publish, so a lecturer's new
             // course assessment enters the ADMIN REVIEW queue rather than sitting
@@ -1075,13 +1075,13 @@ class OnlineExamController extends Controller
             $payload['workflow_state'] = $validated['workflow_state'] ?? 'draft';
             $payload['is_published'] = ($validated['workflow_state'] ?? 'draft') === 'published';
 
-            AuditLog::record('create', 'Online Exams', "Teacher created Course Offering exam: {$payload['title']} (Offering #{$offering->id})");
+            AuditLog::record('create', 'Online Exams', "Teacher created Course Allocation exam: {$payload['title']} (Allocation #{$offering->id})");
 
             $exam = DB::transaction(fn() => OnlineExam::create($payload));
 
             // Straight to the ENGINE's question page, which is where a lecturer
             // authors questions in exactly one place in PIIE. Same destination as the
-            // Offering-scoped controller, so both entrances lead to one workflow.
+            // Allocation-scoped controller, so both entrances lead to one workflow.
             return redirect()
                 ->route('teacher.online_exams.questions.index', $exam->id)
                 ->with('success', 'Exam created as a draft for ' . ($offering->subject?->name ?? 'your course') . '. Add its questions next — it cannot be published until it has them.');
@@ -1125,11 +1125,11 @@ class OnlineExamController extends Controller
      * GET /teacher/online-exams/{exam}/edit
      *
      * The form's MODE is the exam's, not the lecturer's. An exam that belongs to a
-     * Course Offering is edited with its academic context read-only and its legacy
+     * Course Allocation is edited with its academic context read-only and its legacy
      * selectors hidden - not because they would be rejected, but because there is no
      * legitimate value to put in them: the course already fixed them.
      *
-     * The Offering list is still supplied, because an exam created before the
+     * The Allocation list is still supplied, because an exam created before the
      * allocation was recorded is not a reason to lose the ability to edit it.
      */
     public function teacherEdit(OnlineExam $exam)
@@ -1171,7 +1171,7 @@ class OnlineExamController extends Controller
             'structureLocked' => $exam->isStructurallyLocked(),
             'readinessErrors' => $exam->publicationReadinessErrors(),
             'offerings' => app(CourseOfferingExamAccess::class)->teachableOfferings($user),
-            // An Offering exam whose Offering row has vanished still renders the form
+            // An Allocation exam whose Allocation row has vanished still renders the form
             // - with `$offering` NULL it falls back to legacy selectors, and
             // `UpdateOnlineExamRequest` refuses the save rather than silently moving
             // the paper onto the school-wide legacy path.
@@ -1216,7 +1216,7 @@ class OnlineExamController extends Controller
             // rejects an attempt to, and this makes the write independent of that.
             if ($request->isCourseOfferingMode()) {
                 $offering = $request->offering();
-                abort_if($offering === null, 422, 'The Course Offering for this assessment could not be resolved.');
+                abort_if($offering === null, 422, 'The Course Allocation for this assessment could not be resolved.');
 
                 $payload = array_merge(
                     $payload,
@@ -1890,7 +1890,7 @@ class OnlineExamController extends Controller
         $query = OnlineExamAnswer::query()
             ->with(['submission.student', 'submission.exam.questions', 'submission.answerRows', 'question'])
             // `courseOffering` only when the table exists. Most of this engine's
-            // suites hand-roll a partial schema that predates the Course Offering
+            // suites hand-roll a partial schema that predates the Course Allocation
             // work, and eager-loading a relation onto a table that was never created
             // is an unconditional 500 on the queue every marker opens. Guarded, not
             // assumed - the same decision `teacherIndex()` already makes.
@@ -1905,7 +1905,7 @@ class OnlineExamController extends Controller
                         //
                         // This used to restate ownership by hand - `creator_id`,
                         // `created_by`, `class_id` - and so inherited the exact defect
-                        // the exam list had: a Course Offering exam has `class_id` NULL
+                        // the exam list had: a Course Allocation exam has `class_id` NULL
                         // by design, so the only arm that could ever match it was
                         // authorship. A CO-LECTURER allocated to the course was told
                         // their queue was empty while somebody else's answers sat
@@ -3035,7 +3035,7 @@ public function heartbeat($submissionId)
      * per-exam results screen, and the only actions remain `publishResult()` and
      * `returnResultForCorrection()`, both of which refuse a non-administrator.
      *
-     * Tenant-scoped like every other query in this controller, and Course-Offering
+     * Tenant-scoped like every other query in this controller, and Course-Allocation
      * aware: a submission names the course it belongs to, because an administrator
      * approving a Business Mathematics result and one approving a Business
      * Accounting result are different decisions.
@@ -3638,7 +3638,7 @@ public function heartbeat($submissionId)
      * ── WHY THIS HAD TO BE ADDED ────────────────────────────────────────────
      *
      * A student submitted an exam and nobody was told. `submitBySubmission()` wrote
-     * the audit line and redirected. On the Course Offering paper that was
+     * the audit line and redirected. On the Course Allocation paper that was
      * invisible to everyone: the lecturer's Marking Queue is a filtered list of
      * answers awaiting marking, so a submission whose answers were all
      * automatically marked never appears there, and the lecturer had no way to
@@ -3648,7 +3648,7 @@ public function heartbeat($submissionId)
      * `OnlineExamPortalNotifier::lecturerRecipients()`, which reads
      * `exam.course_offering_id -> course_offering_lecturer_allocations`. That is
      * deliberately not `teacher_permissions`, and deliberately not "the author
-     * only": on a Course Offering the appointment is the authority, so a
+     * only": on a Course Allocation the appointment is the authority, so a
      * co-lecturer is included and a deallocated author is not. A legacy exam keeps
      * its original creator-only rule.
      *
@@ -4234,13 +4234,13 @@ public function heartbeat($submissionId)
         // ── A COURSE OFFERING EXAM IS OWNED BY THE ALLOCATION, NOT BY A CLASS ──
         //
         // This scope had three arms: I made it, I made it via `created_by`, or it
-        // targets a class I teach. An Offering exam has `class_id` NULL BY DESIGN -
+        // targets a class I teach. An Allocation exam has `class_id` NULL BY DESIGN -
         // filling it would enrol a whole class and bypass confirmed registration -
         // so the only arm that could ever match it was "I made it".
         //
         // The consequence was that a co-lecturer could not see an assessment for a
         // course they are allocated to teach, and a lecturer who was re-appointed to
-        // an Offering lost sight of the papers already sitting in the review queue.
+        // an Allocation lost sight of the papers already sitting in the review queue.
         // Both are the same defect the create page had: teaching authority read from
         // the legacy class graph instead of from the allocation.
         //
@@ -4264,7 +4264,7 @@ public function heartbeat($submissionId)
     }
 
     /**
-     * The Course Offerings this lecturer holds an allocation on, in this tenant.
+     * The Course Allocations this lecturer holds an allocation on, in this tenant.
      *
      * `ended` is included and `cancelled` excluded, matching
      * `LecturerCourseOfferingAccess::reachableOfferings()`: a lecturer keeps sight of
@@ -4424,11 +4424,11 @@ public function heartbeat($submissionId)
      * list must be able to open it, and one who cannot must get a 404 rather than
      * a page that then refuses to save.
      *
-     * A Course Offering assessment is reachable ONLY by a student with a confirmed
-     * Course Registration on that Offering. Its `class_id` is NULL by design - HEI
+     * A Course Allocation assessment is reachable ONLY by a student with a confirmed
+     * Course Registration on that Allocation. Its `class_id` is NULL by design - HEI
      * delivery is never faked through the legacy Class/Section graph - and the
      * original rule treats a NULL class as "every student in the school", so
-     * extending that rule to Offering exams would have published this course's
+     * extending that rule to Allocation exams would have published this course's
      * assessment to the entire institution. See CourseOfferingExamAccess.
      */
     private function findStudentExamOrFail(int $examId): OnlineExam

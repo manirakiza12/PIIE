@@ -65,7 +65,7 @@ class LessonPublishWithAttachmentOnlyTest extends TestCase
         return $this->actingAs($this->lecturer)->put(
             "/teacher/course-offerings/{$this->offering->id}/content/lessons/{$lesson->id}",
             // The module id travels with the save, exactly as the real form sends
-            // it. Without it the service re-resolves a module from the Offering,
+            // it. Without it the service re-resolves a module from the Allocation,
             // which is not necessarily the one this lesson belongs to - so the
             // request was refused for moving the lesson, long before the publish
             // guard was ever reached.
@@ -85,7 +85,7 @@ class LessonPublishWithAttachmentOnlyTest extends TestCase
         // relying on the relation. The `lessons()` relation fills in only the
         // module foreign key, and `CourseOfferingLesson`'s saving guard compares
         // the lesson's offering against its module's - so a lesson built through
-        // the relation alone is refused for belonging to no Offering at all. The
+        // the relation alone is refused for belonging to no Allocation at all. The
         // guard is right; the fixture was incomplete.
         return CourseOfferingLesson::query()->create(array_merge([
             'school_id' => $this->school,

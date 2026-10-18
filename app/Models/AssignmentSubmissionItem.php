@@ -44,7 +44,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * filename and never under public/. A student's photograph of their work, or a
  * voice recording, is personal evidence: it is reachable only through a route
  * that re-checks the confirmed registration (or, for a lecturer, the allocation
- * on that exact Offering). Serving these from a guessable public path would
+ * on that exact Allocation). Serving these from a guessable public path would
  * publish the student's work to anyone who guessed it.
  */
 class AssignmentSubmissionItem extends Model

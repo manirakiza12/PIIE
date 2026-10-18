@@ -10,7 +10,7 @@
 @endphp
 
 <div class="mainSection-title">
-    <a href="{{ route('teacher.course_offerings.show', $offering->id) }}" class="btn btn-sm btn-outline-secondary mb-2">Back to Course Offering</a>
+    <a href="{{ route('teacher.course_offerings.show', $offering->id) }}" class="btn btn-sm btn-outline-secondary mb-2">Back to Course Allocation</a>
     {{-- A lecturer who arrives here wanting to know who is behind should not have
          to go hunting through the workspace tabs for it. This roster answers WHO is
          enrolled; the grid answers HOW FAR they have got. Both are wanted from the
@@ -24,14 +24,14 @@
 @if($withheld)
     <section class="eSection-wrap">
         <div class="border rounded p-4 text-center" role="status">
-            <h6>No confirmed students are currently registered for this Course Offering.</h6>
+            <h6>No confirmed students are currently registered for this Course Allocation.</h6>
             <p class="text-muted mb-0">{{ $withheld }}</p>
         </div>
     </section>
 @elseif($roster->isEmpty())
     <section class="eSection-wrap">
         <div class="border rounded p-4 text-center" role="status">
-            <h6>No confirmed students are currently registered for this Course Offering.</h6>
+            <h6>No confirmed students are currently registered for this Course Allocation.</h6>
             <p class="text-muted mb-0">Students appear here once the academic office has confirmed their registration.</p>
         </div>
     </section>

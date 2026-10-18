@@ -191,7 +191,7 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
         $payload['teacher_id'] = $unrelated->id;
         $response = $this->actingAs($primary)->put(route('teacher.live_classes.update', $class->id), $payload);
         $response->assertSessionHasErrors('teacher_id');
-        $this->assertDatabaseHas('live_classes', ['id' => $class->id, 'teacher_id' => $primary->id, 'title' => 'Offering class 1']);
+        $this->assertDatabaseHas('live_classes', ['id' => $class->id, 'teacher_id' => $primary->id, 'title' => 'Allocation class 1']);
     }
 
     public function test_primary_co_and_same_tenant_admin_can_manage_materials(): void
@@ -362,12 +362,12 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
     {
         $classA = $this->liveClass(1, 1, $this->offeringA);
         $classB = $this->liveClass(2, 1, $this->parallelOffering);
-        $materialB = $this->material($classB, 'Other Offering secret', 'https://assets.example.test/other-secret');
+        $materialB = $this->material($classB, 'Other Allocation secret', 'https://assets.example.test/other-secret');
         $primary = $this->user('material-id-or@example.test', 3, 1);
         $this->allocation($primary, $this->offeringA, CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER);
 
         $access = $this->actingAs($primary)->get(route('live_classes.materials.access', [$classA->id, $materialB]));
-        $access->assertNotFound()->assertDontSee('Other Offering secret')->assertDontSee('other-secret');
+        $access->assertNotFound()->assertDontSee('Other Allocation secret')->assertDontSee('other-secret');
         $this->delete(route('teacher.live_classes.materials.destroy', $materialB))->assertForbidden();
         $this->assertDatabaseHas('live_class_materials', ['id' => $materialB]);
         $this->assertDatabaseHas('live_classes', ['id' => $classA->id]);
@@ -375,7 +375,7 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
         $this->registration($student, $this->offeringA, CourseRegistration::STATUS_CONFIRMED);
         $wrongMaterialResponse = $this->actingAs($student)->get(route('live_classes.materials.access', [$classA->id, $materialB]));
         $this->assertSame(404, $wrongMaterialResponse->getStatusCode(), 'Class A + Material B response Location: '.(string) $wrongMaterialResponse->headers->get('Location'));
-        $wrongMaterialResponse->assertDontSee('Other Offering secret')->assertDontSee('other-secret');
+        $wrongMaterialResponse->assertDontSee('Other Allocation secret')->assertDontSee('other-secret');
 
         $foreignClass = $this->liveClass(3, 2, $this->foreignOffering, ['title' => 'Foreign tenant confidential']);
         $foreignMaterial = $this->material($foreignClass, 'Foreign material secret');
@@ -520,7 +520,7 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
      */
     public function test_confirmed_student_access_is_unchanged_before_the_academic_period_starts(): void
     {
-        // Put the Offering in progress while its Academic Period is still ahead.
+        // Put the Allocation in progress while its Academic Period is still ahead.
         $period = DB::table('academic_periods')->insertGetId([
             'school_id' => 1, 'academic_year_id' => 1, 'label' => 'Semester 1',
             'start_date' => Carbon::parse('2026-10-01'), 'end_date' => Carbon::parse('2027-01-25'),
@@ -565,7 +565,7 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
     {
         $row = array_merge([
             'id' => $id, 'school_id' => $schoolId, 'course_offering_id' => $offeringId,
-            'title' => 'Offering class '.$id, 'subject_id' => $schoolId === 1 ? $this->subjectA : null,
+            'title' => 'Allocation class '.$id, 'subject_id' => $schoolId === 1 ? $this->subjectA : null,
             'platform' => 'custom', 'meeting_url' => 'https://meet.example.test/private-secret',
             'meeting_id' => 'private-meeting-id', 'meeting_password' => 'private-password',
             'scheduled_at' => '2026-09-25 10:00:00', 'ends_at' => '2026-09-25 11:00:00',

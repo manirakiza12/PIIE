@@ -5,7 +5,7 @@
 
 <div class="eSection-wrap">
     <h5>{{ get_phrase('Assign Lecturer') }}</h5>
-    <p class="text-muted">{{ get_phrase('This creates a Planned allocation. Activate it separately when the Offering and lecturer are eligible.') }}</p>
+    <p class="text-muted">{{ get_phrase('This creates a Planned allocation. Activate it separately when the Allocation and lecturer are eligible.') }}</p>
 
     @if($errors->any())
         <div class="alert alert-danger" role="alert" aria-labelledby="lecturer-errors-title">
@@ -17,22 +17,20 @@
     @if(in_array($offering->status, ['completed', 'cancelled'], true))
         <div class="alert alert-info" role="status">
             @if($offering->status === 'completed')
-                {{ get_phrase('This Offering is complete. Lecturer allocations are retained as history.') }}
+                {{ get_phrase('This Allocation is complete. Lecturer allocations are retained as history.') }}
             @else
-                {{ get_phrase('This Offering is cancelled. Lecturer allocations are read-only.') }}
+                {{ get_phrase('This Allocation is cancelled. Lecturer allocations are read-only.') }}
             @endif
         </div>
     @elseif(!$canMutateOffering)
-        <div class="alert alert-info" role="status">{{ get_phrase('Lecturer allocations cannot be changed for this Offering state.') }}</div>
+        <div class="alert alert-info" role="status">{{ get_phrase('Lecturer allocations cannot be changed for this Allocation state.') }}</div>
     @elseif(!$canManage)
         <div class="alert alert-info" role="status">{{ get_phrase('You can view this workspace but do not have permission to assign lecturers.') }}</div>
     @elseif($candidates->isEmpty())
         <div class="alert alert-info" role="status">
             <strong>{{ get_phrase('No eligible lecturers are currently available.') }}</strong>
             <div>{{ get_phrase('Only enabled, same-institution Teacher/Lecturer accounts that satisfy staff eligibility requirements can be selected.') }}</div>
-            @if(auth()->user()->hasPermission('staff.view'))
-                <a class="alert-link" href="{{ route('admin.rbac.staff.index') }}">{{ get_phrase('Open Staff Directory') }}</a>
-            @endif
+            <p class="mb-0">{{ get_phrase('Maintain lecturer accounts in the Staff module before assigning them here.') }}</p>
         </div>
     @else
         <form method="POST" action="{{ route('admin.course_offerings.lecturers.store', $offering->id) }}" class="row g-3" aria-describedby="allocation-period-help">

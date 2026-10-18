@@ -9,7 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 
 /**
- * A read model for the Course Offering Gradebook that does not exist yet.
+ * A read model for the Course Allocation Gradebook that does not exist yet.
  *
  * WHAT THIS IS, AND WHAT IT IS NOT
  *
@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
  * brief is explicit that the Gradebook comes later, and inventing one here would
  * be a second, competing product.
  *
- * It IS the agreement about SHAPE. A future Course Offering Gradebook must be able
+ * It IS the agreement about SHAPE. A future Course Allocation Gradebook must be able
  * to read assignment outcomes without a migration and without a rewrite, which
  * means the data it needs has to be derivable now, under stable names, from rows
  * that already exist. This class fixes that contract in one place, so when the
@@ -27,7 +27,7 @@ use Illuminate\Support\Collection;
  * WHY A READ MODEL AND NOT A NEW TABLE
  *
  * Every field below is already stored: the mark, the maximum, the release
- * instant, the student, the Offering. A `course_offering_grades` table would be a
+ * instant, the student, the Allocation. A `course_offering_grades` table would be a
  * denormalised copy that can drift from the submission it came from - and the one
  * thing a gradebook must never do is disagree with the marking a lecturer
  * actually did.
@@ -48,7 +48,7 @@ class GradebookFeed
 {
 
     /**
-     * Every RELEASED grade for one Course Offering.
+     * Every RELEASED grade for one Course Allocation.
      *
      * Unreleased marks are excluded, because a gradebook that showed a mark the
      * student has not been given would leak it. A lecturer building their own
@@ -133,7 +133,7 @@ class GradebookFeed
     }
 
     /**
-     * Students on the Offering with a factual state for every assignment,
+     * Students on the Allocation with a factual state for every assignment,
      * including the ones with no mark at all.
      *
      * A gradebook must be able to show a student who has NOT been marked as

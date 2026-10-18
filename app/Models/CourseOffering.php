@@ -35,11 +35,11 @@ class CourseOffering extends Model
     ];
 
     /**
-     * Does this Offering restrict a student's progression?
+     * Does this Allocation restrict a student's progression?
      *
      * False by default, deliberately. Gating a live student population without
      * warning would lock people out of content they are part-way through, so an
-     * Offering opts in rather than out.
+     * Allocation opts in rather than out.
      */
     public function gatesProgression(): bool
     {
@@ -49,15 +49,15 @@ class CourseOffering extends Model
     protected static function booted(): void
     {
         static::creating(function (): void {
-            throw new DomainException('Course Offerings may only be created through CourseOfferingService.');
+            throw new DomainException('Course Allocations may only be created through CourseOfferingService.');
         });
 
         static::updating(function (self $offering): void {
-            throw new DomainException('Course Offerings may only be changed through CourseOfferingService.');
+            throw new DomainException('Course Allocations may only be changed through CourseOfferingService.');
         });
 
         static::deleting(function (self $offering): void {
-            throw new DomainException('Course Offerings cannot be deleted; cancel the Offering to preserve history.');
+            throw new DomainException('Course Allocations cannot be deleted; cancel the Allocation to preserve history.');
         });
     }
 
@@ -72,7 +72,7 @@ class CourseOffering extends Model
     }
 
     /**
-     * Academic Year and Academic Period for this Offering.
+     * Academic Year and Academic Period for this Allocation.
      *
      * The tenant constraint is applied only when the owning row is actually
      * available, i.e. on lazy access. It used to be applied unconditionally at
@@ -116,7 +116,7 @@ class CourseOffering extends Model
     }
 
     /**
-     * Who is allocated to teach this Offering.
+     * Who is allocated to teach this Allocation.
      *
      * ── WHY THE TENANT CONSTRAINT IS A SUBQUERY AND NOT A SCALAR ───────────
      *
@@ -131,7 +131,7 @@ class CourseOffering extends Model
      * `where school_id is null`, which matches nothing.
      *
      * So `CourseOffering::with('lecturerAllocations')` returned an empty
-     * collection for every Offering in the product, with no error and no warning.
+     * collection for every Allocation in the product, with no error and no warning.
      * It failed CLOSED, which is the safe direction, and it failed SILENTLY, which
      * is how a tenant-shaped constraint goes unnoticed for as long as nobody
      * eager-loads the relation - and a Course Home that names no lecturers at all
@@ -152,7 +152,7 @@ class CourseOffering extends Model
      * therefore states the same rule with no dependence on a PHP-side value that
      * may or may not be loaded:
      *
-     *     this allocation row must belong to the same tenant as its Offering
+     *     this allocation row must belong to the same tenant as its Allocation
      *
      * That is the tenant constraint, and it is now actually enforced on the
      * eager-load path where it previously was not.

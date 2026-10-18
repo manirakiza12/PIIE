@@ -59,11 +59,11 @@
 <div class="alert alert-info">
     {{ get_phrase('Teachers manage questions and marking for the courses and subjects they are assigned to. Administrators control exam publication, schedule, and result-release policy.') }}
     @if($hasCourseOffering)
-        <br><strong>{{ get_phrase('You are teaching the following Course Offerings. Their exams are listed below, and a new assessment for one of them is created from the course itself.') }}</strong>
+        <br><strong>{{ get_phrase('You are teaching the following Course Allocations. Their exams are listed below, and a new assessment for one of them is created from the course itself.') }}</strong>
         <ul class="mb-0 mt-1">
             @foreach($courseOfferings as $piieCourse)
                 <li>
-                    {{ $piieCourse->subject?->name ?? ('Course Offering #'.$piieCourse->id) }}
+                    {{ $piieCourse->subject?->name ?? ('Course Allocation #'.$piieCourse->id) }}
                     @if($piieCourse->reference)<span class="text-muted">({{ $piieCourse->reference }})</span>@endif
                     @if($piieCourse->academicYear || $piieCourse->academicPeriod)
                         <span class="text-muted">
@@ -76,7 +76,7 @@
     @endif
 
     @unless($hasCourseOffering || $hasLegacySubject)
-        <br><strong data-testid="no-assignment-warning">{{ get_phrase('You are not currently assigned to any Course Offering or legacy class/subject, so there is nothing here to work on. Ask an administrator to add you to a course.') }}</strong>
+        <br><strong data-testid="no-assignment-warning">{{ get_phrase('You are not currently assigned to any Course Allocation or legacy class/subject, so there is nothing here to work on. Ask an administrator to add you to a course.') }}</strong>
     @elseif(! $hasLegacySubject)
         <br><span class="text-muted">{{ get_phrase('The Subject, Class and Programme filters below apply to legacy class-based exams only.') }}</span>
     @endif
@@ -115,19 +115,19 @@
             <input class="form-control eForm-control" type="text" name="title" value="{{ request('title') }}" placeholder="{{ get_phrase('Search by title') }}">
         </div>
         @if($hasCourseOffering)
-            {{-- Course Offering is offered BEFORE the legacy filters, because for a
-                 higher-education lecturer it is the primary axis: a Course Offering
+            {{-- Course Allocation is offered BEFORE the legacy filters, because for a
+                 higher-education lecturer it is the primary axis: a Course Allocation
                  exam has no class at all, so filtering by Class could never find one.
-                 Only Offerings the lecturer is allocated to are listed, and the
+                 Only Allocations the lecturer is allocated to are listed, and the
                  controller re-checks that intersection, so a forged id narrows to
                  nothing rather than exposing another course. --}}
             <div class="col-md-3">
-                <label class="eForm-label" for="filter-course-offering">{{ get_phrase('Course Offering') }}</label>
+                <label class="eForm-label" for="filter-course-offering">{{ get_phrase('Course Allocation') }}</label>
                 <select class="form-select eForm-select" name="course_offering_id" id="filter-course-offering" data-testid="filter-course-offering">
-                    <option value="">{{ get_phrase('All Course Offerings') }}</option>
+                    <option value="">{{ get_phrase('All Course Allocations') }}</option>
                     @foreach($courseOfferings as $piieCourse)
                         <option value="{{ $piieCourse->id }}" {{ (string) request('course_offering_id') === (string) $piieCourse->id ? 'selected' : '' }}>
-                            {{ $piieCourse->subject?->name ?? ('Offering #'.$piieCourse->id) }}{{ $piieCourse->reference ? ' ('.$piieCourse->reference.')' : '' }}
+                            {{ $piieCourse->subject?->name ?? ('Allocation #'.$piieCourse->id) }}{{ $piieCourse->reference ? ' ('.$piieCourse->reference.')' : '' }}
                         </option>
                     @endforeach
                 </select>
@@ -211,14 +211,14 @@
                              print a LIE about it: this paper goes to the confirmed
                              students of one course and nobody else.
 
-                             So the second line states the real scope for an Offering
+                             So the second line states the real scope for an Allocation
                              exam, and the legacy class line is left byte-identical for
                              a legacy one. This is also what stops the workspace's
                              "Quizzes & Exams" tab from reading as an unrelated legacy
                              examination list: the course is named on the row. --}}
                         @if($exam->course_offering_id !== null)
                             <div class="text-muted small">
-                                {{ get_phrase('Course Offering') }} ·
+                                {{ get_phrase('Course Allocation') }} ·
                                 {{ $exam->courseOffering?->reference ?? ('#'.$exam->course_offering_id) }}
                             </div>
                         @else

@@ -742,7 +742,7 @@ class OnlineExamLifecycleGovernanceTest extends TestCase
         $this->assertStringContainsString(
             $this->offering->subject->name,
             $notification->message,
-            'the notification must name the Course Offering the paper belongs to'
+            'the notification must name the Course Allocation the paper belongs to'
         );
 
         $this->assertSame((int) $this->exam->id, (int) $notification->online_exam_id);
@@ -783,7 +783,7 @@ class OnlineExamLifecycleGovernanceTest extends TestCase
                 ->where('user_id', $stranger->id)
                 ->where('type', 'exam_submitted')
                 ->count(),
-            'a legacy class assignment must not make a lecturer a recipient for a Course Offering exam'
+            'a legacy class assignment must not make a lecturer a recipient for a Course Allocation exam'
         );
     }
 

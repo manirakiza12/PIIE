@@ -13,8 +13,8 @@
 </style>
 <div class="mainSection-title"><h4>{{ get_phrase(isset($subject) ? ($isHigherEducation ? 'Edit Course Unit' : 'Edit Subject / Course Unit') : ($isHigherEducation ? 'Add Course Unit' : 'Add Subject / Course Unit')) }}</h4></div>
 @if($isHigherEducation)
-<div class="alert alert-info" role="note"><strong>Academic Year and Semester:</strong> A Course Unit is a reusable catalogue record. Choose the dated teaching year and semester under Course Registrations when creating its Course Offering.
-@if(isset($subject) && auth()->user()->hasPermission('academic.course_offering.manage'))<a class="alert-link" href="{{ route('admin.course_offerings.create', ['subject_id'=>$subject->id]) }}">Schedule this Course Unit</a>@endif
+<div class="alert alert-info" role="note"><strong>Academic Year and Semester:</strong> A Course Unit is a reusable catalogue record. Choose the dated teaching year and semester in the Course Allocation module.
+
 </div>
 @endif
 @if($errors->any())<div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif

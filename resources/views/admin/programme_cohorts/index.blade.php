@@ -30,7 +30,7 @@
             </div>
         </article>
     @empty
-<div class="text-center py-5"><h5>No legacy student groups match these filters</h5><p class="text-muted mb-3">Student groups are optional. Place students directly in their approved Programme Curriculum and Study Stage.</p><div class="d-flex justify-content-center flex-wrap gap-2"><a class="btn btn-outline-secondary" href="{{ route('admin.programme_cohorts.index') }}">Clear filters</a><a class="btn btn-primary" href="{{ route('admin.academic.direct_placement') }}">Place Student in Programme</a></div></div>
+<div class="text-center py-5"><h5>No legacy student groups match these filters</h5><p class="text-muted mb-3">Student groups are optional. Place students directly in their approved Programme Curriculum and Programme Year.</p><div class="d-flex justify-content-center flex-wrap gap-2"><a class="btn btn-outline-secondary" href="{{ route('admin.programme_cohorts.index') }}">Clear filters</a><a class="btn btn-primary" href="{{ route('admin.academic.direct_placement') }}">Place Student in Programme</a></div></div>
     @endforelse
     {{ $cohorts->links() }}
 </div>

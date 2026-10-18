@@ -22,11 +22,11 @@ use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * The student's side of Course Offering Assignments.
+ * The student's side of Course Allocation Assignments.
  *
  * EVERY ACTION AUTHORISES THE SAME WAY
  *
- * A confirmed registration for the exact Offering, and an assignment the lecturer
+ * A confirmed registration for the exact Allocation, and an assignment the lecturer
  * has actually released. A draft is a 404, not a 403, so these pages cannot be
  * used to discover what has not been published.
  *
@@ -389,7 +389,7 @@ class StudentCourseAssignmentController extends Controller
     }
 
     /**
-     * Serve this Course Offering's cover image.
+     * Serve this Course Allocation's cover image.
      *
      * A student's own course cover, on the student's own route. It is NOT served
      * from the lecturer namespace: that group redirects a student away before any
@@ -399,7 +399,7 @@ class StudentCourseAssignmentController extends Controller
      * registration, an allocation, or the academic office - because both call
      * `CourseCoverImage::assertMayView()`. One rule with two doors, not two rules.
      *
-     * An Offering with no cover is a normal state, so this is a 404 rather than a
+     * An Allocation with no cover is a normal state, so this is a 404 rather than a
      * placeholder, and no caller should treat a missing cover as a fault.
      */
     public function coverImage(Request $request, int $id)
@@ -428,8 +428,8 @@ class StudentCourseAssignmentController extends Controller
      * Open a lecturer's handout.
      *
      * Authorised on the same rule as the page that links it: a confirmed
-     * registration on the exact Offering, and the assignment actually released.
-     * A resource id from another tenant, another Offering, or a draft assignment
+     * registration on the exact Allocation, and the assignment actually released.
+     * A resource id from another tenant, another Allocation, or a draft assignment
      * is a 404, so a handout (which may be a question paper or a marking scheme)
      * is not reachable by guessing.
      */

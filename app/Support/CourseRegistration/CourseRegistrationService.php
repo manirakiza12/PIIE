@@ -32,21 +32,21 @@ class CourseRegistrationService
             }
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($offeringId)->first();
             if (! $offering) {
-                throw new DomainException('This Course Offering could not be found in this institution.');
+                throw new DomainException('This Course Allocation could not be found in this institution.');
             }
             $membership = $this->applicableMembership($schoolId, $student, $offering, $membershipId);
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($offeringId)->lockForUpdate()->first();
             if ($offering->status !== CourseOffering::STATUS_OPEN) {
-                throw new DomainException('Students may register only while the Course Offering is open.');
+                throw new DomainException('Students may register only while the Course Allocation is open.');
             }
             $existing = CourseRegistration::where('school_id', $schoolId)->where('student_id', $studentId)
                 ->where('course_offering_id', $offeringId)->lockForUpdate()->first();
             if ($existing) {
                 if ((int) $existing->curriculum_membership_id !== (int) $membership->id) {
-                    throw new DomainException('This student already has a registration for this Course Offering under a different Study Plan entry. The academic office should review it.');
+                    throw new DomainException('This student already has a registration for this Course Allocation under a different Study Plan entry. The academic office should review it.');
                 }
                 if ($existing->status === CourseRegistration::STATUS_DROPPED) {
-                    throw new DomainException('This student already has a dropped registration for this Offering; same-Offering re-registration is not allowed.');
+                    throw new DomainException('This student already has a dropped registration for this Allocation; same-Allocation re-registration is not allowed.');
                 }
                 return $existing;
             }
@@ -70,7 +70,7 @@ class CourseRegistrationService
                     if ($existing && $existing->status !== CourseRegistration::STATUS_DROPPED) {
                         return $existing;
                     }
-                    throw new DomainException('A registration for this Offering already exists.');
+                    throw new DomainException('A registration for this Allocation already exists.');
                 }
                 throw $exception;
             }
@@ -93,13 +93,13 @@ class CourseRegistrationService
             $this->assertActor($student, $actorId);
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($registration->course_offering_id)->first();
             if (! $offering) {
-                throw new DomainException('This Course Registration no longer matches the Course Offering. The academic office should review it.');
+                throw new DomainException('This Course Registration no longer matches the Course Allocation. The academic office should review it.');
             }
             $membership = $this->applicableMembership($schoolId, $student, $offering, (int) $registration->curriculum_membership_id, true);
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($registration->course_offering_id)->lockForUpdate()->first();
             $registration = CourseRegistration::where('school_id', $schoolId)->whereKey($registrationId)->lockForUpdate()->first();
             if (! $offering || (int) $offering->subject_id !== (int) $registration->subject_id) {
-                throw new DomainException('This Course Registration no longer matches the Course Offering. The academic office should review it.');
+                throw new DomainException('This Course Registration no longer matches the Course Allocation. The academic office should review it.');
             }
             if ((string) $registration->registered_credits !== number_format((float) $membership->credits, 2, '.', '')
                 || $registration->registered_classification !== $membership->classification) {
@@ -109,10 +109,10 @@ class CourseRegistrationService
                 return $registration;
             }
             if ($registration->status !== CourseRegistration::STATUS_REGISTERED) {
-                throw new DomainException('Only registered students may confirm an Offering registration.');
+                throw new DomainException('Only registered students may confirm an Allocation registration.');
             }
             if ($offering->status !== CourseOffering::STATUS_OPEN) {
-                throw new DomainException('Registration confirmation is allowed only while the Course Offering is open.');
+                throw new DomainException('Registration confirmation is allowed only while the Course Allocation is open.');
             }
             if (! $this->confirmationEligibility->allows($student)) {
                 throw ValidationException::withMessages(['registration' => 'Pay at least 20% of the current academic-session fees before confirming this Course Registration.']);
@@ -139,7 +139,7 @@ class CourseRegistrationService
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($registration->course_offering_id)->lockForUpdate()->first();
             $registration = CourseRegistration::where('school_id', $schoolId)->whereKey($registrationId)->lockForUpdate()->first();
             if (! $offering || (int) $offering->subject_id !== (int) $registration->subject_id) {
-                throw new DomainException('This Course Registration no longer matches the Course Offering. The academic office should review it.');
+                throw new DomainException('This Course Registration no longer matches the Course Allocation. The academic office should review it.');
             }
             $this->storedMembership($schoolId, $offering, $registration);
             if ($registration->status === CourseRegistration::STATUS_DROPPED) {
@@ -149,7 +149,7 @@ class CourseRegistrationService
                 throw new DomainException('Only active registrations may be dropped.');
             }
             if (! in_array($offering->status, [CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true)) {
-                throw new DomainException('Registration cannot be dropped for a completed or cancelled Offering.');
+                throw new DomainException('Registration cannot be dropped for a completed or cancelled Allocation.');
             }
             $before = $registration->status;
             $registration->status = CourseRegistration::STATUS_DROPPED;
@@ -186,7 +186,7 @@ class CourseRegistrationService
     {
         $result = $this->eligibility->evaluate($offering, (int) $student->id, $membershipId, true, $allowRetired);
         if (! $result->eligible || ! $result->membership || (int) $result->membership->subject_id !== (int) $offering->subject_id) {
-            throw new DomainException($result->eligible ? 'This Course Offering needs academic review before students can register.' : $result->message);
+            throw new DomainException($result->eligible ? 'This Course Allocation needs academic review before students can register.' : $result->message);
         }
 
         return $result->membership;

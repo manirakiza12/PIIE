@@ -13,19 +13,19 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Course-Offering Assignments fixture.
+ * Course-Allocation Assignments fixture.
  *
  * BUILT ON THE EXISTING CHAIN, NOT A NEW ONE
  *
- * An assignment is only meaningful inside a Course Offering, so every test needs
- * an institution, an in-progress Offering, an allocated lecturer and a confirmed
+ * An assignment is only meaningful inside a Course Allocation, so every test needs
+ * an institution, an in-progress Allocation, an allocated lecturer and a confirmed
  * student. CourseContentFixture already builds exactly that, so this composes it
  * rather than rebuilding a subtly different chain.
  *
  * THE TABLES ARE DECLARED WITH BOTH THE LEGACY AND THE COURSE-OFFERING COLUMNS
  *
  * The real `assignments` table carries Subject/Class/Teacher columns alongside
- * the new Course Offering ones. A fixture declaring only the new columns would
+ * the new Course Allocation ones. A fixture declaring only the new columns would
  * test a schema PIIE does not run, and - worse - would hide any query that still
  * reaches for a legacy column. The legacy `is_published` flag and the
  * `submission_type` / `status` enums are reproduced with their REAL definitions,
@@ -62,12 +62,12 @@ trait AssignmentFixture
                 $t->dateTime('due_date')->nullable();
                 $t->integer('max_marks')->default(100);
                 // The REAL production enum, including 'link' - which the Course
-                // Offering surfaces deliberately never offer.
+                // Allocation surfaces deliberately never offer.
                 $t->enum('submission_type', ['file', 'text', 'link', 'any'])->default('any');
                 $t->boolean('is_published')->default(true);
                 $t->timestamps();
 
-                // ── Course Offering shape, as added by the migration ──
+                // ── Course Allocation shape, as added by the migration ──
                 $t->unsignedBigInteger('course_offering_id')->nullable()->index('asg_offering_idx');
                 $t->text('learning_objectives')->nullable();
                 $t->string('status', 20)->default('draft');
@@ -120,7 +120,7 @@ trait AssignmentFixture
                 $t->enum('status', ['submitted', 'late', 'graded'])->default('submitted');
                 $t->timestamps();
 
-                // ── Course Offering shape ──
+                // ── Course Allocation shape ──
                 $t->unsignedBigInteger('course_offering_id')->nullable()->index('asub_offering_idx');
                 $t->unsignedSmallInteger('attempt_no')->default(1);
                 $t->unsignedSmallInteger('attempt_cycle')->default(1);
@@ -134,7 +134,7 @@ trait AssignmentFixture
                 $t->unsignedBigInteger('returned_by')->nullable();
                 $t->dateTime('marks_released_at')->nullable();
                 $t->string('idempotency_key', 64)->nullable();
-                // The canonical rich-text response for a Course Offering
+                // The canonical rich-text response for a Course Allocation
                 // submission. The legacy `submission` TEXT column is left exactly
                 // as production has it, for the K12 screens.
                 $t->longText('text_response')->nullable();
@@ -305,7 +305,7 @@ trait AssignmentFixture
     // ── builders ──────────────────────────────────────────────────────────
 
     /**
-     * A Course Offering assignment, draft by default.
+     * A Course Allocation assignment, draft by default.
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -601,10 +601,10 @@ trait AssignmentFixture
     }
 
     /**
-     * A WHOLE second tenant with its own Offering, lecturer, student, assignment
+     * A WHOLE second tenant with its own Allocation, lecturer, student, assignment
      * and submission.
      *
-     * Cross-tenant and cross-Offering denial can only be tested against content
+     * Cross-tenant and cross-Allocation denial can only be tested against content
      * that genuinely belongs somewhere else, so this builds one.
      *
      * @return array{schoolId:int, offeringId:int, lecturer:\App\Models\User, student:\App\Models\User, assignmentId:int, submissionId:int}
@@ -662,11 +662,11 @@ trait AssignmentFixture
     }
 
     /**
-     * A second Offering in the SAME school.
+     * A second Allocation in the SAME school.
      *
-     * Needed because cross-Offering denial is a different failure from
+     * Needed because cross-Allocation denial is a different failure from
      * cross-tenant denial: both ids are valid, the tenant is the same, and only
-     * the Offering differs. A second tenant alone would not prove the Offering
+     * the Allocation differs. A second tenant alone would not prove the Allocation
      * boundary, because the school check would catch the request anyway.
      */
     protected function secondOfferingAssignment(): array
@@ -691,10 +691,10 @@ trait AssignmentFixture
     }
 
     /**
-     * A second CONFIRMED registrant on the SAME Offering.
+     * A second CONFIRMED registrant on the SAME Allocation.
      *
      * Shared rather than copied into each test class, because it encodes one
-     * rule - a second confirmed student exists on the SAME Offering, in the same
+     * rule - a second confirmed student exists on the SAME Allocation, in the same
      * tenant - and two private copies of the same rule will drift.
      *
      * It is needed for any test about ownership: a test that asserts one student

@@ -172,7 +172,7 @@ class OnlineExamAnnouncementNotifier
      *
      *     if ($exam->class_id) { ... enrollment ... }
      *
-     * so a Course Offering exam - `class_id` NULL by design - reached EVERY student
+     * so a Course Allocation exam - `class_id` NULL by design - reached EVERY student
      * in the school with a "your exam starts soon" reminder. A reminder is not
      * harmless where a notification is: it asserts that the recipient has an exam
      * coming, and a student who is not on the course would be told one was.

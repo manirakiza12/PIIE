@@ -10,7 +10,7 @@ use App\Models\AssignmentSubmission;
  *
  * ── WHY THIS IS A SHARED CLASS AND NOT A VIEW CONCERN ─────────────────────
  *
- * The Course Offering assignment list and the Course Home card both need to say
+ * The Course Allocation assignment list and the Course Home card both need to say
  * "Open", "Missing", "Returned (late)" and so on. Written twice, the two would
  * disagree - and the disagreement would be invisible, because both sentences
  * would be individually reasonable and only their juxtaposition would be wrong. A

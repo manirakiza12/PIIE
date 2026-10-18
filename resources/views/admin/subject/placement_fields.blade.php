@@ -20,22 +20,22 @@
 @endphp
 <section class="border rounded p-3 my-3" data-unit-placement>
     <h5>{{ get_phrase('Curriculum placement') }}</h5>
-    <p class="text-muted">{{ get_phrase('Select an existing draft Curriculum to save its credits, stage and prerequisites together with this Course Unit. Other placements remain unchanged.') }}</p>
+    <p class="text-muted">{{ get_phrase('Select an existing draft Curriculum to save its credits, Programme Year and prerequisites together with this Course Unit. Other placements remain unchanged.') }}</p>
     <div class="mb-3"><label class="form-label">{{ get_phrase('Programme Curriculum') }}</label>
         <select name="placement_curriculum_id" class="form-select" data-plan>
             <option value="">{{ get_phrase('Catalogue only — leave placements unchanged') }}</option>
             @foreach($unitSetup['plans'] as $plan)<option value="{{ $plan->id }}" @selected((string)$initialPlan === (string)$plan->id)>{{ $plan->programme->name }} — {{ $plan->version }}</option>@endforeach
         </select>
     </div>
-    @if($unitSetup['plans']->isEmpty())<p class="text-muted">{{ get_phrase('Create a draft Programme Curriculum and its stages before assigning a placement. You can save the Course Unit catalogue record now.') }} <a href="{{ route('admin.curricula.create') }}">{{ get_phrase('Create Programme Curriculum') }}</a></p>@endif
+    @if($unitSetup['plans']->isEmpty())<p class="text-muted">{{ get_phrase('Create a draft Programme Curriculum and its Programme Years in their modules before assigning a placement. You can save the Course Unit catalogue record now.') }}</p>@endif
     <div class="mb-3">
         <label class="form-label" for="unit-curriculum-academic-year">Curriculum applies from Academic Year</label>
         <input id="unit-curriculum-academic-year" class="form-control" type="text" readonly data-curriculum-year value="Choose a Programme Curriculum to see its Academic Year">
-        <p class="form-text">This year comes from the selected curriculum. Set or change it in the draft Programme Curriculum. For the actual year and semester in which this unit is taught, use Course Registrations ? Create Course Offering after saving the unit.</p>
+        <p class="form-text">This is the first applicable Academic Year, not an expiry date. The curriculum remains reusable in later years. Set the actual teaching year and semester in the Course Allocation module.</p>
     </div>
     <fieldset data-placement-fields disabled>
         <div class="row g-3">
-            <div class="col-md-6"><label class="form-label">{{ get_phrase('Programme Year / Stage') }}</label><select class="form-select" name="placement_stage_id" required data-stage></select></div>
+            <div class="col-md-6"><label class="form-label">{{ get_phrase('Programme Year') }}</label><select class="form-select" name="placement_stage_id" required data-stage></select></div>
             <div class="col-md-6"><label class="form-label">{{ get_phrase('Classification') }}</label><select class="form-select" name="placement_classification"><option value="compulsory">{{ get_phrase('Compulsory') }}</option><option value="elective">{{ get_phrase('Elective') }}</option></select></div>
             <div class="col-md-6"><label class="form-label">{{ get_phrase('Credit Units') }}</label><input type="number" class="form-control" name="placement_credits" min="0" max="9999.99" step="0.01" required></div>
             <div class="col-md-6"><label class="form-label">{{ get_phrase('Order') }}</label><input type="number" class="form-control" name="placement_sequence" min="0" max="65535" required></div>

@@ -62,7 +62,7 @@
             <tr>
                 <th>{{ get_phrase('Student') }}</th>
                 <th>{{ get_phrase('Exam') }}</th>
-                <th>{{ get_phrase('Course Offering / Course Unit') }}</th>
+                <th>{{ get_phrase('Course Allocation / Course Unit') }}</th>
                 <th>{{ get_phrase('Submitted') }}</th>
                 <th class="text-end">{{ get_phrase('Objective') }}</th>
                 <th class="text-end">{{ get_phrase('Manual') }}</th>
@@ -84,13 +84,13 @@
                     <td>{{ optional($submission->student)->name ?? '—' }}</td>
                     <td>{{ $submission->exam->title ?? '—' }}</td>
                     {{-- The course is part of the decision, so it is never blank: an
-                         Offering paper names its course, a legacy paper names its class. --}}
+                         Allocation paper names its course, a legacy paper names its class. --}}
                     <td>
                         @if($offering)
                             <div>{{ optional($submission->exam->subject)->name ?? '—' }}</div>
-                            <div class="text-muted small">{{ $offering->reference ?? ('Offering #'.$offering->id) }}</div>
+                            <div class="text-muted small">{{ $offering->reference ?? ('Allocation #'.$offering->id) }}</div>
                         @else
-                            <div class="text-muted small">{{ optional($submission->exam->classRoom)->name ?? get_phrase('Legacy - no course offering') }}</div>
+                            <div class="text-muted small">{{ optional($submission->exam->classRoom)->name ?? get_phrase('Legacy - no course allocation') }}</div>
                         @endif
                     </td>
                     <td>{{ optional($submission->submitted_at)->format('d M Y H:i') ?? '—' }}</td>

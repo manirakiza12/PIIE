@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
-/** Authoritative Offering-scoped Live Class participation and staffing checks. */
+/** Authoritative Allocation-scoped Live Class participation and staffing checks. */
 class LiveClassAccessService
 {
     private const VIEW_CAPABILITY = 'live_classes.view';
@@ -114,7 +114,7 @@ class LiveClassAccessService
      *
      * As in the list query, only the END of the allocation window narrows this:
      * a class scheduled before the lecturer's own allocation start is part of
-     * their Offering's history and is theirs to read.
+     * their Allocation's history and is theirs to read.
      */
     public function canLecturerView(User $user, LiveClass $class): bool
     {
@@ -154,7 +154,7 @@ class LiveClassAccessService
             ->first();
     }
 
-    /** Current mutation requires current allocation and an operational Offering. */
+    /** Current mutation requires current allocation and an operational Allocation. */
     public function canLecturerManage(User $user, LiveClass $class): bool
     {
         return $this->hasAnyCapability($user, self::MANAGE_CAPABILITIES)
@@ -242,7 +242,7 @@ class LiveClassAccessService
 
         // Pre-start exception, judged per allocation through the same shared
         // authority the lecturer workspace uses, so the two can never disagree.
-        // A lecturer without the grant, or on an Offering that was not
+        // A lecturer without the grant, or on an Allocation that was not
         // deliberately early-started, is simply not added.
         $extra = CourseOfferingLecturerAllocation::query()
             ->where('school_id', $offering->school_id)
@@ -279,8 +279,8 @@ class LiveClassAccessService
      * it would refuse a completed class, which is the only one with a recording.
      *
      * The test is responsibility rather than current manageability: this person
-     * is, or was, allocated to the Offering the class belongs to, and holds a
-     * manage capability. That keeps the class bound to its Offering and to a real
+     * is, or was, allocated to the Allocation the class belongs to, and holds a
+     * manage capability. That keeps the class bound to its Allocation and to a real
      * appointment, while allowing the work to be finished afterwards.
      *
      * Available on a concluded class on purpose. Cancelling a class does not
@@ -363,14 +363,14 @@ class LiveClassAccessService
      * Which Live Classes may this lecturer READ?
      *
      * READ, not act. The distinction matters and was the cause of a real,
-     * reported bug: a lecturer's Course Offering dashboard showed "Live Classes
+     * reported bug: a lecturer's Course Allocation dashboard showed "Live Classes
      * 0" while they demonstrably owned, and had created, several of them.
      *
      * The old query required the CLASS DATE to fall inside the allocation's own
      * date window, so any class scheduled before the allocation's agreed
      * `starts_on` became invisible. That is wrong in principle and it is wrong
      * in practice here: an allocation for 1 Oct does not make a class taught on
-     * 29 Sep somebody else's, and a class belongs to its Offering, not to a
+     * 29 Sep somebody else's, and a class belongs to its Allocation, not to a
      * slice of the calendar. It also disagreed with the per-record checks
      * below, which do let an authorised tester past a pre-start date - so the
      * list and the detail page could contradict each other about one class.
@@ -456,10 +456,10 @@ class LiveClassAccessService
         if (! $offering) return false;
         if (in_array($offering->status, [CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true)) return true;
 
-        // Once the Offering itself is completed, a student keeps read access to
+        // Once the Allocation itself is completed, a student keeps read access to
         // classes that reached a real outcome - it happened, or it was
         // cancelled, and both are the academic record. A class that was never
-        // concluded is deliberately NOT included here: the Offering is over and
+        // concluded is deliberately NOT included here: the Allocation is over and
         // nothing was ever asserted about this one, so there is no settled
         // history to show.
         return $offering->status === CourseOffering::STATUS_COMPLETED
@@ -496,9 +496,9 @@ class LiveClassAccessService
 
         // The allocation date gate refused. This is the ONLY gate an authorised
         // System Tester may relax, and only for a deliberately early-started
-        // Offering: the identical query is re-run without the starts_on clause and
+        // Allocation: the identical query is re-run without the starts_on clause and
         // the row is then re-validated by SystemTesterAccess, which re-checks
-        // tenant, identity, allocation status, Offering lifecycle and the early
+        // tenant, identity, allocation status, Allocation lifecycle and the early
         // start evidence. Host/join/publish rules above are untouched.
         return $this->testerPreStartAllocation($user, $class, $date, function () use ($user, $class, $operational, $date, $host, $manager) {
             $relaxed = CourseOfferingLecturerAllocation::query()->where('school_id', $class->school_id)
@@ -526,7 +526,7 @@ class LiveClassAccessService
      * Re-validates a pre-start allocation through the single testing authority.
      * Returns the allocation only if the allocation's ONLY failing condition is
      * the pre-start date, so a cancelled/ended record, a wrong tenant, an
-     * un-early-started Offering or a missing grant can never slip through here.
+     * un-early-started Allocation or a missing grant can never slip through here.
      */
     private function testerPreStartAllocation(User $user, LiveClass $class, string $date, callable $resolve): ?CourseOfferingLecturerAllocation
     {

@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * HEI academic structure for Course Offering eligibility tests: one BBIT Study
- * Plan with Year 1-3 stages, open Semester 1 Offerings 11 (Year 1 unit),
+ * HEI academic structure for Course Allocation eligibility tests: one BBIT Study
+ * Plan with Year 1-3 stages, open Semester 1 Allocations 11 (Year 1 unit),
  * 21 (Year 2), 31 (Year 3) and 12 (Year 1 unit in 2027/2028), plus cohorts
  * 1 (BBIT 2026-V1), 2 (BBIT 2026-V2) and 3 (another Programme).
  * Requires AdmissionsTestHelper tables.

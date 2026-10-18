@@ -20,14 +20,14 @@ use Tests\Feature\Support\AdmissionsTestHelper;
 use Tests\TestCase;
 
 /**
- * The lecturer-facing Live Class workflow, as a Course Offering workflow.
+ * The lecturer-facing Live Class workflow, as a Course Allocation workflow.
  *
  * The defects this pins, all found by manual inspection of
  * /teacher/live-classes/create:
  *
  *  - The generic create screen handed an HEI lecturer a Class / Section /
  *    Programme / Session form, i.e. the K12 academic model, and let them build
- *    a class that contradicted the Course Offering it belonged to.
+ *    a class that contradicted the Course Allocation it belonged to.
  *  - A raw lifecycle dropdown was pre-filled, so a brand-new future class
  *    rendered as "Live" the moment the form opened.
  *  - Meeting ID, Meeting Password, Recording URL and an "Attendance enabled"
@@ -311,7 +311,7 @@ class LiveClassLecturerUxTest extends TestCase
         $response = $this->actingAs($unallocated)->get(route('teacher.live_classes.create'));
 
         $response->assertOk();
-        $response->assertSee('You have no Course Offering to schedule into yet.');
+        $response->assertSee('You have no Course Allocation to schedule into yet.');
     }
 
     // ══ §3 / §13 OFFERING_5_PRESELECTED + ACADEMIC_CONTEXT_DERIVED ══
@@ -333,7 +333,7 @@ class LiveClassLecturerUxTest extends TestCase
         $response->assertSee('2 registered students');
         $response->assertSee('Primary Lecturer');
 
-        // There is no Offering picker: it is already chosen by the route.
+        // There is no Allocation picker: it is already chosen by the route.
         $response->assertDontSee('name="course_offering_id"', false);
     }
 
@@ -341,7 +341,7 @@ class LiveClassLecturerUxTest extends TestCase
     {
         $alone = $this->actingAs($this->lecturer)
             ->get(route('teacher.course_offerings.live_classes.create', $this->offering->id));
-        $alone->assertOk()->assertDontSee('Change Course Offering');
+        $alone->assertOk()->assertDontSee('Change Course Allocation');
 
         $second = $this->makeOffering('BBIT1104-2026-S1');
         $this->allocate($second, $this->lecturer);
@@ -349,7 +349,7 @@ class LiveClassLecturerUxTest extends TestCase
         $this->actingAs($this->lecturer)
             ->get(route('teacher.course_offerings.live_classes.create', $this->offering->id))
             ->assertOk()
-            ->assertSee('Change Course Offering');
+            ->assertSee('Change Course Allocation');
     }
 
     // ══ §2 / §4 LEGACY_ACADEMIC_FIELDS_HIDDEN ══
@@ -588,9 +588,9 @@ class LiveClassLecturerUxTest extends TestCase
         $response = $this->actingAs($this->lecturer)->get(route('teacher.live_classes.index'));
 
         $response->assertOk();
-        $response->assertSee('Course Offering');
+        $response->assertSee('Course Allocation');
         $response->assertSee('Academic Period');
-        $response->assertSee('All Course Offerings');
+        $response->assertSee('All Course Allocations');
         $response->assertDontSee('All classes');
         $response->assertDontSee('All courses');
         $response->assertDontSee('All sessions');
@@ -607,12 +607,12 @@ class LiveClassLecturerUxTest extends TestCase
 
     public function test_meet_now_requires_an_authorised_offering_for_hei(): void
     {
-        // No Offering at all: refused rather than creating an orphan meeting.
+        // No Allocation at all: refused rather than creating an orphan meeting.
         $this->actingAs($this->lecturer)
             ->post(route('teacher.live_classes.meet_now'), ['platform' => 'jitsi'])
             ->assertSessionHasErrors('course_offering_id');
 
-        // Somebody else's Offering: refused.
+        // Somebody else's Allocation: refused.
         $other = $this->makeOffering('SECRET-2026-S1');
         $stranger = $this->makeLecturer('Stranger', tester: true);
         $this->allocate($other, $stranger);
@@ -649,7 +649,7 @@ class LiveClassLecturerUxTest extends TestCase
         $this->allocate($future, $this->lecturer, now()->addMonth()->startOfMonth()->toDateString());
         DB::table('audit_logs')->insert([
             'school_id' => $this->school, 'action' => 'COURSE_OFFERING_EARLY_START',
-            'event_type' => 'COURSE_OFFERING_EARLY_START', 'module' => 'Course Offerings',
+            'event_type' => 'COURSE_OFFERING_EARLY_START', 'module' => 'Course Allocations',
             'description' => 'early start', 'record_type' => CourseOffering::class,
             'record_id' => $future->id, 'created_at' => now(),
         ]);
@@ -712,7 +712,7 @@ class LiveClassLecturerUxTest extends TestCase
         $response->assertSee('Mathematics');
         $response->assertSee('Form 1 East');
         $response->assertSee('name="class_id"', false);
-        $response->assertDontSee('Course Offering');
+        $response->assertDontSee('Course Allocation');
     }
 
     public function test_a_k12_institution_still_keeps_the_legacy_meet_now_selectors(): void

@@ -90,7 +90,7 @@
                                 {{-- The authorised route. The stored path is generated and
                                      outside the web root, so this is the only way to
                                      read it, and it re-checks the lecturer's own
-                                     allocation on this exact Offering. --}}
+                                     allocation on this exact Allocation. --}}
                                 <a class="btn btn-sm btn-outline-primary flex-shrink-0"
                                    href="{{ route('teacher.course_offerings.assignments.submissions.evidence', [$offering->id, $assignment->id, $submission->id, $item->id]) }}">Open</a>
                             @elseif($item->hasUsableLink())

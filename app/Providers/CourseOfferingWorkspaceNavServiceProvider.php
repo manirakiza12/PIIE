@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Supplies the lecturer's Course Offering workspace navigation to EVERY page in
+ * Supplies the lecturer's Course Allocation workspace navigation to EVERY page in
  * the teacher/course_offerings namespace.
  *
  * WHY A VIEW COMPOSER RATHER THAN A CONTROLLER VARIABLE
@@ -21,7 +21,7 @@ use Illuminate\Support\ServiceProvider;
  * someone forgot.
  *
  * A composer makes the navigation a property of the NAMESPACE rather than of a
- * particular view file. A lecturer Course Offering page now has the navigation
+ * particular view file. A lecturer Course Allocation page now has the navigation
  * because of where it lives, not because someone remembered to add an include.
  * That is the difference between a fix and a convention.
  *
@@ -30,7 +30,7 @@ use Illuminate\Support\ServiceProvider;
  * The composer reads the offering the controller already resolved and asks the
  * existing `LecturerCourseOfferingAccess` what this lecturer may use. It never
  * grants anything: every destination re-checks the lecturer's own allocation on
- * that exact Course Offering when it is opened, so a rendered tab is a pointer,
+ * that exact Course Allocation when it is opened, so a rendered tab is a pointer,
  * not a permission.
  */
 class CourseOfferingWorkspaceNavServiceProvider extends ServiceProvider
@@ -56,7 +56,7 @@ class CourseOfferingWorkspaceNavServiceProvider extends ServiceProvider
 
             $offering = $nav->offeringFor($request, $view->getData());
 
-            // Not inside a Course Offering (the lecturer's own list of Offerings,
+            // Not inside a Course Allocation (the lecturer's own list of Allocations,
             // for instance). No navigation to render, and nothing is broken.
             if (! $offering) {
                 return;
@@ -64,7 +64,7 @@ class CourseOfferingWorkspaceNavServiceProvider extends ServiceProvider
 
             // Reuse the resolution the lecturer's workspace already uses, so
             // `my_allocation_is_current` and the rest behave identically here and
-            // on the Overview page. A lecturer with no allocation on this Offering
+            // on the Overview page. A lecturer with no allocation on this Allocation
             // gets no navigation at all rather than a row of tabs that 404.
             $access = app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class);
             $resolved = $access->resolveForLecturer($user, (int) $offering->id);

@@ -96,7 +96,7 @@ class OnlineExamCreatePageTest extends TestCase
      *
      * The signature is matched as `teacherCreate(...)` with any parameter list, and
      * deliberately NOT pinned to the empty one. `teacherCreate()` grew a `Request`
-     * when the Course Offering selector was added, and it would have been wrong to
+     * when the Course Allocation selector was added, and it would have been wrong to
      * weaken this assertion's real subject - "the view is handed a null exam" - into
      * "the view is handed a null exam by a method that happens to take no arguments".
      * The second is an accident of syntax; the first is the contract.

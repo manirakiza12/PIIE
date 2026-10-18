@@ -19,7 +19,7 @@ use Tests\TestCase;
  * Course Unit/Subject, Class, Programme, Academic Semester. And because
  * `teacherAssignableSubjects()` is built from `teacher_permissions` and
  * `teacher_programme_assignments` - both empty for Daniel Okello, whose entire
- * teaching authority is a `CourseOfferingLecturerAllocation` on Offering 5 - the
+ * teaching authority is a `CourseOfferingLecturerAllocation` on Allocation 5 - the
  * page told the PRIMARY LECTURER of BBIT1103:
  *
  *     "No subjects are assigned to this teacher. An administrator must assign a
@@ -34,17 +34,17 @@ use Tests\TestCase;
  * Creating `teacher_permissions` rows for Daniel would make the page stop
  * complaining while leaving the architecture wrong: the exam would then be scoped
  * by a class cohort, `applyStudentVisibility()` would admit every student enrolled
- * in that class rather than every student confirmed on the Offering, and the
+ * in that class rather than every student confirmed on the Allocation, and the
  * notification recipients would follow the class too. It would convert a correct
- * Course Offering assessment into a legacy one by the back door.
+ * Course Allocation assessment into a legacy one by the back door.
  *
- * So the tests below assert the opposite: that the Offering is the authority, that
+ * So the tests below assert the opposite: that the Allocation is the authority, that
  * the legacy graph is NOT consulted, and that a legacy assignment is never
  * fabricated to make a form work.
  *
  * ── BOTH MODES ARE COVERED ───────────────────────────────────────────────────
  *
- *   MODE A  `course_offering_id` present -> the Offering is authoritative
+ *   MODE A  `course_offering_id` present -> the Allocation is authoritative
  *   MODE B  `course_offering_id` NULL     -> the legacy class/subject path, intact
  *
  * The legacy half is not a formality. Nine live exams have NULL there, and the
@@ -117,7 +117,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
                 ->where('user_id', $this->lecturer->id)
                 ->where('course_offering_id', $this->offering->id)
                 ->count(),
-            'a Course Offering allocation IS the teaching authority'
+            'a Course Allocation allocation IS the teaching authority'
         );
     }
 
@@ -135,7 +135,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         $this->assertStringNotContainsString(
             'No subjects are assigned to this teacher',
             $html,
-            'a valid Course Offering allocation is sufficient authority; the legacy warning must not appear'
+            'a valid Course Allocation allocation is sufficient authority; the legacy warning must not appear'
         );
     }
 
@@ -149,12 +149,12 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         $this->assertStringContainsString(
             'data-testid="exam-course-offering-select"',
             $html,
-            'the Course Offering must be offered as a selector, not described in prose'
+            'the Course Allocation must be offered as a selector, not described in prose'
         );
 
-        // The Offering is the FIRST academic control on the page. Asserted by
+        // The Allocation is the FIRST academic control on the page. Asserted by
         // position rather than by presence, because presence alone would be
-        // satisfied by a Course Offering dropdown sitting below four legacy ones -
+        // satisfied by a Course Allocation dropdown sitting below four legacy ones -
         // which is exactly the shape that produced the original complaint.
         $offeringAt = strpos($html, 'exam-course-offering-select');
         $subjectAt = strpos($html, 'name="subject_id"');
@@ -164,7 +164,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         $this->assertLessThan(
             $subjectAt,
             $offeringAt,
-            'the Course Offering selector must come BEFORE the legacy subject selector'
+            'the Course Allocation selector must come BEFORE the legacy subject selector'
         );
     }
 
@@ -181,18 +181,18 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('value="'.$this->offering->id.'"', $html, 'their own Offering is offered');
+        $this->assertStringContainsString('value="'.$this->offering->id.'"', $html, 'their own Allocation is offered');
 
         $this->assertStringNotContainsString(
             'value="'.$notMine->id.'"',
             $html,
-            'an Offering they are not allocated to must never be offered'
+            'an Allocation they are not allocated to must never be offered'
         );
 
         $this->assertStringNotContainsString(
             'value="'.$theirs['offering']->id.'"',
             $html,
-            'another institution\'s Offering must never be offered'
+            'another institution\'s Allocation must never be offered'
         );
     }
 
@@ -220,7 +220,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         // summary that renders the right headings with empty values would pass a
         // presence check and tell a lecturer nothing.
         $this->assertStringContainsString($offering->subject->name, $html, 'the Course is named');
-        $this->assertStringContainsString($offering->reference, $html, 'the Offering reference is shown');
+        $this->assertStringContainsString($offering->reference, $html, 'the Allocation reference is shown');
         $this->assertStringContainsString('2026/2027', $html, 'the academic year is derived');
         $this->assertStringContainsString('Semester 1', $html, 'the semester/period is derived');
         $this->assertStringContainsString('Daniel Okello', $html, 'the lecturer is named');
@@ -253,7 +253,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
             $this->assertDoesNotMatchRegularExpression(
                 '/<(select|input)\b[^>]*\bname="'.$field.'"/',
                 $html,
-                "no {$field} CONTROL may be offered in Course Offering mode"
+                "no {$field} CONTROL may be offered in Course Allocation mode"
             );
         }
     }
@@ -302,7 +302,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         $this->assertStringNotContainsString(
             'data-testid="exam-offering-context"',
             $html,
-            'an Offering the lecturer is not allocated to must not produce a derived summary'
+            'an Allocation the lecturer is not allocated to must not produce a derived summary'
         );
     }
 
@@ -338,8 +338,8 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
 
         $this->assertSame((int) $this->offering->id, (int) $exam->course_offering_id);
         $this->assertSame((int) $this->offering->subject_id, (int) $exam->subject_id, 'the Course Unit is DERIVED');
-        $this->assertSame((int) $this->offering->school_id, (int) $exam->school_id, 'the tenant comes from the Offering');
-        $this->assertNull($exam->class_id, 'a class must never be written for a Course Offering exam');
+        $this->assertSame((int) $this->offering->school_id, (int) $exam->school_id, 'the tenant comes from the Allocation');
+        $this->assertNull($exam->class_id, 'a class must never be written for a Course Allocation exam');
         $this->assertNull($exam->programme_id);
         $this->assertNull($exam->session_id);
     }
@@ -479,7 +479,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
             $this->assertDoesNotMatchRegularExpression(
                 '/<(select|input)\b[^>]*\bname="'.$field.'"/',
                 $html,
-                "no {$field} CONTROL is editable on a Course Offering exam"
+                "no {$field} CONTROL is editable on a Course Allocation exam"
             );
         }
     }
@@ -681,12 +681,12 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('A paper of this course', $html);
-        $this->assertStringContainsString($this->offering->reference, $html, 'the Offering is named on the row');
+        $this->assertStringContainsString($this->offering->reference, $html, 'the Allocation is named on the row');
 
         $this->assertStringNotContainsString(
             'All classes',
             $html,
-            'a Course Offering exam must not be described as reaching all classes'
+            'a Course Allocation exam must not be described as reaching all classes'
         );
 
         $this->assertSame((int) $this->offering->id, (int) $exam->course_offering_id);
@@ -741,7 +741,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         $confirmed = $this->makeUser(7, 1, 'active', 'Confirmed Student');
         $this->confirmStudent($this->offering, $confirmed);
 
-        // In this institution, on no Offering at all. This is the student the old
+        // In this institution, on no Allocation at all. This is the student the old
         // NULL-class rule would have handed the paper to.
         $stranger = $this->makeUser(7, 1, 'active', 'Student On Another Course');
 
@@ -814,7 +814,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * A published Offering exam, owned by the lecturer, inside its window.
+     * A published Allocation exam, owned by the lecturer, inside its window.
      *
      * `creator_id` AND `created_by` are set because `canManageExam()` requires
      * ownership, and ownership is `creator_id ?: created_by`.
@@ -841,10 +841,10 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
     }
 
     /**
-     * A complete, valid Course Offering exam submission.
+     * A complete, valid Course Allocation exam submission.
      *
      * No `subject_id`, no `class_id`, no `programme_id`, no `session_id` - the point
-     * being that a Course Offering exam is fully described without them.
+     * being that a Course Allocation exam is fully described without them.
      */
     private function offeringPayload(array $overrides = []): array
     {

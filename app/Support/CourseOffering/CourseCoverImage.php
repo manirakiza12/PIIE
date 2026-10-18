@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The optional cover image on a Course Offering.
+ * The optional cover image on a Course Allocation.
  *
  * CAPABILITY ONLY - NO INTERFACE
  *
@@ -33,7 +33,7 @@ use Illuminate\Validation\ValidationException;
  * at any time, forever. That is the same failure as publishing it. The stored
  * name is generated, the client's filename never becomes the path, and the only
  * way to read the bytes is a route that re-checks that the viewer is entitled to
- * see this Offering - a confirmed registration for a student, an allocation for a
+ * see this Allocation - a confirmed registration for a student, an allocation for a
  * lecturer, or the academic office.
  *
  * REPLACING A COVER DISPOSES OF THE OLD BYTES
@@ -59,10 +59,10 @@ class CourseCoverImage
     ) {}
 
     /**
-     * Is this Offering allowed to carry a cover image at all?
+     * Is this Allocation allowed to carry a cover image at all?
      *
      * The relationship is OPTIONAL, so the absence of one is a normal state for
-     * every Offering, forever. Nothing should ever treat a missing cover as a
+     * every Allocation, forever. Nothing should ever treat a missing cover as a
      * problem to be fixed.
      */
     public function hasCover(CourseOffering $offering): bool
@@ -71,9 +71,9 @@ class CourseCoverImage
     }
 
     /**
-     * Set or replace the cover image for an Offering.
+     * Set or replace the cover image for an Allocation.
      *
-     * Authority is the LECTURER'S OWN ALLOCATION on this exact Offering, re-checked
+     * Authority is the LECTURER'S OWN ALLOCATION on this exact Allocation, re-checked
      * here rather than trusted from the page that linked the form.
      *
      * @throws \Illuminate\Validation\ValidationException
@@ -114,7 +114,7 @@ class CourseCoverImage
 
             // Written the way CourseOfferingService writes, because
             // CourseOffering deliberately refuses a direct save() so that an
-            // Offering is only ever mutated by a service. The guard's intent is
+            // Allocation is only ever mutated by a service. The guard's intent is
             // respected rather than switched off.
             //
             // No `updated_by`: course_offerings has no such column. The cover's own
@@ -174,12 +174,12 @@ class CourseCoverImage
     }
 
     /**
-     * May this actor READ the cover of this Offering?
+     * May this actor READ the cover of this Allocation?
      *
      * Three groups, and no more:
-     *   - a lecturer with a current allocation on this exact Offering;
-     *   - a student with a CONFIRMED registration on this exact Offering;
-     *   - the academic office, on the same Course Offering capabilities every
+     *   - a lecturer with a current allocation on this exact Allocation;
+     *   - a student with a CONFIRMED registration on this exact Allocation;
+     *   - the academic office, on the same Course Allocation capabilities every
      *     other administrative surface uses.
      *
      * Anyone else - another tenant, an unallocated lecturer, a student registered
@@ -189,7 +189,7 @@ class CourseCoverImage
     public function assertMayView(User $actor, CourseOffering $offering): void
     {
         if ((int) $actor->school_id !== (int) $offering->school_id) {
-            throw new \Symfony\Component\HttpKernel\Exception\HttpException(404, 'Course Offering not found.');
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(404, 'Course Allocation not found.');
         }
 
         $lecturerResolved = $this->lecturerAccess->resolveForLecturer($actor, (int) $offering->id);
@@ -220,7 +220,7 @@ class CourseCoverImage
             return;
         }
 
-        throw new \Symfony\Component\HttpKernel\Exception\HttpException(404, 'Course Offering not found.');
+        throw new \Symfony\Component\HttpKernel\Exception\HttpException(404, 'Course Allocation not found.');
     }
 
     /**
@@ -233,7 +233,7 @@ class CourseCoverImage
     private function assertMayManage(User $actor, CourseOffering $offering): void
     {
         if ((int) $actor->school_id !== (int) $offering->school_id) {
-            throw new \Symfony\Component\HttpKernel\Exception\HttpException(404, 'Course Offering not found.');
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(404, 'Course Allocation not found.');
         }
 
         $lecturerResolved = $this->lecturerAccess->resolveForLecturer($actor, (int) $offering->id);
@@ -251,7 +251,7 @@ class CourseCoverImage
             return;
         }
 
-        throw new \Symfony\Component\HttpKernel\Exception\HttpException(403, 'You are not authorized to change this Course Offering.');
+        throw new \Symfony\Component\HttpKernel\Exception\HttpException(403, 'You are not authorized to change this Course Allocation.');
     }
 
     private function discard(?string $storedName): void

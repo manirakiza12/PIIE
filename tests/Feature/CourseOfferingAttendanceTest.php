@@ -23,7 +23,7 @@ use Tests\Feature\Support\StaffModuleTestHelper;
 use Tests\TestCase;
 
 /**
- * Step 5B: HEI Course Offering attendance.
+ * Step 5B: HEI Course Allocation attendance.
  *
  * Runs the real migration against the in-memory SQLite database, so the schema
  * under test is the schema that will be applied - not a hand-built imitation.
@@ -164,7 +164,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $this->get(route('teacher.course_offerings.attendance.create', $draft->id))
             ->assertRedirect()->assertSessionHasErrors('attendance');
 
-        // An Open Offering may be prepared, but no teaching attendance is recorded
+        // An Open Allocation may be prepared, but no teaching attendance is recorded
         // for teaching that has not happened: the form is reachable, the save is not.
         $open = $this->offering('open');
         $this->get(route('teacher.course_offerings.attendance.create', $open->id))->assertOk();
@@ -173,7 +173,7 @@ class CourseOfferingAttendanceTest extends TestCase
         ])->assertSessionHasErrors('session');
         $this->assertSame(0, DB::table('course_offering_attendance_sessions')->where('course_offering_id', $open->id)->count());
 
-        // A cancelled Offering is read-only, and takes no new session.
+        // A cancelled Allocation is read-only, and takes no new session.
         $cancelled = $this->offering('cancelled');
         $this->get(route('teacher.course_offerings.attendance.index', $cancelled->id))->assertOk()->assertSee('read-only');
         $this->get(route('teacher.course_offerings.attendance.create', $cancelled->id))
@@ -183,7 +183,7 @@ class CourseOfferingAttendanceTest extends TestCase
 
     public function test_completed_offering_is_read_only_history(): void
     {
-        // Teaching happens, is marked, and only then is the Offering completed.
+        // Teaching happens, is marked, and only then is the Allocation completed.
         $offering = $this->offering('in_progress');
         $session = $this->sessionFor($offering);
         $registration = $this->confirmation($session, 'S-1');
@@ -197,7 +197,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $this->get(route('teacher.course_offerings.attendance.create', $offering->id))
             ->assertRedirect()->assertSessionHasErrors('attendance');
 
-        // No new session, and no new mark, on a completed Offering.
+        // No new session, and no new mark, on a completed Allocation.
         $this->assertNotNull($this->catch(fn () => $this->attendance->createSession($this->lecturer, $offering->id, '2026-10-06')));
         $this->assertNotNull($this->catch(fn () => $this->attendance->mark($this->lecturer, $session, $registration, CourseOfferingAttendanceStatus::ABSENT)));
         $this->assertCount(1, $this->attendance->recordsForSession($session), 'History is never rewritten.');
@@ -220,7 +220,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $this->assertNotNull($this->catch(fn () => $this->attendance->createSession($this->lecturer, $offering->id, '2026-10-06', '11:00', '09:00')));
         $this->assertNotNull($this->catch(fn () => $this->attendance->createSession($this->lecturer, $offering->id, '2026-10-06', '11:00', '11:00')));
 
-        // Date must fall inside the Offering's Academic Period (2026-09-01 .. 2027-06-30).
+        // Date must fall inside the Allocation's Academic Period (2026-09-01 .. 2027-06-30).
         $this->assertNotNull($this->catch(fn () => $this->attendance->createSession($this->lecturer, $offering->id, '2027-07-15')));
         $this->assertNotNull($this->catch(fn () => $this->attendance->createSession($this->lecturer, $offering->id, '2026-08-01')));
         // ...and a date inside it is accepted.
@@ -570,9 +570,9 @@ class CourseOfferingAttendanceTest extends TestCase
     // GET /teacher/course-offerings/{offering}/attendance/create, which was
     // CourseOfferingAttendanceSessionType not being autoloadable. The create page
     // must load for an authorised lecturer, including an authorised pre-start
-    // System Tester on a governed early-started Offering.
+    // System Tester on a governed early-started Allocation.
 
-    /** An in-progress Offering whose Academic Period has not begun. */
+    /** An in-progress Allocation whose Academic Period has not begun. */
     private function preStartOffering(User $lecturer, string $unit = 'BBIT1103'): CourseOffering
     {
         $school = (int) $lecturer->school_id;
@@ -653,7 +653,7 @@ class CourseOfferingAttendanceTest extends TestCase
             ->assertSee('Live Class');
     }
 
-    // 3. Create loads for a pre-start Tester on a governed early-started Offering.
+    // 3. Create loads for a pre-start Tester on a governed early-started Allocation.
     public function test_attendance_create_loads_for_a_pre_start_tester_lecturer(): void
     {
         $lecturer = $this->lecturer($this->institution(1), 'Pre-start Tester');
@@ -721,7 +721,7 @@ class CourseOfferingAttendanceTest extends TestCase
         }
     }
 
-    // 8-11. Offering lifecycle decides whether teaching attendance is possible.
+    // 8-11. Allocation lifecycle decides whether teaching attendance is possible.
     // The policy is the existing one, unchanged: teaching operations are allowed
     // for Open and In Progress, and refused for Draft, Completed and Cancelled.
     public function test_offering_lifecycle_governs_the_attendance_create_page(): void
@@ -738,12 +738,12 @@ class CourseOfferingAttendanceTest extends TestCase
             $this->assertSame(
                 $served,
                 $response->getStatusCode() === 200,
-                "a {$status} Offering ".($served ? 'serves' : 'refuses').' the attendance create page'
+                "a {$status} Allocation ".($served ? 'serves' : 'refuses').' the attendance create page'
             );
         }
     }
 
-    // 12-13. The roster stays the Offering's confirmed registrations, read-only.
+    // 12-13. The roster stays the Allocation's confirmed registrations, read-only.
     public function test_attendance_roster_is_confirmed_registrations_and_exposes_no_registration_controls(): void
     {
         $offering = $this->offering('in_progress');
@@ -832,7 +832,7 @@ class CourseOfferingAttendanceTest extends TestCase
     private function markableSession(User $lecturer, string $unit = 'UNIT-MARK', int $students = 3): CourseOfferingAttendanceSession
     {
         $offering = $this->offering('in_progress', $lecturer, $unit);
-        // A confirmed roster, mirroring the real Offering #5 register.
+        // A confirmed roster, mirroring the real Allocation #5 register.
         foreach (range(1, max(1, $students)) as $n) {
             $this->confirmation($offering, "{$unit}-STU-{$n}");
         }
@@ -978,7 +978,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $offering = CourseOffering::find($session->course_offering_id);
         $onRoster = $this->attendance->rosterFor($session)->first();
 
-        // A confirmed registration for a DIFFERENT Offering in the same tenant.
+        // A confirmed registration for a DIFFERENT Allocation in the same tenant.
         $otherSubject = (int) DB::table('subjects')->insertGetId([
             'school_id' => $lecturer->school_id, 'name' => 'Other Unit', 'code' => 'OTHER-1',
             'created_at' => now(), 'updated_at' => now(),
@@ -1175,16 +1175,16 @@ class CourseOfferingAttendanceTest extends TestCase
     // ==================================================== Session creation POST
     //
     // The second manual defect: submitting the create form returned the
-    // lecturer to the generic Course Offering page with no visible error, and no
+    // lecturer to the generic Course Allocation page with no visible error, and no
     // session was created. Two separate causes, both real:
     //   1. a session dated before the Academic Period start was refused, with no
     //      pre-start System Tester exception in the Attendance date gate;
     //   2. the refusal was returned with back(), so the error was flashed onto
-    //      whichever page the lecturer arrived from - and the Course Offering
+    //      whichever page the lecturer arrived from - and the Course Allocation
     //      page renders no validation errors, making a genuine refusal look
     //      exactly like a successful submission.
 
-    /** A pre-start, governed early-started, in-progress Offering for a tester. */
+    /** A pre-start, governed early-started, in-progress Allocation for a tester. */
     private function testerOffering(User $lecturer, string $unit = 'BBIT1103'): CourseOffering
     {
         $offering = $this->preStartOffering($lecturer, $unit);
@@ -1227,7 +1227,7 @@ class CourseOfferingAttendanceTest extends TestCase
             ->assertSee('Attendance session created.');
     }
 
-    // 6. A refusal returns to the CREATE FORM, never the generic Offering page.
+    // 6. A refusal returns to the CREATE FORM, never the generic Allocation page.
     public function test_a_refused_submission_returns_to_the_create_form_with_a_visible_error(): void
     {
         $lecturer = $this->lecturer($this->institution(1), 'Refused Lecturer');
@@ -1243,7 +1243,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $this->assertNotSame(
             route('teacher.course_offerings.show', $offering->id),
             $response->headers->get('Location'),
-            'never silently sent to the generic Course Offering page'
+            'never silently sent to the generic Course Allocation page'
         );
         $response->assertSessionHasErrors('session');
 
@@ -1254,7 +1254,7 @@ class CourseOfferingAttendanceTest extends TestCase
             ->get(route('teacher.course_offerings.attendance.create', $offering->id))
             ->assertOk()
             ->assertSee('This Attendance Session was not created.')
-            ->assertSee("must fall within the Offering's Academic Period")
+            ->assertSee("must fall within the Allocation's Academic Period")
             ->assertSee('2019-01-05', false);
     }
 
@@ -1317,7 +1317,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $this->assertCount(0, $this->attendance->sessionsForOffering($offering->fresh()));
     }
 
-    // 9. An Offering that was NOT governed-early-started is never unlocked.
+    // 9. An Allocation that was NOT governed-early-started is never unlocked.
     public function test_a_governed_early_start_is_required(): void
     {
         $a = $this->institution(1);
@@ -1376,7 +1376,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $this->assertCount(0, $this->attendance->sessionsForOffering($offering->fresh()));
     }
 
-    // 11. THE FIX: an authorised tester on a governed early-started Offering can
+    // 11. THE FIX: an authorised tester on a governed early-started Allocation can
     //      create an approved pre-start session.
     public function test_an_authorised_tester_can_create_a_pre_start_session(): void
     {
@@ -1467,7 +1467,7 @@ class CourseOfferingAttendanceTest extends TestCase
                 ->post(route('teacher.course_offerings.attendance.store', $offering->id), $this->sessionPayload());
 
             // Either outcome is a correct refusal: a cancelled allocation makes
-            // the Offering itself unreachable (404, fail closed), while an ended
+            // the Allocation itself unreachable (404, fail closed), while an ended
             // one is rejected by the Attendance rules with a visible message.
             $this->assertContains(
                 $response->getStatusCode(),
@@ -1494,7 +1494,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $this->assertCount(0, $this->attendance->sessionsForOffering($offering->fresh()));
     }
 
-    // 15. An unrelated Offering is refused.
+    // 15. An unrelated Allocation is refused.
     public function test_an_unrelated_offering_cannot_be_created_for(): void
     {
         $lecturer = $this->lecturer($this->institution(1), 'Unrelated Lecturer');
@@ -1509,7 +1509,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $this->assertCount(0, $this->attendance->sessionsForOffering($mine->fresh()));
     }
 
-    // 17. Draft and Cancelled Offerings cannot record teaching.
+    // 17. Draft and Cancelled Allocations cannot record teaching.
     public function test_draft_and_cancelled_offerings_cannot_create_sessions(): void
     {
         foreach (['draft', 'cancelled'] as $status) {
@@ -1581,7 +1581,7 @@ class CourseOfferingAttendanceTest extends TestCase
         $offering = app(CourseOfferingService::class)->createDraft($institution['school'], $subjectId, $year, $period);
         app(CourseOfferingService::class)->addApplicability($institution['school'], $offering->id, $membershipId);
         $service = app(CourseOfferingService::class);
-        // A cancelled Offering is reached the way it happens in life: the lecturer
+        // A cancelled Allocation is reached the way it happens in life: the lecturer
         // is allocated, and the academic office then withdraws the delivery. That
         // leaves a read-only cancelled workspace, not an unreachable id.
         if ($status !== 'draft') {
@@ -1626,7 +1626,7 @@ class CourseOfferingAttendanceTest extends TestCase
         return CourseOfferingAttendanceSession::where('school_id', $offering->school_id)->findOrFail($id);
     }
 
-    /** Accepts the Offering, or the attendance session that belongs to it. */
+    /** Accepts the Allocation, or the attendance session that belongs to it. */
     private function confirmation(CourseOffering|CourseOfferingAttendanceSession $context, string $code, string $status = CourseRegistration::STATUS_CONFIRMED, ?array $institution = null): CourseRegistration
     {
         $offering = $context instanceof CourseOfferingAttendanceSession
@@ -1651,7 +1651,7 @@ class CourseOfferingAttendanceTest extends TestCase
             ->firstOrFail();
     }
 
-    /** Closes out an Offering the way Step 3 governs it: end the allocation, then complete. */
+    /** Closes out an Allocation the way Step 3 governs it: end the allocation, then complete. */
     private function finaliseOffering(CourseOffering $offering): void
     {
         $open = DB::table('course_offering_lecturer_allocations')

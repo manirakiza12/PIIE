@@ -85,7 +85,7 @@ class CourseRegistrationOfferingFoundationTest extends TestCase
         $this->assertSame('registered', $registration->status);
         $this->assertTrue($roster->eligible($offering)->isEmpty());
         $registered = $roster->registered($offering)->sole();
-        $this->assertSame('Offering Student', $registered->student_name);
+        $this->assertSame('Allocation Student', $registered->student_name);
         $this->assertSame('1', (string) $registered->curriculum_version);
         $this->assertSame('registered', $registered->status);
     }
@@ -115,7 +115,7 @@ class CourseRegistrationOfferingFoundationTest extends TestCase
         ] as $attempt) {
             try {
                 $attempt();
-                $this->fail('Mismatched tenant/Offering/Membership context must be rejected.');
+                $this->fail('Mismatched tenant/Allocation/Membership context must be rejected.');
             } catch (DomainException) {
                 $this->assertSame(0, CourseRegistration::count());
             }
@@ -189,7 +189,7 @@ class CourseRegistrationOfferingFoundationTest extends TestCase
         ] as $attempt) {
             try {
                 $attempt();
-                $this->fail('Completed Offering registration history must be read-only.');
+                $this->fail('Completed Allocation registration history must be read-only.');
             } catch (DomainException) {
                 $this->assertSame('registered', $registration->fresh()->status);
             }
@@ -272,8 +272,8 @@ class CourseRegistrationOfferingFoundationTest extends TestCase
         $this->actingAs($student);
         // The view now builds its cards from `StudentCourseCatalogue`, so a direct
         // render must supply it the way `StudentController::myCourses()` does. What
-        // this test is about is unchanged: parallel Offerings stay separate, and the
-        // register form still submits only the Offering id.
+        // this test is about is unchanged: parallel Allocations stay separate, and the
+        // register form still submits only the Allocation id.
         $catalogue = app(StudentCourseCatalogue::class, ['schoolId' => 1])->build($view);
         $html = view('student.my_courses', $view + [
             'catalogue' => $catalogue,
@@ -384,7 +384,7 @@ class CourseRegistrationOfferingFoundationTest extends TestCase
         DB::table('academic_years')->insert(['id' => 1, 'school_id' => $school, 'label' => '2025', 'start_date' => '2025-01-01', 'end_date' => '2025-12-31', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         DB::table('academic_periods')->insert(['id' => 1, 'school_id' => $school, 'academic_year_id' => 1, 'type' => 'semester', 'label' => 'Semester 1', 'sequence' => 1, 'start_date' => '2025-01-01', 'end_date' => '2025-06-30', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         DB::table('schools')->where('id', $school)->update(['current_academic_year_id' => 1, 'current_academic_period_id' => 1]);
-        $student = User::create(['name' => 'Offering Student', 'email' => 'offering-student@example.com', 'password' => bcrypt('secret'), 'role_id' => 7, 'school_id' => $school]);
+        $student = User::create(['name' => 'Allocation Student', 'email' => 'offering-student@example.com', 'password' => bcrypt('secret'), 'role_id' => 7, 'school_id' => $school]);
         $foreignStudent = User::create(['name' => 'Foreign Student', 'email' => 'foreign-student@example.com', 'password' => bcrypt('secret'), 'role_id' => 7, 'school_id' => $foreignSchool]);
         DB::table('student_profiles')->insert(['user_id' => $student->id, 'school_id' => $school, 'programme_id' => $programme, 'created_at' => now(), 'updated_at' => now()]);
         $subject = (int) DB::table('subjects')->insertGetId(['name' => 'Research', 'code' => 'R101', 'credits' => 3, 'course_type' => 'compulsory', 'pass_mark' => 50, 'programme_id' => $programme, 'school_id' => $school, 'created_at' => now(), 'updated_at' => now()]);

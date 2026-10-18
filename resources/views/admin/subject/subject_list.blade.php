@@ -131,7 +131,7 @@
         <div class="text-center py-5" role="status">
             <h5>{{ get_phrase($search || $classId || $programmeId ? 'No matching catalogue records' : 'No catalogue records yet') }}</h5>
             @if($isHigherEducation)
-                <p class="text-muted mx-auto" style="max-width: 42rem">{{ get_phrase('Create Course Units here, then add each one to the appropriate Programme Curriculum stage and define its credits and classification there.') }}</p>
+                <p class="text-muted mx-auto" style="max-width: 42rem">{{ get_phrase('Create Course Units here. Select a draft Programme Curriculum and Programme Year in Course Unit setup to define its credits, classification and prerequisites.') }}</p>
             @elseif($isMixed)
                 <p class="text-muted">{{ get_phrase('Create a Subject for a Class or a Course Unit for a Programme.') }}</p>
             @else

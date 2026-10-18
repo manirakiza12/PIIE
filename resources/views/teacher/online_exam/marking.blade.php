@@ -98,9 +98,9 @@
                                 {{ $pendingSubmission->exam->title ?? '—' }}
                                 <div class="text-muted small">
                                     @if($pendingOffering)
-                                        {{ $pendingOffering->reference ?? ('Offering #'.$pendingOffering->id) }}
+                                        {{ $pendingOffering->reference ?? ('Allocation #'.$pendingOffering->id) }}
                                     @else
-                                        {{ get_phrase('Legacy - no course offering') }}
+                                        {{ get_phrase('Legacy - no course allocation') }}
                                     @endif
                                 </div>
                             </td>
@@ -174,7 +174,7 @@
                 <tr>
                     <th>{{ get_phrase('Student') }}</th>
                     <th>{{ get_phrase('Exam') }}</th>
-                    <th>{{ get_phrase('Course Offering / Course Unit') }}</th>
+                    <th>{{ get_phrase('Course Allocation / Course Unit') }}</th>
                     <th>{{ get_phrase('Submitted') }}</th>
                     <th class="text-end">{{ get_phrase('Total') }}</th>
                     <th class="text-end">{{ get_phrase('Actions') }}</th>
@@ -192,9 +192,9 @@
                         <td>
                             @if($handOverOffering)
                                 <div>{{ optional($handOver->exam->subject)->name ?? '—' }}</div>
-                                <div class="text-muted small">{{ $handOverOffering->reference ?? ('Offering #'.$handOverOffering->id) }}</div>
+                                <div class="text-muted small">{{ $handOverOffering->reference ?? ('Allocation #'.$handOverOffering->id) }}</div>
                             @else
-                                <div class="text-muted small">{{ optional($handOver->exam->classRoom)->name ?? get_phrase('Legacy - no course offering') }}</div>
+                                <div class="text-muted small">{{ optional($handOver->exam->classRoom)->name ?? get_phrase('Legacy - no course allocation') }}</div>
                             @endif
                         </td>
                         <td>{{ optional($handOver->submitted_at)->format('d M Y H:i') ?? '—' }}</td>
@@ -235,7 +235,7 @@
             <thead>
             <tr>
                 <th>#</th><th>{{ get_phrase('Student') }}</th><th>{{ get_phrase('Exam') }}</th>
-                <th>{{ get_phrase('Course Offering / Course Unit') }}</th>
+                <th>{{ get_phrase('Course Allocation / Course Unit') }}</th>
                 <th>{{ get_phrase('Submitted') }}</th>
                 <th>{{ get_phrase('Question') }}</th><th>{{ get_phrase('Answer') }}</th><th>{{ get_phrase('Max') }}</th><th>{{ get_phrase('Awarded') }}</th><th>{{ get_phrase('Comment') }}</th><th>{{ get_phrase('Status') }}</th><th>{{ get_phrase('Action') }}</th>
             </tr>
@@ -252,7 +252,7 @@
                     $finalizationLabel = $submission->isFinalized() ? 'Submitted for Admin Review' : 'With Lecturer';
                     $releaseLabel = $submission->isResultVisible() ? 'Released' : 'Not Released';
                     // Which course this answer belongs to, for a paper that lives in
-                    // a Course Offering. A legacy paper has none and says so, rather
+                    // a Course Allocation. A legacy paper has none and says so, rather
                     // than showing a blank cell that reads as "unattached".
                     $offeringExam = $submission->exam->courseOffering ?? null;
                 @endphp
@@ -261,14 +261,14 @@
                     <td>{{ optional($answer->submission->student)->name ?? '—' }}</td>
                     <td>{{ $answer->submission->exam->title ?? '—' }}</td>
                     {{-- The academic context a marker needs to judge fairly: a Course
-                         Offering paper names its course, a legacy paper names its
+                         Allocation paper names its course, a legacy paper names its
                          class. Never blank, because blank reads as unattached. --}}
                     <td>
                         @if($offeringExam)
                             <div>{{ optional($submission->exam->subject)->name ?? '-' }}</div>
-                            <div class="text-muted small">{{ $offeringExam->reference ?? ('Offering #'.$offeringExam->id) }}</div>
+                            <div class="text-muted small">{{ $offeringExam->reference ?? ('Allocation #'.$offeringExam->id) }}</div>
                         @else
-                            <div class="text-muted small">{{ optional($submission->exam->classRoom)->name ?? get_phrase('Legacy - no course offering') }}</div>
+                            <div class="text-muted small">{{ optional($submission->exam->classRoom)->name ?? get_phrase('Legacy - no course allocation') }}</div>
                         @endif
                     </td>
                     <td>{{ optional($submission->submitted_at)->format('d M Y H:i') ?? '-' }}</td>

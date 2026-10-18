@@ -29,7 +29,7 @@ final class CourseOfferingEligibilityResult
         return new self(false, $code, $message, $assignment);
     }
 
-    /** True when the failure concerns the student's placement rather than one Offering. */
+    /** True when the failure concerns the student's placement rather than one Allocation. */
     public function isPlacementFailure(): bool
     {
         return in_array($this->code, CourseOfferingEligibility::PLACEMENT_CODES, true);

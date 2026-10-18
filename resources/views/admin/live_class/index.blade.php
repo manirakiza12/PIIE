@@ -32,13 +32,13 @@
             <a href="{{ route($routePrefix . '.live_classes.create') }}" class="eBtn eBtn-primary">{{ get_phrase('Schedule Class') }}</a>
             @if($isHei)
                 {{-- An instant meeting in higher education must belong to a Course
-                     Offering, so the Meeting selector is the Offering - never
+                     Allocation, so the Meeting selector is the Allocation - never
                      "All classes" / "All courses" / "All sessions", which are
                      meaningless in an HEI timetable. --}}
                 <form method="POST" action="{{ route($routePrefix . '.live_classes.meet_now') }}" target="_blank" class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
                     @csrf
-                    <select name="course_offering_id" class="form-control eForm-control" style="min-width: 200px; height: 40px;" aria-label="{{ get_phrase('Course Offering') }}" required>
-                        <option value="">{{ get_phrase('Choose a Course Offering') }}</option>
+                    <select name="course_offering_id" class="form-control eForm-control" style="min-width: 200px; height: 40px;" aria-label="{{ get_phrase('Course Allocation') }}" required>
+                        <option value="">{{ get_phrase('Choose a Course Allocation') }}</option>
                         @foreach($meetNowOfferings as $offeringRow)
                             <option value="{{ $offeringRow->id }}">{{ $offeringRow->reference ?: optional($offeringRow->subject)->name }}</option>
                         @endforeach
@@ -124,7 +124,7 @@
                 <input type="hidden" name="view" value="{{ $activeView }}">
                 <div class="col-md-3"><label class="eForm-label">{{ get_phrase('Search') }}</label><input type="text" name="search" value="{{ $search }}" class="form-control eForm-control" placeholder="{{ get_phrase('Title') }}"></div>
                 @if($isHei)
-                    <div class="col-md-3"><label class="eForm-label">{{ get_phrase('Course Offering') }}</label><select name="course_offering_id" class="form-control eForm-control"><option value="">{{ get_phrase('All Course Offerings') }}</option>@foreach($filterOfferings as $filterOffering)<option value="{{ $filterOffering->id }}" {{ (string)$courseOfferingId === (string)$filterOffering->id ? 'selected' : '' }}>{{ $filterOffering->reference ? $filterOffering->reference.' — ' : '' }}{{ optional($filterOffering->subject)->name }}</option>@endforeach</select></div>
+                    <div class="col-md-3"><label class="eForm-label">{{ get_phrase('Course Allocation') }}</label><select name="course_offering_id" class="form-control eForm-control"><option value="">{{ get_phrase('All Course Allocations') }}</option>@foreach($filterOfferings as $filterOffering)<option value="{{ $filterOffering->id }}" {{ (string)$courseOfferingId === (string)$filterOffering->id ? 'selected' : '' }}>{{ $filterOffering->reference ? $filterOffering->reference.' — ' : '' }}{{ optional($filterOffering->subject)->name }}</option>@endforeach</select></div>
                     <div class="col-md-2"><label class="eForm-label">{{ get_phrase('Academic Period') }}</label><select name="academic_period_id" class="form-control eForm-control"><option value="">{{ get_phrase('All') }}</option>@foreach($filterPeriods as $filterPeriod)<option value="{{ $filterPeriod->id }}" {{ (string)$academicPeriodId === (string)$filterPeriod->id ? 'selected' : '' }}>{{ $filterPeriod->label }}</option>@endforeach</select></div>
                 @else
                     <div class="col-md-2"><label class="eForm-label">{{ get_phrase('Course') }}</label><select name="subject_id" class="form-control eForm-control"><option value="">{{ get_phrase('All') }}</option>@foreach($subjects as $subject)<option value="{{ $subject->id }}" {{ (string)$subjectId === (string)$subject->id ? 'selected' : '' }}>{{ $subject->name }}</option>@endforeach</select></div>
@@ -160,7 +160,7 @@
                             <td>{{ $lc->title }}</td>
                             <td>
                                 @if($lc->course_offering_id)
-                                    <span class="d-block">{{ $lc->courseOffering?->reference ?: get_phrase('Course Offering') }}</span>
+                                    <span class="d-block">{{ $lc->courseOffering?->reference ?: get_phrase('Course Allocation') }}</span>
                                     <span class="d-block small text-muted">{{ optional($lc->courseOffering?->academicPeriod)->name ?: optional($lc->subject)->name ?: '—' }}</span>
                                 @else
                                     {{ optional($lc->subject)->name ?: '—' }}

@@ -1817,6 +1817,17 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
 });
 
 // ΓöÇΓöÇ Governed Programme Curricula ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Route::controller(\App\Http\Controllers\ProgrammeYearController::class)->middleware('auth', 'admin', 'rbac')->prefix('admin/programme-years')->name('admin.programme_years.')->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::post('/', 'store')->name('store');
+    Route::put('/{id}', 'update')->whereNumber('id')->name('update');
+    Route::delete('/{id}', 'destroy')->whereNumber('id')->name('destroy');
+});
+Route::controller(\App\Http\Controllers\AcademicDeliveryWorkspaceController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
+    Route::get('admin/course-registrations', 'registrations')->name('admin.course_registrations.index');
+    Route::get('admin/lecturer-assignments', 'lecturers')->name('admin.lecturer_assignments.index');
+});
+Route::get('admin/curriculum-course-units', [\App\Http\Controllers\CurriculumController::class, 'units'])->middleware('auth', 'admin', 'rbac')->name('admin.curriculum_units.index');
 Route::controller(\App\Http\Controllers\CurriculumController::class)->middleware('auth', 'admin', 'rbac')->prefix('admin/curricula')->name('admin.curricula.')->group(function () {
     Route::get('/', 'index')->name('index');
     Route::get('/create', 'create')->name('create');
@@ -1824,6 +1835,7 @@ Route::controller(\App\Http\Controllers\CurriculumController::class)->middleware
     Route::get('/{id}/subjects/search', 'searchSubjects')->whereNumber('id')->name('subjects.search');
     Route::get('/{id}', 'show')->whereNumber('id')->name('show');
     Route::put('/{id}', 'update')->whereNumber('id')->name('update');
+    Route::delete('/{id}', 'destroy')->whereNumber('id')->name('destroy');
     Route::post('/{id}/stages', 'storeStage')->whereNumber('id')->name('stages.store');
     Route::put('/{id}/stages/{stageId}', 'updateStage')->whereNumber('id')->whereNumber('stageId')->name('stages.update');
     Route::post('/{id}/stages/{stageId}/move', 'moveStage')->whereNumber('id')->whereNumber('stageId')->name('stages.move');
@@ -1871,6 +1883,7 @@ Route::controller(\App\Http\Controllers\CourseOfferingController::class)->middle
         Route::post('/{allocation}/replace', 'replace')->whereNumber('offering')->whereNumber('allocation')->name('replace');
     });
     Route::put('/{id}', 'update')->whereNumber('id')->name('update');
+    Route::delete('/{id}', 'destroy')->whereNumber('id')->name('destroy');
     Route::get('/{id}', 'show')->whereNumber('id')->name('show');
 });
 

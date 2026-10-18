@@ -243,9 +243,9 @@ class QuestionGradingService
     }
 
     /**
-     * Prove this actor may mark this attempt, INSIDE its own Offering.
+     * Prove this actor may mark this attempt, INSIDE its own Allocation.
      *
-     * The PARENT ASSIGNMENT is the authority for tenant and Offering, resolved
+     * The PARENT ASSIGNMENT is the authority for tenant and Allocation, resolved
      * through the manager path, and the attempt is then scoped to that assignment.
      * Deliberately not the other way round: `assignment_submissions` carries no
      * school_id of its own precisely so that this cannot be short-circuited by a

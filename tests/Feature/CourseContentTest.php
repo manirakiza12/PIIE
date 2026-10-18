@@ -17,7 +17,7 @@ use Tests\TestCase;
  * Course Content: the lecturer authoring surface.
  *
  * Covers the things that must be true BEFORE a student ever sees a word:
- * authority, tenant and Offering isolation, the sanitizer, the publish rules,
+ * authority, tenant and Allocation isolation, the sanitizer, the publish rules,
  * ordering, and the platform-safety properties (no offline claims, no autoplay,
  * no giant assets).
  *
@@ -65,8 +65,8 @@ class CourseContentTest extends TestCase
         $other = $this->otherTenant();
         $lesson = $this->lesson();
 
-        // A PUT to OUR OWN Offering, carrying a module id that belongs to
-        // another institution. The Offering id is the trap: it is genuinely
+        // A PUT to OUR OWN Allocation, carrying a module id that belongs to
+        // another institution. The Allocation id is the trap: it is genuinely
         // ours, so only the parent re-resolution can catch this.
         $this->actingAs($this->lecturer)
             ->put("/teacher/course-offerings/{$this->offering->id}/content/lessons/{$lesson->id}", [
@@ -123,7 +123,7 @@ class CourseContentTest extends TestCase
     public function test_an_unallocated_lecturer_cannot_author_content(): void
     {
         // Grace is a lecturer in the same school with a real user, but holds NO
-        // allocation on this Offering. The allocation - not the role - is the
+        // allocation on this Allocation. The allocation - not the role - is the
         // gate.
         DB::table('course_offering_lecturer_allocations')
             ->where('user_id', $this->otherLecturer->id)
@@ -436,7 +436,7 @@ class CourseContentTest extends TestCase
         // role-based compatibility layer, so it must NOT be accepted as proof of
         // administration. If it were, this predicate would answer "true" for an
         // ordinary lecturer, and it is one careless caller away from granting a
-        // teacher admin rights over any Offering in the school.
+        // teacher admin rights over any Allocation in the school.
         $access = app(\App\Support\CourseContent\CourseContentAccess::class);
 
         $this->assertTrue(
@@ -453,13 +453,13 @@ class CourseContentTest extends TestCase
     {
         // `teachingActionsAllowed()` reads a `my_allocation_id` attribute that
         // only the lecturer resolver attaches, so a caller holding a plainly
-        // loaded Offering used to be denied a permission they genuinely hold -
+        // loaded Allocation used to be denied a permission they genuinely hold -
         // safe, but baffling and easy to reintroduce.
         $access = app(\App\Support\CourseContent\CourseContentAccess::class);
 
         $plain = \App\Models\CourseOffering::query()->findOrFail($this->offering->id);
 
-        $this->assertNull($plain->getAttribute('my_allocation_id'), 'this Offering was loaded without the resolver');
+        $this->assertNull($plain->getAttribute('my_allocation_id'), 'this Allocation was loaded without the resolver');
         $this->assertTrue(
             $access->canLecturerManage($this->lecturer, $plain),
             'the answer must depend on who the actor is, not on how the row was loaded'
@@ -469,7 +469,7 @@ class CourseContentTest extends TestCase
     public function test_a_co_lecturer_on_the_allocation_can_edit_content(): void
     {
         // The complement of the test above, and the one that would catch an
-        // over-tightened rule: any allocation on the Offering is enough. The
+        // over-tightened rule: any allocation on the Allocation is enough. The
         // gate is "is this person allocated", not "are they the primary
         // lecturer" - a second lecturer teaching the same unit is ordinary.
         $lesson = $this->lesson();
@@ -487,7 +487,7 @@ class CourseContentTest extends TestCase
 
     public function test_a_lecturer_cannot_author_content_for_an_offering_in_another_school_they_can_see(): void
     {
-        // Even given a perfectly valid id, the tenant check on the Offering
+        // Even given a perfectly valid id, the tenant check on the Allocation
         // itself is what refuses. This is the boundary a URL edit tests.
         $other = $this->otherTenant();
 
@@ -518,13 +518,13 @@ class CourseContentTest extends TestCase
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // CROSS-OFFERING DENIAL (same tenant, different Offering)
+    // CROSS-OFFERING DENIAL (same tenant, different Allocation)
     // ══════════════════════════════════════════════════════════════════════
 
     public function test_a_lesson_cannot_be_read_through_the_wrong_offering_url(): void
     {
-        // Same school, same tenant - only the Offering differs. Without the
-        // Offering predicate on the lesson query, this would render a lesson
+        // Same school, same tenant - only the Allocation differs. Without the
+        // Allocation predicate on the lesson query, this would render a lesson
         // from a different delivery under the first one's URL.
         $other = $this->secondOfferingSameSchool();
         $lesson = $this->lesson();
@@ -546,7 +546,7 @@ class CourseContentTest extends TestCase
             ->assertRedirect();
 
         // Sanity: the edit DID apply here, because the lesson genuinely belongs
-        // to this Offering. The point of the neighbouring test is that the
+        // to this Allocation. The point of the neighbouring test is that the
         // mismatch is caught when it does not.
         $this->assertSame('Edited via the right URL but wrong parent',
             CourseOfferingLesson::query()->find($lesson->id)->title);
@@ -947,9 +947,9 @@ class CourseContentTest extends TestCase
     {
         $ours = $this->module(['title' => 'Ours']);
 
-        // A second module under a genuinely DIFFERENT Offering in the same
-        // school. Two modules of one Offering would not test the invariant at
-        // all, because their Offering ids would agree.
+        // A second module under a genuinely DIFFERENT Allocation in the same
+        // school. Two modules of one Allocation would not test the invariant at
+        // all, because their Allocation ids would agree.
         $otherOffering = $this->secondOfferingSameSchool();
         $theirs = CourseOfferingModule::query()->create([
             'school_id' => $this->school,
@@ -961,8 +961,8 @@ class CourseContentTest extends TestCase
 
         $this->expectException(\DomainException::class);
 
-        // A lesson cannot be saved claiming an Offering that disagrees with its
-        // module's Offering. This is the invariant that makes the denormalised
+        // A lesson cannot be saved claiming an Allocation that disagrees with its
+        // module's Allocation. This is the invariant that makes the denormalised
         // course_offering_id column safe to query on.
         CourseOfferingLesson::query()->create([
             'school_id' => $this->school,

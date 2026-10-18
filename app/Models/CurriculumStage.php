@@ -20,7 +20,7 @@ class CurriculumStage extends Model
     private static function assertDraftOwner(self $stage): void
     {
         if ($stage->curriculum_id && Curriculum::where('school_id', $stage->school_id)->whereKey($stage->curriculum_id)->value('status') !== 'draft') {
-            throw new DomainException('Curriculum stages may only be changed while their Curriculum is draft.');
+            throw new DomainException('Programme Years may only be changed while their Curriculum is draft.');
         }
     }
 

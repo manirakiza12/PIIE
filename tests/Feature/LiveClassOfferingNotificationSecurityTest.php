@@ -162,7 +162,7 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
      * events are now implemented and governed, so the test is rewritten to pin
      * the required behaviour rather than the missing behaviour. The security
      * intent is unchanged and still asserted here: recipient-scoped delivery,
-     * no school-wide Noticeboard for an Offering-backed class, and no provider
+     * no school-wide Noticeboard for an Allocation-backed class, and no provider
      * secret in the payload.
      */
     public function test_offering_reschedule_and_cancel_notify_only_the_confirmed_student(): void
@@ -186,7 +186,7 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
         $this->assertSame(
             [(int) $student->id],
             DB::table('user_notifications')->pluck('user_id')->map(fn ($id) => (int) $id)->all(),
-            'only the confirmed registration for THIS Offering is told'
+            'only the confirmed registration for THIS Allocation is told'
         );
 
         $this->post(route('teacher.live_classes.cancel', $class->id))->assertRedirect();
@@ -200,7 +200,7 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
         $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_cancelled')->count());
 
         $this->assertSame(0, DB::table('noticeboard')->count(),
-            'an Offering-backed class is never announced school-wide');
+            'an Allocation-backed class is never announced school-wide');
 
         foreach (DB::table('user_notifications')->get() as $notification) {
             $haystack = $notification->title.' '.$notification->body.' '.$notification->url;
@@ -357,7 +357,7 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
     {
         $values = array_merge([
             'id' => $id, 'school_id' => 1, 'course_offering_id' => $offeringId, 'subject_id' => $this->subjectA,
-            'title' => 'Offering reminder class '.$id, 'platform' => 'jitsi',
+            'title' => 'Allocation reminder class '.$id, 'platform' => 'jitsi',
             'meeting_url' => 'https://meet.example.test/provider-room-secret', 'meeting_id' => 'meeting-id-secret',
             'meeting_password' => 'meeting-password-secret', 'recording_url' => 'https://video.example.test/recording-provider-secret',
             'scheduled_at' => now()->addDay(), 'ends_at' => now()->addDay()->addHour(),

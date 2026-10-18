@@ -233,7 +233,7 @@ class FileOnlyLessonTest extends TestCase
     public function test_another_tenants_module_cannot_be_targeted(): void
     {
         // The module id arrives from the form, so it is re-resolved against the
-        // authorised Offering. A substituted id from another tenant is refused
+        // authorised Allocation. A substituted id from another tenant is refused
         // rather than written - the same guarantee the normal lesson form gives.
         $foreign = DB::table('course_offering_modules')->insertGetId([
             'school_id' => $this->school + 999,

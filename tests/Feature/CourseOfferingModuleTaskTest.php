@@ -167,7 +167,7 @@ class CourseOfferingModuleTaskTest extends TestCase
 
     public function test_a_task_cannot_be_attached_to_a_module_from_another_offering(): void
     {
-        // SECURITY. The module id is resolved INSIDE the Offering in the URL, so a
+        // SECURITY. The module id is resolved INSIDE the Allocation in the URL, so a
         // substituted id from another delivery is refused rather than written.
         $other = $this->secondOfferingAssignment();
         $foreignModule = CourseOfferingModule::query()->create([
@@ -180,7 +180,7 @@ class CourseOfferingModuleTaskTest extends TestCase
 
         $this->actingAs($this->lecturer)
             ->post("/teacher/course-offerings/{$this->offering->id}/assignments", [
-                'title' => 'Should not attach across Offerings',
+                'title' => 'Should not attach across Allocations',
                 'instructions' => '<p>x</p>',
                 'max_marks' => 10,
                 'submission_type' => Assignment::SUBMISSION_TEXT,
@@ -192,7 +192,7 @@ class CourseOfferingModuleTaskTest extends TestCase
             ])
             ->assertSessionHasErrors('course_offering_module_id');
 
-        $this->assertSame(0, Assignment::query()->where('title', 'Should not attach across Offerings')->count());
+        $this->assertSame(0, Assignment::query()->where('title', 'Should not attach across Allocations')->count());
     }
 
     public function test_a_task_cannot_be_attached_to_a_module_from_another_tenant(): void
@@ -815,7 +815,7 @@ class CourseOfferingModuleTaskTest extends TestCase
         // The owner can read it.
         $this->actingAs($this->student)->get($url)->assertOk();
 
-        // Another confirmed student on the SAME Offering cannot.
+        // Another confirmed student on the SAME Allocation cannot.
         $this->actingAs($other)->get($url)->assertNotFound();
 
         // And the stored path is not reachable by guessing under any URL.
@@ -979,7 +979,7 @@ class CourseOfferingModuleTaskTest extends TestCase
     public function test_marks_still_flow_to_the_gradebook_feed_unchanged(): void
     {
         // Nothing about marking was added, removed or retyped, so the read model a
-        // future Course Offering Gradebook is written against must still work, and
+        // future Course Allocation Gradebook is written against must still work, and
         // a module task must appear in it like any other assignment.
         $task = $this->requiredModuleTask($this->module, [
             'status' => Assignment::STATUS_PUBLISHED,

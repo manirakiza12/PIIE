@@ -91,7 +91,7 @@ class LiveClassOfferingFoundationTest extends TestCase
         $this->subjectTwo = $this->createSubject(1, 'Course B');
         $this->createSubject(2, 'Foreign Course');
         $this->actor = User::create([
-            'name' => 'Offering facilitator',
+            'name' => 'Allocation facilitator',
             'email' => 'facilitator@example.test',
             'role_id' => 3,
             'school_id' => 1,
@@ -123,7 +123,7 @@ class LiveClassOfferingFoundationTest extends TestCase
     {
         $offeringId = $this->createOffering(1, $this->subjectOne, CourseOffering::STATUS_OPEN, 'SHARED-1');
         $class = $this->service->createForOffering($this->actor, $offeringId, [
-            'title' => 'Offering meeting',
+            'title' => 'Allocation meeting',
             'timezone' => 'Africa/Lagos',
         ]);
 
@@ -154,7 +154,7 @@ class LiveClassOfferingFoundationTest extends TestCase
             } else {
                 try {
                     $this->service->createForOffering($this->actor, $offeringId, ['title' => $status]);
-                    $this->fail("{$status} Offering must not accept a new operational Live Class.");
+                    $this->fail("{$status} Allocation must not accept a new operational Live Class.");
                 } catch (DomainException $exception) {
                     $this->assertStringContainsString('open or in-progress', $exception->getMessage());
                 }
@@ -177,7 +177,7 @@ class LiveClassOfferingFoundationTest extends TestCase
         $this->assertSame($this->subjectOne, (int) $first->subject_id);
         $this->assertSame($this->subjectOne, (int) $second->subject_id);
         $this->assertNotSame((int) $first->course_offering_id, (int) $second->course_offering_id);
-        $this->assertNull($first->programme_id, 'One shared Offering is not duplicated by Programme.');
+        $this->assertNull($first->programme_id, 'One shared Allocation is not duplicated by Programme.');
         $this->assertNull($second->programme_id);
     }
 
@@ -229,7 +229,7 @@ class LiveClassOfferingFoundationTest extends TestCase
     {
         try {
             $callback();
-            $this->fail('Expected the Offering-backed Live Class domain guard to reject the operation.');
+            $this->fail('Expected the Allocation-backed Live Class domain guard to reject the operation.');
         } catch (DomainException $exception) {
             $this->assertNotSame('', $exception->getMessage());
         }

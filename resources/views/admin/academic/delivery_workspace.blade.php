@@ -1,0 +1,11 @@
+@extends('admin.navigation')
+@section('content')
+<div class="mainSection-title"><h4>{{ $title }}</h4><p class="text-muted">Choose a Course Allocation to {{ $module === 'lecturers' ? 'manage its lecturer assignments' : 'register students and manage their registration status' }}.</p></div>
+<section class="eSection-wrap">
+    <form method="GET" class="row g-2 mb-3"><div class="col-md-9"><label for="allocation-search" class="form-label">Allocation reference</label><input id="allocation-search" class="form-control" name="search" value="{{ request('search') }}" placeholder="Search allocations"></div><div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary">Search</button></div></form>
+    <div class="table-responsive"><table class="table eTable align-middle"><thead><tr><th>Course Allocation</th><th>Course Unit</th><th>Academic Year</th><th>Semester / Term</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+    @forelse($allocations as $allocation)<tr><td>{{ $allocation->reference }}</td><td>{{ $allocation->subject?->code }} — {{ $allocation->subject?->name }}</td><td>{{ $allocation->academicYear?->label }}</td><td>{{ $allocation->academicPeriod?->label }}</td><td>{{ \App\Support\CourseOffering\CourseOfferingService::statusLabel($allocation->status) }}</td><td><a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ route($route, ['allocation_id' => $allocation->id]) }}">{{ $module === 'lecturers' ? 'Manage Assignments' : 'Manage Registrations' }}</a></td></tr>
+    @empty<tr><td colspan="6" class="text-muted text-center py-4">No matching Course Allocations. Create the teaching-period record in Course Allocation first.</td></tr>@endforelse
+    </tbody></table></div>{{ $allocations->links() }}
+</section>
+@endsection

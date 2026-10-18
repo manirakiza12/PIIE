@@ -20,7 +20,7 @@ use Illuminate\Support\Collection;
  *
  * It adds NO query and NO eligibility rule of its own. Everything it returns was
  * already decided by `StudentCourseOfferingDiscovery::discover()`, which had
- * already narrowed the Offerings to the student's curriculum, year, period and
+ * already narrowed the Allocations to the student's curriculum, year, period and
  * cohort, and had already fetched only this student's own registrations.
  *
  * That is the point of the search and filters being applied HERE rather than in
@@ -44,10 +44,10 @@ final class StudentCourseCatalogue
      * `CourseRegistrationOfferingFoundationTest` asserts one of these strings.
      */
     private const SECTIONS = [
-        'available' => ['Available to Register', 'No Course Offering is currently available for this period.'],
+        'available' => ['Available to Register', 'No Course Allocation is currently available for this period.'],
         'pending' => ['Registered — Pending Confirmation', 'No registrations are waiting for confirmation.'],
         'confirmed' => ['Confirmed Courses', 'No confirmed courses for this academic history.'],
-        'history' => ['Dropped / History', 'No dropped Offering registrations.'],
+        'history' => ['Dropped / History', 'No dropped Allocation registrations.'],
     ];
 
     /**
@@ -181,7 +181,7 @@ final class StudentCourseCatalogue
                  * pins with `test_a_student_awaiting_confirmation_cannot_read_the_cover`.
                  *
                  * So a cover is offered here on confirmed cards and nowhere else. A
-                 * pending registration, an Offering the student has not registered
+                 * pending registration, an Allocation the student has not registered
                  * for, and a dropped one would each render an `<img>` whose URL the
                  * server answers 404 — a broken image in the card grid.
                  *
@@ -274,7 +274,7 @@ final class StudentCourseCatalogue
     ) {}
 
     /**
-     * Which of the student's confirmed Offerings actually carry a cover?
+     * Which of the student's confirmed Allocations actually carry a cover?
      *
      * ── WHY THIS IS A LOOKUP AND NOT A COLUMN IN `discover()` ────────────────
      *
@@ -291,8 +291,8 @@ final class StudentCourseCatalogue
      * and the card falls back. Degrading to a fallback is the correct behaviour
      * for a missing image anyway.
      *
-     * Scoped twice over — to this school, and to the Offering ids the student has
-     * a CONFIRMED registration on — so it cannot reveal that an unrelated Offering
+     * Scoped twice over — to this school, and to the Allocation ids the student has
+     * a CONFIRMED registration on — so it cannot reveal that an unrelated Allocation
      * has a cover.
      *
      * @param  Collection<int,\stdClass>  $confirmedRows

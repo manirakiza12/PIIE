@@ -20,8 +20,12 @@ class AcademicWorkflowGuideTest extends TestCase
         $guide = app(AcademicWorkflowGuide::class);
         $data = $guide->forRequest($user,Request::create('/admin/course-unit/setup'));
         $this->assertSame('units',$data['current']['key']);
-        $this->assertStringContainsString('Years / Stages',$data['current']['before']);
+        $this->assertStringContainsString('Programme Years',$data['current']['before']);
         $keys = array_column($data['steps'],'key');
+        $this->assertNotContains('teaching-groups', $keys);
+        $this->assertNotContains('admin.class_list', array_column($data['steps'], 'route'));
+        $this->assertNotContains('admin.programme_cohorts.index', array_column($data['steps'], 'route'));
+        $this->assertContains('admin.academic.direct_placement', array_column($data['steps'], 'route'));
         $this->assertLessThan(array_search('units',$keys),array_search('curricula',$keys));
         $this->assertLessThan(array_search('lecturers',$keys),array_search('offerings',$keys));
         foreach($data['steps'] as $step) $this->assertTrue(app('router')->getRoutes()->hasNamedRoute($step['route']));

@@ -18,15 +18,15 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * The single authority for what a Lecturer may see and do inside an HEI Course
- * Offering.
+ * Allocation.
  *
  * The only accepted chain is:
  *
- *   authenticated Lecturer -> Lecturer Allocation -> Course Offering -> tenant
+ *   authenticated Lecturer -> Lecturer Allocation -> Course Allocation -> tenant
  *
  * Nothing else grants access. In particular a shared Course Unit, a Programme
  * membership, a Programme Cohort membership or a legacy teacher/class assignment
- * never expose a Course Offering, because none of them is an academic delivery
+ * never expose a Course Allocation, because none of them is an academic delivery
  * appointment and none of them carries the offering's own lifecycle.
  *
  * Allocation lifecycle is reused verbatim from
@@ -38,10 +38,10 @@ use Illuminate\Support\Facades\Schema;
  *             current teaching action
  *   cancelled withdrawn; it grants nothing at all
  *
- * Offering lifecycle is reused from CourseOfferingService via CourseOffering's
+ * Allocation lifecycle is reused from CourseOfferingService via CourseOffering's
  * own status constants, and the operational gate matches
  * LiveClassAccessService::offeringAllowsOperations() so Live Classes, this
- * workspace and the admin screens can never disagree about whether an Offering
+ * workspace and the admin screens can never disagree about whether an Allocation
  * is being taught.
  */
 class LecturerCourseOfferingAccess
@@ -64,7 +64,7 @@ class LecturerCourseOfferingAccess
     /**
      * Allocations a lecturer may still reach, keyed by offering id. Cancelled
      * allocations are excluded outright; ended ones are included so a completed
-     * Course Offering still shows its teaching record.
+     * Course Allocation still shows its teaching record.
      */
     public function reachableOfferings(User $lecturer, ?string $date = null): SupportCollection
     {
@@ -88,7 +88,7 @@ class LecturerCourseOfferingAccess
     }
 
     /**
-     * My Course Offerings, with the academic context and the student count the
+     * My Course Allocations, with the academic context and the student count the
      * list shows. Every row is derived from an allocation, so an unallocated
      * offering can never appear.
      */
@@ -165,7 +165,7 @@ class LecturerCourseOfferingAccess
     }
 
     /**
-     * Current teaching means: the allocation is in force today AND the Offering is
+     * Current teaching means: the allocation is in force today AND the Allocation is
      * in a state that is actually being taught. This is deliberately identical to
      * the rule Live Class management already applies, so a lecturer can never
      * reach a teaching action here that Live Classes would refuse there.
@@ -181,8 +181,8 @@ class LecturerCourseOfferingAccess
     }
 
     /**
-     * The teaching roster. Course Offering scoped and tenant scoped: confirmed
-     * registrations for this Offering only. A Programme, a Cohort or the wider
+     * The teaching roster. Course Allocation scoped and tenant scoped: confirmed
+     * registrations for this Allocation only. A Programme, a Cohort or the wider
      * institution never widens it, and the lecturer is read-only here.
      */
     public function teachingRoster(CourseOffering $offering)
@@ -217,8 +217,8 @@ class LecturerCourseOfferingAccess
     }
 
     /**
-     * Completed Offerings keep a readable teaching record; cancelled and draft
-     * Offerings never expose a roster.
+     * Completed Allocations keep a readable teaching record; cancelled and draft
+     * Allocations never expose a roster.
      */
     public function rosterAvailable(CourseOffering $offering): bool
     {
@@ -231,7 +231,7 @@ class LecturerCourseOfferingAccess
         return self::ROLE_LABELS[(string) $role] ?? 'Lecturer';
     }
 
-    /** Allocation filters available on the My Course Offerings page. */
+    /** Allocation filters available on the My Course Allocations page. */
     public function filterOptions(User $lecturer): array
     {
         $allocations = $this->reachableOfferings($lecturer);
@@ -254,7 +254,7 @@ class LecturerCourseOfferingAccess
     }
 
     /**
-     * Is this lecturer currently TEACHING this allocation, on this Offering?
+     * Is this lecturer currently TEACHING this allocation, on this Allocation?
      *
      * A READ-ONLY CLASSIFICATION, not a gate.
      *
@@ -286,9 +286,9 @@ class LecturerCourseOfferingAccess
         }
         $startsOn = (string) $allocation->starts_on;
         // The ONLY condition an authorised System Tester may relax is this one:
-        // today being before the allocation's agreed start date, on an Offering
+        // today being before the allocation's agreed start date, on an Allocation
         // that was deliberately early-started. Allocation status, tenant,
-        // identity, Offering lifecycle and the end date are all still enforced,
+        // identity, Allocation lifecycle and the end date are all still enforced,
         // and no date on the allocation is ever written. See SystemTesterAccess.
         if ($startsOn !== '' && $startsOn > $date) {
             // Resolved only in this exceptional branch, so the normal path is

@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * Lecturer attendance for a Course Offering.
+ * Lecturer attendance for a Course Allocation.
  *
  * Every action resolves the offering through LecturerCourseOfferingAccess
  * first, so a changed URL id reaches nothing. A session is then re-checked
@@ -55,7 +55,7 @@ class TeacherCourseOfferingAttendanceController extends Controller
         [$offering, $terms, $canTeach] = $this->resolve($request, $id);
         if (! $canTeach) {
             return redirect()->route('teacher.course_offerings.attendance.index', $offering->id)
-                ->withErrors(['attendance' => 'Attendance can be recorded once this Course Offering is in progress and you hold a current teaching allocation.']);
+                ->withErrors(['attendance' => 'Attendance can be recorded once this Course Allocation is in progress and you hold a current teaching allocation.']);
         }
 
         return view('teacher.course_offerings.attendance.create', [
@@ -97,7 +97,7 @@ class TeacherCourseOfferingAttendanceController extends Controller
         } catch (ValidationException $exception) {
             // Validation failure must land on THIS form too, with the typed
             // values preserved, rather than on url()->previous() - which is the
-            // generic Course Offering page when the lecturer arrived from there,
+            // generic Course Allocation page when the lecturer arrived from there,
             // and that page renders no validation errors at all.
             return redirect()
                 ->route('teacher.course_offerings.attendance.create', $offering->id)
@@ -116,7 +116,7 @@ class TeacherCourseOfferingAttendanceController extends Controller
         }
 
         // Land on the new session's register, which is where the confirmed
-        // roster is actually marked - not the generic Course Offering page.
+        // roster is actually marked - not the generic Course Allocation page.
         return redirect()
             ->route('teacher.course_offerings.attendance.show', [$offering->id, $created->id])
             ->with('success', 'Attendance session created. Mark the attendance for this session below.');
@@ -194,7 +194,7 @@ class TeacherCourseOfferingAttendanceController extends Controller
         }
 
         // The roster identity is course_registrations.id, and the browser's copy
-        // is not trusted: every submitted id must belong to THIS Offering, in
+        // is not trusted: every submitted id must belong to THIS Allocation, in
         // this tenant, confirmed, and actually present on this register. The
         // array key is deliberately ignored.
         $rosterIds = $this->attendance->rosterFor($attendanceSession)->pluck('id')

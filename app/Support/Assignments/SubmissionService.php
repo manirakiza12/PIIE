@@ -525,7 +525,7 @@ class SubmissionService
             ->whereKey((int) $assignment->course_offering_id)
             ->firstOrFail();
 
-        // A confirmed registration on this exact Offering. Not "is a student",
+        // A confirmed registration on this exact Allocation. Not "is a student",
         // not "is in the same cohort": the registration is the authority, the
         // same test Course Content and Live Classes use.
         if (! $this->access->canStudentAccess($student, $offering)) {

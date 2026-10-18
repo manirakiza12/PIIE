@@ -24,17 +24,17 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * Three existing authorities already answer every question asked here, and each
  * is asked rather than reimplemented:
  *
- *   - `CourseContentAccess` owns the Offering lookup and the lecturer's
+ *   - `CourseContentAccess` owns the Allocation lookup and the lecturer's
  *     allocation-based manage/view rights, plus the confirmed-registration test
  *     for a student. It is the single definition of "may this person reach this
- *     Offering", used by Course Content, Assignments and Live Classes alike.
+ *     Allocation", used by Course Content, Assignments and Live Classes alike.
  *   - `OnlineExamAuthorizer` owns "may this person create, manage, teach, mark or
  *     publish results for this exam", and is unchanged.
  *   - `OnlineExamPolicy::sit` owns the student gate, and is unchanged.
  *
  * The only genuinely new question is the one the old code could not ask: whether a
  * given student is on a given OFFERING. That is answered here, and answered with
- * the same `CourseRegistration` test the rest of the Course Offering student
+ * the same `CourseRegistration` test the rest of the Course Allocation student
  * surface uses.
  *
  * ── WHY THE STUDENT VISIBILITY RULE LIVES HERE AND NOT IN THE CONTROLLER ────
@@ -44,19 +44,19 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * one too many - they can disagree, and a disagreement here means either a student
  * cannot sit an exam they should, or one they should not. So the rule is stated
  * once, in `applyStudentVisibility()`, and both call sites use it. Adding a third
- * copy inside Course Offering integration would have been the worst possible place
+ * copy inside Course Allocation integration would have been the worst possible place
  * to do that, because this is precisely where the two halves of the product
- * (legacy Class/Section and Course Offering) have to agree.
+ * (legacy Class/Section and Course Allocation) have to agree.
  */
 class CourseOfferingExamAccess
 {
     /**
-     * The two authorities this class ASKS about a single Offering, plus the one it
+     * The two authorities this class ASKS about a single Allocation, plus the one it
      * asks about a LIST of them.
      *
-     * `CourseContentAccess` decides "may this person act on THAT Offering" and
+     * `CourseContentAccess` decides "may this person act on THAT Allocation" and
      * `OnlineExamAuthorizer` decides "may this person act on THAT exam"; neither
-     * can answer "which Offerings may this lecturer create assessments in", so
+     * can answer "which Allocations may this lecturer create assessments in", so
      * `LecturerCourseOfferingAccess` is injected for exactly that question and for
      * nothing else. `PermissionService` remains absent: it is not asked here.
      *
@@ -77,14 +77,14 @@ class CourseOfferingExamAccess
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * The Offerings this actor may currently create a Course Offering assessment in.
+     * The Allocations this actor may currently create a Course Allocation assessment in.
      *
      * This is the list behind the generic create page's FIRST selector, and it is
      * `LecturerCourseOfferingAccess::offerings()` - not a query written here. That
      * matters for two reasons, and both are about authority rather than tidiness:
      *
      *  - Every row is derived from a `CourseOfferingLecturerAllocation` in the
-     *    actor's own tenant, so an Offering the lecturer does not teach cannot
+     *    actor's own tenant, so an Allocation the lecturer does not teach cannot
      *    appear, and another institution's cannot either. There is no code path in
      *    which this method widens what the allocation table says.
      *  - Each row arrives already carrying its academic context (`subject`,
@@ -114,11 +114,11 @@ class CourseOfferingExamAccess
     }
 
     /**
-     * The authoritative academic fields for an exam that belongs to this Offering.
+     * The authoritative academic fields for an exam that belongs to this Allocation.
      *
      * ── WHY THIS IS A FUNCTION AND NOT FOUR LINES IN A CONTROLLER ────────────
      *
-     * Two controllers now create Offering-backed exams - the Offering-scoped one
+     * Two controllers now create Allocation-backed exams - the Allocation-scoped one
      * and the generic create page - and they must not disagree about a single
      * value. Stated once, it is also the place where the reasoning behind the NULLs
      * lives, rather than in a comment that one of the two call sites may not read.
@@ -139,7 +139,7 @@ class CourseOfferingExamAccess
         return [
             'school_id' => (int) $offering->school_id,
             'course_offering_id' => (int) $offering->id,
-            // The Offering has exactly ONE Course Unit. It is read, never chosen.
+            // The Allocation has exactly ONE Course Unit. It is read, never chosen.
             'subject_id' => (int) $offering->subject_id,
             // NULL on purpose. Populating any of these would enrol every student of
             // that class into the assessment and bypass the confirmed Course
@@ -165,7 +165,7 @@ class CourseOfferingExamAccess
      * worst place to get it wrong in one of them:
      *
      *  - too NARROW, which is the failure that was reported. A student submitted an
-     *    exam and nobody was told. On a Course Offering, a CO-LECTURER allocated to
+     *    exam and nobody was told. On a Course Allocation, a CO-LECTURER allocated to
      *    the course teaches it and marks it, and did not write the paper - so
      *    authorship excluded the person who actually needed to know.
      *
@@ -176,7 +176,7 @@ class CourseOfferingExamAccess
      * So the set is exactly the people who may act, and it is derived from the two
      * authorities that already decide that, rather than from a third rule:
      *
-     *   1. the lecturer ALLOCATED to this Course Offering, who may mark it because
+     *   1. the lecturer ALLOCATED to this Course Allocation, who may mark it because
      *      `OnlineExamAuthorizer::canTeachExam()` says so - and that method is the
      *      one that requires a current allocation in this tenant and fails CLOSED;
      *   2. the paper's AUTHOR, who may always act on their own paper - the same
@@ -255,15 +255,15 @@ class CourseOfferingExamAccess
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // THE MANAGER SIDE - authoring inside an Offering
+    // THE MANAGER SIDE - authoring inside an Allocation
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * The Offering, for someone who is about to author in it, or a 404.
+     * The Allocation, for someone who is about to author in it, or a 404.
      *
      * The lookup and the manage check are both `CourseContentAccess`'s, so an
-     * Offering is found by exactly one rule across the whole product and a
-     * lecturer can only author assessments for Offerings they are genuinely
+     * Allocation is found by exactly one rule across the whole product and a
+     * lecturer can only author assessments for Allocations they are genuinely
      * allocated to.
      */
     public function resolveOfferingForManager(User $actor, int $offeringId): CourseOffering
@@ -275,7 +275,7 @@ class CourseOfferingExamAccess
     }
 
     /**
-     * The Offering, for someone who is only going to LOOK at it.
+     * The Allocation, for someone who is only going to LOOK at it.
      *
      * View is deliberately weaker than manage: a co-lecturer who may see the
      * assessment list has not thereby gained the right to change an assessment.
@@ -289,39 +289,39 @@ class CourseOfferingExamAccess
             || $this->contentAccess->canStudentAccess($actor, $offering);
 
         if (! $mayView) {
-            throw new HttpException(404, 'Course Offering not found.');
+            throw new HttpException(404, 'Course Allocation not found.');
         }
 
         return $offering;
     }
 
     /**
-     * Is this exam one of THIS Offering's assessments?
+     * Is this exam one of THIS Allocation's assessments?
      *
      * Checked, never assumed. A route shaped
      * `/teacher/course-offerings/{offering}/exams/{exam}` is trivially mistyped, and
-     * without this a lecturer allocated to two Offerings could move an assessment
+     * without this a lecturer allocated to two Allocations could move an assessment
      * from one to the other by editing the number in the address bar. It is a 404
-     * rather than a 403, consistent with the rest of the Course Offering surface:
+     * rather than a 403, consistent with the rest of the Course Allocation surface:
      * a colleague should not learn that an exam exists somewhere they cannot reach.
      */
     public function assertExamBelongsToOffering(OnlineExam $exam, CourseOffering $offering): void
     {
         if ((int) $exam->course_offering_id !== (int) $offering->id) {
-            throw new HttpException(404, 'Assessment not found for this Course Offering.');
+            throw new HttpException(404, 'Assessment not found for this Course Allocation.');
         }
 
         if ((int) $exam->school_id !== (int) $offering->school_id) {
-            throw new HttpException(404, 'Assessment not found for this Course Offering.');
+            throw new HttpException(404, 'Assessment not found for this Course Allocation.');
         }
     }
 
     /**
      * May this person run the engine's exam-management actions on this exam?
      *
-     * Delegated whole. Adding an Offering to an exam must not make it easier to
+     * Delegated whole. Adding an Allocation to an exam must not make it easier to
      * manage than any other exam, so the engine's own authorizer stays the only
-     * answer, and the Offering merely decides WHICH exam is on the table.
+     * answer, and the Allocation merely decides WHICH exam is on the table.
      */
     public function canManageExam(User $actor, OnlineExam $exam): bool
     {
@@ -333,10 +333,10 @@ class CourseOfferingExamAccess
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * May this student reach the Course Offering at all?
+     * May this student reach the Course Allocation at all?
      *
      * `CourseContentAccess`'s answer, asked rather than restated: a confirmed
-     * registration for that exact Offering, in that exact tenant, for an active
+     * registration for that exact Allocation, in that exact tenant, for an active
      * non-staff user.
      */
     public function canStudentAccessOffering(User $actor, CourseOffering $offering): bool
@@ -345,7 +345,7 @@ class CourseOfferingExamAccess
     }
 
     /**
-     * The Offerings this student is CONFIRMED on, in this tenant.
+     * The Allocations this student is CONFIRMED on, in this tenant.
      *
      * Returns an empty list when the registration table is absent, which is the
      * right answer rather than a fallback: no table means no confirmed
@@ -354,7 +354,7 @@ class CourseOfferingExamAccess
      * table must never widen who may sit an assessment.
      *
      * The guard is not paranoia. Most of this engine's test suites build a partial
-     * schema that predates the Course Offering work, and an unguarded query here
+     * schema that predates the Course Allocation work, and an unguarded query here
      * turned every student exam page in seventeen of them into a 500.
      *
      * @return list<int>
@@ -397,18 +397,18 @@ class CourseOfferingExamAccess
      * changing working legacy delivery, and nine live exams depend on it. It is
      * reported, not silently rewritten.
      *
-     * What could not be preserved is that rule's application to a Course Offering
-     * assessment. An Offering assessment is created with `class_id`, `programme_id`
+     * What could not be preserved is that rule's application to a Course Allocation
+     * assessment. An Allocation assessment is created with `class_id`, `programme_id`
      * and `session_id` all NULL - the brief forbids faking higher-education
      * delivery through the legacy Class/Section graph, and populating them would
      * not be a harmless placeholder: it would enrol every student of that class
      * into the assessment, bypassing the confirmed Course Registration that is the
      * only legitimate higher-education eligibility test.
      *
-     * So a NULL-armed legacy rule applied to an Offering assessment would make it
+     * So a NULL-armed legacy rule applied to an Allocation assessment would make it
      * sit-able by the whole school. The two cases are therefore separated, and an
-     * Offering assessment is reachable only by a student confirmed on THAT
-     * Offering:
+     * Allocation assessment is reachable only by a student confirmed on THAT
+     * Allocation:
      *
      *   (A) course_offering_id IS NOT NULL  -> confirmed registration on it
      *   (B) course_offering_id IS NULL      -> the original rule, unchanged
@@ -448,7 +448,7 @@ class CourseOfferingExamAccess
         // column at all and every exam is a legacy one. Branch (A) is then simply
         // not expressible, so it is omitted and branch (B) stands alone - which is
         // exactly the pre-existing behaviour, on a schema that predates Course
-        // Offerings. The engine guards its own optional columns the same way
+        // Allocations. The engine guards its own optional columns the same way
         // (`Schema::hasColumn('online_exams', 'programme_id')`), and a missing
         // column must not be a fatal error on every student exam page.
         $offeringColumnExists = Schema::hasColumn('online_exams', 'course_offering_id');
@@ -456,7 +456,7 @@ class CourseOfferingExamAccess
         return $query->where(function ($q) use (
             $classIds, $sessionIds, $programmeId, $confirmedOfferingIds, $offeringColumnExists
         ) {
-            // (A) a Course Offering assessment this student is confirmed on
+            // (A) a Course Allocation assessment this student is confirmed on
             if ($offeringColumnExists) {
                 $q->where(function ($inner) use ($confirmedOfferingIds) {
                     $inner->whereNotNull('course_offering_id');
@@ -467,7 +467,7 @@ class CourseOfferingExamAccess
                         // Registered on nothing. Expressing this as an impossible
                         // predicate rather than skipping the branch is deliberate: it
                         // documents that a student with no confirmed registration sees
-                        // no Offering assessment, rather than accidentally seeing all.
+                        // no Allocation assessment, rather than accidentally seeing all.
                         $inner->whereRaw('1 = 0');
                     }
                 });
@@ -524,11 +524,11 @@ class CourseOfferingExamAccess
     }
 
     /**
-     * The confirmed students an Offering assessment's marking queue should cover.
+     * The confirmed students an Allocation assessment's marking queue should cover.
      *
-     * Confirmed Course Registrations on the Offering and nothing else - never
+     * Confirmed Course Registrations on the Allocation and nothing else - never
      * Programme, Cohort, Study Plan or legacy Class membership. A student cannot
-     * be added to a marking list for an Offering assessment by belonging to a
+     * be added to a marking list for an Allocation assessment by belonging to a
      * cohort, which is the same rule Assignments and Live Classes already use.
      *
      * Returns an empty list for a legacy exam, because the legacy marking queue

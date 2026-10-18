@@ -51,7 +51,7 @@
             <form method="post" action="{{ route('superadmin.google_meet.verify') }}" class="mb-2">@csrf<button class="btn btn-outline-primary">Verify calendar access</button></form>
             <form method="post" action="{{ route('superadmin.google_meet.disconnect') }}">@csrf<button class="btn btn-outline-danger">Disconnect institution account</button></form>
         @endif
-        <hr><p class="small text-muted">Verification reads calendar access without creating a meeting. Once connected, administrators can select Google Meet when adding a live class for the selected institution. Sign in to the connected Google account to host those meetings. Lecturers connect their own Google accounts from Live Classes for their course offerings.</p>
+        <hr><p class="small text-muted">Verification reads calendar access without creating a meeting. Once connected, administrators can select Google Meet when adding a live class for the selected institution. Sign in to the connected Google account to host those meetings. Lecturers connect their own Google accounts from Live Classes for their course allocations.</p>
     </div></div>
 </div>
 @endsection

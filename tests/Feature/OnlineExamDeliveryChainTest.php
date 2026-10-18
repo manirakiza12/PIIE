@@ -55,7 +55,7 @@ class OnlineExamDeliveryChainTest extends TestCase
         $this->bootSchema();
     }
 
-    /** The engine's tables plus the Course Offering ones this chain reads. */
+    /** The engine's tables plus the Course Allocation ones this chain reads. */
     private function bootSchema(): void
     {
         parent::setUp();
@@ -822,15 +822,15 @@ class OnlineExamDeliveryChainTest extends TestCase
  *
  * ── THIS TEST FAILED BEFORE A FIX, AND THAT IS THE POINT ───────────────────
  *
- * `OnlineExamAuthorizer::canTeachExam()` had no Course Offering arm. For an
- * Offering assessment - `class_id` AND `programme_id` both NULL - it fell through
+ * `OnlineExamAuthorizer::canTeachExam()` had no Course Allocation arm. For an
+ * Allocation assessment - `class_id` AND `programme_id` both NULL - it fell through
  * to the legacy subject rule, and `teacherCanUseSubject()` returns TRUE for a
  * subject linked to neither a class nor a programme. So an unallocated role-3
  * lecturer passed, `canMarkAnswer()` said yes, the route answered 302, and the
  * mark was WRITTEN. The test below failed on `assertForbidden()` having been told
  * 302.
  *
- * The fix asks `CourseContentAccess::canLecturerManage()` for Offering exams. It
+ * The fix asks `CourseContentAccess::canLecturerManage()` for Allocation exams. It
  * is asserted here through the ROUTE, because the route is what a real request
  * reaches, and through the authorizer, because that is where the decision lives.
  */
@@ -861,7 +861,7 @@ public function test_a_LECTURER_cannot_mark_or_see_a_submission_for_SOMEONE_ELSE
         // The decision itself, where it is made.
         $this->assertFalse(
             app(\App\Support\Permissions\OnlineExamAuthorizer::class)->canTeachExam($intruder, $set['exam']),
-            'an unallocated lecturer does not teach this Offering, so he does not mark it'
+            'an unallocated lecturer does not teach this Allocation, so he does not mark it'
         );
 
         $this->assertFalse(
@@ -942,7 +942,7 @@ public function test_a_LECTURER_cannot_mark_or_see_a_submission_for_SOMEONE_ELSE
      * A LEGACY exam must keep its original marking rule.
      *
      * §13 forbids changing the meaning of the nullable legacy fields just to
-     * accommodate Course Offerings. This pins the other side of that bargain: the
+     * accommodate Course Allocations. This pins the other side of that bargain: the
      * new arm is entered ONLY when `course_offering_id` is set, so a legacy paper
      * continues to be decided in the original order - `programme_id`, then
      * `class_id` / `TeacherPermission`, then `teacherCanUseSubject()`.
@@ -961,7 +961,7 @@ public function test_a_LECTURER_cannot_mark_or_see_a_submission_for_SOMEONE_ELSE
      *
      * The stronger property is asserted first, and it is the one that matters: an
      * ALLOCATION must make no difference to a legacy paper. Two lecturers, one
-     * allocated to an Offering and one allocated to nothing, must get the SAME
+     * allocated to an Allocation and one allocated to nothing, must get the SAME
      * answer to the SAME legacy paper. Were the new arm leaking into the legacy
      * path, the allocated lecturer's answer would change and this would fail.
      */

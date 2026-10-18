@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * ONE question inside a Course Offering assignment.
+ * ONE question inside a Course Allocation assignment.
  *
  * A question is a row on the EXISTING `assignments` record. There is no second
  * assignment product, no join table and no separate submission model - a

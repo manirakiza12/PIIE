@@ -128,7 +128,7 @@ class SystemRoleRegistryTest extends TestCase
      * staff/admin middleware, staff provisioning and account access. The
      * lecturer allocation service reads SystemRole::TEACHER for eligibility,
      * and the lecturer workspace reads SystemRole::TEACHER to confirm the
-     * signed-in user really is a lecturer before any Offering is resolved.
+     * signed-in user really is a lecturer before any Allocation is resolved.
      */
     public function test_registry_is_not_referenced_by_runtime_code_yet(): void
     {

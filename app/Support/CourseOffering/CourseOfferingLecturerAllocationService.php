@@ -116,7 +116,7 @@ class CourseOfferingLecturerAllocationService
             $offering = $this->lockedOffering($schoolId, (int) $initial->course_offering_id);
             $allocation = $this->lockedAllocation($schoolId, $allocationId);
             if (! in_array($offering->status, [CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true)) {
-                throw new DomainException('Lecturer allocations may only be activated for open or in-progress Offerings.');
+                throw new DomainException('Lecturer allocations may only be activated for open or in-progress Allocations.');
             }
             if ($allocation->status !== CourseOfferingLecturerAllocation::STATUS_PLANNED) {
                 throw new DomainException('Only planned lecturer allocations may be activated.');
@@ -301,7 +301,7 @@ class CourseOfferingLecturerAllocationService
 
         $user = $this->eligibleLecturersQuery((int) $offering->school_id)->whereKey($userId)->first();
         if (! $user) {
-            throw new DomainException('The lecturer must be an eligible User in the Offering tenant.');
+            throw new DomainException('The lecturer must be an eligible User in the Allocation tenant.');
         }
         if ($activating && $user->staff_status === StaffStatus::ON_LEAVE) {
             throw new DomainException('A staff member on leave cannot be activated into a teaching allocation.');
@@ -385,12 +385,12 @@ class CourseOfferingLecturerAllocationService
             ->first(['start_date', 'end_date']);
 
         if (! $period || ! $period->start_date || ! $period->end_date) {
-            throw new DomainException('The Offering Academic Period has no valid date bounds.');
+            throw new DomainException('The Allocation Academic Period has no valid date bounds.');
         }
         $periodStart = $this->parseDate((string) $period->start_date);
         $periodEnd = $this->parseDate((string) $period->end_date);
         if ($periodEnd < $periodStart || $date < $periodStart || $date > $periodEnd) {
-            throw new DomainException("{$label} must fall within the Offering Academic Period.");
+            throw new DomainException("{$label} must fall within the Allocation Academic Period.");
         }
     }
 
@@ -411,7 +411,7 @@ class CourseOfferingLecturerAllocationService
     private function assertOfferingWritable(CourseOffering $offering): void
     {
         if (! in_array($offering->status, [CourseOffering::STATUS_DRAFT, CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true)) {
-            throw new DomainException("Lecturer allocations cannot be changed for a {$offering->status} Offering.");
+            throw new DomainException("Lecturer allocations cannot be changed for a {$offering->status} Allocation.");
         }
     }
 
@@ -450,7 +450,7 @@ class CourseOfferingLecturerAllocationService
 
     private function audit(string $action, CourseOfferingLecturerAllocation $allocation, array $before, array $after): void
     {
-        AuditLog::record($action, 'Course Offering Lecturer Allocations', "{$action} for Course Offering #{$allocation->course_offering_id}, allocation #{$allocation->id}.", [
+        AuditLog::record($action, 'Course Allocation Lecturer Allocations', "{$action} for Course Allocation #{$allocation->course_offering_id}, allocation #{$allocation->id}.", [
             'school_id' => $allocation->school_id,
             'record_type' => CourseOfferingLecturerAllocation::class,
             'record_id' => $allocation->id,

@@ -28,7 +28,7 @@ use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * The lecturer's Course Offering Assignments workspace.
+ * The lecturer's Course Allocation Assignments workspace.
  *
  * AUTHORING IS A FULL PAGE, NOT A DRAWER
  *
@@ -39,10 +39,10 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  *
  * THE OFFERING IS CONTEXT, NEVER A FIELD
  *
- * Every route carries the Offering id, and every write re-resolves the assignment
- * by id INSIDE that Offering before touching it. A substituted id cannot move an
- * assignment between Offerings or tenants, and a lecturer who has no allocation
- * learns nothing about Offerings they were not given.
+ * Every route carries the Allocation id, and every write re-resolves the assignment
+ * by id INSIDE that Allocation before touching it. A substituted id cannot move an
+ * assignment between Allocations or tenants, and a lecturer who has no allocation
+ * learns nothing about Allocations they were not given.
  *
  * EVERY MUTATION RE-CHECKS AUTHORITY
  *
@@ -74,7 +74,7 @@ class TeacherCourseOfferingAssignmentController extends Controller
     /**
      * GET /teacher/course-offerings/{id}/assignments
      *
-     * The list a lecturer opens from the Course Offering. It answers, per
+     * The list a lecturer opens from the Course Allocation. It answers, per
      * assignment: what state is it in, when is it due, out of how many marks,
      * how many have submitted, and how many of those are marked.
      */
@@ -88,7 +88,7 @@ class TeacherCourseOfferingAssignmentController extends Controller
             ->where('course_offering_id', $offering->id)
             ->with('submissions:id,assignment_id,is_draft,marks_awarded,marks_released_at,submitted_at')
             // Eager-loaded so a list row can show its module's title without a
-            // query PER ROW. A lecturer with twenty assignments in one Offering
+            // query PER ROW. A lecturer with twenty assignments in one Allocation
             // would otherwise fire twenty extra queries to render a label.
             ->with('module:id,course_offering_id,title,sequence')
             // Lifecycle order, not alphabetical. A standard CASE rather than
@@ -162,7 +162,7 @@ class TeacherCourseOfferingAssignmentController extends Controller
         // Arriving from a module and having to re-pick it is the friction.
         //
         // The id is taken from the query string, so it is NOT trusted: it is matched
-        // against this Offering's own module options and silently ignored if it is
+        // against this Allocation's own module options and silently ignored if it is
         // not one of them. That keeps `resolveModule()`'s own tenant and ownership
         // check as the authority rather than adding a second one here.
         $requestedModule = (int) $request->query('course_offering_module_id');
@@ -570,9 +570,9 @@ class TeacherCourseOfferingAssignmentController extends Controller
     /**
      * Open the file a student submitted, for marking.
      *
-     * Authorised by resolving the assignment in the Offering in the URL and the
+     * Authorised by resolving the assignment in the Allocation in the URL and the
      * submission inside THAT assignment - so a submission id from another tenant,
-     * another Offering, or another student on the same assignment cannot be
+     * another Allocation, or another student on the same assignment cannot be
      * substituted here to read work the lecturer should not see.
      */
     public function submissionFile(Request $request, int $id, int $assignment, int $submission)
@@ -594,8 +594,8 @@ class TeacherCourseOfferingAssignmentController extends Controller
      * Open ONE piece of a student's evidence, for marking.
      *
      * The attempt is resolved through the manager path first, which proves a
-     * current allocation on the Offering in the URL and that the submission
-     * belongs to the assignment in that Offering. The item is then scoped to THAT
+     * current allocation on the Allocation in the URL and that the submission
+     * belongs to the assignment in that Allocation. The item is then scoped to THAT
      * attempt, so an item id belonging to a different student, attempt,
      * assignment or tenant is a 404.
      *
@@ -631,8 +631,8 @@ class TeacherCourseOfferingAssignmentController extends Controller
      * unusable in practice.
      *
      * Authorised through the manager resolver, which proves a current allocation on
-     * the Offering in the URL and that the attempt belongs to the assignment in that
-     * Offering. A document is NOT streamable - it downloads through `evidence`,
+     * the Allocation in the URL and that the attempt belongs to the assignment in that
+     * Allocation. A document is NOT streamable - it downloads through `evidence`,
      * because a PDF rendered in a page is a document execution surface and reading
      * one costs a lecturer nothing.
      */
@@ -876,7 +876,7 @@ class TeacherCourseOfferingAssignmentController extends Controller
      * Serve a lecturer's handout.
      *
      * Authorised on the same rule as the page that links it - a current
-     * allocation on the Offering - so a copied resource id is worth nothing to
+     * allocation on the Allocation - so a copied resource id is worth nothing to
      * anybody else. Files live outside the web root, so this is the only way to
      * read one.
      */
@@ -938,7 +938,7 @@ class TeacherCourseOfferingAssignmentController extends Controller
             'status' => ['required', Rule::in(Assignment::STATUSES)],
 
             // ── Module/chapter task ──
-            // Optional. Scoped to this Offering AND this tenant, so a module id
+            // Optional. Scoped to this Allocation AND this tenant, so a module id
             // from elsewhere is refused at validation rather than written.
             'course_offering_module_id' => [
                 'nullable',
@@ -1049,9 +1049,9 @@ class TeacherCourseOfferingAssignmentController extends Controller
     }
 
     /**
-     * The modules of THIS Offering, for the module picker.
+     * The modules of THIS Allocation, for the module picker.
      *
-     * Scoped to the Offering AND the tenant, in the order a lecturer reads them.
+     * Scoped to the Allocation AND the tenant, in the order a lecturer reads them.
      * Archived modules are excluded: attaching a task to a retired module would
      * place it somewhere no student will ever navigate.
      *

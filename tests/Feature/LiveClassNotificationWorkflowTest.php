@@ -38,7 +38,7 @@ use Tests\TestCase;
  *    the compiled SQL as well, which is what actually changed and which fails
  *    loudly on the bug.
  *
- * 2. Course-Offering Live Classes notified students, but only publish: a
+ * 2. Course-Allocation Live Classes notified students, but only publish: a
  *    reschedule, a cancellation and a new recording were all silent, and
  *    nothing stopped a repeated publish re-notifying the same cohort.
  */
@@ -354,7 +354,7 @@ class LiveClassNotificationWorkflowTest extends TestCase
         $this->inForceAllocation($future, $this->lecturer, now()->addMonth()->startOfMonth()->toDateString());
         DB::table('audit_logs')->insert([
             'school_id' => $this->school, 'action' => 'COURSE_OFFERING_EARLY_START',
-            'event_type' => 'COURSE_OFFERING_EARLY_START', 'module' => 'Course Offerings',
+            'event_type' => 'COURSE_OFFERING_EARLY_START', 'module' => 'Course Allocations',
             'description' => 'early start', 'record_type' => CourseOffering::class,
             'record_id' => $future->id, 'created_at' => now(),
         ]);
@@ -449,7 +449,7 @@ class LiveClassNotificationWorkflowTest extends TestCase
                 (int) $liveClass->id,
                 ['subject_id' => 999999]
             );
-            $this->fail('the service should have refused a subject outside the Offering');
+            $this->fail('the service should have refused a subject outside the Allocation');
         } catch (\DomainException $exception) {
             $this->assertStringContainsString('conflicts', $exception->getMessage());
         }
@@ -467,7 +467,7 @@ class LiveClassNotificationWorkflowTest extends TestCase
         $confirmed = $this->makeStudent('Confirmed Student', $this->school, $this->offering);
         $pending = $this->makeStudent('Pending Student', $this->school, $this->offering, 'pending');
         $dropped = $this->makeStudent('Dropped Student', $this->school, $this->offering, 'dropped');
-        $otherOffering = $this->makeStudent('Other Offering Student', $this->school,
+        $otherOffering = $this->makeStudent('Other Allocation Student', $this->school,
             $this->makeOffering($this->school, 'OTHER-1'));
         $otherTenant = $this->makeStudent('Foreign Student', $this->otherSchool, null);
         DB::table('course_registrations')->insert([

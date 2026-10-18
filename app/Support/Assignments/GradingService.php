@@ -42,7 +42,7 @@ class GradingService
     ) {}
 
     /**
-     * The marking list: every confirmed registrant on this Offering, with the
+     * The marking list: every confirmed registrant on this Allocation, with the
      * factual state of their work.
      *
      * Built from confirmed REGISTRATIONS, not from who happens to have submitted,
@@ -201,13 +201,13 @@ class GradingService
     }
 
     /**
-     * Resolve a submission for a LECTURER, inside the Offering in the URL.
+     * Resolve a submission for a LECTURER, inside the Allocation in the URL.
      *
-     * The Assignment is resolved FIRST, under tenant + Offering + id, and the
+     * The Assignment is resolved FIRST, under tenant + Allocation + id, and the
      * submission is then scoped to that assignment. Deliberately not the other
      * way round: `assignment_submissions` carries no `school_id` of its own, and
      * filtering a submission by an offering id it merely mirrors would trust that
-     * mirror. Resolving the parent first means the tenant and Offering are proven
+     * mirror. Resolving the parent first means the tenant and Allocation are proven
      * from `assignments` itself, and a submission id from another tenant or
      * another delivery is a 404.
      */
@@ -256,12 +256,12 @@ class GradingService
     }
 
     /**
-     * @throws HttpException when the lecturer has no allocation on the Offering
+     * @throws HttpException when the lecturer has no allocation on the Allocation
      *                       this submission belongs to
      */
     private function assertCanGrade(User $actor, AssignmentSubmission $submission): Assignment
     {
-        // The parent assignment is the authority for tenant and Offering, so it
+        // The parent assignment is the authority for tenant and Allocation, so it
         // is loaded and re-checked through the manager path. A submission row
         // carries no school_id of its own precisely so that this cannot be
         // short-circuited by a denormalised value that has drifted.

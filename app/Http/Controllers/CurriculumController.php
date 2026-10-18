@@ -50,8 +50,11 @@ class CurriculumController extends Controller
 
         $query->when(in_array($request->query('status'), Curriculum::STATUSES, true), fn ($q) => $q->where('curricula.status', $request->query('status')))
             ->when($request->filled('programme_id'), fn ($q) => $q->where('curricula.programme_id', (int) $request->query('programme_id')))
-            ->when($request->filled('department_id'), fn ($q) => $q->where('programmes.department_id', (int) $request->query('department_id')))
-            ->when($request->filled('academic_year_id'), fn ($q) => $q->where('curricula.effective_academic_year_id', (int) $request->query('academic_year_id')));
+            ->when($request->filled('department_id'), fn ($q) => $q->where('programmes.department_id', (int) $request->query('department_id')));
+        if ($request->filled('academic_year_id')) {
+            $applicableYear = AcademicYear::where('school_id', $schoolId)->findOrFail($request->integer('academic_year_id'));
+            $query->where('academic_years.start_date', '<=', $applicableYear->start_date->toDateString());
+        }
 
         $curriculumRows = $query->orderBy('programmes.name')->orderByDesc('curricula.created_at')->paginate(20)->withQueryString();
         $programmes = Programme::where('school_id', $schoolId)->orderBy('name')->get(['id', 'code', 'name', 'department_id']);
@@ -62,6 +65,21 @@ class CurriculumController extends Controller
             : null;
 
         return view('admin.curricula.index', compact('curriculumRows', 'programmes', 'departments', 'academicYears', 'selectedProgramme'));
+    }
+
+    public function destroy(Request $request, int $id)
+    {
+        $this->curricula->deleteDraft($this->tenantCurriculum($request, $id));
+        return redirect()->route('admin.curricula.index')->with('success', 'Draft Programme Curriculum deleted.');
+    }
+
+    public function units(Request $request)
+    {
+        $curricula = Curriculum::where('school_id', $request->user()->school_id)->with('programme')->orderBy('programme_id')->orderBy('version')->get();
+        $data = $request->filled('curriculum_id')
+            ? $this->show($request, $request->integer('curriculum_id'))->getData()
+            : [];
+        return view('admin.curriculum_units.index', $data + compact('curricula'));
     }
 
     public function create(Request $request)
@@ -131,7 +149,7 @@ class CurriculumController extends Controller
         $data = $request->validate(['label' => ['required', 'string', 'max:100'], 'sequence' => ['required', 'integer', 'min:1', 'max:65535']]);
         $this->curricula->addStage($curriculum, $data['label'], (int) $data['sequence']);
         $request->session()->forget('errors');
-        return back()->with('success', 'Stage added.');
+        return back()->with('success', 'Programme Year added.');
     }
 
     public function updateStage(Request $request, int $id, int $stageId)
@@ -140,7 +158,7 @@ class CurriculumController extends Controller
         $stage = $this->tenantStage($curriculum, $stageId);
         $data = $request->validate(['label' => ['required', 'string', 'max:100'], 'sequence' => ['required', 'integer', 'min:1', 'max:65535']]);
         $this->curricula->updateStage($curriculum, $stage, $data['label'], (int) $data['sequence']);
-        return back()->with('success', 'Stage updated.');
+        return back()->with('success', 'Programme Year updated.');
     }
 
     public function moveStage(Request $request, int $id, int $stageId)
@@ -149,14 +167,14 @@ class CurriculumController extends Controller
         $stage = $this->tenantStage($curriculum, $stageId);
         $data = $request->validate(['direction' => ['required', Rule::in(['up', 'down'])]]);
         $this->curricula->moveStage($curriculum, $stage, $data['direction']);
-        return back()->with('success', 'Stage order updated.');
+        return back()->with('success', 'Programme Year order updated.');
     }
 
     public function destroyStage(Request $request, int $id, int $stageId)
     {
         $curriculum = $this->tenantCurriculum($request, $id);
         $this->curricula->removeStage($curriculum, $this->tenantStage($curriculum, $stageId));
-        return back()->with('success', 'Stage removed.');
+        return back()->with('success', 'Programme Year removed.');
     }
 
     public function searchSubjects(Request $request, int $id)

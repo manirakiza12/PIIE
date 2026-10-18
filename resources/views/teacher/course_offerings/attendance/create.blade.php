@@ -16,7 +16,7 @@
 @if($errors->any())<div class="alert alert-danger" role="alert"><strong>This Attendance Session was not created.</strong><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
 <section class="eSection-wrap">
-    <p class="text-muted">A session records one teaching occurrence for this {{ $courseUnitLabel }}. The date must fall within the Course Offering's Academic Period.</p>
+    <p class="text-muted">A session records one teaching occurrence for this {{ $courseUnitLabel }}. The date must fall within the Course Allocation's Academic Period.</p>
     <form method="POST" action="{{ route('teacher.course_offerings.attendance.store', $offering->id) }}" class="row g-3" data-single-submit>
         @csrf
         <div class="col-12 col-md-4">

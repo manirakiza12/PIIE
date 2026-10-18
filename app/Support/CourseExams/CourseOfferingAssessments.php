@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * ── EVERY GATE IS THE ENGINE'S ──────────────────────────────────────────────
  *
- *   - which exams exist:      `published()`, in this Offering, in this tenant
+ *   - which exams exist:      `published()`, in this Allocation, in this tenant
  *   - whether the window is open: `isWithinScheduledWindow()`
  *   - whether a mark may be seen: `isResultVisibleFor()`
  *   - whether an attempt is over: `isAttemptCompleted()`
@@ -52,7 +52,7 @@ class CourseOfferingAssessments
     ) {}
 
     /**
-     * The student's assessments in this Offering, most urgent first.
+     * The student's assessments in this Allocation, most urgent first.
      *
      * @return list<array<string, mixed>>
      */

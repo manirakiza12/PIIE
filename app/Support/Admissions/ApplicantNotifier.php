@@ -43,7 +43,7 @@ class ApplicantNotifier
                 'details' => ['Student Name' => $student->name, 'Student Number' => $student->code,
                     'Course Unit' => trim($subject->code.' '.$subject->name),
                     'Academic Year' => $year->label, 'Academic Period' => $period->label,
-                    'Offering Reference' => $offering->reference ?: '#'.$offering->id,
+                    'Allocation Reference' => $offering->reference ?: '#'.$offering->id,
                     'Registration ID' => $registration->id, 'Status' => $status],
             ]);
         } catch (\Throwable $exception) {

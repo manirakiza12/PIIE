@@ -30,7 +30,7 @@ class AssignmentController extends Controller
     public function index(Request $request)
     {
         $search   = $request->search ?? '';
-        // ->k12(): the legacy K12 screen. Course Offering assignments have their
+        // ->k12(): the legacy K12 screen. Course Allocation assignments have their
         // own lecturer workspace and their own grading rules, so listing them
         // here would show a lecturer marks they cannot set and deadlines that
         // behave differently. Legacy rows have course_offering_id NULL and are
@@ -73,9 +73,9 @@ class AssignmentController extends Controller
         $validated['teacher_id']  = Auth::id();
         $validated['is_published'] = 1;
 
-        // Course Offering assignments are created through the lecturer workspace,
+        // Course Allocation assignments are created through the lecturer workspace,
         // which enforces allocation authority and the governed lifecycle, so a
-        // Course Offering id can never arrive here from this form. The validated
+        // Course Allocation id can never arrive here from this form. The validated
         // payload carries no such field, which is what makes that guarantee.
         $a = Assignment::create($validated);
         AuditLog::record('create', 'Assignments', "Created assignment: {$a->title}");
@@ -118,7 +118,7 @@ class AssignmentController extends Controller
     {
         // Security Phase 2G: a submission belongs to a school through its assignment.
         // Scoped to a K12 assignment as well as to the school: this legacy grading
-    // action does not apply the Course Offering rules (bounded marks, release
+    // action does not apply the Course Allocation rules (bounded marks, release
     // gate), so a HEI submission must be graded in the lecturer workspace.
     $sub = AssignmentSubmission::k12()
         ->whereHas('assignment', fn ($q) => $q->k12()->where('school_id', auth()->user()->school_id))
@@ -137,7 +137,7 @@ class AssignmentController extends Controller
         $class_id   = resolve_student_academic_context($student_id, $school_id)['class_id'];
 
         // ->k12() is LOAD-BEARING here, not cosmetic. This query matches
-        // `class_id IS NULL`, and a Course Offering assignment has class_id NULL
+        // `class_id IS NULL`, and a Course Allocation assignment has class_id NULL
         // by design - so without the partition every HEI assignment in the school
         // would be listed to every K12 student, who could then submit to it
         // through the two routes below. Legacy rows are unaffected.

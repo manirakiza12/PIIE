@@ -126,7 +126,7 @@ class ProgressionGateSwitchTest extends TestCase
 
         // 404, not 403, and deliberately so. This workspace answers 404 to an
         // unallocated lecturer everywhere else, and that is the stronger answer: a
-        // 403 would confirm the Course Offering EXISTS, so the URL could be used to
+        // 403 would confirm the Course Allocation EXISTS, so the URL could be used to
         // discover which offerings a lecturer may not see. A switch that changed
         // access to student content is exactly the wrong place to soften that.
         $this->actingAs($stranger)
@@ -140,7 +140,7 @@ class ProgressionGateSwitchTest extends TestCase
 
     public function test_the_control_is_not_rendered_to_someone_who_cannot_use_it(): void
     {
-        // A rendered button is a claim that the person may do the thing. Offering a
+        // A rendered button is a claim that the person may do the thing. Allocation a
         // control that will be refused teaches a lecturer that the site is broken.
         $stranger = \App\Models\User::query()->create([
             'school_id' => $this->school,

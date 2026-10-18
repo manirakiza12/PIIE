@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * Administrator bulk registration and confirmation for one Course Offering.
+ * Administrator bulk registration and confirmation for one Course Allocation.
  *
  * Every student is processed on its own through CourseRegistrationService,
  * which re-applies CourseOfferingEligibility, locking and the unique
@@ -29,12 +29,12 @@ class CourseOfferingRegistrationBatch
     {
     }
 
-    /** Current (active or deferred) members of a cohort relevant to this Offering. */
+    /** Current (active or deferred) members of a cohort relevant to this Allocation. */
     public function cohortStudentIds(CourseOffering $offering, int $cohortId): Collection
     {
         $cohort = $this->relevantCohorts($offering)->firstWhere('id', $cohortId);
         if (! $cohort) {
-            throw ValidationException::withMessages(['programme_cohort_id' => 'Choose an active Programme Cohort whose Study Plan is linked to this Course Offering.']);
+            throw ValidationException::withMessages(['programme_cohort_id' => 'Choose an active Programme Cohort whose Study Plan is linked to this Course Allocation.']);
         }
 
         return DB::table('programme_cohort_memberships')
@@ -43,7 +43,7 @@ class CourseOfferingRegistrationBatch
             ->pluck('student_id')->map(fn ($id) => (int) $id)->unique()->values();
     }
 
-    /** Active Programme Cohorts in this tenant following a Study Plan linked to the Offering. */
+    /** Active Programme Cohorts in this tenant following a Study Plan linked to the Allocation. */
     public function relevantCohorts(CourseOffering $offering): Collection
     {
         $studyPlans = DB::table('course_offering_curriculum_memberships')
@@ -66,7 +66,7 @@ class CourseOfferingRegistrationBatch
                     ->where('course_offering_id', $offering->id)->where('student_id', $studentId)->first();
                 if ($existing) {
                     return $existing->status === CourseRegistration::STATUS_DROPPED
-                        ? $this->outcome($name, self::SKIPPED, 'Previously withdrawn from this Course Offering; re-registration is not allowed.')
+                        ? $this->outcome($name, self::SKIPPED, 'Previously withdrawn from this Course Allocation; re-registration is not allowed.')
                         : $this->outcome($name, self::ALREADY, 'Already registered.');
                 }
                 try {
@@ -94,7 +94,7 @@ class CourseOfferingRegistrationBatch
                 $registration = CourseRegistration::query()->where('school_id', $schoolId)
                     ->where('course_offering_id', $offering->id)->whereKey($registrationId)->first();
                 if (! $registration) {
-                    return $this->outcome('A selected registration', self::SKIPPED, 'This registration was not found for this Course Offering.');
+                    return $this->outcome('A selected registration', self::SKIPPED, 'This registration was not found for this Course Allocation.');
                 }
                 $name = $this->studentName($schoolId, (int) $registration->student_id) ?? 'A selected student';
                 if ($registration->status === CourseRegistration::STATUS_CONFIRMED) {

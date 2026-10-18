@@ -69,7 +69,7 @@ class CourseRegistrationFeeWaiverService
                 throw new DomainException('The 20% fee waiver is available only to continuing students.');
             }
             if (! app(CourseOfferingEligibility::class)->evaluate($offering, $studentId)->eligible) {
-                throw new DomainException('The student must meet the academic requirements for this Course Offering before a fee waiver can be granted.');
+                throw new DomainException('The student must meet the academic requirements for this Course Allocation before a fee waiver can be granted.');
             }
             if (app(StudentRegistrationConfirmationEligibility::class)->allows($student)) {
                 throw new DomainException('The student already meets the current-session payment requirement or has an active waiver.');

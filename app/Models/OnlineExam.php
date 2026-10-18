@@ -37,7 +37,7 @@ class OnlineExam extends Model
      *
      * `lifecycle_status` itself is the engine's own derivation and is untouched -
      * it is what the scopes and the result views already branch on. This is only
-     * the sentence shown beside it, so the Course Offering list and the two
+     * the sentence shown beside it, so the Course Allocation list and the two
      * existing screens cannot call the same state two different things.
      */
     public const LIFECYCLE_LABELS = [
@@ -63,7 +63,7 @@ class OnlineExam extends Model
      * May the question set still be changed?
      *
      * Delegated to the engine's own `isStructurallyLocked()` rather than restated,
-     * so the Course Offering question page cannot offer to add a fourth question to
+     * so the Course Allocation question page cannot offer to add a fourth question to
      * an exam thirty students have already sat.
      */
     public function questionsAreLocked(): bool
@@ -140,10 +140,10 @@ class OnlineExam extends Model
     }
 
     /**
-     * The Course Offering this assessment is delivered through, if any.
+     * The Course Allocation this assessment is delivered through, if any.
      *
      * NULL is the ordinary case for a legacy Class/Section assessment and means
-     * exactly what it always meant: not a Course Offering assessment. The
+     * exactly what it always meant: not a Course Allocation assessment. The
      * relation is never used to widen reachability - see
      * `CourseOfferingExamAccess`, which is the only thing allowed to decide who
      * may sit it.
@@ -154,7 +154,7 @@ class OnlineExam extends Model
     }
 
     /**
-     * Assessments belonging to one Course Offering, in this tenant.
+     * Assessments belonging to one Course Allocation, in this tenant.
      *
      * The tenant is constrained even though every exam is already school-scoped:
      * a scope that forgets it would be a cross-institution read waiting for a

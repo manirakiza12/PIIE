@@ -24,14 +24,14 @@ use Illuminate\View\View;
  *
  * ── AUTHORISATION IS DONE HERE AND ONLY HERE ──────────────────────────────
  *
- * Both `CourseContentAccess` and `AssignmentAccess` resolve an Offering for a
+ * Both `CourseContentAccess` and `AssignmentAccess` resolve an Allocation for a
  * student, and both do it from the CONFIRMED REGISTRATION. They are the existing
  * authorities, so this controller uses them and adds no rule of its own. A 404
  * rather than a 403 is deliberate and consistent with the rest of the Course
- * Offering student surface: a colleague should not be able to tell from the
- * response whether an Offering exists in a tenant they cannot see.
+ * Allocation student surface: a colleague should not be able to tell from the
+ * response whether an Allocation exists in a tenant they cannot see.
  *
- * `StudentCourseHome` is then given an Offering it may assume the caller has
+ * `StudentCourseHome` is then given an Allocation it may assume the caller has
  * checked, and it does no authorisation of its own - a second gate is a second
  * place for the two to disagree, and a gate that sometimes opens is worse than
  * no gate.
@@ -55,10 +55,10 @@ class StudentCourseController extends Controller
 
         $offering = $this->assignmentAccess->resolveOffering($student, (int) $id);
 
-        // BOTH authorities, asked. They are the two the Offering is reachable
+        // BOTH authorities, asked. They are the two the Allocation is reachable
         // through today - Course Content and Assignments - and they answer the same
         // question from the same confirmed registration. Requiring both means the
-        // Course Home cannot be a way into an Offering that one of the two would
+        // Course Home cannot be a way into an Allocation that one of the two would
         // have refused, which is the whole point of having two.
         if (! $this->contentAccess->canStudentAccess($student, $offering)
             || ! $this->assignmentAccess->canStudentAccess($student, $offering)) {

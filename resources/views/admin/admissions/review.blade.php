@@ -472,7 +472,7 @@
                     <div class="fw-semibold mb-2" style="font-size:13.5px;">{{ get_phrase('Academic Assignment') }}</div>
 
                     @if($cohortPlacementPending && $admission->programme_id && $admission->intake_session_id)
-                        <div class="alert alert-info py-2" role="status"><strong>Academic Placement Pending</strong><div>The student needs an approved Programme Curriculum and Study Stage before course registration. A student group is optional.</div>@if(auth()->user()->hasPermission('academic.programme_cohort.membership'))<a class="btn btn-sm btn-outline-primary mt-2" href="{{ route('admin.academic.direct_placement') }}">Place Student in Programme</a>@endif</div>
+                        <div class="alert alert-info py-2" role="status"><strong>Academic Placement Pending</strong><div>The student needs an approved Programme Curriculum and Programme Year before course registration. A student group is optional.</div>@if(auth()->user()->hasPermission('academic.programme_cohort.membership'))<a class="btn btn-sm btn-outline-primary mt-2" href="{{ route('admin.academic.direct_placement') }}">Place Student in Programme</a>@endif</div>
                     @endif
 
                     @if($existingEnrolment)

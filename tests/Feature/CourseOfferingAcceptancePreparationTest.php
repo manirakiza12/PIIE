@@ -15,7 +15,7 @@ use Tests\TestCase;
  * COURSE OFFERING ACCEPTANCE — PREPARATION AGAINST THE REAL DATABASE.
  * ══════════════════════════════════════════════════════════════════════════════
  *
- * Creates ONE disposable DRAFT examination on the real Course Offering #5
+ * Creates ONE disposable DRAFT examination on the real Course Allocation #5
  * (BBIT1103 — Business Mathematics) with the four required question types, so a
  * lecturer can verify the genuine offering workflow in a browser. Everything else
  * in this verification ran against the isolated schema, where an offering paper
@@ -62,7 +62,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
      * a good rule and it is left completely untouched for every other suite.
      *
      * This one file has to write to the real database, because the verification the
-     * brief asks for is about the REAL Course Offering relationship and the real
+     * brief asks for is about the REAL Course Allocation relationship and the real
      * lecturer's permissions. So it boots the application itself and puts the default
      * connection back to the application's own database.
      *
@@ -122,7 +122,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
     {
         $offering = DB::table('course_offerings')->where('id', self::OFFERING_ID)->first();
 
-        $this->assertNotNull($offering, 'Course Offering #5 must exist');
+        $this->assertNotNull($offering, 'Course Allocation #5 must exist');
         $this->assertSame(1, (int) $offering->school_id, 'the offering must belong to school 1');
         $this->assertSame('BBIT1103-2026-S1', $offering->reference);
 
@@ -171,7 +171,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
 
         $this->assertTrue(
             $canTeach,
-            'The lecturer must be entitled to teach Course Offering #5 before an exam can be created on it.'
+            'The lecturer must be entitled to teach Course Allocation #5 before an exam can be created on it.'
         );
     }
 
@@ -186,7 +186,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
 
         // THE CONFIRMATION THE BRIEF ASKS FOR.
         $this->assertSame(5, (int) $exam->course_offering_id,
-            'the paper must hang off Course Offering #5, not a legacy class');
+            'the paper must hang off Course Allocation #5, not a legacy class');
         $this->assertNull($exam->class_id,
             'an offering assessment must not also be class-scoped');
 
@@ -372,7 +372,7 @@ class CourseOfferingAcceptancePreparationTest extends TestCase
             // refusing the first attempt with "The max attempts field is required" and
             // "The result release policy field is required" - which is the validation
             // working, not a defect. `subject_id` is deliberately absent: it is
-            // required only for a LEGACY exam, because a Course Offering assessment
+            // required only for a LEGACY exam, because a Course Allocation assessment
             // takes its subject from the authorised offering.
             'max_attempts' => 1,
             'result_release_policy' => 'immediate',

@@ -61,7 +61,7 @@ class LiveClassEligibility
     }
 
     /**
-     * The students a Course-Offering-backed Live Class concerns, regardless of
+     * The students a Course-Allocation-backed Live Class concerns, regardless of
      * whether the class can currently be joined.
      *
      * This exists because eligibleStudentUserIds() deliberately returns nothing
@@ -79,7 +79,7 @@ class LiveClassEligibility
      * consulted, so a student who merely shares a Programme with the class is
      * never notified and never granted access.
      *
-     * Returns an empty collection for a class that is not Offering-backed, so
+     * Returns an empty collection for a class that is not Allocation-backed, so
      * callers must not use this to decide the legacy recipient list.
      */
     public static function confirmedOfferingStudentUserIds(LiveClass $liveClass): Collection

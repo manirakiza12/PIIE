@@ -24,9 +24,9 @@
     $needsReauth = $connection && $connection->needsReauthorization();
 
     // Where to come back to after consent. Passed by the caller when it knows —
-    // the Course Offering creation page sends its own path, so a lecturer who
+    // the Course Allocation creation page sends its own path, so a lecturer who
     // connects from there lands back on the form they were filling in for the
-    // Offering, not on the generic Live Classes list.
+    // Allocation, not on the generic Live Classes list.
     //
     // A PATH ONLY, never a full URL. `GoogleAuthController::returnPath()` re-validates
     // this server-side and rejects anything that is not a same-site path, so a

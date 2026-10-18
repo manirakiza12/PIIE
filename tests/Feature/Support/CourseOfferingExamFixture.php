@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * ── WHY THIS EXISTS RATHER THAN A MIGRATION ────────────────────────────────
  *
- * The Course Offering schema is large - registrations, allocations, content,
+ * The Course Allocation schema is large - registrations, allocations, content,
  * modules, lessons, progress, live classes, attendance - and the exam feature
  * reads four tables of it: `course_offerings`, `course_registrations`,
  * `course_offering_lecturer_allocations` and the two academic-calendar tables.
@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Schema;
  * So the real migrations are RUN, and only where the table is missing. That is the
  * important difference: a hand-written `Schema::create` can quietly disagree with
  * production and a test will pass against the fiction, whereas a migration can
- * only produce what production produces. The course offering helper methods below
+ * only produce what production produces. The course allocation helper methods below
  * therefore insert real rows through the real columns.
  *
  * ── THE ASSESSMENT TABLES COME FROM THE EXAM HELPER ───────────────────────
@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\Schema;
 trait CourseOfferingExamFixture
 {
     /**
-     * Build the exam engine's own tables, then the four Course Offering ones the
+     * Build the exam engine's own tables, then the four Course Allocation ones the
      * exam feature reads.
      *
      * ── WHY THE TABLES ARE DECLARED HERE RATHER THAN MIGRATED ───────────────
@@ -369,10 +369,10 @@ trait CourseOfferingExamFixture
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * A Course Offering in the institution, in its term.
+     * A Course Allocation in the institution, in its term.
      *
      * The subject is created here because the exam's own `subject_id` is DERIVED
-     * from the Offering rather than chosen by a lecturer - which is the whole point
+     * from the Allocation rather than chosen by a lecturer - which is the whole point
      * of not faking delivery through the legacy Class/Section graph.
      */
     protected function makeOffering(int $schoolId = 1, array $overrides = []): CourseOffering
@@ -416,7 +416,7 @@ trait CourseOfferingExamFixture
     }
 
     /**
-     * A student CONFIRMED on this Offering.
+     * A student CONFIRMED on this Allocation.
      *
      * Confirmed, not merely registered: `registered` is a state the student
      * eligibility rules deliberately refuse, and a fixture that used it would
@@ -440,7 +440,7 @@ trait CourseOfferingExamFixture
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * Another institution, with its own Offering and its own confirmed student.
+     * Another institution, with its own Allocation and its own confirmed student.
      *
      * BUILT ONCE and memoised. Calling this twice created two different schools,
      * and a test that compared "their year" against one call while asserting
@@ -482,7 +482,7 @@ trait CourseOfferingExamFixture
         ];
     }
 
-    /** A student of THIS institution who is NOT on the given Offering. */
+    /** A student of THIS institution who is NOT on the given Allocation. */
     protected function unconfirmedStudentFor(CourseOffering $offering, string $name = 'Not On This Course'): User
     {
         $student = $this->makeUser(7, $offering->school_id, $name);

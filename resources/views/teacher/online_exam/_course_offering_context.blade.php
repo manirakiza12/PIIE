@@ -4,7 +4,7 @@
     ── WHY THIS IS A PARTIAL AND NOT INLINE ────────────────────────────────────
 
     The same four facts have to appear in three places: the generic create page once
-    an Offering is chosen, the generic edit page for an Offering-backed exam, and the
+    an Allocation is chosen, the generic edit page for an Allocation-backed exam, and the
     offering-scoped create page. Inline, they would be three copies that could
     disagree about what "the academic context" is - and the two that had already been
     written used different labels, which is how a course's header came to say
@@ -12,7 +12,7 @@
 
     ── WHY IT IS READ-ONLY ─────────────────────────────────────────────────────
 
-    Every value here comes from the Course Offering row, read through relations the
+    Every value here comes from the Course Allocation row, read through relations the
     rest of the product already uses. None of it is a `<select>`, and none of it is
     a hidden input the server reads back. A lecturer cannot create an "assessment
     for this course" that is actually about another Course Unit, cannot point it at a
@@ -23,7 +23,7 @@
 
     `academic_term('subject', ...)` resolves to the institution's own wording for the
     column, which is "Course Unit" in the higher-education configuration and "Subject"
-    elsewhere. The literal labels here match what the Course Offering workspace and
+    elsewhere. The literal labels here match what the Course Allocation workspace and
     the offering-scoped exam form already print, so a lecturer reading two pages of
     the same workflow sees one vocabulary.
 --}}
@@ -37,16 +37,16 @@
 
 <div class="card border-primary-subtle mb-4" data-testid="exam-offering-context">
     <div class="card-header bg-body-tertiary">
-        {{ get_phrase('Course Offering exam') }}
+        {{ get_phrase('Course Allocation exam') }}
         <span class="text-muted small fw-normal">
             {{ get_phrase('This academic context comes from the course. It cannot be changed here.') }}
         </span>
     </div>
     <div class="card-body py-3">
         <dl class="row mb-0 small">
-            <dt class="col-sm-3 col-lg-2">{{ get_phrase('Course Offering') }}</dt>
+            <dt class="col-sm-3 col-lg-2">{{ get_phrase('Course Allocation') }}</dt>
             <dd class="col-sm-9 col-lg-10 mb-2" data-testid="exam-offering-reference">
-                {{ $offering->subject?->name ?? (get_phrase('Course Offering') . ' #' . $offering->id) }}
+                {{ $offering->subject?->name ?? (get_phrase('Course Allocation') . ' #' . $offering->id) }}
                 @if($offering->reference)
                     <span class="text-muted">({{ $offering->reference }})</span>
                 @endif
@@ -57,7 +57,7 @@
                 @if($courseUnit)
                     {{ $courseUnit->code ? $courseUnit->code . ' — ' : '' }}{{ $courseUnit->name }}
                 @else
-                    <span class="text-muted">{{ get_phrase('Not set on this Course Offering') }}</span>
+                    <span class="text-muted">{{ get_phrase('Not set on this Course Allocation') }}</span>
                 @endif
             </dd>
 
@@ -78,7 +78,7 @@
         </dl>
 
         <p class="text-muted small mb-0 mt-3">
-            {{ get_phrase('Only students with a confirmed registration on this Course Offering will receive this exam. A class, programme or academic session is deliberately not chosen: choosing one would enrol every student of it and bypass that confirmation.') }}
+            {{ get_phrase('Only students with a confirmed registration on this Course Allocation will receive this exam. A class, programme or academic session is deliberately not chosen: choosing one would enrol every student of it and bypass that confirmation.') }}
         </p>
     </div>
 </div>

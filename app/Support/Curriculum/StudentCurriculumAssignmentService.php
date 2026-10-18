@@ -70,7 +70,7 @@ class StudentCurriculumAssignmentService
             $curriculum = $this->assignableCurriculum($schoolId, $programmeId, $curriculumId);
             $stage = \App\Models\CurriculumStage::query()->where('school_id', $schoolId)->where('curriculum_id', $curriculumId)->whereKey($stageId)->first();
             if (! $stage) {
-                throw new DomainException('Choose a Study Stage from the selected approved Programme Curriculum.');
+                throw new DomainException('Choose a Programme Year from the selected approved Programme Curriculum.');
             }
             $this->assertEffectiveDateNotBeforeCurriculumFloor($curriculum, $effectiveYear);
             $profile = StudentProfile::query()->where('school_id', $schoolId)->where('user_id', $studentId)->lockForUpdate()->first();
@@ -114,7 +114,7 @@ class StudentCurriculumAssignmentService
         }
         $year = $yearQuery->first();
         if (! $year) {
-            throw new DomainException('Offering AcademicYear was not found in this tenant.');
+            throw new DomainException('Allocation AcademicYear was not found in this tenant.');
         }
 
         $query = StudentCurriculumAssignment::query()

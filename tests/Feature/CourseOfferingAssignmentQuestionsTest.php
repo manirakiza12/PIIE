@@ -19,7 +19,7 @@ use Tests\Feature\Support\AssignmentFixture;
 use Tests\TestCase;
 
 /**
- * Question-based Course Offering Assignments, end to end.
+ * Question-based Course Allocation Assignments, end to end.
  *
  * THE THING UNDER TEST IS A SET OF PROMISES, NOT A SCREEN
  *
@@ -272,8 +272,8 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
 
         // 404, NOT 403, AND THAT IS DELIBERATE.
         //
-        // `CourseContentAccess::resolveOffering` refuses an Offering the actor cannot
-        // reach with a 404, so this lecturer learns nothing about which Offerings
+        // `CourseContentAccess::resolveOffering` refuses an Allocation the actor cannot
+        // reach with a 404, so this lecturer learns nothing about which Allocations
         // exist - and, just as importantly, nothing about what a COLLEAGUE is
         // teaching. A 403 here would confirm that the id addresses something real.
         $this->actingAs($stranger)
@@ -1414,8 +1414,8 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
 
         // 404, NOT 403, AND THAT IS DELIBERATE.
         //
-        // `CourseContentAccess::resolveOffering` refuses an Offering the actor cannot
-        // reach with a 404, so this lecturer learns nothing about which Offerings
+        // `CourseContentAccess::resolveOffering` refuses an Allocation the actor cannot
+        // reach with a 404, so this lecturer learns nothing about which Allocations
         // exist - and, just as importantly, nothing about what a COLLEAGUE is
         // teaching. A 403 here would confirm that the id addresses something real.        // And the mark is refused by the SAME check, so there is no second path
         // into the grading screen that could forget it.
@@ -1803,7 +1803,7 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
             ->get('/student/assignments')
             ->assertOk();
 
-        // A question cannot be attached to a K12 assignment: there is no Offering
+        // A question cannot be attached to a K12 assignment: there is no Allocation
         // to check an allocation against, and the K12 screens are not question-based.
         $this->actingAs($this->lecturer)
             ->post("/teacher/course-offerings/{$this->offering->id}/assignments/{$k12->id}/questions", [
@@ -1916,8 +1916,8 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
         // same tenant - so only the OFFERING differs. A second tenant alone would
         // not prove the boundary, because the school check would catch it anyway.
         //
-        // 404: the lecturer holds an allocation on the FIRST Offering and not on the
-        // second, and the Offering resolver refuses to resolve the one they were
+        // 404: the lecturer holds an allocation on the FIRST Allocation and not on the
+        // second, and the Allocation resolver refuses to resolve the one they were
         // given, so the evidence is never even looked for.
         $this->actingAs($this->lecturer)
             ->get("/teacher/course-offerings/{$other['offeringId']}/assignments/{$assignment->id}/submissions/{$submission->id}/media/{$image->id}")
@@ -1943,10 +1943,10 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
         $theirs = $this->otherTenantAssignment();
 
         // BOTH are 404, and that is the point: a cross-tenant actor is refused by
-        // the SAME Offering resolver that refuses a legitimate lecturer on the
+        // the SAME Allocation resolver that refuses a legitimate lecturer on the
         // wrong delivery, so there is no separate cross-tenant code path that could
         // be got wrong. The first request carries our assignment id inside THEIR
-        // Offering; the second carries it inside OURS. Neither resolves.
+        // Allocation; the second carries it inside OURS. Neither resolves.
         $this->actingAs($theirs['lecturer'])
             ->get("/teacher/course-offerings/{$theirs['offeringId']}/assignments/{$assignment->id}/submissions/{$submission->id}/media/{$image->id}")
             ->assertNotFound();
