@@ -985,6 +985,10 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::post('admin/academic-structure/current', [\App\Http\Controllers\AcademicStructureController::class, 'setCurrent'])->name('admin.academic_structure.current')->middleware('admin_permission');
     Route::post('admin/academic-structure/years/{yearId}/status', [\App\Http\Controllers\AcademicStructureController::class, 'transitionYear'])->name('admin.academic_structure.years.status')->middleware('admin_permission');
     Route::post('admin/academic-structure/periods/{periodId}/status', [\App\Http\Controllers\AcademicStructureController::class, 'transitionPeriod'])->name('admin.academic_structure.periods.status')->middleware('admin_permission');
+    Route::get('admin/academic-structure/{kind}/{recordId}/edit', [\App\Http\Controllers\AcademicStructureController::class, 'record'])->name('admin.academic_structure.edit')->middleware('admin_permission')->where('kind', 'years|periods')->whereNumber('recordId');
+    Route::get('admin/academic-structure/{kind}/{recordId}', [\App\Http\Controllers\AcademicStructureController::class, 'record'])->name('admin.academic_structure.show')->middleware('admin_permission')->where('kind', 'years|periods')->whereNumber('recordId');
+    Route::put('admin/academic-structure/{kind}/{recordId}', [\App\Http\Controllers\AcademicStructureController::class, 'update'])->name('admin.academic_structure.update')->middleware('admin_permission')->where('kind', 'years|periods')->whereNumber('recordId');
+    Route::delete('admin/academic-structure/{kind}/{recordId}', [\App\Http\Controllers\AcademicStructureController::class, 'destroy'])->name('admin.academic_structure.destroy')->middleware('admin_permission')->where('kind', 'years|periods')->whereNumber('recordId');
     Route::get('admin/session_manager', 'sessionManager')->name('admin.settings.session_manager')->middleware('admin_permission');
     Route::get('admin/session_manager/active_session/{id}', 'activeSession')->name('admin.session_manager.active_session');
     Route::get('admin/session_manager/create', 'createSession')->name('admin.create.session');

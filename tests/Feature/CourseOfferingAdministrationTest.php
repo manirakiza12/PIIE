@@ -1391,6 +1391,69 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         ]);
     }
 
+    public function test_calendar_records_have_view_edit_update_and_delete_with_tenant_boundaries(): void
+    {
+        $a = $this->tenants[1];
+        $this->actingAs($this->staff(1, ['academic.structure.manage']));
+        $yearData = ['label' => '2030/2031', 'start_date' => '2030-01-01', 'end_date' => '2030-12-31'];
+        $this->post(route('admin.academic_structure.years.store'), $yearData)->assertSessionHasNoErrors();
+        $year = (int) DB::table('academic_years')->where('label', '2030/2031')->value('id');
+        foreach (['show', 'edit'] as $action) {
+            $this->get(route('admin.academic_structure.'.$action, ['years', $year]))->assertOk()->assertSee('2030/2031');
+            $this->get(route('admin.academic_structure.'.$action, ['periods', $a['period']]))->assertOk();
+            $this->get(route('admin.academic_structure.'.$action, ['years', $this->tenants[2]['year']]))->assertNotFound();
+        }
+        $this->put(route('admin.academic_structure.update', ['years', $year]), array_replace($yearData, ['label' => 'Revised year']))
+            ->assertSessionHasNoErrors()->assertRedirect(route('admin.academic_structure.show', ['years', $year]));
+        $data = ['academic_year_id' => $year, 'type' => 'semester', 'sequence' => 1, 'label' => 'First semester', 'start_date' => '2030-01-01', 'end_date' => '2030-06-30'];
+        $this->post(route('admin.academic_structure.periods.store'), $data)->assertSessionHasNoErrors();
+        $period = (int) DB::table('academic_periods')->where('academic_year_id', $year)->value('id');
+        $this->put(route('admin.academic_structure.update', ['periods', $period]), array_replace($data, ['label' => 'Revised semester', 'end_date' => '2030-05-31']))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('academic_periods', ['id' => $period, 'label' => 'Revised semester', 'end_date' => '2030-05-31', 'status' => 'planned']);
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $period]))->assertSessionHasErrors('confirm_deletion');
+        $this->delete(route('admin.academic_structure.destroy', ['years', $year]), ['confirm_deletion' => 1])->assertSessionHasErrors('delete');
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $period]), ['confirm_deletion' => 1])->assertRedirect(route('admin.academic_structure.index', ['section' => 'semesters']));
+        $this->assertDatabaseMissing('academic_periods', ['id' => $period]);
+
+        // These reference tables are omitted from this test class's minimal schema.
+        Schema::table('sessions', fn (Blueprint $t) => $t->unsignedBigInteger('academic_year_id')->nullable());
+        Schema::create('programme_cohorts', function (Blueprint $t) { $t->id(); $t->unsignedBigInteger('entry_academic_year_id'); });
+        Schema::create('student_curriculum_assignments', function (Blueprint $t) { $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('entry_academic_year_id'); $t->unsignedBigInteger('effective_from_academic_year_id'); });
+        $this->delete(route('admin.academic_structure.destroy', ['years', $year]), ['confirm_deletion' => 1])->assertSessionHasNoErrors()->assertRedirect(route('admin.academic_structure.index'));
+        $this->assertDatabaseMissing('academic_years', ['id' => $year]);
+        $this->put(route('admin.academic_structure.update', ['years', $this->tenants[2]['year']]), $yearData)->assertNotFound();
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $this->tenants[2]['period']]), ['confirm_deletion' => 1])->assertNotFound();
+        $this->actingAs($this->staff(1, []))->get(route('admin.academic_structure.edit', ['years', $a['year']]))->assertForbidden();
+        $this->put(route('admin.academic_structure.update', ['years', $a['year']]), $yearData)->assertForbidden();
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $a['period']]), ['confirm_deletion' => 1])->assertForbidden();
+    }
+
+    public function test_calendar_edits_validate_dates_sequence_current_context_and_linked_history(): void
+    {
+        $a = $this->tenants[1];
+        $this->actingAs($this->staff(1, ['academic.structure.manage']));
+        $year = \App\Models\AcademicYear::findOrFail($a['year']);
+        $period = \App\Models\AcademicPeriod::findOrFail($a['period']);
+        $data = $period->only(['academic_year_id', 'type', 'sequence', 'label']);
+        $data += ['start_date' => $period->start_date->toDateString(), 'end_date' => $period->end_date->toDateString()];
+        $yearData = ['label' => $year->label, 'start_date' => $year->start_date->toDateString(), 'end_date' => $year->end_date->toDateString()];
+        $this->put(route('admin.academic_structure.update', ['years', $year->id]), array_replace($yearData, ['start_date' => '2026-05-01']))->assertSessionHasErrors('start_date');
+        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['end_date' => '2027-12-31']))->assertSessionHasErrors('start_date');
+        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['academic_year_id' => $this->tenants[2]['year']]))->assertSessionHasErrors('academic_year_id');
+        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['type' => 'term']))->assertSessionHasErrors('type');
+        $this->post(route('admin.academic_structure.periods.store'), $data)->assertSessionHasErrors('sequence');
+        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), $data + ['status' => 'completed'])->assertSessionHasErrors('status');
+        $this->createOffering($a, 'PRESERVE-CALENDAR');
+        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['sequence' => 3]))->assertSessionHasErrors('start_date');
+        $this->put(route('admin.academic_structure.update', ['years', $year->id]), array_replace($yearData, ['end_date' => '2027-12-31']))->assertSessionHasErrors('start_date');
+        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['label' => 'Corrected label']))->assertSessionHasNoErrors();
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $period->id]), ['confirm_deletion' => 1])->assertSessionHasErrors('delete');
+        DB::table('schools')->where('id', $a['school'])->update(['current_academic_year_id' => $year->id, 'current_academic_period_id' => $period->id]);
+        $this->delete(route('admin.academic_structure.destroy', ['years', $year->id]), ['confirm_deletion' => 1])->assertSessionHasErrors('delete');
+        $this->assertDatabaseHas('academic_periods', ['id' => $period->id, 'sequence' => $data['sequence'], 'label' => 'Corrected label']);
+        $this->assertDatabaseHas('course_offerings', ['reference' => 'PRESERVE-CALENDAR']);
+    }
+
     private function createAcademicTables(): void
     {
         Schema::create('academic_years', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('school_id'); $t->string('label'); $t->date('start_date'); $t->date('end_date'); $t->string('status'); $t->timestamps(); });

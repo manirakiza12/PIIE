@@ -17,6 +17,17 @@ class AdminPermission
      * @var array<string, array<int, string>>
      */
     private const MODULE_ROUTES = [
+        'admin.academic_structure.index' => [
+            'admin.academic_structure.show',
+            'admin.academic_structure.edit',
+            'admin.academic_structure.update',
+            'admin.academic_structure.destroy',
+            'admin.academic_structure.years.store',
+            'admin.academic_structure.periods.store',
+            'admin.academic_structure.years.status',
+            'admin.academic_structure.periods.status',
+            'admin.academic_structure.current',
+        ],
         'admin.department_list' => [
             'admin.department.schools_faculties',
             'admin.department.departments',

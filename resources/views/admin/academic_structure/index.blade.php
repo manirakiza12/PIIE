@@ -90,16 +90,20 @@
             <h5>{{ $showPeriods ? $academicPeriodLabel.'s by Academic Year' : 'Academic Years' }}</h5>
             @forelse($years->when($showPeriods && request('year_id'), fn ($items) => $items->where('id', request('year_id'))) as $year)
                 <div class="border rounded p-3 mb-3"><div class="d-flex justify-content-between"><strong>{{ $year->label }}</strong><span>{{ ucfirst($year->status) }}</span></div><div class="text-muted">{{ $year->start_date->format('Y-m-d') }} — {{ $year->end_date->format('Y-m-d') }}</div>
-                    @if($year->status === 'planned')
+                    @if(!$showPeriods)
+                    @include('admin.academic_structure.actions', ['record' => $year, 'kind' => 'years'])
+                    @endif
+                    @if(!$showPeriods && $year->status === 'planned')
                         <form method="post" action="{{ route('admin.academic_structure.years.status', $year->id) }}" class="d-inline-block mt-2">@csrf<input type="hidden" name="status" value="active"><button class="btn btn-sm btn-outline-primary" type="submit">Activate year</button></form>
                     @endif
-                    @if($year->status === 'active' && ! $year->periods->contains(fn ($period) => in_array($period->status, ['planned', 'active'], true)))
+                    @if(!$showPeriods && $year->status === 'active' && ! $year->periods->contains(fn ($period) => in_array($period->status, ['planned', 'active'], true)))
                         <form method="post" action="{{ route('admin.academic_structure.years.status', $year->id) }}" class="d-inline-block mt-2">@csrf<input type="hidden" name="status" value="completed"><button class="btn btn-sm btn-outline-success" type="submit">Complete year</button></form>
                     @endif
-                    @if(in_array($year->status, ['planned', 'active'], true))
+                    @if(!$showPeriods && in_array($year->status, ['planned', 'active'], true))
                         <form method="post" action="{{ route('admin.academic_structure.years.status', $year->id) }}" class="d-inline-block mt-2" onsubmit="return confirm('Cancel this academic year? Historical academic records will be preserved.');">@csrf<input type="hidden" name="status" value="cancelled"><input type="hidden" name="confirm_cancellation" value="1"><button class="btn btn-sm btn-outline-danger" type="submit">Cancel year</button></form>
                     @endif
-                    @if($showPeriods && $year->periods->isNotEmpty())<ul class="mb-0 mt-2">@foreach($year->periods as $period)<li>{{ $academicPeriodLabel }} {{ $period->sequence }} · {{ $period->start_date->format('Y-m-d') }} — {{ $period->end_date->format('Y-m-d') }} · {{ ucfirst($period->status) }}
+                    @if($showPeriods && $year->periods->isNotEmpty())<ul class="mb-0 mt-2">@foreach($year->periods as $period)<li class="border-top pt-3 mt-3"><strong>{{ $period->label }}</strong> · {{ $academicPeriodLabel }} {{ $period->sequence }} · {{ $period->start_date->format('Y-m-d') }} — {{ $period->end_date->format('Y-m-d') }} · {{ ucfirst($period->status) }}
+                        @include('admin.academic_structure.actions', ['record' => $period, 'kind' => 'periods'])
                         @if($period->status === 'planned')
                             <form method="post" action="{{ route('admin.academic_structure.periods.status', $period->id) }}" class="d-inline-block">@csrf<input type="hidden" name="status" value="active"><button class="btn btn-sm btn-outline-primary" type="submit">Activate</button></form>
                         @elseif($period->status === 'active')
