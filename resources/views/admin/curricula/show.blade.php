@@ -5,6 +5,7 @@
     $courseUnitLabel = app(\App\Support\TenantConfiguration::class)->terminology($curriculum->school)['course_unit'] ?? 'Course Unit';
     $periodLabel = $calendarPattern === 'semester' ? 'Semester' : 'Term';
     $isDraft = $curriculum->status === 'draft';
+    $isOwner = \App\Support\Curriculum\CurriculumOwnerAccess::allows(auth()->user(), (int) $curriculum->school_id);
     $useUnifiedUnitSetup = $isDraft && $canManage && auth()->user()->hasPermission('academic.structure');
     $totalCredits = $curriculum->memberships->sum(fn ($membership) => (float) $membership->credits);
 @endphp
@@ -20,11 +21,22 @@
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger"><strong>{{ get_phrase('Please correct the following:') }}</strong><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 @if($isDraft)<div class="alert alert-warning"><strong>{{ get_phrase('Draft — not official') }}.</strong> {{ get_phrase('Changes are editable until approval. Approval makes the structure immutable.') }}</div>
+@elseif($isOwner)<div class="alert alert-info"><strong>Owner access.</strong> You can reopen this {{ $curriculum->status }} curriculum for editing{{ $curriculum->status === 'retired' ? ' or restore it to Approved' : '' }} using the controls below.</div>
 @elseif($curriculum->status === 'approved')<div class="alert alert-success"><strong>{{ get_phrase('Official approved Curriculum') }}.</strong> {{ get_phrase('This academic structure is read-only. Material changes require a successor version.') }}</div>
 @else<div class="alert alert-secondary"><strong>{{ get_phrase('Retired historical Curriculum') }}.</strong> {{ get_phrase('This record is preserved and read-only.') }}</div>@endif
 
 
 
+@if($isOwner && !$isDraft)
+<section class="eSection-wrap mb-3" id="owner-controls"><h5>Owner curriculum controls</h5>
+    <p>Reopen this same version to change its details, Programme Years, Course Units, credits and prerequisites. Approve it again when finished to enable new placements, allocation links and student registration or confirmation. Existing records are retained. Your reason and the current structure are recorded in the audit history.</p>
+    <form method="POST" action="{{ route('admin.curricula.owner_status', $curriculum->id) }}">@csrf
+        <div class="mb-3"><label for="owner-status" class="form-label">Action</label><select id="owner-status" name="status" class="form-select"><option value="draft">Reopen for Editing</option>@if($curriculum->status === 'retired')<option value="approved">Restore to Approved</option>@endif</select></div>
+        <div class="mb-3"><label for="owner-reason" class="form-label">Reason</label><textarea id="owner-reason" name="reason" class="form-control" maxlength="500" required>{{ old('reason') }}</textarea></div>
+        <button class="btn btn-primary">Apply Owner Change</button>
+    </form>
+</section>
+@endif
 <section class="eSection-wrap mb-3" aria-labelledby="metadata-heading">
     <h5 id="metadata-heading">{{ get_phrase('Curriculum Details') }}</h5>
     @if($isDraft && $canManage)

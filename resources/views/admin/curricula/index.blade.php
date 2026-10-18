@@ -36,6 +36,8 @@
                 <td><div class="d-flex flex-wrap gap-2"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.curricula.show', $row->id) }}">View</a>
                 @if($row->status === 'draft' && auth()->user()->hasPermission('academic.curriculum.manage'))
                 <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#metadata-heading">Edit</a><form method="POST" action="{{ route('admin.curricula.destroy', $row->id) }}" onsubmit="return confirm('Delete this draft curriculum and its structure?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete</button></form>
+                @elseif(\App\Support\Curriculum\CurriculumOwnerAccess::allows(auth()->user(), (int) auth()->user()->school_id))
+                <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#owner-controls">Edit / Restore</a>
                 @else<span class="small text-muted">Official structure is protected</span>@endif
                 </div></td>
             </tr>

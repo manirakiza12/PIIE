@@ -15,6 +15,33 @@ use Illuminate\Validation\ValidationException;
 
 class CurriculumFoundationService
 {
+    public function ownerChangeStatus(Curriculum $curriculum, string $status, string $reason): Curriculum
+    {
+        abort_unless(CurriculumOwnerAccess::allows(auth()->user(), (int) $curriculum->school_id), 403);
+        $this->validate(compact('status', 'reason'), [
+            'status' => ['required', 'in:draft,approved'],
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+        if (trim($reason) === '') $this->fail('reason', 'Explain the owner correction.');
+
+        return DB::transaction(function () use ($curriculum, $status, $reason): Curriculum {
+            $locked = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
+            $previous = $locked->status;
+            if (!in_array($previous, ['approved', 'retired'], true) || $previous === $status) {
+                $this->fail('status', 'Choose an approved or retired curriculum for owner correction.');
+            }
+            if ($status === 'approved') {
+                foreach ($this->approvalBlockers($locked) as $field => $message) $this->fail($field, $message);
+            }
+            $snapshot = $locked->toArray();
+            $snapshot['years'] = $locked->stages()->get()->toArray();
+            $snapshot['course_units'] = $locked->memberships()->with('prerequisites')->get()->toArray();
+            DB::table('curricula')->where('school_id', $locked->school_id)->where('id', $locked->id)->update(['status' => $status, 'updated_at' => now()]);
+            $this->audit('CURRICULUM_OWNER_STATUS_CHANGED', $locked, $snapshot, ['status' => $status, 'reason' => trim($reason)]);
+            return $locked->refresh();
+        });
+    }
+
     public function deleteDraft(Curriculum $curriculum): void
     {
         DB::transaction(function () use ($curriculum): void {
