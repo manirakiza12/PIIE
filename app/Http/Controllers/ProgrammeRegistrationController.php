@@ -66,10 +66,10 @@ class ProgrammeRegistrationController extends Controller
         $offerings = $c['ready'] ? $this->offerings($c) : collect();
         $subjects = DB::table('subjects')->where('school_id', $c['schoolId'])->whereIn('id', $offerings->pluck('subject_id'))->get()->keyBy('id');
         $students = $c['ready'] ? $this->students($c)->paginate(30)->withQueryString() : null;
-        $registrations = DB::table('course_registrations')->where('school_id', $c['schoolId'])
-            ->whereIn('course_offering_id', $offerings->pluck('id'))->whereIn('student_id', $students?->pluck('id') ?? [])->get()->groupBy('student_id');
-        $placements = DB::table('student_curriculum_assignments')->where('school_id', $c['schoolId'])
-            ->whereIn('student_id', $students?->pluck('id') ?? [])->whereNull('ended_at')->get()->groupBy('student_id');
+        $registrations = $students?->isNotEmpty() ? DB::table('course_registrations')->where('school_id', $c['schoolId'])
+            ->whereIn('course_offering_id', $offerings->pluck('id'))->whereIn('student_id', $students->pluck('id'))->get()->groupBy('student_id') : collect();
+        $placements = $students?->isNotEmpty() ? DB::table('student_curriculum_assignments')->where('school_id', $c['schoolId'])
+            ->whereIn('student_id', $students->pluck('id'))->whereNull('ended_at')->get()->groupBy('student_id') : collect();
         $cells = [];
         foreach ($students ?? [] as $student) {
             foreach ($offerings as $offering) {

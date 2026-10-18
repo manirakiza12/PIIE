@@ -192,7 +192,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $allocation = $this->createOffering($this->tenants[1], 'STANDALONE');
         $foreign = $this->createOffering($this->tenants[2], 'FOREIGN');
         $this->actingAs($this->staff(1, [], ['role_id' => 2]));
-        $this->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Manage Registrations')->assertDontSee('FOREIGN');
+        $this->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Register Students for Courses')->assertDontSee('FOREIGN');
         $this->get(route('admin.lecturer_assignments.index'))->assertOk()->assertSee('Manage Assignments')->assertDontSee('FOREIGN');
         $this->get(route('admin.course_registrations.index', ['allocation_id' => $allocation->id]))->assertOk()->assertSee('Student Registration');
         $this->get(route('admin.lecturer_assignments.index', ['allocation_id' => $allocation->id]))->assertOk();
@@ -990,7 +990,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $this->get(route('admin.academic_structure.index', ['section' => 'semesters']))
             ->assertOk()
             ->assertSee('Current academic context updated.')
-            ->assertSee('2026 (2026-01-01) — Semester 1')
+            ->assertSee('2026 (01/01/26) — Semester 1')
             ->assertSee('Semester 1')
             ->assertSee('Academic year 2026-2027')
             ->assertSee('class="eBtn eBtn-primary" type="submit">Save current selection</button>', false);
