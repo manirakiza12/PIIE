@@ -193,6 +193,10 @@ class CurriculumFoundationService
         if ($stage->memberships()->exists()) {
             $this->fail('stage', 'Move or remove this Programme Year’s Course Units before removing the Programme Year.');
         }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('student_curriculum_assignments', 'entry_curriculum_stage_id')
+            && DB::table('student_curriculum_assignments')->where('entry_curriculum_stage_id', $stage->id)->exists()) {
+            $this->fail('stage', 'This Programme Year is used by student placements and cannot be deleted.');
+        }
         $before = $stage->only(['id', 'label', 'sequence']);
         $stage->delete();
         $this->audit('CURRICULUM_STAGE_REMOVED', $curriculum, $before, []);

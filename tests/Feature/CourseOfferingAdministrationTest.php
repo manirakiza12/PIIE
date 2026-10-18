@@ -108,6 +108,44 @@ class CourseOfferingAdministrationTest extends TestCase
         }
     }
 
+    public function test_owner_has_programme_year_crud_directly_for_retired_curricula(): void
+    {
+        $tenant = $this->tenants[1];
+        $id = $tenant['curriculum'];
+        DB::table('curricula')->where('id', $id)->update(['status' => 'retired']);
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+        $page = $this->get(route('admin.programme_years.index', ['curriculum_id' => $id]))->assertOk()->assertSee('Edit Year')->assertSee('Delete Year');
+        $this->assertStringNotContainsString('Use a successor curriculum', $page->getContent());
+        if (getenv('PIIE_CAPTURE_PROGRAMME_WORKSPACE') === '1') file_put_contents(base_path('output/programme-workspace-browser/years-owner-retired.html'), $page->getContent());
+        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Corrected Year One', 'sequence' => 1, 'reason' => 'Owner fixes retired year'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'draft']);
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $tenant['stage'], 'label' => 'Corrected Year One']);
+        DB::table('curricula')->where('id', $id)->update(['status' => 'approved']);
+        $this->post(route('admin.programme_years.store'), ['curriculum_id' => $id, 'label' => 'Year Two', 'sequence' => 2, 'reason' => 'Owner adds second year'])->assertSessionHasNoErrors();
+        $newId = DB::table('curriculum_stages')->where('curriculum_id', $id)->where('sequence', 2)->value('id');
+        $this->get(route('admin.programme_years.show', $newId))->assertOk()->assertSee('Year Two');
+        DB::table('curricula')->where('id', $id)->update(['status' => 'retired']);
+        $this->delete(route('admin.programme_years.destroy', $tenant['stage']), ['reason' => 'Cannot remove populated year'])->assertSessionHasErrors('stage');
+        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'retired']);
+        Schema::create('student_curriculum_assignments', function (Blueprint $table): void { $table->id(); $table->unsignedBigInteger('entry_curriculum_stage_id'); });
+        DB::table('student_curriculum_assignments')->insert(['entry_curriculum_stage_id' => $newId]);
+        $this->delete(route('admin.programme_years.destroy', $newId), ['reason' => 'Student reference must be protected'])->assertSessionHasErrors('stage');
+        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'retired']);
+        DB::table('student_curriculum_assignments')->delete();
+        $this->delete(route('admin.programme_years.destroy', $newId), ['reason' => 'Remove unused year'])->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('curriculum_stages', ['id' => $newId]);
+        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'draft']);
+    }
+
+    public function test_non_owner_cannot_change_official_programme_years(): void
+    {
+        $tenant = $this->tenants[1];
+        $this->actingAs($this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage']));
+        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Forbidden', 'sequence' => 1, 'reason' => 'No owner access'])->assertSessionHasErrors('curriculum');
+        $this->post(route('admin.programme_years.store'), ['curriculum_id' => $tenant['curriculum'], 'label' => 'Year Two', 'sequence' => 2, 'reason' => 'No owner access'])->assertSessionHasErrors('curriculum');
+        $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'status' => 'approved']);
+    }
+
     public function test_standalone_programme_years_crud_and_tenant_boundaries(): void
     {
         $tenant = $this->tenants[1];
@@ -123,7 +161,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $this->put(route('admin.programme_years.update', $this->tenants[2]['stage']), ['label' => 'Forbidden', 'sequence' => 1])->assertNotFound();
         $this->delete(route('admin.programme_years.destroy', $year))->assertSessionHasNoErrors();
         $this->assertDatabaseMissing('curriculum_stages', ['id' => $year]);
-        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Cannot edit', 'sequence' => 1])->assertSessionHasErrors('curriculum');
+        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Needs reason', 'sequence' => 1])->assertSessionHasErrors('reason');
     }
 
     public function test_curriculum_only_staff_keep_standalone_placement_editing_without_catalogue_grants(): void
