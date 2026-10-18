@@ -16,6 +16,61 @@ use Illuminate\Support\Facades\DB;
 
 class StudentCurriculumAssignmentService
 {
+    public function correctUnusedDirectPlacement(int $schoolId, int $id, int $curriculumId, int $stageId, int $yearId, int $actorId, string $reason): StudentCurriculumAssignment
+    {
+        return DB::transaction(function () use ($schoolId, $id, $curriculumId, $stageId, $yearId, $actorId, $reason) {
+            [$placement, $actor] = $this->unusedDirectPlacement($schoolId, $id, $actorId);
+            $curriculum = Curriculum::where('school_id', $schoolId)->findOrFail($curriculumId);
+            $this->programme($schoolId, (int) $curriculum->programme_id);
+            $curriculum = $this->assignableCurriculum($schoolId, (int) $curriculum->programme_id, $curriculumId);
+            $year = $this->academicYear($schoolId, $yearId, 'academic_year_id');
+            $this->assertEffectiveDateNotBeforeCurriculumFloor($curriculum, $year);
+            $stage = \App\Models\CurriculumStage::where('school_id', $schoolId)->where('curriculum_id', $curriculumId)->find($stageId);
+            if (!$stage) throw new DomainException('Choose a Programme Year from the selected approved Programme Curriculum.');
+            if (trim($reason) === '') throw new DomainException('Explain the placement correction.');
+            if (StudentCurriculumAssignment::where('school_id', $schoolId)->where('student_id', $placement->student_id)->count() !== 1) {
+                throw new DomainException('This student has placement history. Use the governed transfer workflow instead of correcting an initial placement.');
+            }
+            $profile = StudentProfile::where('school_id', $schoolId)->where('user_id', $placement->student_id)->lockForUpdate()->first();
+            if (!$profile) throw new DomainException('The student needs an institution profile before academic placement.');
+            $before = $placement->getAttributes();
+            DB::table('student_curriculum_assignments')->where('school_id', $schoolId)->where('id', $id)->update([
+                'programme_id' => $curriculum->programme_id, 'curriculum_id' => $curriculumId,
+                'entry_curriculum_stage_id' => $stageId, 'entry_academic_year_id' => $yearId,
+                'effective_from_academic_year_id' => $yearId, 'reason' => trim($reason), 'updated_at' => now(),
+            ]);
+            $profile->forceFill(['programme_id' => $curriculum->programme_id, 'year_of_study' => $stage->sequence])->save();
+            $placement->refresh();
+            $this->audit('STUDENT_UNUSED_PLACEMENT_CORRECTED', $placement, $actor, ['previous' => $before, 'corrected' => $placement->getAttributes(), 'reason' => trim($reason)]);
+            return $placement;
+        });
+    }
+
+    public function deleteUnusedDirectPlacement(int $schoolId, int $id, int $actorId): void
+    {
+        DB::transaction(function () use ($schoolId, $id, $actorId): void {
+            [$placement, $actor] = $this->unusedDirectPlacement($schoolId, $id, $actorId);
+            $this->audit('STUDENT_UNUSED_PLACEMENT_DELETED', $placement, $actor, ['deleted' => $placement->getAttributes()]);
+            DB::table('student_curriculum_assignments')->where('school_id', $schoolId)->where('id', $id)->delete();
+            // The student account and admission profile remain available for a new placement.
+        });
+    }
+
+    private function unusedDirectPlacement(int $schoolId, int $id, int $actorId): array
+    {
+        $placement = StudentCurriculumAssignment::where('school_id', $schoolId)->findOrFail($id);
+        $this->lockStudent($schoolId, (int) $placement->student_id);
+        $actor = $this->administrativeActor($schoolId, $actorId);
+        $placement = StudentCurriculumAssignment::where('school_id', $schoolId)->whereKey($id)->lockForUpdate()->firstOrFail();
+        if ($placement->ended_at || $placement->programme_cohort_membership_id !== null) {
+            throw new DomainException('Historical or group-linked placements cannot be edited or deleted here.');
+        }
+        if (\Illuminate\Support\Facades\Schema::hasTable('course_registrations') && DB::table('course_registrations')->where('school_id', $schoolId)->where('student_id', $placement->student_id)->exists()) {
+            throw new DomainException('This student has course registration history. The placement is protected from editing and deletion.');
+        }
+        return [$placement, $actor];
+    }
+
     public function assignInitialCurriculum(int $schoolId, int $studentId, int $programmeId, int $entryAcademicYearId, int $effectiveFromAcademicYearId, int $actorId): StudentCurriculumAssignment
     {
         return DB::transaction(function () use ($schoolId, $studentId, $programmeId, $entryAcademicYearId, $effectiveFromAcademicYearId, $actorId): StudentCurriculumAssignment {

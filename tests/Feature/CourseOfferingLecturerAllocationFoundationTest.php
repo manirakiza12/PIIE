@@ -62,6 +62,19 @@ class CourseOfferingLecturerAllocationFoundationTest extends TestCase
         $this->actingAs($this->user(1, 1, ['role_id' => '2']));
     }
 
+    public function test_only_unused_planned_lecturer_assignments_can_be_deleted(): void
+    {
+        $lecturer = $this->user(1, 91);
+        $planned = $this->allocations->createPlanned(1, $this->offerings[1], (int) $lecturer->id, 'co_lecturer', '2026-01-01');
+        $this->allocations->deletePlanned(1, $planned->id);
+        $this->assertDatabaseMissing('course_offering_lecturer_allocations', ['id' => $planned->id]);
+        $active = $this->allocations->createPlanned(1, $this->offerings[1], (int) $lecturer->id, 'co_lecturer', '2026-01-01');
+        DB::table('course_offerings')->where('id', $this->offerings[1])->update(['status' => 'open']);
+        $this->allocations->activate(1, $active->id);
+        $this->assertDomainFailure(fn () => $this->allocations->deletePlanned(1, $active->id));
+        $this->assertDatabaseHas('course_offering_lecturer_allocations', ['id' => $active->id, 'status' => 'active']);
+    }
+
     public function test_same_tenant_teacher_can_receive_each_controlled_role_and_profile_is_optional(): void
     {
         foreach (CourseOfferingLecturerAllocation::ROLES as $index => $role) {

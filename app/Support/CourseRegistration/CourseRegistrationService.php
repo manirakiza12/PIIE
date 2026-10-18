@@ -17,6 +17,30 @@ use Illuminate\Validation\ValidationException;
 
 class CourseRegistrationService
 {
+    public function deletePending(int $schoolId, int $registrationId, int $actorId): void
+    {
+        DB::transaction(function () use ($schoolId, $registrationId, $actorId): void {
+            $initial = CourseRegistration::where('school_id', $schoolId)->findOrFail($registrationId);
+            $student = $this->student($schoolId, (int)$initial->student_id, true);
+            $this->assertActor($student, $actorId);
+            $actor = User::where('school_id', $schoolId)->find($actorId);
+            if (!$actor || (int)$actor->role_id === 7) throw new DomainException('An authorised staff member must delete pending registrations.');
+            $offering = CourseOffering::where('school_id', $schoolId)->whereKey($initial->course_offering_id)->lockForUpdate()->firstOrFail();
+            $registration = CourseRegistration::where('school_id', $schoolId)->whereKey($registrationId)->lockForUpdate()->firstOrFail();
+            if ($registration->status !== CourseRegistration::STATUS_REGISTERED || $offering->status !== CourseOffering::STATUS_OPEN) {
+                throw new DomainException('Only pending registrations in an Open allocation can be deleted. Withdraw a confirmed registration to preserve history.');
+            }
+            foreach (\Illuminate\Support\Facades\Schema::getTableListing() as $table) {
+                $table = basename(str_replace('.', '/', $table));
+                if (\Illuminate\Support\Facades\Schema::hasColumn($table, 'course_registration_id') && DB::table($table)->where('course_registration_id', $registrationId)->exists()) {
+                    throw new DomainException('This registration has related academic records and cannot be deleted.');
+                }
+            }
+            $this->audit('COURSE_REGISTRATION_PENDING_DELETED', $registration, $registration->status, $actorId, 'Unused pending registration deleted before confirmation.');
+            DB::table('course_registrations')->where('school_id', $schoolId)->where('id', $registrationId)->delete();
+        });
+    }
+
     public function __construct(private StudentRegistrationConfirmationEligibility $confirmationEligibility, private StudentCurriculumAssignmentService $assignments, private CourseOfferingEligibility $eligibility)
     {
     }

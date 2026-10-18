@@ -35,6 +35,9 @@
                 @forelse($offerings as $offering)
                     <tr><td>{{ $offering->reference ?: '#'.$offering->id }}</td><td>{{ $offering->subject->code ? $offering->subject->code.' — ' : '' }}{{ $offering->subject->name }}</td><td>{{ $offering->academicYear->label }}</td><td>{{ $offering->academicPeriod->label }}</td><td>{{ $offering->applicability_summary ?: '—' }}</td><td><span class="badge bg-{{ $offering->status==='open'?'success':($offering->status==='draft'?'warning text-dark':($offering->status==='cancelled'?'secondary':'primary')) }}">{{ str_replace('_',' ',ucfirst($offering->status)) }}</span></td><td>{{ $offering->updated_at?->format('Y-m-d') }}</td><td><a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ route('admin.course_offerings.show',$offering->id) }}">View</a>
 
+@if($offering->status === 'draft' && auth()->user()->hasPermission('academic.course_offering.manage'))
+<div class="d-flex flex-wrap gap-2 mt-2"><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.course_offerings.show', $offering->id) }}#offering-details">Edit</a><form method="POST" action="{{ route('admin.course_offerings.destroy', $offering->id) }}" onsubmit="return confirm('Delete this unused draft Course Allocation? Records in use are protected.')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete</button></form></div>
+@else<small class="d-block text-muted">Historical identity is protected</small>@endif
 </td></tr>
                 @empty
                     @if($hasAnyOfferings)

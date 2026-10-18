@@ -17,6 +17,21 @@
     </div>
 </div>
 
+<section class="eSection-wrap mb-3" aria-label="How students reach course registration">
+    <h5>How students get into these lists</h5>
+    <ol class="mb-2">
+        <li>Create the student account in <strong>Students</strong>.</li>
+        <li>In <strong>Student Placement</strong>, assign the student to the approved Programme Curriculum, Programme Year and Academic Year.</li>
+        <li>In <strong>Course Allocation</strong>, link that curriculum's course unit and matching semester or term, then open the allocation.</li>
+        <li>The student appears under <strong>Not Registered</strong>. A student who fails a placement or fee check appears under <strong>Needs Attention</strong> with the reason.</li>
+        <li>Select <strong>Register</strong> or <strong>Register Selected</strong>. The student moves to <strong>Registered Students</strong>, awaiting confirmation.</li>
+        <li>Select <strong>Confirm</strong> to activate the registration. Withdrawn registrations remain in history.</li>
+    </ol>
+    <p class="mb-0 text-muted">These lists are calculated automatically; there is no separate upload or Add Student action here. Missing students need a matching academic placement first. Registration and confirmation both recheck eligibility, including the 20% fee requirement or an authorised waiver.</p>
+    @if(!$canManage)<div class="alert alert-info mt-3 mb-0">Your account can view this list but cannot register students. An administrator must grant Manage Course Registrations access.</div>@endif
+    @if(!$isOpen)<div class="alert alert-warning mt-3 mb-0">This allocation is {{ str_replace('_', ' ', $offering->status) }}. Registration controls are available only when the allocation is Open.</div>@endif
+</section>
+
 <section class="eSection-wrap mb-3" aria-label="Course Allocation">
     <div class="row g-3">
         <div class="col-12 col-md-6 col-xl-4"><div class="text-muted small">Course Unit</div><div class="fw-semibold">{{ $offering->subject?->code ? $offering->subject->code.' — ' : '' }}{{ $offering->subject?->name }}</div><div class="small text-muted">{{ $offering->reference ?: '' }}</div></div>
@@ -48,7 +63,7 @@
 
 <ul class="nav nav-tabs mb-0" role="tablist">
     <li class="nav-item"><a class="nav-link {{ $mode === 'eligible' ? 'active' : '' }}" @if($mode === 'eligible') aria-current="page" @endif href="{{ route('admin.course_offerings.eligible_students', $offering->id) }}">Not Registered ({{ $counts['not_registered'] }})</a></li>
-    <li class="nav-item"><a class="nav-link {{ $mode === 'registered' ? 'active' : '' }}" @if($mode === 'registered') aria-current="page" @endif href="{{ route('admin.course_offerings.registrations', $offering->id) }}">Registered Students ({{ $counts['registered'] + $counts['confirmed'] }}) and History</a></li>
+    <li class="nav-item"><a class="nav-link {{ $mode === 'registered' ? 'active' : '' }}" @if($mode === 'registered') aria-current="page" @endif href="{{ route('admin.course_offerings.registrations', $offering->id) }}">Registered Students ({{ $counts['registered'] + $counts['confirmed'] }}) · History ({{ $counts['dropped'] }})</a></li>
 </ul>
 
 <section class="eSection-wrap">
@@ -147,6 +162,7 @@
                         @if($canConfirm || $canManage)
                             <td class="text-nowrap">
                                 @if($canConfirm && $isOpen && $registration->status === 'registered')<button class="btn btn-sm btn-success" form="confirm-one-{{ $registration->id }}">Confirm</button>@endif
+                                @if($canManage && $isOpen && $registration->status === 'registered')<button class="btn btn-sm btn-outline-danger" form="delete-pending-{{ $registration->id }}">Delete Pending</button>@endif
                                 @if($canManage && in_array($registration->status, ['registered', 'confirmed'], true) && in_array($offering->status, ['open', 'in_progress'], true))<button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#drop-{{ $registration->id }}" aria-expanded="false" aria-controls="drop-{{ $registration->id }}">Withdraw</button>@endif
                             </td>
                         @endif
@@ -156,6 +172,7 @@
             </table></div>
         </form>
         @foreach($students as $registration)
+            @if($canManage && $isOpen && $registration->status === 'registered')<form method="POST" action="{{ route('admin.course_offerings.registrations.destroy', [$offering->id, $registration->id]) }}" id="delete-pending-{{ $registration->id }}" class="d-none" data-single-submit onsubmit="return confirm('Delete this pending registration before confirmation? The student account and placement are kept.')">@csrf @method('DELETE')</form>@endif
             @if($canConfirm && $isOpen && $registration->status === 'registered')
                 <form method="POST" action="{{ route('admin.course_offerings.registrations.confirm', [$offering->id, $registration->id]) }}" id="confirm-one-{{ $registration->id }}" class="d-none" data-single-submit>@csrf</form>
             @endif

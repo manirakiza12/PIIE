@@ -17,6 +17,21 @@ use Illuminate\Support\Facades\Schema;
 
 class CourseOfferingLecturerAllocationService
 {
+    public function deletePlanned(int $schoolId, int $allocationId): void
+    {
+        DB::transaction(function () use ($schoolId, $allocationId): void {
+            $initial = $this->allocation($schoolId, $allocationId);
+            $offering = $this->lockedOffering($schoolId, (int)$initial->course_offering_id);
+            $allocation = $this->lockedAllocation($schoolId, $allocationId);
+            $this->assertOfferingWritable($offering);
+            if ($allocation->status !== CourseOfferingLecturerAllocation::STATUS_PLANNED) {
+                throw new DomainException('Only unused planned lecturer assignments can be deleted. End or cancel an active assignment to preserve its history.');
+            }
+            $this->audit('COURSE_OFFERING_LECTURER_DRAFT_DELETED', $allocation, $this->allocationValues($allocation), []);
+            DB::table('course_offering_lecturer_allocations')->where('school_id', $schoolId)->where('id', $allocationId)->delete();
+        });
+    }
+
     /**
      * Users eligible to receive a planned allocation for this tenant.
      * On-leave staff remain selectable here; activation revalidates their status.

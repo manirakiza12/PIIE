@@ -335,6 +335,15 @@ class CourseOfferingController extends Controller
         return $this->studentsWorkspace($request, $id, 'registered');
     }
 
+    public function deleteRegistration(Request $request, int $id, int $registration)
+    {
+        $schoolId = (int)$request->user()->school_id;
+        \App\Models\CourseRegistration::where('school_id', $schoolId)->where('course_offering_id', $id)->findOrFail($registration);
+        try { $this->registrations->deletePending($schoolId, $registration, (int)$request->user()->id); }
+        catch (\DomainException $e) { return back()->withErrors(['registration' => $e->getMessage()]); }
+        return redirect()->route('admin.course_offerings.eligible_students', $id)->with('success', 'Pending registration deleted. The student returns to Not Registered if still eligible.');
+    }
+
     /** Eligible and Registered tabs of the Allocation student workspace. */
     private function studentsWorkspace(Request $request, int $id, string $mode)
     {

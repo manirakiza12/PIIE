@@ -63,6 +63,15 @@ class CourseOfferingLecturerController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, int $offering, int $allocation)
+    {
+        $schoolId = (int)$request->user()->school_id;
+        $this->allocationForOffering($schoolId, $offering, $allocation);
+        try { $this->allocations->deletePlanned($schoolId, $allocation); }
+        catch (DomainException $e) { return back()->withErrors(['allocation' => $e->getMessage()]); }
+        return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', 'Unused planned lecturer assignment deleted.');
+    }
+
     public function history(Request $request, int $offering)
     {
         $schoolId = (int) $request->user()->school_id;

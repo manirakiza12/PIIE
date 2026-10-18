@@ -26,7 +26,7 @@ class AcademicDeliveryWorkspaceController extends Controller
             $request->attributes->set('academic_standalone_module', $module);
             return $module === 'lecturers'
                 ? app(CourseOfferingLecturerController::class)->index($request, (int) $offering->id)
-                : ($request->query('view') === 'eligible'
+                : ($request->query('view', 'eligible') === 'eligible'
                     ? app(CourseOfferingController::class)->eligibleStudents($request, (int) $offering->id)
                     : app(CourseOfferingController::class)->registeredStudents($request, (int) $offering->id));
         }

@@ -71,6 +71,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $this->get(route('admin.programme_years.index'))->assertOk()->assertSee('Create Programme Year');
         $this->post(route('admin.programme_years.store'), ['curriculum_id' => $draft, 'label' => 'Year 1', 'sequence' => 1])->assertSessionHasNoErrors();
         $year = DB::table('curriculum_stages')->where('curriculum_id', $draft)->value('id');
+        $this->get(route('admin.programme_years.show', $year))->assertOk()->assertSee('Course Units in this Year');
         $this->put(route('admin.programme_years.update', $year), ['label' => 'Foundation Year', 'sequence' => 1])->assertSessionHasNoErrors();
         $this->assertDatabaseHas('curriculum_stages', ['id' => $year, 'label' => 'Foundation Year']);
         $this->get(route('admin.programme_years.index', ['curriculum_id' => $this->tenants[2]['curriculum']]))->assertNotFound();
@@ -847,7 +848,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             route('admin.department.schools_faculties'), route('admin.department.departments'), route('admin.programmes.index'),
             route('admin.academic_structure.index'), route('admin.academic_structure.index', ['section'=>'semesters']),
             route('admin.settings.academic'), route('admin.curricula.index'), route('admin.programme_years.index'), route('admin.subject_list'),
-            route('admin.academic.direct_placement'), route('admin.course_offerings.index'), route('admin.lecturer_assignments.index'), route('admin.course_registrations.index'), route('admin.routine'), route('admin.live_classes.index'),
+            route('admin.academic.placements.index'), route('admin.course_offerings.index'), route('admin.lecturer_assignments.index'), route('admin.course_registrations.index'), route('admin.routine'), route('admin.live_classes.index'),
             route('admin.daily_attendance'), route('admin.question_bank.index'), route('admin.online_exams.index'),
             route('admin.gradebook'),
         ] as $destination) {
@@ -864,11 +865,11 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             ->assertDontSee('>Classes</span>', false);
         $this->assertNotContains(route('admin.programme_cohorts.index'), $destinations);
         $this->assertNotContains(route('admin.class_list'), $destinations);
-        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Place Student in Programme');
+        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Student Placement');
         // Keep the direct destination when a legacy restriction prevents opening Programmes.
         $admin->forceFill(['menu_permission'=>json_encode(['admin.programme_cohorts.index'])])->save();
         $restricted=$this->actingAs($admin->fresh())->get(route('admin.course_offerings.index'))->assertOk();
-        $this->assertStringContainsString('>Place Student in Programme</span>', $restricted->getContent());
+        $this->assertStringContainsString('>Student Placement</span>', $restricted->getContent());
     }
 
     public function test_scheduling_a_saved_unit_prefills_its_name_and_keeps_dated_year_selection(): void

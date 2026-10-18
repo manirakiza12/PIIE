@@ -5,6 +5,7 @@
 @endphp
 
 @if($canChange && $item->status === \App\Models\CourseOfferingLecturerAllocation::STATUS_PLANNED)
+    <form method="POST" action="{{ route('admin.course_offerings.lecturers.destroy', [$offering->id, $item->id]) }}" onsubmit="return confirm('Delete this unused planned lecturer assignment?')" class="mb-2">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete Planned</button></form>
     <details class="lecturer-action">
         <summary class="btn btn-sm btn-outline-primary">{{ get_phrase('Edit Planned') }}</summary>
         <form method="POST" action="{{ route('admin.course_offerings.lecturers.update', [$offering->id, $item->id]) }}" class="lecturer-action-form mt-2">

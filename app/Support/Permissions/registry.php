@@ -303,6 +303,7 @@ return [
     */
     'routes' => [
         'admin.programme_years.index' => 'academic.curriculum.view',
+        'admin.programme_years.show' => 'academic.curriculum.view',
         'admin.curriculum_units.index' => 'academic.curriculum.view',
         'admin.programme_years.*' => 'academic.curriculum.manage',
         'admin.course_registrations.index' => 'academic.course_registration.view',
@@ -324,6 +325,7 @@ return [
         'admin.course_offerings.registrations' => 'academic.course_registration.view',
         'admin.course_offerings.registrations.store' => 'academic.course_registration.manage',
         'admin.course_offerings.registrations.drop' => 'academic.course_registration.manage',
+        'admin.course_offerings.registrations.destroy' => 'academic.course_registration.manage',
         'admin.course_offerings.registrations.bulk' => 'academic.course_registration.manage',
         'admin.course_offerings.registrations.confirm' => 'academic.course_registration.confirm',
         'admin.course_offerings.registrations.confirm_bulk' => 'academic.course_registration.confirm',
@@ -334,6 +336,7 @@ return [
         'admin.course_offerings.lecturers.create' => 'academic.course_offering.lecturer.manage',
         'admin.course_offerings.lecturers.store' => 'academic.course_offering.lecturer.manage',
         'admin.course_offerings.lecturers.update' => 'academic.course_offering.lecturer.manage',
+        'admin.course_offerings.lecturers.destroy' => 'academic.course_offering.lecturer.manage',
         'admin.course_offerings.lecturers.activate' => 'academic.course_offering.lecturer.manage',
         'admin.course_offerings.lecturers.end' => 'academic.course_offering.lecturer.manage',
         'admin.course_offerings.lecturers.cancel' => 'academic.course_offering.lecturer.manage',
@@ -353,6 +356,7 @@ return [
         'admin.programme_cohorts.members.*' => 'academic.programme_cohort.membership',
         'admin.programme_cohorts.placement.*' => 'academic.programme_cohort.membership',
         'admin.academic.direct_placement' => 'academic.programme_cohort.membership',
+        'admin.academic.placements.*' => 'academic.programme_cohort.membership',
         'admin.academic.direct_placement.store' => 'academic.programme_cohort.membership',
 
         // Curriculum read and governance routes are specific before the manage wildcard.

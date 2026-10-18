@@ -1,0 +1,5 @@
+@extends('admin.navigation')
+@section('content')
+<div class="mainSection-title"><h4>{{ $year->label }}</h4><p class="text-muted">{{ $year->curriculum->programme?->name }} · Curriculum {{ $year->curriculum->version }} · {{ ucfirst($year->curriculum->status) }}</p><a href="{{ route('admin.programme_years.index', ['curriculum_id' => $year->curriculum_id]) }}" class="btn btn-outline-secondary">All Programme Years</a></div>
+<section class="eSection-wrap"><h5>Course Units in this Year</h5><div class="table-responsive"><table class="table"><thead><tr><th>Code</th><th>Course Unit</th><th>Credits</th><th>Classification</th><th>Semester / Term</th></tr></thead><tbody>@forelse($year->memberships as $membership)<tr><td>{{ $membership->subject?->code }}</td><td>{{ $membership->subject?->name }}</td><td>{{ $membership->credits }}</td><td>{{ ucfirst($membership->classification) }}</td><td>{{ ucfirst($membership->period_type ?? '') }} {{ $membership->period_sequence }}</td></tr>@empty<tr><td colspan="5" class="text-muted">No course units assigned to this year.</td></tr>@endforelse</tbody></table></div></section>
+@endsection
