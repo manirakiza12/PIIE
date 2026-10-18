@@ -120,7 +120,7 @@ class AcademicStructureController extends Controller
             $data = $request->validate($rules);
             $record->fill($data);
             if ($kind === 'years' && $record->periods()->where(function ($query) use ($data) {
-                $query->where('start_date', '<', $data['start_date'])->orWhere('end_date', '>', $data['end_date']);
+                $query->whereDate('start_date', '<', $data['start_date'])->orWhereDate('end_date', '>', $data['end_date']);
             })->exists()) {
                 throw ValidationException::withMessages(['start_date' => 'The year dates must include all existing semesters or terms.']);
             }
