@@ -251,6 +251,7 @@ class LiveClassNotificationWorkflowTest extends TestCase
             ]);
         }
 
+        $this->grantStudyEligibilityFixture($student);
         return $student;
     }
 

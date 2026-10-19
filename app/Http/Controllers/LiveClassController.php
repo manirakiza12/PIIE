@@ -1575,6 +1575,11 @@ class LiveClassController extends Controller
 
     private function authorizeMaterialAccess(LiveClass $liveClass, bool $manage, bool $recording = false): void
     {
+        $user = Auth::user();
+        if ((int) $user->role_id === 7) {
+            abort_unless(app(\App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility::class)->allows($user),
+                403, 'Pay at least 20% of current-session school fees or obtain an authorised study fee waiver.');
+        }
         $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
         if ($liveClass->course_offering_id === null) {
             $this->authorize($manage ? 'update' : 'view', $liveClass);

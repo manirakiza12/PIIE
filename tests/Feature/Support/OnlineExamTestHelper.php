@@ -34,10 +34,22 @@ trait OnlineExamTestHelper
 
         Schema::create('schools', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('running_session')->default(1);
             $table->string('title')->nullable();
             $table->string('school_type')->nullable();
             $table->string('education_level')->nullable();
             $table->timestamps();
+        });
+
+        // Exam workflow tests start after the financial study requirement is met.
+        Schema::create('student_fee_managers', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('school_id');
+            $table->unsignedBigInteger('student_id');
+            $table->unsignedBigInteger('session_id');
+            $table->decimal('total_amount', 12, 2);
+            $table->decimal('paid_amount', 12, 2);
+            $table->string('status');
         });
 
         Schema::create('classes', function (Blueprint $table) {
@@ -501,6 +513,11 @@ trait OnlineExamTestHelper
 
         if ($name !== null) {
             $user->forceFill(['name' => $name])->save();
+        }
+
+        if ($roleId === 7) {
+            DB::table('student_fee_managers')->insert(['school_id' => $schoolId, 'student_id' => $user->id,
+                'session_id' => 1, 'total_amount' => 100, 'paid_amount' => 20, 'status' => 'unpaid']);
         }
 
         return $user;

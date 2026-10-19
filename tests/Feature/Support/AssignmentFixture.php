@@ -719,6 +719,7 @@ trait AssignmentFixture
             'status' => 'confirmed',
         ]);
 
+        $this->grantStudyEligibilityFixture($user);
         return $user->fresh();
     }
     private function tenantUser(string $name, int $role, int $schoolId): \App\Models\User

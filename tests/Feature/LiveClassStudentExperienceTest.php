@@ -214,6 +214,7 @@ class LiveClassStudentExperienceTest extends TestCase
             ]);
         }
 
+        $this->grantStudyEligibilityFixture($student);
         return $student;
     }
 

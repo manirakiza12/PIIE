@@ -202,6 +202,21 @@ class LiveClassOfferingAuthorizationTest extends TestCase
             ->assertRedirect('https://external.example.test/authorized-material');
     }
 
+    public function test_direct_material_links_recheck_the_twenty_percent_study_requirement(): void
+    {
+        $student = $this->user('fee-gated-material@example.test', 7, 1);
+        $class = $this->liveClass(1, 1, 101, ['status' => LiveClass::STATUS_ENDED]);
+        $this->registration($student, 1, 101, CourseRegistration::STATUS_CONFIRMED);
+        $material = DB::table('live_class_materials')->insertGetId(['school_id' => 1, 'live_class_id' => $class->id,
+            'type' => 'link', 'category' => 'resource', 'title' => 'Protected notes',
+            'link_url' => 'https://external.example.test/protected-notes', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('student_fee_managers')->where('student_id', $student->id)->update(['paid_amount' => 0]);
+        $url = route('live_classes.materials.access', [$class->id, $material]);
+        $this->actingAs($student)->get($url)->assertForbidden();
+        DB::table('student_fee_managers')->where('student_id', $student->id)->update(['paid_amount' => 20]);
+        $this->get($url)->assertRedirect('https://external.example.test/protected-notes');
+    }
+
     public function test_offering_material_serialization_hides_private_key_and_external_url(): void
     {
         $class = $this->liveClass(1, 1, 101);
@@ -420,10 +435,12 @@ class LiveClassOfferingAuthorizationTest extends TestCase
 
     private function user(string $email, int $roleId, int $schoolId): User
     {
-        return User::create([
+        $user = User::create([
             'name' => $email, 'email' => $email, 'role_id' => $roleId,
             'school_id' => $schoolId, 'status' => 1, 'account_status' => 'active',
         ]);
+        if ($roleId === 7) { $this->grantStudyEligibilityFixture($user); }
+        return $user;
     }
 
     private function registration(User $user, int $schoolId, int $offeringId, string $status): void

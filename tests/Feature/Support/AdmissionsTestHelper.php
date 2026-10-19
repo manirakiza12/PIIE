@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Schema;
 
 trait AdmissionsTestHelper
 {
+    use StudyFeeEligibilityFixture;
     use ActiveSchoolSubscriptionFixture;
     protected function bootAdmissionsTestSchema(?string $isolatedMysqlDatabase = null): void
     {
