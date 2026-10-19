@@ -308,6 +308,10 @@
                         </button>
                     </div>
                     <div class="col-6 col-md-3">
+                        <small class="text-muted d-block">{{ get_phrase('Payment Registration Number (PRN)') }}</small>
+                        <strong>{{ ApplicationFee::registrationNumber($admission) }}</strong>
+                    </div>
+                    <div class="col-6 col-md-3">
                         <small class="text-muted d-block">{{ get_phrase('Amount Paid') }}</small>
                         <strong>{{ ApplicationFee::format($feePaid, $admission) }}</strong>
                     </div>

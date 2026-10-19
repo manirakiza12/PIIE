@@ -74,6 +74,25 @@ class ApplicantPesaPalJourneyTest extends TestCase
         ], $overrides)));
     }
 
+    public function test_payment_registration_number_is_stable_and_unique_per_application(): void
+    {
+        $first = $this->application('public', ['app_number' => 'PIIE-2627-S-P0001']);
+        $second = $this->application('staff_entry', ['app_number' => 'PIIE-2627-S-P0002']);
+
+        $this->assertSame('PRN-PIIE2627SP0001', ApplicationFee::registrationNumber($first));
+        $this->assertSame(ApplicationFee::registrationNumber($first), ApplicationFee::registrationNumber($first->fresh()));
+        $this->assertNotSame(ApplicationFee::registrationNumber($first), ApplicationFee::registrationNumber($second));
+    }
+
+    public function test_a_different_payer_phone_is_sent_to_pesapal_for_mobile_money_checkout(): void
+    {
+        $admission = $this->application();
+        ApplicantPesaPalPayment::start($admission, '+256771234567');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest')
+            && $request['billing_address']['phone_number'] === '+256771234567');
+    }
+
     public function test_ugx_application_fee_is_reserved_submitted_and_settled_in_institution_currency(): void
     {
         \Illuminate\Support\Facades\Schema::table('schools', function (\Illuminate\Database\Schema\Blueprint $table) { $table->string('school_currency')->nullable(); });
@@ -84,6 +103,9 @@ class ApplicantPesaPalJourneyTest extends TestCase
         $payment = ApplicantPesaPalPayment::start($admission);
         $this->assertSame('UGX', $payment->currency);
         $this->assertSame('100000.00', $payment->amount);
+        $this->assertSame('PRN-' . strtoupper((string) preg_replace('/[^A-Z0-9]/i', '', $admission->app_number)), ApplicationFee::registrationNumber($admission));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest')
+            && str_contains($request['description'], ApplicationFee::registrationNumber($admission)));
         $this->assertSame('UGX', $admission->fresh()->application_fee_currency);
         Http::assertSent(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest') && $request['currency']==='UGX' && (float)$request['amount']===100000.0);
         $this->code=1; $this->description='COMPLETED'; $this->statusChanges=['amount'=>'100000.00'];

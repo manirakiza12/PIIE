@@ -19,13 +19,15 @@ final class PesaPalController extends Controller
     {
         $application = Admission::findOrFail($admission);
         if ($request->isMethod('post')) {
+            $validated = $request->validate(['payer_phone' => ['nullable', 'string', 'max:20', 'regex:/\A\+?[0-9()\s-]{7,20}\z/']]);
             try {
                 if ($request->input('action') === 'check') {
                     $payment = $application->payments()->where('school_id', $application->school_id)->where('method', 'pesapal')->latest('id')->firstOrFail();
                     ApplicantPesaPalPayment::reconcile($payment);
                     return back()->with('success', 'Payment status checked with PesaPal.');
                 }
-                $payment = ApplicantPesaPalPayment::start($application);
+                $payerPhone = isset($validated['payer_phone']) ? preg_replace('/[()\s-]/', '', $validated['payer_phone']) : null;
+                $payment = ApplicantPesaPalPayment::start($application, $payerPhone ?: null);
                 $url = $payment->gateway_payload['checkout_url'] ?? null;
                 if (! $url) { return back()->with('error', 'Payment is awaiting verification. Contact finance before retrying.'); }
                 return redirect()->away($url);

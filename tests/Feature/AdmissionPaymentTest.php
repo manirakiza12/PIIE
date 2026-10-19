@@ -334,7 +334,7 @@ class AdmissionPaymentTest extends TestCase
                 && ($mail->data['details']['Portal Sign-in Address'] ?? null) === route('applicant.login')
                 && str_contains($mail->data['subject'], 'PIIE-2627-O-P5001')
                 && ($mail->data['details']['Application Number'] ?? null) === 'PIIE-2627-O-P5001'
-                && ($mail->data['details']['Payment Reference'] ?? null) === 'PIIE-2627-O-P5001'
+                && ($mail->data['details']['Payment Registration Number (PRN)'] ?? null) === 'PRN-PIIE2627OP5001'
                 && str_contains((string) $mail->data['cta_url'], '/payments/application/')
                 && str_contains((string) $mail->data['access_url'], '/applicant/reset-password/');
         });

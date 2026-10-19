@@ -10,6 +10,7 @@
     $settled  = $admission->isFeeSettled();
     $pending  = $admission->fee_status === \App\Models\Admission::FEE_PENDING;
     $gateways = collect($methods);
+    $pendingPesaPal = $payments->contains(fn ($payment) => $payment->method === 'pesapal' && $payment->status === 'pending');
     $sandboxCheckoutBlocked = config('sandbox.connectivity') !== null
         && !(class_exists(\PiieSandbox\ControlledCheckout::class)
             && \PiieSandbox\ControlledCheckout::buttonEnabled($admission));
@@ -37,6 +38,16 @@
         </div>
     </div>
 </div>
+
+@if(ApplicationFee::isRequired($admission))
+<div class="ap-card">
+    <div class="ap-card-head">
+        <h2 class="ap-card-title"><i class="bi bi-upc-scan"></i> Payment Registration Number (PRN)</h2>
+    </div>
+    <p class="ap-hint mb-2">This identifies your application fee and is attached to your PesaPal checkout automatically. For automatic confirmation, start payment here and choose an option offered by PesaPal; a bank transfer made outside PesaPal cannot be automatically matched.</p>
+    <code class="d-inline-block p-2 rounded bg-light" style="font-size:16px; user-select:all;">{{ ApplicationFee::registrationNumber($admission) }}</code>
+</div>
+@endif
 
 @if($settled)
     <div class="ap-card">
@@ -68,7 +79,7 @@
                         <h2 class="ap-card-title"><i class="bi bi-lightning-charge"></i> {{ get_phrase('Pay Online') }}</h2>
                     </div>
 
-                    <p class="ap-hint mb-2">Choose MTN Mobile Money, Airtel Money or a bank card on PesaPal's secure checkout. Available methods depend on your currency and merchant account.</p>
+                    <p class="ap-hint mb-2">Choose an available option on PesaPal's secure checkout, such as MTN Mobile Money, Airtel Money, a card or bank transfer. Options depend on your currency and merchant account.</p>
                     <p class="ap-hint mb-3">Approve Mobile Money on your phone when prompted. Enter card details only on PesaPal's hosted page. A prompt or a return to PIIE does not confirm payment; PIIE checks the result with PesaPal.</p>
                     @if(!($gateway['configured'] ?? false))
                         <div class="alert alert-warning" role="status">PesaPal is not ready to accept payments yet. Admissions must finish the secure PesaPal configuration and HTTPS notification setup.</div>
@@ -88,6 +99,8 @@
 
                     <form action="{{ route('applicant.payment.gateway.start', $gateway['key']) }}" method="POST" class="mb-2">
                         @csrf
+                            <label class="form-label" for="payer-phone">Payer mobile number <span class="text-muted">(optional; enter another person's number for the mobile money prompt)</span></label>
+                            <input class="form-control mb-2" type="tel" inputmode="tel" id="payer-phone" name="payer_phone" maxlength="20" autocomplete="tel" placeholder="Leave blank to use the applicant's number" value="{{ old('payer_phone') }}" @disabled($pendingPesaPal)>
                             <button type="submit" class="ap-btn ap-btn-accent w-100" @disabled(!($gateway['configured'] ?? false) || $sandboxCheckoutBlocked || !\App\Support\Payments\ApplicantPesaPalPayment::eligible($admission))>
                             <i class="bi {{ $gateway['icon'] }}"></i> {{ \App\Support\Payments\PesaPalPaymentExperience::checkoutLabel($payments) }}
                         </button>
@@ -136,9 +149,9 @@
                                     @if($payment->gateway_payload['last_checked_at'] ?? null)<div class="ap-hint mb-1">Last provider check: {{ \Carbon\Carbon::parse($payment->gateway_payload['last_checked_at'])->format('d M Y H:i T') }}</div>@endif
                                     @if($payment->status === 'pending' && filled($payment->gateway_txn_id))
                                         <form method="post" action="{{ route('applicant.payment.pesapal.status', $payment->id) }}" class="mt-2">@csrf
-                                            <label class="form-label" for="pesapal-prn-{{ $payment->id }}">PesaPal PRN / confirmation code <span class="text-muted">(optional)</span></label>
-                                            <div class="d-flex flex-wrap gap-2"><input id="pesapal-prn-{{ $payment->id }}" name="confirmation_code" class="form-control" maxlength="100" autocomplete="off" placeholder="Enter PRN to verify it with PesaPal"><button type="submit" class="ap-btn" @disabled(config('sandbox.connectivity') !== null && !config('sandbox.connectivity.transactions', false))>Verify payment with PesaPal</button></div>
-                                            <p class="ap-hint mt-1 mb-0">We confirm the PRN against this application’s PesaPal order. A typed code alone never marks a fee as paid.</p>
+                                            <label class="form-label" for="pesapal-prn-{{ $payment->id }}">PesaPal confirmation code <span class="text-muted">(optional)</span></label>
+                                            <div class="d-flex flex-wrap gap-2"><input id="pesapal-prn-{{ $payment->id }}" name="confirmation_code" class="form-control" maxlength="100" autocomplete="off" placeholder="Enter PesaPal confirmation code"><button type="submit" class="ap-btn" @disabled(config('sandbox.connectivity') !== null && !config('sandbox.connectivity.transactions', false))>Verify payment with PesaPal</button></div>
+                                            <p class="ap-hint mt-1 mb-0">PIIE verifies this code against PesaPal’s completed transaction. A typed code alone never marks a fee as paid.</p>
                                         </form>
                                     @endif
                                 @endif

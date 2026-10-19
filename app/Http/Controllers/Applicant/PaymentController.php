@@ -54,8 +54,10 @@ class PaymentController extends BaseApplicantController
     {
         $admission = $this->currentApplication();
         if ($gateway === 'pesapal') {
+            $validated = $request->validate(['payer_phone' => ['nullable', 'string', 'max:20', 'regex:/\A\+?[0-9()\s-]{7,20}\z/']]);
             try {
-                $payment = \App\Support\Payments\ApplicantPesaPalPayment::start($admission);
+                $payerPhone = isset($validated['payer_phone']) ? preg_replace('/[()\s-]/', '', $validated['payer_phone']) : null;
+                $payment = \App\Support\Payments\ApplicantPesaPalPayment::start($admission, $payerPhone ?: null);
                 $url = $payment->gateway_payload['checkout_url'] ?? null;
                 return $url ? redirect()->away($url) : back()->with('error', 'An outstanding payment is awaiting verification. Do not pay again; contact finance.');
             } catch (\App\Support\Payments\PesaPalException $exception) {

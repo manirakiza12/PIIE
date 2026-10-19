@@ -22,7 +22,7 @@ class PesaPalApplicantPaymentUiTest extends TestCase
             'applicant.pesapal.ipn'=>'/payments/pesapal/ipn'] as $route=>$path) {
             $this->assertSame('https://piie.ac.ug'.$path,route($route));
         }
-        $admission=Admission::findOrFail($this->makeAdmission($school,['status'=>'submitted','submitted_at'=>now(),
+        $admission=Admission::findOrFail($this->makeAdmission($school,['app_number'=>'PIIE-2627-S-P9001','status'=>'submitted','submitted_at'=>now(),
             'intake_session_id'=>$this->makeIntakeSession($school,['application_fee'=>'50000.00'])]));
         foreach ([['FAILED','failed','EXPIRED','Expired'],['FAILED','failed',null,'Failed'],
             ['COMPLETED','paid',null,'Successful'],['UNKNOWN','pending',null,'Awaiting payment'],
@@ -36,7 +36,9 @@ class PesaPalApplicantPaymentUiTest extends TestCase
             $this->assertStringContainsString($label,$html);
             $this->assertStringContainsString('MTN Mobile Money',$html);
             $this->assertStringContainsString('Airtel Money',$html);
-            $this->assertStringContainsString('bank card',$html);
+            $this->assertStringContainsString('Payment Registration Number (PRN)', $html);
+            $this->assertStringContainsString('PRN-PIIE2627SP9001', $html);
+            $this->assertStringContainsString('bank transfer',$html);
             $this->assertStringNotContainsString('Bank Deposit / Mobile Money',$html);
             $this->assertStringNotContainsString('Submit Payment Details',$html);
             if ($status === 'pending') {
