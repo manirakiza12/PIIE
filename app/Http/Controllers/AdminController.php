@@ -2100,6 +2100,10 @@ class AdminController extends Controller
     public function studentUpdate(Request $request, $id)
     {
         $data = $request->all();
+        $profileOnly = academic_education_level((int) auth()->user()->school_id) === 'tertiary';
+        if ($profileOnly) {
+            unset($data['class_id'], $data['section_id'], $data['session_id'], $data['department_id']);
+        }
 
         // RBAC Phase 2D: only ever a student in the caller's own school
         // (previously User::find() reached any account, Super Admin
@@ -2121,13 +2125,15 @@ class AdminController extends Controller
             'next_of_kin_contact'  => 'nullable|max:30',
             'status'            => 'nullable|in:active,suspended,graduated,withdrawn,deferred',
             'additional_photo'  => 'nullable|mimes:jpg,jpeg,png|max:4096',
-            'class_id'          => 'required|integer|exists:classes,id',
-            'section_id'        => 'nullable|integer|exists:sections,id',
-            'session_id'        => 'nullable|integer|exists:sessions,id',
-            'department_id'     => 'nullable|integer|exists:departments,id',
+            'class_id'          => $profileOnly ? 'exclude' : 'required|integer|exists:classes,id',
+            'section_id'        => $profileOnly ? 'exclude' : 'nullable|integer|exists:sections,id',
+            'session_id'        => $profileOnly ? 'exclude' : 'nullable|integer|exists:sessions,id',
+            'department_id'     => $profileOnly ? 'exclude' : 'nullable|integer|exists:departments,id',
         ]);
 
-        $this->validateStudentAcademicScope($data);
+        if (! $profileOnly) {
+            $this->validateStudentAcademicScope($data);
+        }
 
         $affiliation = StudentProfile::affiliationAttributes($data);
 
@@ -2172,29 +2178,24 @@ class AdminController extends Controller
             ]);
         }
 
-        // A Programme-track (HEI) student may have no Enrollment row yet —
-        // update() alone would silently no-op for them, so any class
-        // assigned here through this shared edit form would appear to save
-        // but never actually take effect. updateOrCreate() fixes that: it
-        // creates the row the first time a class is assigned, and from then
-        // on updates it in place, exactly like a class/section-track
-        // student's row already behaved.
-        $schoolId = auth()->user()->school_id;
-        $runningSession = $data['session_id'] ?? get_school_settings($schoolId)->value('running_session')
-            ?: (Session::where('school_id', $schoolId)->where('status', 1)->value('id') ?? Session::value('id') ?? 1);
-        $previousEnrollment = Enrollment::where('user_id', $id)->where('school_id', $schoolId)->first();
-        $previousPlacement  = $previousEnrollment ? StatusChangeAudit::placement($previousEnrollment) : null;
-        $enrollment = Enrollment::updateOrCreate(
-            ['user_id' => $id, 'school_id' => $schoolId],
-            [
-                'class_id' => (int) $data['class_id'],
-                'section_id' => (int) ($data['section_id'] ?? 0),
-                'department_id' => (int) ($data['department_id'] ?? 0),
-                'session_id' => (int) ($runningSession ?? 0),
-            ]
-        );
-
-        StatusChangeAudit::enrollment($enrollment, $previousPlacement, 'Student record edit');
+        if (! $profileOnly) {
+            // Class-based schools retain their class assignment workflow.
+            $schoolId = auth()->user()->school_id;
+            $runningSession = $data['session_id'] ?? get_school_settings($schoolId)->value('running_session')
+                ?: (Session::where('school_id', $schoolId)->where('status', 1)->value('id') ?? Session::value('id') ?? 1);
+            $previousEnrollment = Enrollment::where('user_id', $id)->where('school_id', $schoolId)->first();
+            $previousPlacement = $previousEnrollment ? StatusChangeAudit::placement($previousEnrollment) : null;
+            $enrollment = Enrollment::updateOrCreate(
+                ['user_id' => $id, 'school_id' => $schoolId],
+                [
+                    'class_id' => (int) $data['class_id'],
+                    'section_id' => (int) ($data['section_id'] ?? 0),
+                    'department_id' => (int) ($data['department_id'] ?? 0),
+                    'session_id' => (int) ($runningSession ?? 0),
+                ]
+            );
+            StatusChangeAudit::enrollment($enrollment, $previousPlacement, 'Student record edit');
+        }
 
         $additionalImageName = null;
         if ($request->hasFile('additional_photo')) {

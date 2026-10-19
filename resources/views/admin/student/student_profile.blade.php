@@ -91,8 +91,10 @@
                         aria-labelledby="pills-jHome-tab">
                         <div class="text name_title">
                             <h4>{{ get_phrase('Name') }} : {{ $student_details['name'] }}</h4>
+                            @if(academic_education_level(auth()->user()->school_id) !== 'tertiary')
                             <h4>{{ academic_term('class', auth()->user()->school_id) }} : {{ null_checker($student_details['class_name']) }}</h4>
                             <h4>{{ academic_term('section', auth()->user()->school_id) }} : {{ null_checker($student_details['section_name']) }}</h4>
+                            @endif
                             <h4>{{ get_phrase('Parent') }} : {{ null_checker($student_details['parent_name']) }}</h4>
                             <h4>{{ get_phrase('Blood') }} :
                                 {{ null_checker(strtoupper($student_details['blood_group'] ?? '')) }}</h4>

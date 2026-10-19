@@ -23,7 +23,9 @@
         <tr><td class="label">{{ get_phrase('Gender') }}</td><td>{{ $student_details['gender'] ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Blood Group') }}</td><td>{{ strtoupper($student_details['blood_group'] ?? '') ?: '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Address') }}</td><td>{{ $student_details['address'] ?? '-' }}</td></tr>
+        @if(academic_education_level(auth()->user()->school_id) !== 'tertiary')
         <tr><td class="label">{{ get_phrase('Class / Section') }}</td><td>{{ ($student_details['class_name'] ?? '-') . ' / ' . ($student_details['section_name'] ?? '-') }}</td></tr>
+        @endif
         <tr><td class="label">{{ get_phrase('Programme') }}</td><td>{{ optional($profile?->programme)->name ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Intake') }}</td><td>{{ optional($profile?->intakeSession)->name ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Year of Study') }}</td><td>{{ $profile->year_of_study ?? '-' }}</td></tr>

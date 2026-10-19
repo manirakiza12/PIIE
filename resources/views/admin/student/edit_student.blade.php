@@ -38,6 +38,7 @@
                     name = "email" required>
             </div>
 
+            @if(academic_education_level(auth()->user()->school_id) !== 'tertiary')
             <div class="fpb-7">
                 <label for="class_id" class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
                 <small class="text-muted d-block">{{ get_phrase('Students enrolled in this class can access matching class-targeted online exams.') }}</small>
@@ -87,6 +88,7 @@
             </div>
             @endif
 
+            @endif
             <?php
             $info = json_decode($user->user_information ?? '') ?: (object) [];
             $birthday = !empty($info->birthday) ? date('m/d/Y', (int) $info->birthday) : date('m/d/Y');

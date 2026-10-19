@@ -37,6 +37,45 @@ class StudentClassAssignmentTest extends TestCase
         ];
     }
 
+    public function test_tertiary_student_edit_has_no_teaching_group_and_saves_without_enrollment(): void
+    {
+        \Illuminate\Support\Facades\Schema::table('schools', fn ($table) => $table->string('education_level')->nullable());
+        $school = $this->makeSchool();
+        \Illuminate\Support\Facades\DB::table('schools')->where('id', $school)->update(['education_level' => 'tertiary']);
+        $admin = $this->makeAdminUser($school);
+        $this->makeClass($school, ['name' => 'MPAM GROUP']);
+        $student = User::factory()->create(['school_id' => $school, 'role_id' => 7]);
+        $this->actingAs($admin)->get(route('admin.student_edit_modal', $student->id))
+            ->assertOk()->assertDontSee('MPAM GROUP')->assertDontSee('name="class_id"', false)
+            ->assertDontSee('Students enrolled in this class can access matching class-targeted online exams.')
+            ->assertDontSee('name="section_id"', false);
+        $payload = $this->updatePayload(0, 0);
+        unset($payload['class_id'], $payload['section_id']);
+        $payload['email'] = $student->email;
+        $this->post(route('admin.student.update', $student->id), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('Test Student', $student->fresh()->name);
+        $this->assertSame(0, Enrollment::where('user_id', $student->id)->count());
+    }
+
+    public function test_tertiary_profile_save_ignores_group_fields_and_preserves_existing_assignments(): void
+    {
+        \Illuminate\Support\Facades\Schema::table('schools', fn ($table) => $table->string('education_level')->nullable());
+        $school = $this->makeSchool();
+        \Illuminate\Support\Facades\DB::table('schools')->where('id', $school)->update(['education_level' => 'tertiary']);
+        $student = User::factory()->create(['school_id' => $school, 'role_id' => 7]);
+        $old = $this->makeClass($school, ['name' => 'Old Teaching Group']);
+        $new = $this->makeClass($school, ['name' => 'Other Teaching Group']);
+        Enrollment::create(['user_id' => $student->id, 'school_id' => $school, 'class_id' => $old,
+            'section_id' => 0, 'session_id' => 1, 'department_id' => 0]);
+        $before = Enrollment::where('user_id', $student->id)->firstOrFail()->getRawOriginal();
+        $payload = $this->updatePayload($new, 99999);
+        $payload['email'] = $student->email;
+        $this->actingAs($this->makeAdminUser($school))->post(route('admin.student.update', $student->id), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame($before, Enrollment::where('user_id', $student->id)->firstOrFail()->getRawOriginal());
+    }
+
     public function test_assigning_a_class_to_a_student_with_no_enrollment_row_creates_one(): void
     {
         $schoolId = $this->makeSchool();
