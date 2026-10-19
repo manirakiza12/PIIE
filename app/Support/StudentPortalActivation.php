@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Mail;
  */
 class StudentPortalActivation
 {
-    public static function sendActivationEmail(User $student, string $plainPassword, ?int $programmeId = null, ?int $intakeSessionId = null, bool $durable = false, bool $copyToAdmissions = true): bool
+    public static function sendActivationEmail(User $student, string $plainPassword, ?int $programmeId = null, ?int $intakeSessionId = null, bool $durable = false, bool $copyToAdmissions = true, bool $passwordSetupOnly = false): bool
     {
         if ($copyToAdmissions) {
             try {
@@ -34,7 +34,8 @@ class StudentPortalActivation
         }
         if ($durable && \Illuminate\Support\Facades\Schema::hasTable('applicant_notification_deliveries')) {
             $id = \App\Support\Admissions\ApplicantNotificationDelivery::record($student->email, [
-                'name' => $student->name, 'email' => $student->email, 'password' => $plainPassword, 'code' => $student->code,
+                'name' => $student->name, 'email' => $student->email, 'password' => $passwordSetupOnly ? null : $plainPassword, 'code' => $student->code,
+                'student_password_setup' => $passwordSetupOnly,
                 'programme' => $programmeId ? Programme::where('school_id', $student->school_id)->find($programmeId)?->name : null,
                 'intake' => $intakeSessionId ? IntakeSession::where('school_id', $student->school_id)->find($intakeSessionId)?->name : null,
                 'school_id' => $student->school_id,
@@ -46,7 +47,7 @@ class StudentPortalActivation
             return \App\Support\Admissions\ApplicantNotificationDelivery::deliver($id);
         }
         if ($durable && \Illuminate\Support\Facades\DB::transactionLevel() > 0) {
-            \Illuminate\Support\Facades\DB::afterCommit(fn () => self::sendActivationEmail($student, $plainPassword, $programmeId, $intakeSessionId, false, false));
+            \Illuminate\Support\Facades\DB::afterCommit(fn () => self::sendActivationEmail($student, $plainPassword, $programmeId, $intakeSessionId, false, false, $passwordSetupOnly));
             return true;
         }
         if (empty(get_settings('smtp_user')) || !get_settings('smtp_pass') || !get_settings('smtp_host') || !get_settings('smtp_port')) {
@@ -59,7 +60,8 @@ class StudentPortalActivation
         return \App\Support\Mail\SafeMail::send($student->email, new StudentPortalActivationEmail([
             'name'      => $student->name,
             'email'     => $student->email,
-            'password'  => $plainPassword,
+            'password'  => $passwordSetupOnly ? null : $plainPassword,
+            'student_password_setup' => $passwordSetupOnly,
             'code'      => $student->code,
             'programme' => $programme->name ?? null,
             'intake'    => $intake->name ?? null,

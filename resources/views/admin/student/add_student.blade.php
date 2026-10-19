@@ -4,7 +4,7 @@
         <a href="{{ route('admin.hei_admissions.wizard.create') }}" class="fw-bold">{{ get_phrase('Add Application') }}</a>
     </div>
     <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.student.create') }}">
-        <div class="alert alert-info">Add an existing student using their current registration number. No enrolment or fee invoice will be created. The student must change their temporary password on first login.</div>
+        <div class="alert alert-info">Add an existing student using their current registration number. The student receives only a password setup email for the student portal. After saving, upload the documents held by the administration on the Documents page. No applicant account, application fee or new enrolment is created.</div>
         <div class="fpb-7">
             <label for="registration_number" class="eForm-label">Existing registration number</label>
             <input type="text" class="form-control eForm-control" id="registration_number" name="registration_number" maxlength="255" required>

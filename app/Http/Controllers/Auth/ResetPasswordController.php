@@ -93,17 +93,25 @@ class ResetPasswordController extends Controller
             'remember_token' => Str::random(60),
         ]);
 
-        if (app(PermissionService::class)->isStaffRole((int) $user->role_id)) {
+        if ((int) $user->role_id === 7 || app(PermissionService::class)->isStaffRole((int) $user->role_id)) {
             $user->force_password_change = false;
         }
 
         $user->save();
         event(new PasswordReset($user));
         $this->guard()->login($user);
+        if ((int) $user->role_id === 7) {
+            session(['student_login' => 7]);
+            session()->forget('url.intended');
+            \Illuminate\Support\Facades\Auth::guard('applicant')->logout();
+        }
     }
 
     public function redirectPath()
     {
+        if ((int) auth()->user()?->role_id === 7) {
+            return route('student.dashboard');
+        }
         return (int) auth()->user()?->role_id === SystemRole::GENERIC_STAFF
             ? route('staff.dashboard')
             : $this->redirectTo;

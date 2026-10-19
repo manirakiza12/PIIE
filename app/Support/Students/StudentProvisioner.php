@@ -88,7 +88,7 @@ final class StudentProvisioner
     {
         $profile = StudentProfile::where('user_id', $student->id)->first();
         return \App\Support\StudentPortalActivation::sendActivationEmail(
-            $student, $plainPassword, $profile?->programme_id, $profile?->intake_session_id, true
+            $student, $plainPassword, $profile?->programme_id, $profile?->intake_session_id, true, passwordSetupOnly: true
         );
     }
 

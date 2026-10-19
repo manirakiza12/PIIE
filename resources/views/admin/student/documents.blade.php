@@ -22,6 +22,10 @@
 </div>
 
 <div class="row">
+    <div class="col-12 mb-3"><div class="alert alert-info">
+        <strong>{{ $user_details->name }} — {{ $user_details->code }}</strong><br>
+        {{ get_phrase('Administration manages these documents. Upload the records already held for this student, or open an uploaded file to retrieve it. The student does not need to complete an application or upload admission documents.') }}
+    </div></div>
     <div class="col-6">
         <div class="eSection-wrap">
             <div class="eMain">
