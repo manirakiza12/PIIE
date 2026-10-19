@@ -60,7 +60,7 @@ class AdmissionConversionTest extends TestCase
         ])->save();
         $response = $this->actingAs($admin)->postJson(route('admin.hei_admissions.status', $id), ['status' => 'enrolled'])
             ->assertUnprocessable()->assertJsonValidationErrors('status');
-        $this->assertContains('Confirm the application fee payment before proceeding. New applications, including staff entries, require payment.', $response->json('errors.status'));
+        $this->assertContains(\App\Support\Admissions\ApplicationWorkflow::staffProcessingMessage(), $response->json('errors.status'));
         $this->assertSame('accepted', \App\Models\Admission::findOrFail($id)->status);
         $this->assertSame(0, User::where('role_id', 7)->count());
         \Illuminate\Support\Facades\Mail::assertNothingSent();

@@ -201,6 +201,42 @@ class AdmissionWizardTest extends TestCase
         $this->assertNotSame('Should Not', Admission::find($admissionId)->first_name);
     }
 
+    public function test_staff_entry_wizard_locks_after_submission_until_the_fee_is_paid(): void
+    {
+        $schoolId = $this->makeSchool();
+        $this->configurePrimarySchool($schoolId);
+        $admin = $this->makeAdminUser($schoolId);
+        $admissionId = $this->makeAdmission($schoolId, [
+            'source' => 'staff_entry',
+            'status' => Admission::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+            'application_fee_amount' => 50000,
+            'application_fee_currency' => 'UGX',
+            'fee_status' => Admission::FEE_UNPAID,
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.hei_admissions.wizard.step', [$admissionId, 'personal']))
+            ->assertOk()
+            ->assertViewHas('readOnly', true);
+
+        $this->post(route('admin.hei_admissions.wizard.personal', $admissionId), [
+            'first_name' => 'Changed',
+            'last_name' => 'Too Soon',
+            'email' => 'blocked@example.test',
+            'phone_code' => '+256',
+            'phone_number' => '0700000000',
+            'dob' => '1999-01-01',
+            'gender' => 'Male',
+            'nationality' => 'Ugandan',
+            'physical_address' => 'Kampala',
+            'nok_name' => 'Kin',
+            'nok_relationship' => 'Parent',
+            'nok_phone' => '0700000001',
+        ])->assertRedirect(route('admin.hei_admissions.review', $admissionId));
+
+        $this->assertNotSame('Changed', Admission::findOrFail($admissionId)->first_name);
+    }
+
     public function test_admin_can_upload_a_supporting_document_attributed_to_staff(): void
     {
         $schoolId = $this->makeSchool();

@@ -123,11 +123,15 @@
                     <td>
                         <div class="d-flex gap-1">
                             <a href="{{ route('admin.hei_admissions.review', $app->id) }}" class="eBtn eBtn-sm eBtn-primary" title="{{ get_phrase('Review Application') }}"><i class="bi bi-eye" aria-hidden="true"></i> {{ get_phrase('Review') }}</a>
+                            @if(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
+                                <span class="badge bg-warning text-dark align-self-center" title="{{ get_phrase('Admissions actions unlock after payment is confirmed') }}">{{ get_phrase('Awaiting fee') }}</span>
+                            @else
                             <a href="javascript:;" class="eBtn eBtn-sm eBtn-outline" onclick="rightModal('{{ route('admin.hei_admissions.open_modal', ['id' => $app->id]) }}', '{{ get_phrase('Edit Application') }}')"><i class="bi bi-pencil"></i></a>
-                            @if($app->status === 'accepted')
+                            @endif
+                            @if($app->status === 'accepted' && (! \App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) || $app->isFeeSettled()))
                             <a href="{{ route('admin.hei_admissions.offer_letter', $app->id) }}" class="eBtn eBtn-sm eBtn-success" title="{{ get_phrase('Offer Letter') }}"><i class="bi bi-file-pdf"></i></a>
                             @endif
-                            @if($studentUser)
+                            @if($studentUser && (! \App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) || $app->isFeeSettled()))
                             <a href="javascript:;" class="eBtn eBtn-sm eBtn-warning" title="{{ get_phrase('Resend Activation Email') }}" onclick="confirmModal('{{ route('admin.student.resend_activation', $studentUser->id) }}', 'undefined');"><i class="bi bi-envelope-arrow-up"></i></a>
                             @endif
                             {{-- Quick status change stays here for the common
@@ -140,6 +144,8 @@
                                 @else
                                     <span class="text-muted">{{ get_phrase('Awaiting applicant submission') }}</span>
                                 @endif
+                            @elseif(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
+                                <span class="text-muted align-self-center">{{ get_phrase('Applicant payment pending') }}</span>
                             @else
                             <form action="{{ route('admin.hei_admissions.status', $app->id) }}" method="POST" class="d-inline">
                                 @csrf
@@ -153,7 +159,9 @@
                                 </select>
                             </form>
                             @endif
-                            <a href="{{ route('admin.hei_admissions.destroy', $app->id) }}" class="eBtn eBtn-sm eBtn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
+                            @unless(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
+                                <a href="{{ route('admin.hei_admissions.destroy', $app->id) }}" class="eBtn eBtn-sm eBtn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
+                            @endunless
                         </div>
                     </td>
                 </tr>

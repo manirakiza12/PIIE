@@ -476,6 +476,10 @@ class AdmissionWizardController extends Controller
      */
     private function isEditable(Admission $admission): bool
     {
+        if (ApplicationWorkflow::hasBeenSubmitted($admission) && ! ApplicationWorkflow::staffProcessingAllowed($admission)) {
+            return false;
+        }
+
         return in_array($admission->status, [
             Admission::STATUS_DRAFT,
             Admission::STATUS_NEEDS_CORRECTION,
@@ -492,7 +496,9 @@ class AdmissionWizardController extends Controller
 
         return redirect()->route('admin.hei_admissions.review', $admission->id)->with(
             'error',
-            get_phrase('This application has already been decided and can no longer be edited here. Use Return for Corrections if something needs to change.')
+            ApplicationWorkflow::hasBeenSubmitted($admission) && ! ApplicationFee::isSettled($admission)
+                ? ApplicationWorkflow::staffProcessingMessage()
+                : get_phrase('This application has already been decided and can no longer be edited here. Use Return for Corrections if something needs to change.')
         );
     }
 
