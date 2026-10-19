@@ -106,7 +106,7 @@ class CourseOfferingRegistrationBatch
                 try {
                     $confirmed = $this->registrations->confirmRegistration($schoolId, $registrationId, $actorId);
                 } catch (ValidationException) {
-                    return $this->outcome($name, self::SKIPPED, 'Registration cannot be confirmed until at least 20% of current-session fees are paid or an authorised continuing-student waiver is active.');
+                    return $this->outcome($name, self::SKIPPED, 'Registration cannot be confirmed until at least 20% of current-session fees are paid or an authorised student waiver is active.');
                 } catch (DomainException $exception) {
                     return $this->outcome($name, self::SKIPPED, $this->readable($exception, 'This registration needs academic review before it can be confirmed.'));
                 } catch (Throwable $exception) {

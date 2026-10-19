@@ -109,7 +109,7 @@
                     <li><a class="{{ request()->is('accountant/student_fee_manager/sync*') ? 'active' : '' }}" href="{{ route('accountant.fee_manager.sync') }}"><span>
                                 {{ get_phrase('Sync Invoices') }}
                             </span></a></li>
-                    <li><a class="{{ request()->is('accountant/offline_payment/pending*') ? 'active' : '' }}" href="{{ route('accountant.offline_payment_pending') }}"><span>
+                    <li><a class="{{ request()->is('accountant/offline_payment/pending*') ? 'active' : '' }}" href="{{ route('admin.tuition_payments.index') }}"><span>
                                 {{ get_phrase('Offline Payment Request') }}
                             </span></a></li>
                     <li><a class="{{ request()->is('accountant/expenses*') ? 'active' : '' }}" href="{{ route('accountant.expense.list') }}"><span>

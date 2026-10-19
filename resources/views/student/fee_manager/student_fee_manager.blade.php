@@ -17,6 +17,7 @@ if ($date_to == "" || $date_to === null) {
 @extends('student.navigation')
 
 @section('content')
+@include('student.partials.study_fee_status')
 <div class="mainSection-title">
     <div class="row">
         <div class="col-12">

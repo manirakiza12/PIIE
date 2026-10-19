@@ -1255,6 +1255,7 @@ class CourseAssignmentSubmissionTest extends TestCase
             DB::table($usersTable)->where('id', $user->id)->update(['timezone' => $timezone]);
         }
 
+        $this->financiallyEligibleStudent($user);
         return $user->fresh();
     }
 

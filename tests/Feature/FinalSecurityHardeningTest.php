@@ -325,6 +325,8 @@ class FinalSecurityHardeningTest extends TestCase
 
     public function test_teacher_syllabus_and_student_assignment_uploads_refuse_scripts(): void
     {
+        // Exercise upload validation after the new financial study gate has passed.
+        $this->fee($this->A, ['paid_amount' => 20]);
         Schema::create('syllabuses', function (Blueprint $t) {
             $t->id(); $t->string('title')->nullable(); $t->integer('class_id')->nullable(); $t->integer('section_id')->nullable();
             $t->integer('subject_id')->nullable(); $t->string('file')->nullable(); $t->integer('school_id')->nullable(); $t->integer('session_id')->nullable(); $t->timestamps();
@@ -502,38 +504,19 @@ class FinalSecurityHardeningTest extends TestCase
         $this->assertEquals($classA2, $log->new_values['class_id']);
     }
 
-    public function test_offline_payment_submission_and_decisions_are_audited(): void
+    public function test_retired_school_fee_offline_routes_never_write_records(): void
     {
         $fee = $this->fee($this->A);
-
-        $this->actingAs($this->A['student'])->post(route('student.offline_payment', $fee), ['amount' => 100, 'document_image' => UploadedFile::fake()->image('r.jpg')]);
-        $log = $this->lastAudit();
-        $this->assertSame(\App\Models\StudentFeeManager::class, $log->record_type);
-        $this->assertSame($fee, (int) $log->record_id);
-        $this->assertSame('unpaid', $log->old_values['status']);
-        $this->assertSame('pending', $log->new_values['status']);
-        $this->assertStringNotContainsString('document_image', json_encode($log->new_values));
-
-        $parentFee = $this->fee($this->A);
-        $this->actingAs($this->A['parent'])->post(route('parent.offline_payment', $parentFee), ['amount' => 100, 'document_image' => UploadedFile::fake()->image('r.jpg')]);
-        $this->assertSame($parentFee, (int) $this->lastAudit()->record_id);
-        $this->assertSame('pending', $this->lastAudit()->new_values['status']);
-
-        foreach (['admin' => 2, 'accountant' => 4] as $prefix => $roleId) {
-            foreach (['approve' => 'paid', 'decline' => 'unpaid'] as $decision => $status) {
-                $pending = $this->fee($this->A, ['status' => 'pending']);
-                $actor = $this->staff($roleId, $this->A);
-                $this->actingAs($actor)->get(route("{$prefix}.update_offline_payment", ['id' => $pending, 'status' => $decision]));
-
-                $log = AuditLog::where('record_type', \App\Models\StudentFeeManager::class)->where('record_id', $pending)->latest('id')->firstOrFail();
-                $this->assertSame($actor->id, (int) $log->user_id, "{$prefix} {$decision}");
-                $this->assertSame('pending', $log->old_values['status'], "{$prefix} {$decision}");
-                $this->assertSame($status, $log->new_values['status'], "{$prefix} {$decision}");
-                $this->assertEquals($this->A['student']->id, $log->new_values['student_id'], "{$prefix} {$decision}");
+        $before = (array) DB::table('student_fee_managers')->where('id', $fee)->first();
+        foreach (['student', 'parent'] as $portal) {
+            $this->actingAs($this->A[$portal])->post("/$portal/student_fee/offline_payment/$fee", ['amount' => 100])->assertNotFound();
+        }
+        foreach (['admin', 'accountant', 'bursar'] as $portal) {
+            foreach (['approve', 'decline'] as $decision) {
+                $this->actingAs($this->staff(2, $this->A))->get("/$portal/student_fee/delete/$fee/$decision")->assertNotFound();
             }
         }
-
-        $this->assertPhase2fAuditsCarryNoSecrets();
+        $this->assertEquals($before, (array) DB::table('student_fee_managers')->where('id', $fee)->first());
     }
 
     public function test_hostel_payment_decisions_are_audited(): void

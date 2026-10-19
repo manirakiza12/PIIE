@@ -988,42 +988,7 @@ class StudentController extends Controller
      */
     public function startMarzpayTuitionPayment(Request $request, $id)
     {
-        $fee = StudentFeeManager::where('id', $id)
-            ->where('student_id', auth()->id())
-            ->where('school_id', auth()->user()->school_id)
-            ->first();
-
-        if (! $fee || $fee->status === 'paid') {
-            return redirect()->route('student.FeePayment', $id)->with('error', get_phrase('Invoice not found or already paid.'));
-        }
-
-        $request->validate([
-            'phone_number' => 'required|string|min:9|max:15',
-        ]);
-
-        $reference = (string) \Illuminate\Support\Str::uuid();
-
-        $result = \App\Support\Payments\MarzPayService::initiateMobileMoneyCollection(
-            (int) $fee->school_id,
-            $request->phone_number,
-            (float) $fee->total_amount,
-            $reference,
-            'Tuition fee: ' . $fee->title,
-            route('webhooks.marzpay'),
-            ['context' => 'tuition', 'context_id' => $fee->id]
-        );
-
-        if (! $result['ok']) {
-            return redirect()->route('student.FeePayment', $id)->with('error', $result['error'] ?: get_phrase('We could not start the MarzPay payment. Please try again.'));
-        }
-
-        $fee->update([
-            'status'            => 'processing',
-            'payment_method'    => 'marzpay',
-            'gateway_reference' => $result['transaction_uuid'] ?: $reference,
-        ]);
-
-        return view('student.payment.marzpay_pending', ['fee_details' => $fee->toArray(), 'context' => 'tuition']);
+        abort(410, 'School fee payments use verified PesaPal checkout only.');
     }
 
     /** AJAX poll from the pending page — checks MarzPay directly and updates the row if MarzPay has already settled it. */
@@ -1082,38 +1047,7 @@ class StudentController extends Controller
 
     public function offlinePaymentStudent(Request $request, $id = "")
     {
-        $feeBefore = $this->findOwnFeeOrFail($id);
-        $request->validate(['document_image' => 'nullable|file|mimes:' . implode(',', ApplicationDocuments::ALLOWED_EXTENSIONS) . '|max:' . (ApplicationDocuments::MAX_FILE_MB * 1024)]);
-        if ($request->hasFile('document_image') && !in_array(strtolower($request->file('document_image')->getClientOriginalExtension()), ApplicationDocuments::ALLOWED_EXTENSIONS, true)) {
-            return redirect()->back()->with('error', 'Only PDF, JPG and PNG files are accepted.');
-        }
-        $data = $request->all();
-
-        if ($data['amount'] > 0) {
-
-            $file = $data['document_image'];
-
-            if ($file) {
-                $filename  = bin2hex(random_bytes(20)) . '.' . strtolower($file->getClientOriginalExtension());
-                $extension = $file->getClientOriginalExtension(); //Get extension of uploaded file
-
-                $file->move(public_path('assets/uploads/offline_payment'), $filename);
-                $data['document_image'] = $filename;
-            } else {
-                $data['document_image'] = '';
-            }
-
-            StudentFeeManager::where('id', $id)->update([
-                'status'         => 'pending',
-                'document_image' => $data['document_image'],
-                'payment_method' => 'offline',
-            ]);
-
-            StatusChangeAudit::feePayment($feeBefore, 'submitted');
-            return redirect()->route('student.fee_manager.list')->with('message', 'offline payment requested successfully');
-        } else {
-            return redirect()->route('student.fee_manager.list')->with('message', 'offline payment requested fail');
-        }
+        abort(410, 'School fee payments use verified PesaPal checkout only.');
     }
 
     public function profile()

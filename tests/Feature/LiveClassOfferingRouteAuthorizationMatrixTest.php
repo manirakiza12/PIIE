@@ -594,10 +594,12 @@ class LiveClassOfferingRouteAuthorizationMatrixTest extends TestCase
 
     private function user(string $email, int $roleId, int $schoolId): User
     {
-        return User::create([
+        $user = User::create([
             'name' => $email, 'email' => $email, 'role_id' => $roleId,
             'school_id' => $schoolId, 'status' => 1, 'account_status' => 'active',
         ]);
+        if ($roleId === 7) { $this->grantStudyEligibilityFixture($user); }
+        return $user;
     }
 
     private function allocation(User $user, int $offeringId, string $role, string $status = 'active', string $startsOn = '2026-09-01', ?string $endsOn = null): void

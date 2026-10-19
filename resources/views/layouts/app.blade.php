@@ -561,9 +561,9 @@
 
             <!-- Payments -->
             @if(empty($user->menu_permission) || in_array('admin.offline_payment_pending', $menu_permission))
-            <li class="nav-links-li {{ request()->is('admin/offline_payment/pending*') ? 'showMenu' : '' }}">
+            <li class="nav-links-li {{ request()->is('admin/fee-payments*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
-                    <a href="{{ route('admin.offline_payment_pending') }}" class="{{ request()->is('admin/offline_payment/pending*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.tuition_payments.index') }}" class="{{ request()->is('admin/fee-payments*') ? 'active' : '' }}">
                         <div class="sidebar_icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 2L2 7l10 5 10-5-10-5z"></path>

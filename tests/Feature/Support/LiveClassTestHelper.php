@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Schema;
 
 trait LiveClassTestHelper
 {
+    use StudyFeeEligibilityFixture;
     use ActiveSchoolSubscriptionFixture;
     protected function bootLiveClassTestSchema(): void
     {
@@ -328,11 +329,13 @@ $table->timestamps();
 
     protected function makeStudentUser(int $schoolId, array $overrides = []): User
     {
-        return User::factory()->create(array_merge([
+        $student = User::factory()->create(array_merge([
             'role_id' => 7,
             'school_id' => $schoolId,
             'account_status' => 'active',
         ], $overrides));
+        $this->grantStudyEligibilityFixture($student);
+        return $student;
     }
 
     protected function makeClass(int $schoolId, array $overrides = []): int

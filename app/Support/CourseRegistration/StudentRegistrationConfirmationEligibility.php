@@ -2,46 +2,42 @@
 
 namespace App\Support\CourseRegistration;
 
-use App\Models\StudentFeeManager;
-use App\Models\StudentFeeRegistrationWaiver;
-use App\Models\User;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use App\Models\{StudentFeeManager, StudentFeeRegistrationWaiver, User};
+use App\Support\Payments\DecimalAmount;
+use Illuminate\Support\Facades\{DB, Schema};
 
 class StudentRegistrationConfirmationEligibility
 {
-    public function allows(User $student): bool
+    public function allows(User $student): bool { return $this->summary($student)['eligible']; }
+
+    /** Current fee session only; a waiver never posts money or reduces debt. */
+    public function summary(User $student): array
     {
-        if (! Schema::hasTable('schools') || ! Schema::hasColumn('schools', 'running_session')) {
-            return false;
-        }
-        if (! Schema::hasTable('student_fee_managers')) return false;
+        $result = ['eligible' => false, 'waived' => false, 'session_id' => null, 'total_minor' => 0,
+            'paid_minor' => 0, 'required_minor' => 0, 'shortfall_minor' => 0, 'waiver' => null];
+        if (! Schema::hasTable('schools') || ! Schema::hasColumn('schools', 'running_session')
+            || ! Schema::hasTable('student_fee_managers')) { return $result; }
         $sessionId = DB::table('schools')->where('id', $student->school_id)->value('running_session');
-        if (! $sessionId) {
-            return false;
+        if (! $sessionId) { return $result; }
+        $result['session_id'] = (int) $sessionId;
+        $waiver = Schema::hasTable('student_fee_registration_waivers')
+            ? StudentFeeRegistrationWaiver::where('school_id', $student->school_id)->where('student_id', $student->id)
+                ->where('session_id', $sessionId)->whereNull('revoked_at')->first() : null;
+        $invoices = StudentFeeManager::where('student_id', $student->id)->where('school_id', $student->school_id)
+            ->where('session_id', $sessionId)->get();
+        foreach ($invoices as $invoice) {
+            $total = max(0, DecimalAmount::minorUnits($invoice->total_amount) ?? 0);
+            $result['total_minor'] += $total;
+            // Historical offline claims may contain an asserted paid amount;
+            // an unreviewed claim is never evidence of money received.
+            $paid = $invoice->status === 'pending' ? 0 : max(0, DecimalAmount::minorUnits($invoice->paid_amount) ?? 0);
+            $result['paid_minor'] += min($total, $paid);
         }
-
-        if (Schema::hasTable('student_fee_registration_waivers') && StudentFeeRegistrationWaiver::query()->where('school_id', $student->school_id)
-            ->where('student_id', $student->id)->where('session_id', $sessionId)->whereNull('revoked_at')->exists()) {
-            return true;
-        }
-
-        $invoices = StudentFeeManager::where('student_id', $student->id)
-            ->where('school_id', $student->school_id)
-            ->where('session_id', $sessionId)
-            ->get();
-        $total = (int) $invoices->sum(fn ($invoice) => max(0, (int) $invoice->total_amount));
-        if ($total <= 0) {
-            return false;
-        }
-
-        // Count verified invoice payments up to each invoice's face value. Five
-        // times the paid amount avoids floating point rounding at the 20% line.
-        $paid = (int) $invoices->sum(fn ($invoice) => min(
-            max(0, (int) $invoice->total_amount),
-            max(0, (int) $invoice->paid_amount)
-        ));
-
-        return $paid * 5 >= $total;
+        $result['required_minor'] = intdiv($result['total_minor'] + 4, 5);
+        $result['shortfall_minor'] = max(0, $result['required_minor'] - $result['paid_minor']);
+        $result['waiver'] = $waiver;
+        $result['waived'] = $waiver !== null;
+        $result['eligible'] = $waiver !== null || ($result['total_minor'] > 0 && $result['shortfall_minor'] === 0);
+        return $result;
     }
 }

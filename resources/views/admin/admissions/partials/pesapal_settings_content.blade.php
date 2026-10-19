@@ -21,7 +21,7 @@
                 <h5 class="mb-0">Shared application payment configuration</h5>
                 <span class="badge {{ $configured ? 'bg-success' : 'bg-secondary' }}">{{ $configured ? 'Credentials configured' : 'Credentials not configured' }}</span>
             </div>
-            <p class="text-muted">Used by online and administrator-created applications. Resolve outstanding orders before replacing credentials. Configured does not mean sandbox checkout has been tested.</p>
+            <p class="text-muted">Used by online and administrator-created applications, and student school fee payments. Resolve outstanding orders before replacing credentials. Configured does not mean sandbox checkout has been tested.</p>
             <form method="post" action="{{ route('admin.hei_admissions.payment.pesapal.settings.save') }}">
                 @csrf
                 <div class="row g-3">

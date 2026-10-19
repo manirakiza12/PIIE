@@ -31,29 +31,17 @@
 
 		<div class="fpb-7">
 			<label for="paid_amount" class="eForm-label">{{ get_phrase('Paid amount').'('.school_currency().')' }}</label>
-			<input type="number" class="form-control eForm-control" id="paid_amount" name="paid_amount" required>
+			<p class="form-control-plaintext">Recorded automatically from verified payments</p>
 		</div>
 
 		<div class="fpb-7">
 			<label for="status" class="eForm-label">{{ get_phrase('Status') }}</label>
-			<select name="status" id="status" class="form-select eForm-select eChoice-multiple-with-remove" required >
-				<option value="">{{ get_phrase('Select a status') }}</option>
-				<option value="paid">{{ get_phrase('Paid') }}</option>
-				<option value="unpaid">{{ get_phrase('Unpaid') }}</option>
-			</select>
+			<p class="form-control-plaintext">Updated automatically after PesaPal verification</p>
 		</div>
 
 		<div class="fpb-7">
 			<label for="payment_method" class="eForm-label">{{ get_phrase('Payment method') }}</label>
-			<select name="payment_method" id="payment_method" class="form-select eForm-select eChoice-multiple-with-remove">
-				<option value="">{{ get_phrase('Select a payment method') }}</option>
-				<option value="cash">{{ get_phrase('Cash') }}</option>
-				<option value="paypal">{{ get_phrase('Paypal') }}</option>
-				<option value="paytm">{{ get_phrase('Paytm') }}</option>
-				<option value="razorpay">{{ get_phrase('Razorpay') }}</option>
-				<option value="stripe">{{ get_phrase('Stripe') }}</option>
-				<option value="flutterwave">{{ get_phrase('Flutterwave') }}</option>
-			</select>
+			<p class="form-control-plaintext">PesaPal (verified online payment)</p>
 		</div>
 
 	</div>

@@ -106,7 +106,7 @@ class CourseOfferingRoster
         $student = User::query()->where('school_id', $offering->school_id)->where('role_id', 7)->find($studentId);
         return $student && $this->financialEligibility->allows($student)
             ? null
-            : 'Pay at least 20% of the current academic-session fees, or obtain an authorised continuing-student waiver.';
+            : 'Pay at least 20% of the current academic-session fees, or obtain an authorised student waiver.';
     }
 
     public function registered(CourseOffering $offering)

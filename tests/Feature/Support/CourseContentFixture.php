@@ -270,6 +270,7 @@ trait CourseContentFixture
 
         $lecturer = $this->tenantUser('Grace Nakato', 3, $schoolId);
         $student = $this->tenantUser('Mugisha Peter', 7, $schoolId);
+        $this->financiallyEligibleStudent($student);
 
         DB::table('course_offering_lecturer_allocations')->insert([
             'school_id' => $schoolId, 'course_offering_id' => $offeringId, 'user_id' => $lecturer->id,

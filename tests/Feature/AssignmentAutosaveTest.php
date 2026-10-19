@@ -137,6 +137,7 @@ class AssignmentAutosaveTest extends TestCase
             'email' => 'autosave-stranger@example.test',
             'account_status' => 'active',
         ]);
+        $this->grantStudyEligibilityFixture($stranger);
 
         $this->actingAs($stranger)
             ->postJson($this->url($assignment), [
