@@ -41,8 +41,8 @@
                 @csrf
                 <input type="hidden" name="_academic_dialog" value="createAcademicYear">
                 <div class="mb-3"><label class="form-label">Year label</label><input class="form-control" name="label" value="{{ old('label') }}" required maxlength="100" placeholder="2026/2027"></div>
-                <div class="mb-3"><label class="form-label">Start date</label><input class="form-control" type="date" name="start_date" value="{{ old('start_date') }}" required></div>
-                <div class="mb-3"><label class="form-label">End date</label><input class="form-control" type="date" name="end_date" value="{{ old('end_date') }}" required></div>
+                <div class="mb-3"><label class="form-label">Start date (DD/MM/YY)</label><input class="form-control" type="text" placeholder="DD/MM/YY" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" name="start_date" value="{{ \App\Support\Academic\AcademicDate::input(old('start_date')) }}" required></div>
+                <div class="mb-3"><label class="form-label">End date (DD/MM/YY)</label><input class="form-control" type="text" placeholder="DD/MM/YY" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" name="end_date" value="{{ \App\Support\Academic\AcademicDate::input(old('end_date')) }}" required></div>
                 <p class="text-muted">New academic years are created as Planned. Activate a year explicitly before selecting it as current.</p>
                 <button class="eBtn eBtn-primary" type="submit">Create year</button>
             </form>
@@ -53,10 +53,10 @@
             <h5>{{ $showPeriods ? 'Current '.$academicPeriodLabel : 'Current Academic Year' }}</h5>
             <form method="post" action="{{ route('admin.academic_structure.current') }}">
                 @csrf
-                <div class="mb-3"><label class="form-label">Current year</label><select class="form-select" name="current_academic_year_id" id="current_year"><option value="">No current year</option>@foreach($years->where('status', 'active') as $year)<option value="{{ $year->id }}" @selected((int)$school->current_academic_year_id === (int)$year->id)>{{ $year->label }} ({{ $year->start_date->format('Y-m-d') }} — {{ $year->end_date->format('Y-m-d') }})</option>@endforeach</select></div>
+                <div class="mb-3"><label class="form-label">Current year</label><select class="form-select" name="current_academic_year_id" id="current_year"><option value="">No current year</option>@foreach($years->where('status', 'active') as $year)<option value="{{ $year->id }}" @selected((int)$school->current_academic_year_id === (int)$year->id)>{{ $year->label }} ({{ $year->start_date->format('d/m/y') }} — {{ $year->end_date->format('d/m/y') }})</option>@endforeach</select></div>
                 @if($showPeriods)
                 <input type="hidden" name="section" value="semesters">
-                <div class="mb-3"><label class="form-label">Current {{ strtolower($academicPeriodLabel) }}</label><select class="form-select" name="current_academic_period_id" id="current_period"><option value="">No current period (break)</option>@foreach($years as $year)@foreach($year->periods->where('status', 'active') as $period)<option data-year="{{ $year->id }}" value="{{ $period->id }}" @selected((int)$school->current_academic_period_id === (int)$period->id)>{{ $year->label }} ({{ $year->start_date->format('Y-m-d') }}) — {{ ucfirst($period->type) }} {{ $period->sequence }} ({{ $period->start_date->format('Y-m-d') }} — {{ $period->end_date->format('Y-m-d') }})</option>@endforeach @endforeach</select></div>
+                <div class="mb-3"><label class="form-label">Current {{ strtolower($academicPeriodLabel) }}</label><select class="form-select" name="current_academic_period_id" id="current_period"><option value="">No current period (break)</option>@foreach($years as $year)@foreach($year->periods->where('status', 'active') as $period)<option data-year="{{ $year->id }}" value="{{ $period->id }}" @selected((int)$school->current_academic_period_id === (int)$period->id)>{{ $year->label }} ({{ $year->start_date->format('d/m/y') }}) — {{ ucfirst($period->type) }} {{ $period->sequence }} ({{ $period->start_date->format('d/m/y') }} — {{ $period->end_date->format('d/m/y') }})</option>@endforeach @endforeach</select></div>
                 @else
                 <input type="hidden" name="current_academic_period_id" id="current_period" value="{{ $school->current_academic_period_id }}">
                 @endif
@@ -76,10 +76,10 @@
             <form method="post" action="{{ route('admin.academic_structure.periods.store') }}">
                 @csrf
                 <input type="hidden" name="_academic_dialog" value="createAcademicPeriod">
-                <div class="mb-3"><label class="form-label">Academic year</label><select class="form-select" name="academic_year_id" required>@foreach($years as $year)<option value="{{ $year->id }}" @selected((string)old('academic_year_id', $school->current_academic_year_id) === (string)$year->id)>{{ $year->label }} ({{ $year->start_date->format('Y-m-d') }} — {{ $year->end_date->format('Y-m-d') }})</option>@endforeach</select></div>
+                <div class="mb-3"><label class="form-label">Academic year</label><select class="form-select" name="academic_year_id" required>@foreach($years as $year)<option value="{{ $year->id }}" @selected((string)old('academic_year_id', $school->current_academic_year_id) === (string)$year->id)>{{ $year->label }} ({{ $year->start_date->format('d/m/y') }} — {{ $year->end_date->format('d/m/y') }})</option>@endforeach</select></div>
                 <div class="row"><div class="col-md-6 mb-3"><label class="form-label">Type</label><select class="form-select" name="type" required>@foreach(['semester','term'] as $type)<option value="{{ $type }}" @selected(old('type', $school->academic_calendar_pattern) === $type)>{{ ucfirst($type) }}</option>@endforeach</select></div><div class="col-md-6 mb-3"><label class="form-label">Sequence</label><input class="form-control" type="number" min="1" name="sequence" value="{{ old('sequence', 1) }}" required></div></div>
                 <div class="mb-3"><label class="form-label">Label</label><input class="form-control" name="label" value="{{ old('label') }}" required maxlength="100" placeholder="Semester 1 or Term 1"></div>
-                <div class="row"><div class="col-md-6 mb-3"><label class="form-label">Start date</label><input class="form-control" type="date" name="start_date" value="{{ old('start_date') }}" required></div><div class="col-md-6 mb-3"><label class="form-label">End date</label><input class="form-control" type="date" name="end_date" value="{{ old('end_date') }}" required></div></div>
+                <div class="row"><div class="col-md-6 mb-3"><label class="form-label">Start date (DD/MM/YY)</label><input class="form-control" type="text" placeholder="DD/MM/YY" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" name="start_date" value="{{ \App\Support\Academic\AcademicDate::input(old('start_date')) }}" required></div><div class="col-md-6 mb-3"><label class="form-label">End date (DD/MM/YY)</label><input class="form-control" type="text" placeholder="DD/MM/YY" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" name="end_date" value="{{ \App\Support\Academic\AcademicDate::input(old('end_date')) }}" required></div></div>
                 <p class="text-muted">New semesters or terms start as Planned. Activate one before selecting it as current.</p>
                 <button class="eBtn eBtn-primary" type="submit">Create {{ strtolower($academicPeriodLabel) }}</button>
             </form>
@@ -89,7 +89,7 @@
         <div class="eSection-wrap mt-3">
             <h5>{{ $showPeriods ? $academicPeriodLabel.'s by Academic Year' : 'Academic Years' }}</h5>
             @forelse($years->when($showPeriods && request('year_id'), fn ($items) => $items->where('id', request('year_id'))) as $year)
-                <div class="border rounded p-3 mb-3"><div class="d-flex justify-content-between"><strong>{{ $year->label }}</strong><span>{{ ucfirst($year->status) }}</span></div><div class="text-muted">{{ $year->start_date->format('Y-m-d') }} — {{ $year->end_date->format('Y-m-d') }}</div>
+                <div class="border rounded p-3 mb-3"><div class="d-flex justify-content-between"><strong>{{ $year->label }}</strong><span>{{ ucfirst($year->status) }}</span></div><div class="text-muted">{{ $year->start_date->format('d/m/y') }} — {{ $year->end_date->format('d/m/y') }}</div>
                     @if(!$showPeriods)
                     @include('admin.academic_structure.actions', ['record' => $year, 'kind' => 'years'])
                     @endif
@@ -102,7 +102,7 @@
                     @if(!$showPeriods && in_array($year->status, ['planned', 'active'], true))
                         <form method="post" action="{{ route('admin.academic_structure.years.status', $year->id) }}" class="d-inline-block mt-2" onsubmit="return confirm('Cancel this academic year? Historical academic records will be preserved.');">@csrf<input type="hidden" name="status" value="cancelled"><input type="hidden" name="confirm_cancellation" value="1"><button class="btn btn-sm btn-outline-danger" type="submit">Cancel year</button></form>
                     @endif
-                    @if($showPeriods && $year->periods->isNotEmpty())<ul class="mb-0 mt-2">@foreach($year->periods as $period)<li class="border-top pt-3 mt-3"><strong>{{ $period->label }}</strong> · {{ $academicPeriodLabel }} {{ $period->sequence }} · {{ $period->start_date->format('Y-m-d') }} — {{ $period->end_date->format('Y-m-d') }} · {{ ucfirst($period->status) }}
+                    @if($showPeriods && $year->periods->isNotEmpty())<ul class="mb-0 mt-2">@foreach($year->periods as $period)<li class="border-top pt-3 mt-3"><strong>{{ $period->label }}</strong> · {{ $academicPeriodLabel }} {{ $period->sequence }} · {{ $period->start_date->format('d/m/y') }} — {{ $period->end_date->format('d/m/y') }} · {{ ucfirst($period->status) }}
                         @include('admin.academic_structure.actions', ['record' => $period, 'kind' => 'periods'])
                         @if($period->status === 'planned')
                             <form method="post" action="{{ route('admin.academic_structure.periods.status', $period->id) }}" class="d-inline-block">@csrf<input type="hidden" name="status" value="active"><button class="btn btn-sm btn-outline-primary" type="submit">Activate</button></form>

@@ -1831,6 +1831,11 @@ Route::controller(\App\Http\Controllers\AcademicDeliveryWorkspaceController::cla
     Route::get('admin/course-registrations', 'registrations')->name('admin.course_registrations.index');
     Route::get('admin/lecturer-assignments', 'lecturers')->name('admin.lecturer_assignments.index');
 });
+Route::controller(\App\Http\Controllers\ProgrammeRegistrationController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
+    Route::post('admin/course-registrations/register', 'register')->name('admin.course_registrations.register');
+    Route::post('admin/course-registrations/place', 'place')->name('admin.course_registrations.place');
+    Route::post('admin/course-registrations/confirm', 'confirm')->name('admin.course_registrations.confirm');
+});
 Route::get('admin/curriculum-course-units', [\App\Http\Controllers\CurriculumController::class, 'units'])->middleware('auth', 'admin', 'rbac')->name('admin.curriculum_units.index');
 Route::controller(\App\Http\Controllers\CurriculumController::class)->middleware('auth', 'admin', 'rbac')->prefix('admin/curricula')->name('admin.curricula.')->group(function () {
     Route::get('/', 'index')->name('index');

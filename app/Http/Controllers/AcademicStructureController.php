@@ -34,6 +34,7 @@ class AcademicStructureController extends Controller
 
     public function storeYear(Request $request)
     {
+        \App\Support\Academic\AcademicDate::normalize($request);
         $data = $request->validate([
             'label' => ['required', 'string', 'max:100'],
             'start_date' => ['required', 'date'],
@@ -46,6 +47,7 @@ class AcademicStructureController extends Controller
 
     public function storePeriod(Request $request)
     {
+        \App\Support\Academic\AcademicDate::normalize($request);
         $year = AcademicYear::query()->where('school_id', $this->schoolId)->findOrFail($request->input('academic_year_id'));
         $data = $request->validate([
             'academic_year_id' => ['required', 'integer'],
@@ -101,6 +103,7 @@ class AcademicStructureController extends Controller
 
     public function update(Request $request, string $kind, int $recordId)
     {
+        \App\Support\Academic\AcademicDate::normalize($request);
         DB::transaction(function () use ($request, $kind, $recordId) {
             $school = \App\Models\School::whereKey($this->schoolId)->lockForUpdate()->firstOrFail();
             $record = $this->calendarRecord($kind, $recordId, true);
