@@ -323,7 +323,6 @@ class AdmissionPaymentTest extends TestCase
             'app_number' => 'PIIE-2627-O-P5001',
             'email' => 'mailme@example.com',
             'intake_session_id' => $intakeId,
-            'submitted_at' => now(),
         ]);
 
         $this->actingAs($admin)->post(route('admin.hei_admissions.payment.request', $admissionId));
@@ -335,7 +334,7 @@ class AdmissionPaymentTest extends TestCase
                 && ($mail->data['details']['Portal Sign-in Address'] ?? null) === route('applicant.login')
                 && str_contains($mail->data['subject'], 'PIIE-2627-O-P5001')
                 && ($mail->data['details']['Application Number'] ?? null) === 'PIIE-2627-O-P5001'
-                && ($mail->data['details']['Payment Reference'] ?? null) === 'PIIE-2627-O-P5001'
+                && ($mail->data['details']['Payment Registration Number (PRN)'] ?? null) === 'PRN-PIIE2627OP5001'
                 && str_contains((string) $mail->data['cta_url'], '/payments/application/')
                 && str_contains((string) $mail->data['access_url'], '/applicant/reset-password/');
         });
