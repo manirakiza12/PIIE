@@ -142,6 +142,7 @@
             </div>
         </div>
         @unless($admission->isFeeSettled())
+            <p>{{ get_phrase('New applications, including applications entered by staff, must pay the configured application fee before acceptance or enrolment. Existing students use direct student onboarding.') }}</p>
             <p class="text-muted mb-2" style="font-size:13px;">
                 {{ get_phrase('The candidate pays this themselves from their own applicant portal — sending a request gives them a link to set up access and pay, the same way an online applicant would.') }}
             </p>
@@ -152,18 +153,6 @@
                     {{ $admission->applicant_id ? get_phrase('Resend Payment Instructions') : get_phrase('Send Payment Request') }}
                 </button>
             </form>
-            <details class="mt-3">
-                <summary class="text-muted">{{ get_phrase('Record an authorized application-fee waiver') }}</summary>
-                <p class="text-muted mt-2 mb-2" style="font-size:13px;">
-                    {{ get_phrase('This waives only the application fee. It does not waive tuition or the school-fee payment requirement.') }}
-                </p>
-                <form action="{{ route('admin.hei_admissions.payment.waive', $admission->id) }}" method="POST" class="mt-2">
-                    @csrf
-                    <label class="form-label" for="application-fee-waiver-reason">{{ get_phrase('Reason for waiver') }} *</label>
-                    <textarea id="application-fee-waiver-reason" name="reason" class="form-control eForm-control mb-2" rows="2" maxlength="500" required></textarea>
-                    <button type="submit" class="eBtn eBtn-sm eBtn-outline-black">{{ get_phrase('Confirm application-fee waiver') }}</button>
-                </form>
-            </details>
         @endunless
     </div>
 @endif

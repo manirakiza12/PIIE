@@ -115,9 +115,7 @@ class ApplicationFee
                     $paid += $amount;
                 }
 
-                if ($payments->contains(fn ($p) => $p->status === ApplicationPayment::STATUS_WAIVED)) {
-                    $status = Admission::FEE_WAIVED;
-                } elseif ($required !== null && $paid >= $required) {
+                if ($required !== null && $paid >= $required) {
                     $status = Admission::FEE_PAID;
                 } elseif ($payments->contains(fn ($p) => $p->status === ApplicationPayment::STATUS_PENDING
                     && (DecimalAmount::minorUnits($p->amount) ?? 0) > 0)) {

@@ -169,7 +169,7 @@ class AdmissionWizardController extends Controller
             case 'review':
             default:
                 $feeAmount = ApplicationFee::amountFor($admission);
-                $feePaid   = (float) $admission->payments->whereIn('status', ['paid', 'waived'])->sum('amount');
+                $feePaid   = (float) $admission->payments->where('status', 'paid')->sum('amount');
 
                 return view('admin.admissions.wizard.review', $shared + [
                     'blockers'       => $this->blockers($admission),

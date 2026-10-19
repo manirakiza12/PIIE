@@ -155,11 +155,14 @@ class ApplicationPaymentFoundationTest extends TestCase
         ];
     }
 
-    public function test_explicit_waiver_remains_waived(): void
+    public function test_historical_waiver_does_not_settle_a_required_application_fee(): void
     {
         $admission = $this->admission();
         $this->payment($admission, ['method' => 'waived', 'status' => ApplicationPayment::STATUS_WAIVED]);
-        $this->assertSame(Admission::FEE_WAIVED, ApplicationFee::refreshStatus($admission));
+        $admission->forceFill(['fee_status' => Admission::FEE_WAIVED])->save();
+        $this->assertFalse($admission->isFeeSettled());
+        $this->assertFalse(ApplicationFee::isSettled($admission));
+        $this->assertSame(Admission::FEE_UNPAID, ApplicationFee::refreshStatus($admission));
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('excludedStates')]
