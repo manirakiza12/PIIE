@@ -416,6 +416,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Syntax-check every deployment script
         run: for f in deploy/*.sh deploy/remote/*.sh deploy/tests/*.sh; do bash -n "$f"; done
+      - name: Test public asset smoke checks
+        run: python3 -m unittest discover -s tests/deploy -v
       # Every suite in deploy/tests/ is run, in this order. Naming them one by one
       # is what let three suites (preflight, preflight-uploads,
       # uploads-integration) sit unexecuted: they were added and passed locally,

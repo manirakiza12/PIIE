@@ -41,8 +41,14 @@ ln -s ../../../shared/storage/app/public "$REL/public/storage"
 artisan() { docker exec --user www-data -w "/srv/piie/releases/$RID" piie-app php artisan "$@"; }
 artisan package:discover --no-interaction >/dev/null
 artisan --version
-artisan migrate --pretend --force --no-interaction > "$REL/migration-preview.txt"
-if grep -qiE 'drop +(table|column|database)|truncate|delete +from' "$REL/migration-preview.txt"; then fail 'Destructive migration SQL requires review'; fi
+if [ "${PIIE_CODE_ONLY:-0}" = 1 ]; then
+  artisan migrate:status > "$REL/migration-status.txt"
+  ! grep -q Pending "$REL/migration-status.txt" || fail 'Code-only release refuses pending migrations'
+  echo 'Code-only release: no migrations will run'
+else
+  artisan migrate --pretend --force --no-interaction > "$REL/migration-preview.txt"
+  if grep -qiE 'drop +(table|column|database)|truncate|delete +from' "$REL/migration-preview.txt"; then fail 'Destructive migration SQL requires review'; fi
+fi
 if [ "$MODE" = stage ]; then echo "STAGED $RID: live release, uploads and database unchanged"; exit 0; fi
 BACK="$BASE/backups/$RID"
 install -d -m 700 "$BACK"
@@ -102,7 +108,7 @@ find "$SHARED" -type f -exec chmod 664 {} +
 mv "$REL/public/assets/uploads" "$REL/public/assets/uploads-baseline"
 ln -s ../../../../shared/public-uploads "$REL/public/assets/uploads"
 mkdir -p "$BASE/shared/storage/app/public"
-artisan migrate --force --no-interaction
+if [ "${PIIE_CODE_ONLY:-0}" != 1 ]; then artisan migrate --force --no-interaction; fi
 artisan migrate:status | tee "$REL/migration-status.txt"
 ! grep -q Pending "$REL/migration-status.txt" || fail 'Migrations remain pending'
 artisan config:clear

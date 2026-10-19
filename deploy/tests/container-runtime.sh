@@ -24,6 +24,7 @@ case "$*" in
   *'inspect piie-db --format'*) printf 'MARIADB_DATABASE=forge\nMARIADB_ROOT_PASSWORD=test-password\n';;
   *mariadb-dump*) head -c 2000 /dev/urandom;;
   *'migrate --pretend'*) [ "${FAIL_PREVIEW:-0}" = 0 ];;
+  *'migrate:status'*) if [ "${PENDING_MIGRATIONS:-0}" = 1 ]; then echo 'Pending'; fi;;
   *'curl --fail'*) [ "${FAIL_HEALTH:-0}" = 0 ];;
   *) exit 0;;
 esac
@@ -70,3 +71,16 @@ EXPECTED_DEPLOYED_SHA="$SHA" bash "$S/scripts/container-deploy.sh" 20261014-1200
 [ "$(readlink "$S/current/public/assets/uploads")" = ../../../../shared/public-uploads ]
 [ -s "$S/scheduler" ]
 echo 'PASS: successful activation uses container-compatible relative links and scheduler'
+
+: > "$S/docker.log"
+EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 bash "$S/scripts/container-deploy.sh" 20261014-120005-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/code-only.log" 2>&1
+! grep -q 'migrate --' "$S/docker.log"
+[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+echo 'PASS: code-only activation runs no migrations'
+set +e
+EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 PENDING_MIGRATIONS=1 bash "$S/scripts/container-deploy.sh" 20261014-120006-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/pending.log" 2>&1
+code=$?
+set -e
+[ "$code" != 0 ] && grep -q 'refuses pending migrations' "$S/pending.log"
+[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+echo 'PASS: code-only activation rejects pending migrations before backup or switching'
