@@ -127,7 +127,7 @@ class AuthenticationCompatibilityTest extends TestCase
             'email' => $user->email, 'token' => $token,
             'password' => 'l1-new-password', 'password_confirmation' => 'l1-new-password',
             'user_id' => $foreign->id, 'school_id' => $foreign->school_id,
-        ])->assertRedirect('/');
+        ])->assertRedirect($role === 7 ? route('student.dashboard') : '/');
         $this->assertTrue(Hash::check('l1-new-password', $user->fresh()->password));
         $this->assertSame($foreignHash, $foreign->fresh()->password);
         $this->assertFalse(Password::broker('users')->tokenExists($user->fresh(), $token));
