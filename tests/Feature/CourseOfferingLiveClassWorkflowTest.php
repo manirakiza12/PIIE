@@ -282,6 +282,7 @@ class CourseOfferingLiveClassWorkflowTest extends TestCase
             'status' => $status,
         ]);
 
+        $this->grantStudyEligibilityFixture($student);
         return $student;
     }
 

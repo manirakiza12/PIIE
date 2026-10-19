@@ -102,6 +102,7 @@ class LiveClassPrivateAssetFoundationTest extends TestCase
     {
         $class = $this->offeringClass();
         $student = User::create(['name' => 'Registered learner', 'email' => 'asset-student@example.test', 'role_id' => 7, 'school_id' => 11, 'status' => 1]);
+        $this->grantStudyEligibilityFixture($student);
         DB::table('course_registrations')->insert(['school_id' => 11, 'student_id' => $student->id, 'course_offering_id' => 701, 'status' => 'confirmed']);
 
         $storage = app(LiveClassAssetStorage::class);
@@ -125,6 +126,7 @@ class LiveClassPrivateAssetFoundationTest extends TestCase
     {
         $class = $this->offeringClass();
         $student = User::create(['name' => 'Pending learner', 'email' => 'pending-asset@example.test', 'role_id' => 7, 'school_id' => 11, 'status' => 1]);
+        $this->grantStudyEligibilityFixture($student);
         DB::table('course_registrations')->insert(['school_id' => 11, 'student_id' => $student->id, 'course_offering_id' => 701, 'status' => 'registered']);
         $materialId = DB::table('live_class_materials')->insertGetId([
             'school_id' => 11, 'live_class_id' => $class->id, 'type' => 'file', 'category' => 'resource',
@@ -197,6 +199,7 @@ class LiveClassPrivateAssetFoundationTest extends TestCase
         $class = $this->offeringClass();
         DB::table('live_classes')->where('id', $class->id)->update(['recording_url' => 'https://recordings.example.test/lecture']);
         $student = User::create(['name' => 'Confirmed learner', 'email' => 'redirect-learner@example.test', 'role_id' => 7, 'school_id' => 11, 'status' => 1]);
+        $this->grantStudyEligibilityFixture($student);
         $materialId = DB::table('live_class_materials')->insertGetId([
             'school_id' => 11, 'live_class_id' => $class->id, 'type' => 'link', 'category' => 'recording',
             'title' => 'External resource', 'link_url' => 'https://resources.example.test/notes',
