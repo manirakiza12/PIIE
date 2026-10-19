@@ -86,7 +86,7 @@ class AdmissionFeeGateAndExpiryTest extends TestCase
         $admission = $this->submittedAdmission();
         $this->assertFalse(ApplicationFee::isSettled($admission), 'precondition: fee is outstanding');
 
-        foreach (['under_review', 'accepted', 'enrolled'] as $target) {
+        foreach (['under_review', 'needs_correction', 'accepted', 'rejected', 'enrolled', 'withdrawn'] as $target) {
             $this->assertFalse(
                 ApplicationWorkflow::canTransition($admission, $target),
                 "an unpaid application must not reach {$target}"
@@ -111,12 +111,16 @@ class AdmissionFeeGateAndExpiryTest extends TestCase
     }
 
     /** Collecting the fee must never be blocked by the gate that demands it. */
-    public function test_payment_and_rejection_paths_remain_available_while_unpaid(): void
+    public function test_no_admissions_status_change_is_available_while_unpaid(): void
     {
         $admission = $this->submittedAdmission();
-        $this->assertTrue(ApplicationWorkflow::canTransition($admission, 'rejected'));
-        $this->assertTrue(ApplicationWorkflow::canTransition($admission, 'withdrawn'));
-        $this->assertTrue(ApplicationWorkflow::canTransition($admission, 'needs_correction'));
+        foreach (['under_review', 'needs_correction', 'accepted', 'rejected', 'enrolled', 'withdrawn'] as $target) {
+            $this->assertFalse(ApplicationWorkflow::canTransition($admission, $target));
+        }
+        $this->assertTrue(
+            \App\Support\Payments\ApplicantPesaPalPayment::eligible($admission),
+            'the submitted applicant must still be able to start PesaPal payment while Admissions actions are locked'
+        );
     }
 
     public function test_expiry_leaves_drafts_alone_and_only_runs_after_the_intake_closes(): void

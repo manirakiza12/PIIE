@@ -20,6 +20,24 @@ use Illuminate\Support\Facades\DB;
  */
 class ApplicationWorkflow
 {
+    public static function hasBeenSubmitted(Admission $admission): bool
+    {
+        return $admission->status !== Admission::STATUS_DRAFT;
+    }
+
+    /** Refresh the authoritative fee state before any staff-side processing. */
+    public static function staffProcessingAllowed(Admission $admission): bool
+    {
+        ApplicationFee::refreshStatus($admission);
+
+        return ApplicationFee::isSettled($admission);
+    }
+
+    public static function staffProcessingMessage(): string
+    {
+        return get_phrase('Admissions actions are locked until the application fee is paid and confirmed. The applicant can pay from their portal.');
+    }
+
     public static function canTransition(Admission $admission, string $target): bool
     {
         $allowed = [
@@ -31,9 +49,16 @@ class ApplicationWorkflow
             'enrolled' => [], 'rejected' => [], 'withdrawn' => [], 'expired' => [],
         ];
         if ($admission->status !== $target && ! in_array($target, $allowed[$admission->status] ?? [], true)) { return false; }
+        if (self::hasBeenSubmitted($admission) && ! self::staffProcessingAllowed($admission)) {
+            return false;
+        }
+        if (in_array($target, ['under_review', 'needs_correction', 'accepted', 'rejected', 'enrolled', 'withdrawn'], true)) {
+            if (! self::staffProcessingAllowed($admission)) {
+                return false;
+            }
+        }
         if (in_array($target, ['under_review', 'accepted', 'enrolled'], true)) {
-            ApplicationFee::refreshStatus($admission);
-            return filled($admission->submitted_at) && ApplicationProgress::canSubmit($admission) && ApplicationFee::isSettled($admission);
+            return filled($admission->submitted_at) && ApplicationProgress::canSubmit($admission);
         }
         return true;
     }
@@ -53,8 +78,10 @@ class ApplicationWorkflow
             foreach (ApplicationProgress::blockers($admission) as $blocker) {
                 $requirements[] = get_phrase('Complete the required application item').': '.$blocker;
             }
-            if (! ApplicationFee::isSettled($admission)) {
-                $requirements[] = get_phrase('Confirm the application fee payment before proceeding. New applications, including staff entries, require payment.');
+        }
+        if (in_array($target, [Admission::STATUS_UNDER_REVIEW, Admission::STATUS_NEEDS_CORRECTION, Admission::STATUS_ACCEPTED, Admission::STATUS_REJECTED, Admission::STATUS_ENROLLED, Admission::STATUS_WITHDRAWN], true)) {
+            if (! self::staffProcessingAllowed($admission)) {
+                $requirements[] = self::staffProcessingMessage();
             }
         }
         return $requirements;

@@ -62,6 +62,41 @@ class AdmissionsReviewWorkflowTest extends TestCase
         $response->assertSee('Ugandan');
     }
 
+    public function test_unpaid_submitted_application_is_viewable_but_admissions_actions_are_locked(): void
+    {
+        $admission = $this->makeSubmittedAdmission([
+            'application_fee_amount' => 50000,
+            'application_fee_currency' => 'UGX',
+            'fee_status' => Admission::FEE_UNPAID,
+            'notes' => 'Keep this note unchanged.',
+        ]);
+        $documentId = AdmissionDocument::create([
+            'school_id' => $this->schoolId,
+            'admission_id' => $admission->id,
+            'original_name' => 'passport.pdf',
+            'stored_name' => 'passport.pdf',
+            'status' => AdmissionDocument::STATUS_PENDING,
+        ])->id;
+        $admin = $this->makeAdminUser($this->schoolId);
+
+        $this->actingAs($admin)->get(route('admin.hei_admissions.review', $admission->id))
+            ->assertOk()
+            ->assertSee('cannot review documents or make changes until the application fee is paid')
+            ->assertDontSee(route('admin.hei_admissions.notes', $admission->id));
+
+        $this->post(route('admin.hei_admissions.notes', $admission->id), ['notes' => 'Changed before payment'])
+            ->assertRedirect();
+        $this->post(route('admin.hei_admissions.document.review', $documentId), [
+            'status' => AdmissionDocument::STATUS_VERIFIED,
+        ])->assertRedirect();
+        $this->post(route('admin.hei_admissions.status', $admission->id), ['status' => Admission::STATUS_REJECTED])
+            ->assertSessionHasErrors('status');
+
+        $this->assertSame('Keep this note unchanged.', $admission->fresh()->notes);
+        $this->assertSame(AdmissionDocument::STATUS_PENDING, AdmissionDocument::findOrFail($documentId)->status);
+        $this->assertSame(Admission::STATUS_SUBMITTED, $admission->fresh()->status);
+    }
+
     public function test_review_screen_shows_academic_assignment_fields_for_enrolment(): void
     {
         $admission = $this->makeSubmittedAdmission(['status' => Admission::STATUS_ACCEPTED]);

@@ -143,6 +143,7 @@ class AdmissionsController extends Controller
         }
 
         $feeAmount = ApplicationFee::amountFor($admission);
+        $staffProcessingLocked = ApplicationWorkflow::hasBeenSubmitted($admission) && ! ApplicationWorkflow::staffProcessingAllowed($admission);
         $feePaid   = (float) $admission->payments->whereIn('status', [ApplicationPayment::STATUS_PAID, ApplicationPayment::STATUS_WAIVED])->sum('amount');
 
         return view('admin.admissions.review', [
@@ -152,6 +153,7 @@ class AdmissionsController extends Controller
             'feeAmount'         => $feeAmount,
             'feePaid'           => $feePaid,
             'feeOutstanding'    => max(0, $feeAmount - $feePaid),
+            'staffProcessingLocked' => $staffProcessingLocked,
             'progress'          => ApplicationProgress::percent($admission),
             'blockers'          => ApplicationProgress::blockers($admission),
             'statuses'          => Admission::STAFF_SETTABLE_STATUSES,
@@ -174,6 +176,9 @@ class AdmissionsController extends Controller
     public function reviewDocument(Request $request, $id)
     {
         $document = AdmissionDocument::where('school_id', $this->school_id)->findOrFail($id);
+        if (ApplicationWorkflow::hasBeenSubmitted($document->admission) && ! ApplicationWorkflow::staffProcessingAllowed($document->admission)) {
+            return back()->with('error', ApplicationWorkflow::staffProcessingMessage());
+        }
 
         $validated = $request->validate([
             'status'      => ['required', Rule::in([AdmissionDocument::STATUS_VERIFIED, AdmissionDocument::STATUS_REJECTED, AdmissionDocument::STATUS_PENDING])],
@@ -209,6 +214,9 @@ class AdmissionsController extends Controller
     public function requestCorrection(Request $request, $id)
     {
         $admission = Admission::where('school_id', $this->school_id)->submittedOnly()->findOrFail($id);
+        if (! ApplicationWorkflow::staffProcessingAllowed($admission)) {
+            return back()->with('error', ApplicationWorkflow::staffProcessingMessage());
+        }
 
         $validated = $request->validate([
             'correction_note' => 'required|string|max:2000',
@@ -218,7 +226,9 @@ class AdmissionsController extends Controller
 
         $admission->load(['programme', 'intakeSession']);
 
-        ApplicationWorkflow::requestCorrection($admission, Auth::user(), $validated['correction_note']);
+        if (! ApplicationWorkflow::requestCorrection($admission, Auth::user(), $validated['correction_note'])) {
+            return back()->with('error', ApplicationWorkflow::staffProcessingMessage());
+        }
 
         return redirect()->route('admin.hei_admissions.review', $admission->id)
             ->with('success', get_phrase('The application has been returned to the applicant.'));
@@ -228,6 +238,9 @@ class AdmissionsController extends Controller
     public function saveNotes(Request $request, $id)
     {
         $admission = Admission::where('school_id', $this->school_id)->findOrFail($id);
+        if (ApplicationWorkflow::hasBeenSubmitted($admission) && ! ApplicationWorkflow::staffProcessingAllowed($admission)) {
+            return back()->with('error', ApplicationWorkflow::staffProcessingMessage());
+        }
 
         $validated = $request->validate(['notes' => 'nullable|string|max:5000']);
 
@@ -644,6 +657,9 @@ class AdmissionsController extends Controller
     public function destroy($id)
     {
         $admission = Admission::where('school_id', $this->school_id)->findOrFail($id);
+        if (ApplicationWorkflow::hasBeenSubmitted($admission) && ! ApplicationWorkflow::staffProcessingAllowed($admission)) {
+            return back()->with('error', ApplicationWorkflow::staffProcessingMessage());
+        }
         AuditLog::record('delete', 'Admissions', "Deleted application: {$admission->app_number}");
         $admission->delete();
         return redirect()->back()->with('success', get_phrase('Application deleted'));

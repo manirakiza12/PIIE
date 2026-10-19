@@ -41,7 +41,7 @@
                 <a href="{{ route('admin.hei_admissions.index') }}" class="export_btn export_btn-outline">
                     <i class="bi bi-arrow-left"></i> {{ get_phrase('Back to Applications') }}
                 </a>
-                @if(in_array($admission->status, ['accepted', 'enrolled']))
+                @if(! $staffProcessingLocked && in_array($admission->status, ['accepted', 'enrolled']))
                     <a href="{{ route('admin.hei_admissions.offer_letter', $admission->id) }}" class="export_btn">
                         <i class="bi bi-file-pdf"></i> {{ get_phrase('Offer Letter') }}
                     </a>
@@ -210,6 +210,10 @@
         <div class="eSection-wrap mb-3">
             <h5 class="mb-3"><i class="bi bi-folder2-open"></i> {{ get_phrase('Supporting Documents') }}</h5>
 
+            @if($staffProcessingLocked)
+                <div class="alert alert-info" role="status">{{ get_phrase('The application is available to view, but Admissions cannot review documents or make changes until the application fee is paid and confirmed. The applicant can pay from their portal.') }}</div>
+            @endif
+
             @forelse($docChecklist as $row)
                 @php
                     $requirement = $row['requirement'];
@@ -242,7 +246,7 @@
                                 <i class="bi bi-eye"></i>
                             </a>
 
-                            <form action="{{ route('admin.hei_admissions.document.review', $file->id) }}" method="POST" class="d-flex gap-1">
+                            @unless($staffProcessingLocked)<form action="{{ route('admin.hei_admissions.document.review', $file->id) }}" method="POST" class="d-flex gap-1">
                                 @csrf
                                 <input type="hidden" name="status" value="{{ AdmissionDocument::STATUS_VERIFIED }}">
                                 <button type="submit" class="eBtn eBtn-sm eBtn-success" title="{{ get_phrase('Verify') }}"
@@ -255,8 +259,10 @@
                                     onclick="document.getElementById('rejectDoc{{ $file->id }}').classList.toggle('d-none')">
                                 <i class="bi bi-x-lg"></i>
                             </button>
+                            @endunless
                         </div>
 
+                        @unless($staffProcessingLocked)
                         <form action="{{ route('admin.hei_admissions.document.review', $file->id) }}" method="POST"
                               id="rejectDoc{{ $file->id }}" class="d-none mt-2">
                             @csrf
@@ -267,6 +273,7 @@
                                 <button type="submit" class="eBtn eBtn-danger">{{ get_phrase('Reject') }}</button>
                             </div>
                         </form>
+                        @endunless
                     @endforeach
 
                     @if($row['files']->isEmpty())
@@ -425,6 +432,10 @@
         <div class="eSection-wrap mb-3">
             <h5 class="mb-3"><i class="bi bi-clipboard-check"></i> {{ get_phrase('Decision') }}</h5>
 
+            @if($staffProcessingLocked)
+                <div class="alert alert-warning" role="status">{{ get_phrase('Application fee payment must be confirmed before Admissions can review, request corrections, or change this application’s status. The applicant can pay from their portal.') }}</div>
+            @else
+
             @if(! empty($enrolmentBlockers))
                 <div class="alert alert-warning" role="status">
                     <strong>{{ get_phrase('Before enrolment') }}</strong>
@@ -509,10 +520,11 @@
 
                 <button type="submit" class="eBtn w-100">{{ get_phrase('Update Status') }}</button>
             </form>
+            @endif
         </div>
 
         {{-- Request corrections --}}
-        @if(! in_array($admission->status, [Admission::STATUS_DRAFT, Admission::STATUS_ENROLLED]))
+        @if(! $staffProcessingLocked && ! in_array($admission->status, [Admission::STATUS_DRAFT, Admission::STATUS_ENROLLED]))
             <div class="eSection-wrap mb-3">
                 <h5 class="mb-3"><i class="bi bi-arrow-counterclockwise"></i> {{ get_phrase('Return for Corrections') }}</h5>
                 <p class="text-muted" style="font-size:13.5px;">
@@ -533,11 +545,15 @@
             <h5 class="mb-3"><i class="bi bi-lock"></i> {{ get_phrase('Internal Notes') }}</h5>
             <p class="text-muted" style="font-size:13.5px;">{{ get_phrase('Staff only — never shown to the applicant.') }}</p>
 
+            @if($staffProcessingLocked)
+                <p class="text-muted mb-0">{{ get_phrase('Notes are locked until the application fee is paid and confirmed.') }}</p>
+            @else
             <form action="{{ route('admin.hei_admissions.notes', $admission->id) }}" method="POST">
                 @csrf
                 <textarea name="notes" class="form-control eForm-control mb-2" rows="4">{{ $admission->notes }}</textarea>
                 <button type="submit" class="eBtn eBtn-outline w-100">{{ get_phrase('Save Notes') }}</button>
             </form>
+            @endif
         </div>
 
         {{-- Timeline --}}
