@@ -85,6 +85,12 @@ on:
         default: ''
         type: string
 
+      code_only:
+        description: 'Refuse pending migrations and activate without running migrations (Docker runtime)'
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   actions: read
@@ -229,18 +235,21 @@ jobs:
           MODE: ${{ inputs.mode }}
           ALLOW_DESTRUCTIVE: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS }}
           DEPLOYED_REF: ${{ inputs.deployed_ref }}
+          CODE_ONLY: ${{ inputs.code_only && '1' || '0' }}
         run: |
           RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
           SUM=$(cut -d' ' -f1 dist/piie-release-${SHA:0:12}.tar.gz.sha256)
-          ssh piie-prod "EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
+          ssh piie-prod "PIIE_CODE_ONLY=$CODE_ONLY EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
+
+      - name: Verify active release SHA and document root (read-only)
+        if: ${{ inputs.mode == 'activate' }}
+        run: |
+          ssh piie-prod "test \"\$(cat $REMOTE_BASE/current/RELEASE_SHA)\" = '$SHA' && readlink $REMOTE_BASE/current && cat $REMOTE_BASE/current/RELEASE_SHA"
 
       - name: Public smoke check
         if: ${{ inputs.mode == 'activate' }}
         run: |
-          for u in / /login /apply /applicant/login /careers /assets/css/typography.css /assets/css/workspace-ui.css; do
-            code=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 20 "https://piie.ac.ug$u")
-            echo "$u -> $code"; [ "$code" = 200 ] || [ "$code" = 302 ] || exit 1
-          done
+          python3 deploy/check-public-assets.py https://piie.ac.ug
 
       - name: Remove key material
         if: always()

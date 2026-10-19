@@ -11,6 +11,14 @@ must_have() { grep -qx "$1" "$LIST" || { echo "MISSING: $1"; fail=1; }; }
 must_not()  { if grep -E "$1" "$LIST" >/dev/null; then echo "FORBIDDEN ($2):"; grep -E "$1" "$LIST" | head -5; fail=1; fi; }
 
 for f in artisan composer.json RELEASE_SHA vendor/autoload.php public/index.php bootstrap/app.php; do must_have "$f"; done
+for f in public/css/piie-site.css public/css/piie-blocks.css \
+  public/frontend/assets/css/bootstrap.min.css public/frontend/assets/css/style.css \
+  public/frontend/assets/js/jquery-3.6.1.min.js public/frontend/assets/js/bootstrap.bundle.min.js \
+  public/assets/css/main.css public/assets/css/style.css public/assets/css/typography.css \
+  public/assets/css/workspace-ui.css public/assets/js/workspace-ui.js \
+  public/assets/vendors/bootstrap-5.1.3/css/bootstrap.min.css \
+  public/assets/vendors/bootstrap-5.1.3/js/bootstrap.bundle.min.js \
+  public/assets/vendors/jquery/jquery-3.6.0.min.js; do must_have "$f"; done
 
 must_not '^\.env($|\.)'                'environment file'
 must_not '^tests/'                     'tests'

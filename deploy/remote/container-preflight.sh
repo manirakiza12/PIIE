@@ -8,6 +8,8 @@ command -v docker >/dev/null
 docker inspect -f '{{range .Mounts}}{{.Source}}:{{.Destination}}{{println}}{{end}}' piie-app | grep -Fx "$BASE:/srv/piie"
 case "$(readlink "$BASE/current")" in releases/*) ;; *) echo 'Current must be a relative release link'; exit 1;; esac
 [ -s "$BASE/current/RELEASE_SHA" ]
+echo "Active release: $(readlink "$BASE/current")"
+echo "Active SHA: $(cat "$BASE/current/RELEASE_SHA")"
 [ -s "$BASE/shared/.env" ]
 [ -d "$BASE/shared/storage" ]
 [ "$(stat -c %a "$BASE/shared/.env")" = 640 ] || [ "$(stat -c %a "$BASE/shared/.env")" = 600 ]
