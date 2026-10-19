@@ -24,7 +24,7 @@ final class ApplicantPesaPalPayment
         throw ValidationException::withMessages(['payment' => $message]);
     }
 
-    public static function start(Admission $admission): ApplicationPayment
+    public static function start(Admission $admission, ?string $payerPhone = null): ApplicationPayment
     {
         if($guard=config('sandbox.checkout.start_guard')) { $guard($admission); }
         // Re-check terminal failed attempts before permitting a replacement order.
@@ -79,10 +79,10 @@ final class ApplicantPesaPalPayment
         try {
             $order = (new PesaPalService($configuration))->submitOrder([
                 'id' => $payment->reference, 'amount' => (string) $payment->amount, 'currency' => $payment->currency,
-                'description' => 'Application fee ' . $admission->app_number,
+                'description' => 'Application fee PRN ' . ApplicationFee::registrationNumber($admission),
                 'callback_url' => route('applicant.pesapal.callback'),
                 'notification_id' => $configuration->notificationId,
-                'billing_address' => ['email_address' => (string) $admission->email, 'phone_number' => (string) $admission->phone,
+                'billing_address' => ['email_address' => (string) $admission->email, 'phone_number' => $payerPhone ?: (string) $admission->phone,
                     'first_name' => (string) $admission->first_name, 'last_name' => (string) $admission->last_name],
             ]);
             DB::transaction(function () use ($payment, $order) {

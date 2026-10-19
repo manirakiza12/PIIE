@@ -19,6 +19,16 @@ use Illuminate\Support\Facades\DB;
  */
 class ApplicationFee
 {
+    /**
+     * Stable, human-readable identifier for an application's fee obligation.
+     * The application number is unique in the admissions table, so the PRN is
+     * deterministic and does not require a second mutable identifier column.
+     */
+    public static function registrationNumber(Admission $admission): string
+    {
+        return 'PRN-' . strtoupper((string) preg_replace('/[^A-Z0-9]/i', '', $admission->app_number));
+    }
+
     public static function amountFor(Admission $admission): float
     {
         if ($admission->application_fee_amount !== null) { return (float) $admission->application_fee_amount; }

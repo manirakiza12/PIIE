@@ -271,6 +271,7 @@ class ApplicantNotifier
             ],
             'details' => array_filter([
                 get_phrase('Application Number') => $admission->app_number,
+                get_phrase('Payment Registration Number (PRN)') => ApplicationFee::registrationNumber($admission),
                 get_phrase('Amount')             => ApplicationFee::format((float) $payment->amount, $admission),
                 get_phrase('Method')             => ucfirst($payment->method),
                 get_phrase('Reference')          => $payment->reference,
@@ -341,7 +342,7 @@ class ApplicantNotifier
                 get_phrase('Application Number') => $admission->app_number,
                 get_phrase('Programme')          => optional($admission->programme)->name,
                 get_phrase('Application Fee')    => $amount > 0 ? ApplicationFee::format($amount, $admission) : get_phrase('None for this intake'),
-                get_phrase('Payment Reference')  => $admission->app_number,
+                get_phrase('Payment Registration Number (PRN)') => $amount > 0 ? ApplicationFee::registrationNumber($admission) : null,
                 get_phrase('Payment Status')     => ucfirst($admission->fee_status),
             ]),
             'cta_label'   => get_phrase('Pay or Check PesaPal Payment'),
