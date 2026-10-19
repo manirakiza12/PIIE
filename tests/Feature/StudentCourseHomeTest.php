@@ -113,6 +113,7 @@ class StudentCourseHomeTest extends TestCase
             'status' => CourseRegistration::STATUS_CONFIRMED,
         ]);
 
+        $this->financiallyEligibleStudent($user);
         return $user->fresh();
     }
 

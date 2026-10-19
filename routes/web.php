@@ -857,7 +857,6 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::get('admin/class/delete/{id}', 'classDelete')->name('admin.class.delete');
 
     //Accounting route
-    Route::get('admin/student_fee/delete/{id}/{status}', 'update_offline_payment')->name('admin.update_offline_payment');
     // Legacy PayPal/Stripe/Razorpay/Paytm gateway routes removed (Security Phase 2I): the checkout pages use MarzPay + offline payment only, the legacy gateway partials are never included and the controller methods never existed.
     Route::get('admin/subscription/payment/trail', 'admin_free_subcription')->name('admin_free_subcription');
     Route::post('admin/subscription/offline/payment/{id}', 'admin_subscription_offline_payment')->name('admin.admin_subscription_offline_payment');
@@ -1215,8 +1214,6 @@ Route::controller(ParentController::class)->middleware('parent', 'auth')->group(
 
     //Fee manager routes
     Route::get('parent/fee_manager', 'FeeManagerList')->name('parent.fee_manager.list');
-    Route::get('parent/fee_manager/payment/{id}', 'FeePayment')->name('parent.FeePayment');
-    Route::post('parent/fee_manager/payment/{id}/marzpay/start', 'startMarzpayTuitionPayment')->name('parent.payment.marzpay.start');
     Route::get('parent/fee_manager/payment/{id}/marzpay/status', 'checkMarzpayTuitionStatus')->name('parent.payment.marzpay.status');
     Route::get('parent/fee_manager/export/{date_from}/{date_to}/{selected_status}', 'feeManagerExport')->name('parent.fee_manager.export');
     Route::get('parent/student_fee/invoice/{id}', 'studentFeeinvoice')->name('parent.studentFeeinvoice');
@@ -1236,7 +1233,6 @@ Route::controller(ParentController::class)->middleware('parent', 'auth')->group(
 
 
     //Offline payment routes
-    Route::post('parent/student_fee/offline_payment/{id}', 'offlinePayment')->name('parent.offline_payment');
 
     //Routine routes
     Route::get('parent/routine', 'routine')->name('parent.routine');
@@ -1471,12 +1467,9 @@ Route::controller(StudentController::class)->middleware('student', 'auth')->grou
 
     //Fee manager routes
     Route::get('student/fee_manager', 'FeeManagerList')->name('student.fee_manager.list');
-    Route::get('student/fee_manager/payment/{id}', 'FeePayment')->name('student.FeePayment');
-    Route::post('student/fee_manager/payment/{id}/marzpay/start', 'startMarzpayTuitionPayment')->name('student.payment.marzpay.start');
     Route::get('student/fee_manager/payment/{id}/marzpay/status', 'checkMarzpayTuitionStatus')->name('student.payment.marzpay.status');
     Route::get('student/fee_manager/export/{date_from}/{date_to}/{selected_status}', 'feeManagerExport')->name('student.fee_manager.export');
     // Legacy PayPal/Stripe/Razorpay/Paytm gateway routes removed (Security Phase 2I): the checkout pages use MarzPay + offline payment only, the legacy gateway partials are never included and the controller methods never existed.
-    Route::post('student/student_fee/offline_payment/{id}', 'offlinePaymentStudent')->name('student.offline_payment');
     Route::get('student/student_fee/invoice/{id}', 'studentFeeinvoice')->name('student.studentFeeinvoice');
 
     //Profile
@@ -1599,7 +1592,6 @@ Route::controller(AccountantController::class)->middleware('accountant', 'auth')
 
     //Offline payment routes
     Route::get('accountant/offline_payment/pending', 'offline_payment_pending')->name('accountant.offline_payment_pending');
-    Route::get('accountant/student_fee/delete/{id}/{status}', 'update_offline_payment')->name('accountant.update_offline_payment');
 
     //Expenses routes
     Route::get('accountant/expenses/list', 'expenseList')->name('accountant.expense.list');
@@ -1661,7 +1653,6 @@ Route::controller(AccountantController::class)->middleware('bursar', 'auth')->gr
     Route::get('bursar/student_fee_manager/sync', 'feeSyncForm')->name('bursar.fee_manager.sync');
     Route::post('bursar/student_fee_manager/sync', 'feeSyncGenerate')->name('bursar.fee_manager.sync.generate');
     Route::get('bursar/offline_payment/pending', 'offline_payment_pending')->name('bursar.offline_payment_pending');
-    Route::get('bursar/student_fee/delete/{id}/{status}', 'update_offline_payment')->name('bursar.update_offline_payment');
 });
 
 //Warden routes are here
@@ -2821,3 +2812,23 @@ $reservedPublicPaths = collect(Route::getRoutes()->getRoutes())
 Route::get('{slug}', [HomeController::class, 'websitePage'])
     ->where('slug', '(?!(?:'.$reservedPublicPaths.')$)[A-Za-z0-9][A-Za-z0-9_-]*')
     ->name('website.page');
+
+Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middleware(['auth', 'student'])->group(function () {
+    Route::get('student/fee_manager/payment/{id}', 'index')->name('student.FeePayment');
+    Route::post('student/fee_manager/payment/{id}/pesapal/start', 'start')->middleware('throttle:10,1')->name('student.payment.pesapal.start');
+    Route::post('student/fee_manager/payment/{id}/pesapal/{payment}/check', 'check')->middleware('throttle:10,1')->name('student.payment.pesapal.check');
+});
+
+Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middleware(['auth', 'parent'])->group(function () {
+    Route::get('parent/fee_manager/payment/{id}', 'index')->name('parent.FeePayment');
+    Route::post('parent/fee_manager/payment/{id}/pesapal/start', 'start')->middleware('throttle:10,1')->name('parent.payment.pesapal.start');
+    Route::post('parent/fee_manager/payment/{id}/pesapal/{payment}/check', 'check')->middleware('throttle:10,1')->name('parent.payment.pesapal.check');
+});
+
+Route::get('payments/tuition/pesapal/callback', [\App\Http\Controllers\TuitionPesaPalController::class, 'callback'])->middleware('throttle:60,1')->name('tuition.pesapal.callback');
+Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middleware(['auth', 'admin', 'rbac'])->group(function () {
+    Route::get('admin/fee-payments', 'payments')->name('admin.tuition_payments.index');
+    Route::get('admin/fee-payments/{id}', 'index')->name('admin.tuition_payments.show');
+    Route::post('admin/fee-payments/{id}/study-waiver', 'waiver')->name('admin.tuition_payments.waiver');
+    Route::post('admin/fee-payments/{id}/{payment}/check', 'check')->middleware('throttle:10,1')->name('admin.payment.pesapal.check');
+});

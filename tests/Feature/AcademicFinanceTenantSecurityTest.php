@@ -168,7 +168,7 @@ class AcademicFinanceTenantSecurityTest extends TestCase
                 'title' => 'Hijacked', 'total_amount' => 1, 'paid_amount' => 0, 'status' => 'unpaid',
                 'class_id' => $this->A['class'], 'student_id' => $this->A['student']->id, 'payment_method' => 'cash',
             ])->assertNotFound();
-            $this->actingAs($actor)->get(route("{$prefix}.update_offline_payment", ['id' => $foreignFee, 'status' => 'approve']))->assertNotFound();
+            $this->actingAs($actor)->get("/{$prefix}/student_fee/delete/{$foreignFee}/approve")->assertNotFound();
             $this->actingAs($actor)->get(route("{$prefix}.fee_manager.delete", $foreignFee))->assertNotFound();
 
             $this->assertEquals($before, (array) $this->feeRow($foreignFee), "{$prefix}: School B fee untouched");
@@ -193,21 +193,17 @@ class AcademicFinanceTenantSecurityTest extends TestCase
         $this->assertFalse(DB::table('student_fee_managers')->where('title', 'ForeignCreate')->exists());
     }
 
-    public function test_same_school_fee_management_is_unchanged(): void
+    public function test_same_school_invoice_management_cannot_forge_payment(): void
     {
         $admin = $this->staff(2, $this->A);
-        $fee = $this->fee($this->A, ['status' => 'pending']);
-
-        $this->actingAs($admin)->get(route('admin.update_offline_payment', ['id' => $fee, 'status' => 'approve']));
-        $this->assertSame('paid', $this->feeRow($fee)->status);
-
+        $fee = $this->fee($this->A, ['status' => 'unpaid', 'paid_amount' => 0]);
         $this->actingAs($admin)->post(route('admin.fee_manager.update', $fee), [
             'title' => 'Renamed fee', 'total_amount' => 100, 'paid_amount' => 100, 'status' => 'paid',
             'class_id' => $this->A['class'], 'student_id' => $this->A['student']->id, 'payment_method' => 'cash',
-        ]);
+        ])->assertRedirect();
         $this->assertSame('Renamed fee', $this->feeRow($fee)->title);
-        $this->assertSame($this->A['school'], (int) $this->feeRow($fee)->school_id);
-
+        $this->assertSame('unpaid', $this->feeRow($fee)->status);
+        $this->assertSame(0, (int) $this->feeRow($fee)->paid_amount);
         $this->actingAs($admin)->get(route('admin.fee_manager.delete', $fee));
         $this->assertNull($this->feeRow($fee));
     }
@@ -244,32 +240,15 @@ class AcademicFinanceTenantSecurityTest extends TestCase
         }
     }
 
-    public function test_offline_payment_only_on_own_fee_and_only_safe_proof_files(): void
+    public function test_offline_submission_is_retired_for_every_school_and_family(): void
     {
-        $foreignFee = $this->fee($this->B);
-        $ownFee = $this->fee($this->A);
-
-        foreach (['parent.offline_payment' => $this->A['parent'], 'student.offline_payment' => $this->A['student']] as $route => $actor) {
-            $this->actingAs($actor)->post(route($route, $foreignFee), ['amount' => 100, 'document_image' => UploadedFile::fake()->create('p.pdf', 5, 'application/pdf')])->assertNotFound();
-            $this->assertSame('unpaid', $this->feeRow($foreignFee)->status, $route);
+        foreach (['parent' => $this->A['parent'], 'student' => $this->A['student']] as $portal => $actor) {
+            foreach ([$this->fee($this->A), $this->fee($this->B)] as $fee) {
+                $before = (array) $this->feeRow($fee);
+                $this->actingAs($actor)->post("/$portal/student_fee/offline_payment/$fee", ['amount' => 100])->assertNotFound();
+                $this->assertEquals($before, (array) $this->feeRow($fee));
+            }
         }
-
-        $php = tempnam(sys_get_temp_dir(), 'p2e');
-        file_put_contents($php, "<?php echo 'owned';");
-        $this->actingAs($this->A['student'])->post(route('student.offline_payment', $ownFee), ['amount' => 100, 'document_image' => new UploadedFile($php, 'proof.php', null, null, true)]);
-        $this->assertSame('unpaid', $this->feeRow($ownFee)->status);
-        $this->assertSame([], File::exists($this->publicDir . '/assets/uploads/offline_payment') ? File::files($this->publicDir . '/assets/uploads/offline_payment') : []);
-
-        // A genuine image whose name ends in .php must not be stored as .php either.
-        $this->actingAs($this->A['parent'])->post(route('parent.offline_payment', $ownFee), ['amount' => 100, 'document_image' => UploadedFile::fake()->image('receipt.php')]);
-        $this->assertSame('unpaid', $this->feeRow($ownFee)->status);
-        $this->assertSame([], File::exists($this->publicDir . '/assets/uploads/offline_payment') ? File::files($this->publicDir . '/assets/uploads/offline_payment') : []);
-
-        $this->actingAs($this->A['student'])->post(route('student.offline_payment', $ownFee), ['amount' => 100, 'document_image' => UploadedFile::fake()->image('receipt.jpg')]);
-        $row = $this->feeRow($ownFee);
-        $this->assertSame('pending', $row->status);
-        $this->assertMatchesRegularExpression('/^[a-f0-9]{40}\.jpg$/', (string) $row->document_image);
-        $this->assertFileExists($this->publicDir . '/assets/uploads/offline_payment/' . $row->document_image);
     }
 
     // ── Profile photos ───────────────────────────────────────────────────────

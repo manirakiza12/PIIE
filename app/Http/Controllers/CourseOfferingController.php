@@ -393,7 +393,7 @@ class CourseOfferingController extends Controller
             return back()->withErrors(['fee_waiver' => $exception->getMessage()]);
         }
 
-        return redirect()->route('admin.course_offerings.eligible_students', $id)->with('success', 'Continuing-student fee waiver recorded for this session.');
+        return redirect()->route('admin.course_offerings.eligible_students', $id)->with('success', 'Student fee waiver recorded for this session.');
     }
 
     public function revokeStudentFeeWaiver(Request $request, int $id, int $studentId)
@@ -407,7 +407,7 @@ class CourseOfferingController extends Controller
             return back()->withErrors(['fee_waiver' => $exception->getMessage()]);
         }
 
-        return redirect()->route('admin.course_offerings.eligible_students', $id)->with('success', 'Continuing-student fee waiver revoked for this session.');
+        return redirect()->route('admin.course_offerings.eligible_students', $id)->with('success', 'Student fee waiver revoked for this session.');
     }
 
     public function registerBulk(Request $request, int $id)

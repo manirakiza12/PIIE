@@ -40,7 +40,7 @@
             'admin.class_room_list' => get_phrase('Class Room'),
             'admin.department_list' => get_phrase('Department'),
             'admin.fee_manager.list' => get_phrase('Students Fee Manager'),
-            'admin.offline_payment_pending' => get_phrase('Offline Payment Request'),
+            'admin.offline_payment_pending' => get_phrase('Fee Payments'),
             'admin.expense.list' => get_phrase('Expense Manager'),
             'admin.expense.category_list' => get_phrase('Expense Category'),
             'admin.book.book_list' => get_phrase('Book List Manager'),

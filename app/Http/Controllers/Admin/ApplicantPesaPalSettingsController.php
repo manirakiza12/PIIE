@@ -47,7 +47,7 @@ final class ApplicantPesaPalSettingsController extends Controller
             $rows = PaymentMethods::where('school_id', $school)->where('name', 'pesapal')->where('status', 1)->lockForUpdate()->get();
             abort_if($rows->count() > 1, 422, 'Duplicate PesaPal configurations.');
             // Never strand an outstanding order by switching its credentials.
-            abort_if(ApplicationPayment::where('school_id', $school)->where('method', 'pesapal')->where('status', 'pending')->exists(), 422, 'Resolve outstanding PesaPal orders before replacing configuration.');
+            abort_if((ApplicationPayment::where('school_id', $school)->where('method', 'pesapal')->where('status', 'pending')->exists() || \App\Models\TuitionPayment::where('school_id', $school)->where('status', 'pending')->exists()), 422, 'Resolve outstanding PesaPal orders before replacing configuration.');
             $row = $rows->first() ?? new PaymentMethods(['school_id' => $school, 'name' => 'pesapal']);
             $old = $row->exists ? \App\Support\Payments\PesaPalCredentialStorage::read((string) $row->payment_keys, $school) : [];
             if (($old['environment'] ?? $data['environment']) !== $data['environment']
@@ -64,7 +64,7 @@ final class ApplicantPesaPalSettingsController extends Controller
                 $row->save(); // Encrypt a legacy row without changing its IPN or identity.
                 return;
             }
-            if ($row->exists && ApplicationPayment::where('school_id', $school)->where('method', 'pesapal')->exists()) {
+            if ($row->exists && (ApplicationPayment::where('school_id', $school)->where('method', 'pesapal')->exists() || \App\Models\TuitionPayment::where('school_id', $school)->exists())) {
                 $row->update(['status' => 0]);
                 $row = new PaymentMethods(['school_id' => $school, 'name' => 'pesapal']);
             }

@@ -70,7 +70,7 @@
 @if($mode === 'eligible')
     <p class="text-muted">Not Registered lists active students with an academic placement in a linked Curriculum and no registration record for this offering. Withdrawn students appear in Registered Students and History.</p>
 <h6>Eligible Students ({{ $students->count() }})</h6>
-<p class="text-muted">Eligibility checks each student's academic placement and whether at least 20% of their current academic-session fees are paid. Both checks are repeated when you register, so changed records are skipped with a reason. An authorised admin may waive the payment threshold for a continuing student whose Programme entry year is earlier than this Allocation's Academic Year; a reason is required and recorded.</p>
+<p class="text-muted">Eligibility checks each student's academic placement and whether at least 20% of their current academic-session fees are paid. Both checks are repeated when you register, so changed records are skipped with a reason. An authorised admin may waive the payment threshold for an individual student; a reason is required and recorded.</p>
     @if(!$isOpen)
         <div class="alert alert-info">Students can be registered only while the Course Allocation is open.</div>
     @endif
@@ -98,7 +98,7 @@
                     <tr>
                         @if($canManage && $isOpen)<td><input class="form-check-input" type="checkbox" name="student_ids[]" value="{{ $student->id }}" id="student-{{ $student->id }}" aria-label="Select {{ $student->name }}"></td>@endif
                         <td>{{ $student->code ?: '—' }}</td>
-                        <td><label for="student-{{ $student->id }}" class="mb-0">{{ $student->name }}</label>@if($student->roster_fee_waived)<div><span class="badge bg-info text-dark">Continuing-student fee waiver active</span></div>@endif</td>
+                        <td><label for="student-{{ $student->id }}" class="mb-0">{{ $student->name }}</label>@if($student->roster_fee_waived)<div><span class="badge bg-info text-dark">Student fee waiver active</span></div>@endif</td>
 
                         <td>{{ $student->roster_stage ?: '—' }}</td>
                         <td><span class="badge bg-light text-dark border">Not registered</span></td>
@@ -131,7 +131,7 @@
         <p class="text-muted small">These students follow a Curriculum linked to this Course Allocation but cannot register yet.</p>
         <div class="table-responsive"><table class="table table-sm align-middle">
             <thead><tr><th scope="col">Student Number</th><th scope="col">Student Name</th><th scope="col">Programme Year</th><th scope="col">Reason</th>@if($canManageFeeWaivers)<th scope="col">Fee Waiver</th>@endif</tr></thead>
-            <tbody>@foreach($ineligible as $student)<tr><td>{{ $student->code ?: '—' }}</td><td>{{ $student->name }}</td><td>{{ $student->roster_stage ?: '—' }}</td><td>{{ $student->roster_reason }}</td>@if($canManageFeeWaivers)<td>@if($student->roster_can_waive_fees)<details><summary class="btn btn-sm btn-outline-warning text-nowrap">Waive 20% rule</summary><form method="POST" action="{{ route('admin.course_offerings.students.fee_waiver.store', [$offering->id, $student->id]) }}" class="mt-2">@csrf<label class="form-label small" for="grant-fee-waiver-{{ $student->id }}">Reason (required)</label><input required minlength="10" maxlength="500" class="form-control form-control-sm mb-1" id="grant-fee-waiver-{{ $student->id }}" name="reason" placeholder="Explain why this continuing student is exempt"><button class="btn btn-sm btn-warning text-nowrap">Grant Fee Waiver</button></form></details>@else<span class="small text-muted">Waiver unavailable</span>@endif</td>@endif</tr>@endforeach</tbody>
+            <tbody>@foreach($ineligible as $student)<tr><td>{{ $student->code ?: '—' }}</td><td>{{ $student->name }}</td><td>{{ $student->roster_stage ?: '—' }}</td><td>{{ $student->roster_reason }}</td>@if($canManageFeeWaivers)<td>@if($student->roster_can_waive_fees)<details><summary class="btn btn-sm btn-outline-warning text-nowrap">Waive 20% rule</summary><form method="POST" action="{{ route('admin.course_offerings.students.fee_waiver.store', [$offering->id, $student->id]) }}" class="mt-2">@csrf<label class="form-label small" for="grant-fee-waiver-{{ $student->id }}">Reason (required)</label><input required minlength="10" maxlength="500" class="form-control form-control-sm mb-1" id="grant-fee-waiver-{{ $student->id }}" name="reason" placeholder="Explain why this student is exempt"><button class="btn btn-sm btn-warning text-nowrap">Grant Fee Waiver</button></form></details>@else<span class="small text-muted">Waiver unavailable</span>@endif</td>@endif</tr>@endforeach</tbody>
         </table></div>
     @endif
 @else

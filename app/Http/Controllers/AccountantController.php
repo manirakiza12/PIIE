@@ -326,6 +326,7 @@ class AccountantController extends Controller
     }
     public function feeManagerCreate(Request $request, $value="")
     {
+        $request->merge(['paid_amount' => 0, 'status' => 'unpaid', 'payment_method' => '', 'gateway_reference' => null, 'gateway_payload' => null]);
         $data = $request->all();
 
         if($value == 'single'){
@@ -443,145 +444,76 @@ class AccountantController extends Controller
 
     public function feeManagerUpdate(Request $request, $id='')
     {
-        $data = $request->all();
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $id) {
+            $existing = \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
+            abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be edited.');
+            $request->merge(['paid_amount' => $existing->paid_amount, 'status' => $existing->status, 'payment_method' => $existing->payment_method]);
+            $data = $request->all();
 
-        /*GET THE PREVIOUS INVOICE DETAILS FOR GETTING THE PAID AMOUNT*/
-        $this->findSchoolFeeOrFail($id);
-        if (!$this->isSchoolStudent($data['student_id'] ?? null)) {
-            return redirect()->back()->with('error', 'Student not found.');
-        }
-        $previous_invoice_data = StudentFeeManager::find($id);
+            /*GET THE PREVIOUS INVOICE DETAILS FOR GETTING THE PAID AMOUNT*/
+            \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
+            if (!$this->isSchoolStudent($data['student_id'] ?? null)) {
+                return redirect()->back()->with('error', 'Student not found.');
+            }
+            $previous_invoice_data = StudentFeeManager::find($id);
 
-        if ($data['paid_amount'] > $data['total_amount']) {
+            if ($data['paid_amount'] > $data['total_amount']) {
 
-            return redirect()->back()->with('error','Paid amount can not get bigger than total amount');
-        }
-        if ($data['status'] == 'paid' && $data['total_amount'] != $data['paid_amount']) {
-            return redirect()->back()->with('error','Paid amount is not equal to total amount');
-        }
+                return redirect()->back()->with('error','Paid amount can not get bigger than total amount');
+            }
+            if ($data['status'] == 'paid' && $data['total_amount'] != $data['paid_amount']) {
+                return redirect()->back()->with('error','Paid amount is not equal to total amount');
+            }
 
-        /*KEEPING TRACK OF PAYMENT DATE*/
-        if ($data['paid_amount'] != $previous_invoice_data && $data['paid_amount'] > 0) {
-            $timestamp = strtotime(date('d-M-Y'));
-        }elseif ($data['paid_amount'] == 0 || $data['paid_amount'] == "") {
-            $timestamp = 0;
-        }
+            /*KEEPING TRACK OF PAYMENT DATE*/
+            if ($data['paid_amount'] != $previous_invoice_data && $data['paid_amount'] > 0) {
+                $timestamp = strtotime(date('d-M-Y'));
+            }elseif ($data['paid_amount'] == 0 || $data['paid_amount'] == "") {
+                $timestamp = 0;
+            }
 
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
+            $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
 
-        StudentFeeManager::where('id', $id)->update([
-            'title' => $data['title'],
-            'total_amount' => $data['total_amount'],
-            'class_id' => $data['class_id'],
-            'student_id' => $data['student_id'],
-            'paid_amount' => $data['paid_amount'],
-            'payment_method' => $data['payment_method'],
-            'timestamp' => $timestamp,
-            'status' => $data['status'],
-            'school_id' => auth()->user()->school_id,
-            'session_id' => $active_session,
-        ]);
+            StudentFeeManager::where('id', $id)->update([
+                'title' => $data['title'],
+                'total_amount' => $data['total_amount'],
+                'class_id' => $data['class_id'],
+                'student_id' => $data['student_id'],
+                'paid_amount' => $data['paid_amount'],
+                'payment_method' => $data['payment_method'],
+                'timestamp' => $timestamp,
+                'status' => $data['status'],
+                'school_id' => auth()->user()->school_id,
+                'session_id' => $active_session,
+            ]);
 
-        return redirect()->back()->with('message','You have successfully update invoice.');
-    }
+            return redirect()->back()->with('message','You have successfully update invoice.');
+
+        });
+}
 
     public function studentFeeDelete($id)
     {
-        $this->findSchoolFeeOrFail($id);
-        $invoice = StudentFeeManager::find($id);
-        $invoice->delete();
-        return redirect()->back()->with('message','You have successfully delete invoice.');
-    }
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($id) {
+            $existing = \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
+            abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be deleted.');
+            \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
+            $invoice = StudentFeeManager::find($id);
+            $invoice->delete();
+            return redirect()->back()->with('message','You have successfully delete invoice.');
+
+        });
+}
 
 
     public function offline_payment_pending(Request $request )
     {
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-         if(count($request->all()) > 0){
-            $data = $request->all();
-            $date = explode('-', $data['eDateRange']);
-            $date_from = strtotime($date[0].' 00:00:00');
-            $date_to  = strtotime($date[1].' 23:59:59');
-            $selected_class = $data['class'];
-            $selected_status = 'pending';
-            $payment_method = 'offline';
-
-
-
-            if ($selected_class != "all") {
-                $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('class_id', $selected_class)->where('status', $selected_status)->where('payment_method', $payment_method)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();
-            } else {
-                $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('status', $selected_status)->where('payment_method', $payment_method)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();
-            }
-
-
-            $classes = Classes::where('school_id', auth()->user()->school_id)->get();
-
-            return view('accountant.student_fee_manager.student_fee_manager_pending', ['classes' => $classes, 'invoices' => $invoices, 'date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $selected_class, 'selected_status' => $selected_status]);
-
-         } else {
-            $classes = Classes::where('school_id', auth()->user()->school_id)->get();
-            $date_from = strtotime(date('d-m-Y',strtotime('first day of this month')).' 00:00:00');
-            $date_to = strtotime(date('d-m-Y',strtotime('last day of this month')).' 23:59:59');
-            $selected_class = "";
-            $selected_status = 'pending';
-            $payment_method = 'offline';
-            $invoices = StudentFeeManager::where('status','pending')->where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('payment_method', $payment_method)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();
-            return view('accountant.student_fee_manager.student_fee_manager_pending', ['classes' => $classes, 'invoices' => $invoices, 'date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $selected_class, 'selected_status' => $selected_status]);
-         }
-
-
+        return redirect()->route('admin.tuition_payments.index');
     }
 
     public function update_offline_payment($id,$status)
     {
-        $feeBefore = $this->findSchoolFeeOrFail($id);
-        $invoice = StudentFeeManager::find($id);
-        if (!$invoice) {
-            return redirect()->back()->with('error', 'Invoice not found.');
-        }
-
-        $amount = $invoice->total_amount;
-
-        // Only an invoice actually awaiting review may be approved or declined, and
-        // the decision must be one of the two known values. Same guard the Admin
-        // portal applies, so the two finance roles cannot disagree about which
-        // invoices they may act on. `pending` is the discriminator that matters —
-        // see the note in AdminController::update_offline_payment.
-        if (! in_array($status, ['approve', 'decline'], true)) {
-            return redirect()->back()->with('error', 'Unknown payment decision.');
-        }
-
-        if ($invoice->status !== 'pending') {
-            return redirect()->back()->with('error', 'This invoice is not awaiting review of an offline payment.');
-        }
-
-        if($status=='approve')
-        {
-            StudentFeeManager::where('id', $id)->update([
-                'status' => 'paid',
-                'updated_at'=>date("Y-m-d H:i:s"),
-                'paid_amount' =>$amount,
-                'payment_method' => 'offline']);
-
-                StatusChangeAudit::feePayment($feeBefore, 'approved');
-                return redirect()->back()->with('message','Payment Approved');
-        }
-        elseif($status=='decline')
-        {
-            StudentFeeManager::where('id',$id)->update([
-                'status' => 'unpaid',
-                'updated_at'=>date("Y-m-d H:i:s"),
-                'paid_amount' => 0,
-                'payment_method' => 'offline']);
-
-                StatusChangeAudit::feePayment($feeBefore, 'declined');
-                return redirect()->back()->with('message','Payment Decline');
-
-
-        }
-
-
+        abort(410, 'School fee payments use verified PesaPal checkout only.');
     }
 
     public function studentFeeinvoice(Request $request, $id)

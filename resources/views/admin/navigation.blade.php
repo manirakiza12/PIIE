@@ -208,7 +208,7 @@
     // ---- Finance ----
     $showStudentFees = $menuAllows('admin.fee_manager.list') && $navCan('admin.fee_manager.list');
     $showFeeStructures = $menuAllows('admin.fee_structures') && $navCan('admin.fee_structures.index');
-    $showFeePayments = $menuAllows('admin.offline_payment_pending') && $navCan('admin.offline_payment_pending');
+    $showFeePayments = $menuAllows('admin.offline_payment_pending') && $navCan('admin.tuition_payments.index');
     $showExpenses = $menuAllows('admin.expense.list') && $navCan('admin.expense.list');
     $showPayroll = $menuAllows('admin.payroll') && $navCan('admin.payroll.index');
     $showFinanceAny = $showStudentFees || $showFeeStructures || $showFeePayments || $showExpenses || $showPayroll;
@@ -530,13 +530,11 @@
             </li>
             @endif
 
-            <!-- Fee Payments: offline fee payments awaiting approval. Named to match
-                 "Student Fees"/"Fee Structures" instead of the bare "Payments",
-                 which did not say whose payments these were. -->
+            <!-- Fee Payments: verified PesaPal school fee tracking -->
             @if($showFeePayments)
-            <li class="nav-links-li {{ request()->is('admin/offline_payment/pending*') ? 'showMenu' : '' }}">
+            <li class="nav-links-li {{ request()->is('admin/fee-payments*') ? 'showMenu' : '' }}">
                 <div class="iocn-link">
-                    <a href="{{ route('admin.offline_payment_pending') }}" class="{{ request()->is('admin/offline_payment/pending*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.tuition_payments.index') }}" class="{{ request()->is('admin/fee-payments*') ? 'active' : '' }}">
                         <div class="sidebar_icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 2L2 7l10 5 10-5-10-5z"></path>

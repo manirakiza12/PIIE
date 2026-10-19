@@ -27,4 +27,6 @@ class StudentFeeManager extends Model
     protected $casts = [
         'gateway_payload' => 'array',
     ];
+
+    public function student() { return $this->belongsTo(User::class, 'student_id'); }
 }

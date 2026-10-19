@@ -47,6 +47,9 @@ final class PesaPalController extends Controller
     {
         $data = $request->validate(['OrderTrackingId' => 'required|string|max:36', 'OrderMerchantReference' => 'required|string|max:191']);
         if (! PesaPalService::isGuid($data['OrderTrackingId'])) { abort(422); }
+        if (str_starts_with($data['OrderMerchantReference'], 'TUITION-')) {
+            return \App\Http\Controllers\TuitionPesaPalController::notification($request);
+        }
         $payments = ApplicationPayment::where('method', 'pesapal')->where('reference', $data['OrderMerchantReference'])->get();
         if ($payments->count() !== 1) { abort(404); }
         return ApplicantPesaPalPayment::reconcile($payments->first(), $data['OrderTrackingId']);

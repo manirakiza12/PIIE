@@ -29,7 +29,7 @@ final class PesaPalConfiguration
         return self::fromRow($row);
     }
 
-    public static function forPayment(\App\Models\ApplicationPayment $payment): self
+    public static function forPayment(\App\Models\ApplicationPayment|\App\Models\TuitionPayment $payment): self
     {
         $id = $payment->gateway_payload['configuration_id'] ?? null;
         if (! is_int($id)) { throw new PesaPalException(); }

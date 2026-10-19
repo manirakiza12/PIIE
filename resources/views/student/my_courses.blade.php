@@ -1,5 +1,6 @@
 @extends('student.navigation')
 @section('content')
+@include('student.partials.study_fee_status')
 
 @if(($workflow ?? 'legacy') === 'hei')
     @include('student.my_courses_hei')

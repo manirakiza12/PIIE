@@ -58,7 +58,7 @@ trait LiveClassFixture
         $this->schema();
 
         $this->school = (int) DB::table('schools')->insertGetId([
-            'title' => 'PIIE', 'school_type' => 'higher_ed', 'education_level' => 'tertiary',
+            'title' => 'PIIE', 'school_type' => 'higher_ed', 'education_level' => 'tertiary', 'running_session' => 1,
             'timezone' => 'Africa/Kampala', 'created_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -281,12 +281,28 @@ trait LiveClassFixture
 
     protected function user(string $name, int $role): User
     {
-        return User::factory()->create([
+        $user = User::factory()->create([
             'name' => $name,
             'email' => str_replace([' ', '.'], ['.', ''], strtolower($name))."{$role}@example.test",
             'role_id' => $role, 'school_id' => $this->school, 'account_status' => 'active',
             'password' => Hash::make('User#2026'),
         ]);
+        // These learning fixtures assume financially eligible students; threshold
+        // failures and waivers have their own payment/eligibility integration tests.
+        if ($role === 7) {
+            DB::table('student_fee_managers')->insert(['school_id' => $this->school, 'student_id' => $user->id,
+                'session_id' => 1, 'class_id' => 0, 'title' => 'Current-session tuition', 'total_amount' => 100,
+                'paid_amount' => 20, 'payment_method' => 'pesapal', 'status' => 'unpaid']);
+        }
+        return $user;
+    }
+
+    protected function financiallyEligibleStudent(User $student): void
+    {
+        DB::table('schools')->where('id', $student->school_id)->update(['running_session' => 1]);
+        DB::table('student_fee_managers')->insert(['school_id' => $student->school_id, 'student_id' => $student->id,
+            'session_id' => 1, 'class_id' => 0, 'title' => 'Current-session tuition', 'total_amount' => 100,
+            'paid_amount' => 20, 'payment_method' => 'pesapal', 'status' => 'unpaid']);
     }
 
     protected function allocate(User $user, string $role, ?string $startsOn = null): void
