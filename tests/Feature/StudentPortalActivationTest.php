@@ -594,7 +594,8 @@ class StudentPortalActivationTest extends TestCase
         Mail::assertSent(StudentPortalActivationEmail::class, function ($mail) use ($student) {
             return $mail->hasTo($student->email)
                 && $mail->data['code'] === 'PIIE/LEGACY/2019/0042'
-                && Hash::check($mail->data['password'], $student->password);
+                && $mail->data['student_password_setup'] === true
+                && $mail->data['password'] === null;
         });
     }
 

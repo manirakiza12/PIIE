@@ -38,6 +38,11 @@ class ApplicantPortalAccess
     {
         return DB::transaction(function () use ($admission) {
         $admission = Admission::whereKey($admission->id)->where('school_id', $admission->school_id)->lockForUpdate()->firstOrFail();
+        if (\App\Models\User::where('school_id', $admission->school_id)->where('role_id', 7)->where('email', $admission->email)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email' => 'This person already has a student account. Send student portal activation from Students; do not send an application link.',
+            ]);
+        }
         if ($admission->applicant_id) {
             return $admission->applicant()->where('school_id', $admission->school_id)->where('email', $admission->email)->firstOrFail();
         }

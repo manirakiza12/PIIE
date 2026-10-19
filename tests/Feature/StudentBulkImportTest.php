@@ -150,7 +150,8 @@ class StudentBulkImportTest extends TestCase
         $this->assertSame(0, DB::table('identity_sequences')->count());
         \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\StudentPortalActivationEmail::class, function ($mail) use ($student) {
             return $mail->hasTo($student->email) && $mail->data['code'] === $student->code
-                && \Illuminate\Support\Facades\Hash::check($mail->data['password'], $student->password);
+                && $mail->data['student_password_setup'] === true
+                && $mail->data['password'] === null;
         });
         $this->actingAs($student)->get(route('student.dashboard'))->assertRedirect(route('student.password', 'edit'));
     }

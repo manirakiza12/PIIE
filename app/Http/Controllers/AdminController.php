@@ -1925,35 +1925,17 @@ class AdminController extends Controller
     }
 
     /**
-     * Admin-triggered password reset: generates a new random password (never
-     * logged, never exported — see AuditLog::redact) and emails it to the
-     * student the same way initial account creation does.
+     * Admin-triggered student password setup uses the same expiring reset
+     * link as activation; it never sends an application invitation.
      */
     public function studentResetPassword($id)
     {
-        $student = User::where('id', $id)->where('school_id', auth()->user()->school_id)->where('role_id', 7)->firstOrFail();
-
-        $plainPassword = Str::random(10);
-        $student->update(['password' => Hash::make($plainPassword)]);
-
-        if (! empty(get_settings('smtp_user')) && get_settings('smtp_pass') && get_settings('smtp_host') && get_settings('smtp_port')) {
-            \App\Support\Mail\SafeMail::send($student->email, new NewUserEmail([
-                'name'     => $student->name,
-                'email'    => $student->email,
-                'password' => $plainPassword,
-            ]));
-        }
-
-        AuditLog::record('update', 'Staff & Students', "Reset portal password for student {$student->name} (#{$student->id})");
-
-        return redirect()->back()->with('message', get_phrase('Password has been reset and emailed to the student.'));
+        return $this->resendStudentActivationEmail($id);
     }
 
     /**
-     * Re-sends the student portal activation email with a freshly generated
-     * temporary password. Never creates a new User/StudentProfile/invoice —
-     * it only reissues credentials on the existing account and forces a
-     * password change on next login, same as a first-time activation.
+     * Re-send password setup for an existing student without creating
+     * another student, applicant, academic placement or invoice.
      */
     public function resendStudentActivationEmail($id)
     {
@@ -1966,7 +1948,7 @@ class AdminController extends Controller
         ]);
 
         $profile = StudentProfile::where('user_id', $student->id)->first();
-        $sent    = StudentPortalActivation::sendActivationEmail($student, $plainPassword, $profile->programme_id ?? null, $profile->intake_session_id ?? null);
+        $sent    = StudentPortalActivation::sendActivationEmail($student, $plainPassword, $profile->programme_id ?? null, $profile->intake_session_id ?? null, passwordSetupOnly: true);
 
         AuditLog::record('update', 'Staff & Students', "Resent portal activation email to student {$student->name} (#{$student->id})");
 
@@ -2062,7 +2044,11 @@ class AdminController extends Controller
         $result = \App\Support\Students\StudentProvisioner::provision($data, auth()->user()->school_id, false);
         $sent = \App\Support\Students\StudentProvisioner::sendWelcomeEmail($result['user'], $result['password']);
 
-        return redirect()->back()->with('message', $sent ? 'Existing student portal account created. Activation email sent; registration number preserved and enrolment unchanged.' : 'Existing student portal account created; registration number preserved and enrolment unchanged. Activation email was not sent. Check mail settings and resend activation.');
+        $destination = auth()->user()->hasPermission('students.edit')
+            ? redirect()->route('admin.student.documents', $result['user']->id) : redirect()->back();
+        return $destination->with('message', $sent
+            ? 'Existing student account created. Password setup email sent. Upload the documents held by the administration here; the student does not complete an application.'
+            : 'Existing student account created. Upload the documents held by the administration here. Password setup email was not sent; check mail settings and resend student portal activation.');
     }
 
     public function studentIdCardGenerate($id)
