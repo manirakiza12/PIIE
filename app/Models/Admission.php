@@ -188,7 +188,8 @@ class Admission extends Model
 
     public function isFeeSettled(): bool
     {
-        return in_array($this->fee_status, [self::FEE_PAID, self::FEE_WAIVED], true);
+        return $this->fee_status === self::FEE_PAID
+            || ($this->fee_status === self::FEE_WAIVED && ! \App\Support\Admissions\ApplicationFee::isRequired($this));
     }
 
     public function statusLabel(): string

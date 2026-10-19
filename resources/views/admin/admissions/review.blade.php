@@ -53,6 +53,12 @@
 
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
+@if($admission->status === Admission::STATUS_DRAFT && $admission->source === 'staff_entry' && auth()->user()->hasPermission('students.create'))
+    <div class="alert alert-info">
+        {{ get_phrase('This is a new-applicant draft. If the person is already a PIIE student, add them directly using their existing registration number instead of submitting a new application.') }}
+        <a href="{{ route('admin.student.open_modal') }}">{{ get_phrase('Add Existing Student') }}</a>
+    </div>
+@endif
 @if($errors->any())
     <div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
 @endif
@@ -367,9 +373,6 @@
                     <button type="button" class="eBtn eBtn-sm eBtn-outline" data-bs-toggle="collapse" data-bs-target="#recordPaymentForm">
                         <i class="bi bi-cash-stack"></i> {{ get_phrase('Record Offline Payment') }}
                     </button>
-                    <button type="button" class="eBtn eBtn-sm eBtn-outline" data-bs-toggle="collapse" data-bs-target="#waiveFeeForm">
-                        <i class="bi bi-x-circle"></i> {{ get_phrase('Waive Fee') }}
-                    </button>
                 </div>
 
                 <div class="collapse mt-3" id="recordPaymentForm">
@@ -410,20 +413,6 @@
                     </div>
                 </div>
 
-                <div class="collapse mt-3" id="waiveFeeForm">
-                    <div class="p-3" style="background:#f8f9fb; border-radius:8px;">
-                        <h6 class="mb-3">{{ get_phrase('Waive Application Fee') }}</h6>
-                        <form action="{{ route('admin.hei_admissions.payment.waive', $admission->id) }}" method="POST">
-                            @csrf
-                            <label class="form-label">{{ get_phrase('Reason') }} *</label>
-                            <textarea name="reason" class="form-control eForm-control" rows="2" required placeholder="{{ get_phrase('Required — this becomes part of the audit record.') }}"></textarea>
-                            {{-- eBtn-warning's white-on-#f58a5e pairing falls well below
-                                 accessible contrast (~2:1) — eBtn-outline-black is used
-                                 here and below instead of touching that shared class. --}}
-                            <button type="submit" class="eBtn eBtn-sm eBtn-outline-black mt-3">{{ get_phrase('Confirm Waiver') }}</button>
-                        </form>
-                    </div>
-                </div>
             @endif
 
         </div>

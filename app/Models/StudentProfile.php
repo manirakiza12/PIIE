@@ -13,8 +13,21 @@ class StudentProfile extends Model
         'user_id', 'school_id', 'first_name', 'last_name', 'programme_id',
         'intake_session_id', 'year_of_study', 'nationality',
         'national_id_or_passport', 'next_of_kin_address', 'next_of_kin_contact',
-        'additional_image', 'status',
+        'additional_image', 'status', 'affiliated_institution_name', 'affiliated_student_id',
     ];
+
+    public static function affiliationAttributes(array $data): array
+    {
+        $values = array_intersect_key($data, array_flip(['affiliated_institution_name', 'affiliated_student_id']));
+        foreach ($values as &$value) {
+            if (is_string($value)) { $value = trim($value); if ($value === '') { $value = null; } }
+        }
+        unset($value);
+        return \Illuminate\Support\Facades\Validator::make($values, [
+            'affiliated_institution_name' => 'nullable|required_with:affiliated_student_id|string|max:255',
+            'affiliated_student_id' => 'nullable|string|max:100',
+        ])->validate();
+    }
 
     public function user()
     {

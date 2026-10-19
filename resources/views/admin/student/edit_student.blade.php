@@ -206,6 +206,7 @@
             </select>
         </div>
 
+        @include('admin.student._affiliation_fields')
         <div class="fpb-7">
             <label for="year_of_study" class="eForm-label">{{ get_phrase('Year of Study') }}</label>
             <input type="number" min="1" max="20" class="form-control eForm-control" id="year_of_study" name="year_of_study" value="{{ optional($studentProfile)->year_of_study }}">

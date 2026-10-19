@@ -45,7 +45,8 @@ class AdmissionsPrimarySchoolGateTest extends TestCase
         $response->assertOk()->assertSee('Applications');
         $foreignId = $this->makeAdmission($primarySchoolId);
         $this->get(route('admin.hei_admissions.review', $foreignId))->assertNotFound();
-        $this->get(route('admin.hei_admissions.wizard.create'))->assertRedirect();
+        $this->get(route('admin.hei_admissions.wizard.create'))->assertOk();
+        $this->post(route('admin.hei_admissions.wizard.start'))->assertRedirect();
         $this->assertDatabaseHas('admissions', ['school_id' => $otherSchoolId, 'source' => 'staff_entry']);
         $own = \App\Models\Admission::where('school_id', $otherSchoolId)->firstOrFail();
         $this->post(route('admin.hei_admissions.wizard.programme', $own->id), [

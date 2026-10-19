@@ -20,13 +20,13 @@ class StudentImportController extends Controller
     private const COLUMNS = [
         'name', 'email', 'registration_number', 'class', 'section', 'programme', 'department',
         'year_of_study', 'nationality', 'national_id_or_passport',
-        'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake',
+        'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake', 'affiliated_institution_name', 'affiliated_student_id',
     ];
 
     private const HEADER_ROW = [
         'name', 'email', 'registration_number', 'class_name', 'section_name', 'programme_name',
         'department_name', 'year_of_study', 'nationality',
-        'national_id_or_passport', 'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name',
+        'national_id_or_passport', 'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name', 'affiliated_institution_name', 'affiliated_student_id',
     ];
 
     private function schoolId(): int
@@ -52,7 +52,7 @@ class StudentImportController extends Controller
         fputcsv($handle, [
             'Musoke Okello', 'musoke.okello@example.test', 'PIIE/2019/0042', '', '',
             'Bachelor of Business Information Technology', '', '1', 'Ugandan',
-            'CM-0000001', '+256700000000', 'Kampala', 'active', 'May '.date('Y').' Intake',
+            'CM-0000001', '+256700000000', 'Kampala', 'active', 'May '.date('Y').' Intake', '', '',
         ]);
 
         rewind($handle);
@@ -200,10 +200,14 @@ class StudentImportController extends Controller
                 'name'  => $r['name'] ?? '',
                 'email' => $r['email'] ?? '',
                 'registration_number' => trim((string) ($r['registration_number'] ?? '')),
+                'affiliated_institution_name' => trim((string) ($r['affiliated_institution_name'] ?? '')),
+                'affiliated_student_id' => trim((string) ($r['affiliated_student_id'] ?? '')),
             ], [
                 'name'  => 'required|max:255',
                 'email' => 'required|email|max:255',
                 'registration_number' => 'required|string|max:255',
+                'affiliated_institution_name' => 'nullable|required_with:affiliated_student_id|string|max:255',
+                'affiliated_student_id' => 'nullable|string|max:100',
             ]);
             if ($validator->fails()) {
                 $rowErrors[] = implode(' ', $validator->errors()->all());
@@ -268,6 +272,7 @@ class StudentImportController extends Controller
             }
 
             $data = [
+                ...array_intersect_key($r, array_flip(['affiliated_institution_name', 'affiliated_student_id'])),
                 'name'             => trim((string) $r['name']),
                 'registration_number' => $number,
                 'email'            => $email,

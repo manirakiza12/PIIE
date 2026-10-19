@@ -426,14 +426,13 @@ class ApplicantPesaPalJourneyTest extends TestCase
         $this->assertSame('paid', $admission->fresh()->fee_status);
     }
 
-    public function test_no_fee_and_explicit_waiver_do_not_create_online_charges(): void
+    public function test_new_applicant_waiver_endpoint_cannot_bypass_payment(): void
     {
         $admission = $this->application();
         $this->be($this->makeAdminUser($this->school));
-        $this->post(route('admin.hei_admissions.payment.waive', $admission->id), ['reason' => 'Approved isolated fixture waiver'])->assertRedirect();
-        $this->assertSame('waived', $admission->fresh()->fee_status);
-        $this->expectException(ValidationException::class);
-        ApplicantPesaPalPayment::start($admission);
+        $this->post(route('admin.hei_admissions.payment.waive', $admission->id), ['reason' => 'Requested waiver'])->assertUnprocessable();
+        $this->assertSame('unpaid', $admission->fresh()->fee_status);
+        $this->assertSame(0, $admission->payments()->count());
     }
 
     #[DataProvider('channels')]

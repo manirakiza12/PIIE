@@ -276,7 +276,7 @@ class AdmissionPaymentTest extends TestCase
         $this->assertSame(0, ApplicationPayment::where('admission_id', $admissionId)->count());
     }
 
-    public function test_waiving_a_fee_requires_a_reason(): void
+    public function test_new_application_waivers_are_rejected_even_without_a_reason(): void
     {
         $schoolId = $this->makeSchool();
         $this->configurePrimarySchool($schoolId);
@@ -286,11 +286,11 @@ class AdmissionPaymentTest extends TestCase
 
         $response = $this->actingAs($admin)->post(route('admin.hei_admissions.payment.waive', $admissionId), []);
 
-        $response->assertSessionHasErrors('reason');
+        $response->assertUnprocessable();
         $this->assertSame(Admission::FEE_UNPAID, Admission::find($admissionId)->fee_status);
     }
 
-    public function test_waived_and_paid_remain_distinguishable(): void
+    public function test_waivers_are_rejected_while_real_payment_can_settle_the_fee(): void
     {
         $schoolId = $this->makeSchool();
         $this->configurePrimarySchool($schoolId);
@@ -300,17 +300,15 @@ class AdmissionPaymentTest extends TestCase
         $waivedId = $this->makeAdmission($schoolId, ['email' => 'waived@example.com', 'intake_session_id' => $intakeId]);
         $paidId = $this->makeAdmission($schoolId, ['email' => 'paidon@example.com', 'intake_session_id' => $intakeId]);
 
-        $this->actingAs($admin)->post(route('admin.hei_admissions.payment.waive', $waivedId), ['reason' => 'Scholarship recipient.']);
+        $this->actingAs($admin)->post(route('admin.hei_admissions.payment.waive', $waivedId), ['reason' => 'Scholarship recipient.'])->assertUnprocessable();
         $this->actingAs($admin)->post(route('admin.hei_admissions.payment.record', $paidId), [
             'amount' => 50000, 'method' => 'bank', 'paid_at' => now()->toDateString(),
         ]);
 
-        $this->assertSame(Admission::FEE_WAIVED, Admission::find($waivedId)->fee_status);
+        $this->assertSame(Admission::FEE_UNPAID, Admission::find($waivedId)->fee_status);
         $this->assertSame(Admission::FEE_PAID, Admission::find($paidId)->fee_status);
 
-        $waiverPayment = ApplicationPayment::where('admission_id', $waivedId)->first();
-        $this->assertSame(ApplicationPayment::STATUS_WAIVED, $waiverPayment->status);
-        $this->assertSame('Scholarship recipient.', $waiverPayment->note);
+        $this->assertSame(0, ApplicationPayment::where('admission_id', $waivedId)->count());
     }
 
     public function test_sending_a_payment_request_actually_dispatches_an_email_through_the_real_mail_pipeline(): void
@@ -402,7 +400,7 @@ class AdmissionPaymentTest extends TestCase
         $response->assertSee('PIIE-2627-O-P9001');
         $response->assertSee('Send Payment Instructions');
         $response->assertSee('Record Offline Payment');
-        $response->assertSee('Waive Fee');
+        $response->assertDontSee('Waive Fee');
     }
 
     public function test_review_screen_hides_payment_actions_once_fee_is_settled(): void
@@ -413,7 +411,7 @@ class AdmissionPaymentTest extends TestCase
         $intakeId = $this->makeIntakeSession($schoolId, ['application_fee' => 100000]);
         $admissionId = $this->makeAdmission($schoolId, ['intake_session_id' => $intakeId]);
 
-        $this->actingAs($admin)->post(route('admin.hei_admissions.payment.waive', $admissionId), ['reason' => 'Test.']);
+        $this->actingAs($admin)->post(route('admin.hei_admissions.payment.record', $admissionId), ['amount' => 100000, 'method' => 'cash', 'paid_at' => now()->toDateString()]);
 
         $response = $this->actingAs($admin)->get(route('admin.hei_admissions.review', $admissionId));
 
@@ -480,9 +478,12 @@ class AdmissionPaymentTest extends TestCase
         $intakeId = $this->makeIntakeSession($schoolId, ['application_fee' => 50000]);
         $admissionId = $this->makeAdmission($schoolId, ['intake_session_id' => $intakeId]);
 
-        $this->actingAs($admin)->post(route('admin.hei_admissions.payment.waive', $admissionId), ['reason' => 'First waiver.']);
-        $this->actingAs($admin)->post(route('admin.hei_admissions.payment.waive', $admissionId), ['reason' => 'Second attempt.']);
+        $this->actingAs($admin)->post(route('admin.hei_admissions.payment.record', $admissionId), [
+            'amount' => 50000, 'method' => 'cash', 'paid_at' => now()->toDateString(),
+        ])->assertRedirect();
+        $this->actingAs($admin)->post(route('admin.hei_admissions.payment.waive', $admissionId), ['reason' => 'Attempted waiver.'])->assertUnprocessable();
 
-        $this->assertSame(1, ApplicationPayment::where('admission_id', $admissionId)->count(), 'Must not double-waive an already-settled fee.');
+        $this->assertSame(1, ApplicationPayment::where('admission_id', $admissionId)->count(), 'Only the real payment is recorded.');
+        $this->assertSame(Admission::FEE_PAID, Admission::findOrFail($admissionId)->fee_status);
     }
 }

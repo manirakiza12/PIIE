@@ -55,6 +55,11 @@
 @if(! $readOnly && $admission->status === \App\Models\Admission::STATUS_DRAFT)
     <div class="alert alert-info" role="status">
         {{ get_phrase('This application is a draft while you complete the details and required documents. Use Review & Submit to send it to the admissions queue.') }}
+        @if(auth()->user()->hasPermission('students.create'))
+            <div class="mt-2">{{ get_phrase('Already an existing student? Use the existing-student form with their current registration number instead of completing a new application.') }}
+                <a href="{{ route('admin.student.open_modal') }}">{{ get_phrase('Add Existing Student') }}</a>
+            </div>
+        @endif
     </div>
 @endif
 

@@ -245,7 +245,7 @@ class AdmissionsController extends Controller
     // ── Application fee ───────────────────────────────────────────────────
 
     /**
-     * Confirm, reject or waive an application-fee payment.
+     * Confirm or reject an offline application-fee payment.
      *
      * The admission's fee_status is never written here directly — it is
      * recomputed from the payment rows by ApplicationFee::refreshStatus() so
@@ -261,7 +261,7 @@ class AdmissionsController extends Controller
     public function reviewPayment(Request $request, $id)
     {
         $payment = ApplicationPayment::where('school_id', $this->school_id)->findOrFail($id);
-        abort_unless($payment->method === 'offline', 422, 'Online payments require provider verification. Use the explicit fee waiver action for waivers.');
+        abort_unless($payment->method === 'offline', 422, 'Online payments require provider verification. New application fees cannot be waived.');
 
         $validated = $request->validate([
             'status' => ['required', Rule::in([ApplicationPayment::STATUS_PAID, ApplicationPayment::STATUS_REJECTED])],
@@ -433,69 +433,12 @@ class AdmissionsController extends Controller
         return back()->with('success', get_phrase('Payment recorded.'));
     }
 
-    /**
-     * Option E — an explicit fee waiver. Distinguishable from a payment at
-     * every layer: its own ApplicationPayment row (method='waived', no
-     * amount collected) so fee_status=waived vs fee_status=paid never
-     * collapse into the same evidence trail, and a mandatory reason on the
-     * audit record — "waived" with no explanation is not an audit record,
-     * it is just a status flip.
-     */
+    /** Retired endpoint: new applicants must pay, including staff-entered applications. */
     public function waiveFee(Request $request, $id)
     {
-        $validated = $request->validate([
-            'reason' => 'required|string|max:500',
-        ], [
-            'reason.required' => get_phrase('Please state why this fee is being waived.'),
-        ]);
-
-        // Locked for the duration of the check-then-create so two
-        // near-simultaneous submissions (a double-click, or one admin
-        // waiving while another records a payment) can't both pass the
-        // "not already settled" check before either has written — the
-        // second request always sees the first one's result.
-        $payment = \Illuminate\Support\Facades\DB::transaction(function () use ($id, $validated) {
-            $admission = Admission::where('school_id', $this->school_id)->lockForUpdate()->findOrFail($id);
-
-            if ($admission->isFeeSettled()) {
-                return null;
-            }
-            abort_if($admission->payments()->where('status', 'pending')->whereIn('method', ['pesapal', 'marzpay', 'stripe', 'flutterwave'])->exists(), 422, 'Resolve the outstanding online payment before waiving this fee.');
-
-            $payment = ApplicationPayment::create([
-                'school_id'    => $this->school_id,
-                'admission_id' => $admission->id,
-                'applicant_id' => $admission->applicant_id,
-                'amount'       => ApplicationFee::amountFor($admission),
-                'currency'     => ApplicationFee::currencyFor($admission),
-                'method'       => 'waived',
-                'status'       => ApplicationPayment::STATUS_WAIVED,
-                'reference'    => 'WAIVER-' . $admission->id . '-' . strtoupper(\Illuminate\Support\Str::random(6)),
-                'note'         => $validated['reason'],
-                'confirmed_by' => Auth::id(),
-                'paid_at'      => now(),
-            ]);
-
-            ApplicationFee::refreshStatus($admission);
-
-            return $payment;
-        });
-
-        if (! $payment) {
-            return back()->with('error', get_phrase('This application fee is already settled.'));
-        }
-
-        AuditLog::record('create', 'Admissions', "Application fee waived for {$payment->admission->app_number}: {$validated['reason']}", [
-            'event_type'  => 'DATA',
-            'record_type' => ApplicationPayment::class,
-            'record_id'   => $payment->id,
-            'school_id'   => $this->school_id,
-        ]);
-
-        return back()->with('success', get_phrase('Application fee waived.'));
+        Admission::where('school_id', $this->school_id)->findOrFail($id);
+        abort(422, 'Application fees cannot be waived for new applications, including staff entries. Existing students use direct student onboarding.');
     }
-
-    // ── Document requirements ─────────────────────────────────────────────
 
     public function documentRequirements()
     {

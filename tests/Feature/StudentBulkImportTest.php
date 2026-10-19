@@ -33,6 +33,60 @@ class StudentBulkImportTest extends TestCase
         $this->makeClass($this->school, ['name' => 'Class A']);
     }
 
+    public function test_affiliated_student_keeps_both_institution_and_piie_identifiers(): void
+    {
+        (require base_path('database/migrations/2026_10_19_060000_add_affiliation_to_student_profiles.php'))->up();
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->actingAs($this->admin)->post(route('admin.student.create'), [
+            'name' => 'Partner Student', 'email' => 'partner@example.test',
+            'registration_number' => 'PIIE/OLD/0042', 'password_option' => 'auto',
+            'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
+            'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0012/ABC',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $student = User::where('email', 'partner@example.test')->firstOrFail();
+        $this->assertSame('PIIE/OLD/0042', $student->code);
+        $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id,
+            'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0012/ABC']);
+        $this->assertSame(0, DB::table('admissions')->count());
+        $this->assertSame(0, DB::table('enrollment')->count());
+        $this->actingAs($this->admin)->post(route('admin.student.update', $student->id), [
+            'name' => $student->name, 'email' => $student->email,
+            'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
+            'class_id' => DB::table('classes')->where('school_id', $this->school)->value('id'),
+            'affiliated_institution_name' => 'Updated University', 'affiliated_student_id' => '0005/EDIT',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id,
+            'affiliated_institution_name' => 'Updated University', 'affiliated_student_id' => '0005/EDIT']);
+        $this->assertSame(['affiliated_institution_name' => null, 'affiliated_student_id' => null],
+            \App\Models\StudentProfile::affiliationAttributes(['affiliated_institution_name' => '', 'affiliated_student_id' => '']));
+    }
+
+    public function test_partner_student_id_requires_institution_and_rolls_back_account_creation(): void
+    {
+        (require base_path('database/migrations/2026_10_19_060000_add_affiliation_to_student_profiles.php'))->up();
+        $this->actingAs($this->admin)->post(route('admin.student.create'), [
+            'name' => 'Partner Student', 'email' => 'invalid-partner@example.test',
+            'registration_number' => 'PIIE/OLD/0043', 'password_option' => 'auto',
+            'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
+            'affiliated_student_id' => '0012/ABC',
+        ])->assertSessionHasErrors('affiliated_institution_name');
+        $this->assertFalse(User::where('email', 'invalid-partner@example.test')->exists());
+    }
+
+    public function test_csv_import_preserves_affiliation_fields(): void
+    {
+        (require base_path('database/migrations/2026_10_19_060000_add_affiliation_to_student_profiles.php'))->up();
+        $path = tempnam(sys_get_temp_dir(), 'affiliation');
+        $handle = fopen($path, 'w');
+        fputcsv($handle, ['name', 'email', 'registration_number', 'affiliated_institution_name', 'affiliated_student_id']);
+        fputcsv($handle, ['Partner Import', 'partner-import@example.test', 'PIIE/OLD/0044', 'Partner University', '0009/X']);
+        fclose($handle);
+        $this->actingAs($this->admin)->post(route('admin.student.import.run'), ['file' => $this->file($path)])->assertOk();
+        $student = User::where('email', 'partner-import@example.test')->firstOrFail();
+        $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id,
+            'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0009/X']);
+    }
+
     /**
      * `sections` has no school_id in the real schema - it belongs to a class -
      * so the fixture mirrors that rather than inventing a column.

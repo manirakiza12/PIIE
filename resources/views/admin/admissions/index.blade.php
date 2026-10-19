@@ -19,6 +19,9 @@
                 <a href="{{ route('admin.admissions_documents.index') }}" class="export_btn export_btn-outline">{{ get_phrase('Document Requirements') }}</a>
                 <a href="{{ route('admin.admissions_agents.index') }}" class="export_btn export_btn-outline">{{ get_phrase('Agents') }}</a>
                 <a href="{{ route('admin.hei_admissions.wizard.create') }}" class="export_btn">{{ get_phrase('Add Application') }}</a>
+                @if(auth()->user()->hasPermission('students.create'))
+                    <a href="{{ route('admin.student.open_modal') }}" class="export_btn">{{ get_phrase('Add Existing Student') }}</a>
+                @endif
             </div>
         </div>
     </div></div>
@@ -131,14 +134,25 @@
                                  "move a batch to Under Review" pass; anything
                                  needing a note or a document check belongs on
                                  the review screen. --}}
+                            @if($app->status === \App\Models\Admission::STATUS_DRAFT)
+                                @if($app->source === 'staff_entry')
+                                    <a href="{{ route('admin.hei_admissions.wizard.step', [$app->id, 'personal']) }}" class="eBtn eBtn-sm eBtn-outline">{{ get_phrase('Complete Application') }}</a>
+                                @else
+                                    <span class="text-muted">{{ get_phrase('Awaiting applicant submission') }}</span>
+                                @endif
+                            @else
                             <form action="{{ route('admin.hei_admissions.status', $app->id) }}" method="POST" class="d-inline">
                                 @csrf
                                 <select name="status" class="form-select form-select-sm" style="width:150px" onchange="this.form.submit()">
+                                    @if(!in_array($app->status, \App\Models\Admission::STAFF_SETTABLE_STATUSES, true))
+                                        <option value="" selected disabled>{{ $app->statusLabel() }}</option>
+                                    @endif
                                     @foreach(\App\Models\Admission::STAFF_SETTABLE_STATUSES as $s)
                                         <option value="{{ $s }}" {{ $app->status == $s ? 'selected' : '' }}>{{ ucwords(str_replace('_',' ',$s)) }}</option>
                                     @endforeach
                                 </select>
                             </form>
+                            @endif
                             <a href="{{ route('admin.hei_admissions.destroy', $app->id) }}" class="eBtn eBtn-sm eBtn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
                         </div>
                     </td>

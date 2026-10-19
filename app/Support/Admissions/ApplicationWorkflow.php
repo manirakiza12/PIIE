@@ -54,7 +54,7 @@ class ApplicationWorkflow
                 $requirements[] = get_phrase('Complete the required application item').': '.$blocker;
             }
             if (! ApplicationFee::isSettled($admission)) {
-                $requirements[] = get_phrase('Confirm the application fee payment or record an authorised fee waiver before proceeding.');
+                $requirements[] = get_phrase('Confirm the application fee payment before proceeding. New applications, including staff entries, require payment.');
             }
         }
         return $requirements;

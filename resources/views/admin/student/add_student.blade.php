@@ -10,6 +10,7 @@
             <input type="text" class="form-control eForm-control" id="registration_number" name="registration_number" maxlength="255" required>
         </div>
         @csrf 
+        @include('admin.student._affiliation_fields')
         <div class="form-row">
             <div class="fpb-7">
                 <label for="name" class="eForm-label">{{ get_phrase('Name') }}</label>

@@ -31,13 +31,36 @@ class AdmissionWizardTest extends TestCase
         ]);
     }
 
+    public function test_opening_student_entry_does_not_create_blank_drafts_and_offers_existing_students(): void
+    {
+        $school = $this->makeSchool();
+        $admin = $this->makeAdminUser($school);
+        $this->actingAs($admin)->get(route('admin.hei_admissions.wizard.create'))
+            ->assertOk()->assertSee('Add Existing Student')->assertSee('Start New Application')
+            ->assertSee(route('admin.student.open_modal'), false);
+        $this->get(route('admin.hei_admissions.wizard.create'))->assertOk();
+        $this->assertSame(0, Admission::count());
+        $this->assertSame(0, DB::table('admission_status_events')->count());
+    }
+
+    public function test_draft_list_offers_completion_instead_of_invalid_status_changes(): void
+    {
+        $school = $this->makeSchool();
+        $admin = $this->makeAdminUser($school);
+        $id = $this->makeAdmission($school, ['status' => 'draft', 'source' => 'staff_entry', 'submitted_at' => null]);
+        $this->actingAs($admin)->get(route('admin.hei_admissions.index', ['status' => 'draft']))
+            ->assertOk()->assertSee('Complete Application')->assertSee('Add Existing Student')
+            ->assertDontSee('name="status" class="form-select form-select-sm"', false);
+        $this->assertSame('draft', Admission::findOrFail($id)->status);
+    }
+
     public function test_admin_can_create_a_staff_entry_draft_and_is_sent_to_step_one(): void
     {
         $schoolId = $this->makeSchool();
         $this->configurePrimarySchool($schoolId);
         $admin = $this->makeAdminUser($schoolId);
 
-        $response = $this->actingAs($admin)->get(route('admin.hei_admissions.wizard.create'));
+        $response = $this->actingAs($admin)->post(route('admin.hei_admissions.wizard.start'));
 
         $admission = Admission::first();
         $this->assertNotNull($admission, 'Creating a wizard application must create an Admission row.');
@@ -292,7 +315,7 @@ class AdmissionWizardTest extends TestCase
         $intakeId = $this->makeIntakeSession($schoolId);
         AdmissionDocumentRequirement::create(['school_id' => $schoolId, 'key' => 'other', 'label' => 'Other', 'is_required' => false]);
 
-        $create = $this->actingAs($admin)->get(route('admin.hei_admissions.wizard.create'));
+        $create = $this->actingAs($admin)->post(route('admin.hei_admissions.wizard.start'));
         $admission = Admission::first();
         $admissionId = $admission->id;
 
