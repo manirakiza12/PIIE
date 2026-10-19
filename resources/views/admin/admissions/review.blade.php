@@ -53,6 +53,12 @@
 
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
+@if($admission->status === Admission::STATUS_DRAFT && $admission->source === 'staff_entry' && auth()->user()->hasPermission('students.create'))
+    <div class="alert alert-info">
+        {{ get_phrase('This is a new-applicant draft. If the person is already a PIIE student, add them directly using their existing registration number instead of submitting a new application.') }}
+        <a href="{{ route('admin.student.open_modal') }}">{{ get_phrase('Add Existing Student') }}</a>
+    </div>
+@endif
 @if($errors->any())
     <div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
 @endif

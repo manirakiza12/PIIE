@@ -1961,6 +1961,7 @@ Route::controller(AdmissionsController::class)->middleware('auth', 'admin', 'rba
 // with online-application decisions.
 Route::controller(AdmissionWizardController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/hei-admissions/wizard/create',              'create')->name('admin.hei_admissions.wizard.create');
+    Route::post('admin/hei-admissions/wizard/start',              'start')->name('admin.hei_admissions.wizard.start');
     Route::get('admin/hei-admissions/wizard/{id}/{step}',         'step')->name('admin.hei_admissions.wizard.step');
     Route::post('admin/hei-admissions/wizard/{id}/personal',      'savePersonal')->name('admin.hei_admissions.wizard.personal');
     Route::post('admin/hei-admissions/wizard/{id}/programme',     'saveProgramme')->name('admin.hei_admissions.wizard.programme');

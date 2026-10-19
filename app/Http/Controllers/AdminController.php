@@ -1984,7 +1984,7 @@ class AdminController extends Controller
         $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'departments' => $departments, 'programmes' => $programmes, 'intakeSessions' => $intakeSessions];
         if (! $request->ajax()) {
             return view('admin.common.modal_standalone_wrapper', [
-                'page_title' => get_phrase('Create Student'),
+                'page_title' => get_phrase('Add Existing Student'),
                 'inner_view' => 'admin.student.add_student',
                 'view_data'  => $view_data,
             ]);

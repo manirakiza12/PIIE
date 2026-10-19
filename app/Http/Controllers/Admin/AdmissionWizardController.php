@@ -76,13 +76,16 @@ class AdmissionWizardController extends Controller
     }
 
     /**
-     * Starts a new staff-entry application and sends the administrator
-     * straight into Step 1. Materialised immediately (like the applicant
-     * portal's currentApplication()) so it has a reference number and a
-     * timeline entry from the outset, and shows up in the admissions queue
-     * as a draft the administrator can come back to.
+     * Choose existing-student onboarding or a new application without
+     * creating a draft merely by opening the page.
      */
     public function create(Request $request)
+    {
+        return view('admin.admissions.wizard.create');
+    }
+
+    /** Explicitly start a new applicant draft after the staff member chooses that path. */
+    public function start(Request $request)
     {
         $admission = Admission::create([
             'school_id'    => $this->school_id,
