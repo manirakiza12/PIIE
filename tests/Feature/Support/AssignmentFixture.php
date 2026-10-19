@@ -724,11 +724,13 @@ trait AssignmentFixture
     }
     private function tenantUser(string $name, int $role, int $schoolId): \App\Models\User
     {
-        return \App\Models\User::factory()->create([
+        $user = \App\Models\User::factory()->create([
             'name' => $name,
             'email' => str_replace([' ', '.'], ['.', ''], strtolower($name))."{$role}.{$schoolId}@other.example.test",
             'role_id' => $role, 'school_id' => $schoolId, 'account_status' => 'active',
             'password' => bcrypt('User#2026'),
         ]);
+        if ($role === 7) { $this->grantStudyEligibilityFixture($user); }
+        return $user;
     }
 }

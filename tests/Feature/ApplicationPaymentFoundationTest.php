@@ -368,7 +368,7 @@ class ApplicationPaymentFoundationTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_declining_offline_tuition_does_not_falsely_credit_the_invoice(): void
+    public function test_retired_offline_tuition_decision_cannot_credit_the_invoice(): void
     {
         $accountant = User::factory()->create(['role_id' => 4, 'school_id' => $this->schoolId, 'account_status' => 'active']);
         $invoice = StudentFeeManager::create([
@@ -376,8 +376,8 @@ class ApplicationPaymentFoundationTest extends TestCase
             'student_id' => 1, 'school_id' => $this->schoolId, 'session_id' => 1,
             'payment_method' => 'offline', 'status' => 'pending', 'paid_amount' => 0, 'timestamp' => time(),
         ]);
-        $this->actingAs($accountant)->get(route('accountant.update_offline_payment', [$invoice->id, 'decline']))->assertRedirect();
-        $this->assertSame('unpaid', $invoice->fresh()->status);
+        $this->actingAs($accountant)->get('/accountant/student_fee/delete/' . $invoice->id . '/decline')->assertNotFound();
+        $this->assertSame('pending', $invoice->fresh()->status);
         $this->assertEquals(0, $invoice->fresh()->paid_amount);
         $this->assertEquals(50000, $invoice->fresh()->total_amount - $invoice->fresh()->paid_amount);
     }

@@ -324,10 +324,12 @@ class LiveClassOfferingNotificationSecurityTest extends TestCase
 
     private function user(string $email, int $roleId, int $schoolId): User
     {
-        return User::create([
+        $user = User::create([
             'name' => $email, 'email' => $email, 'role_id' => $roleId,
             'school_id' => $schoolId, 'status' => 1, 'account_status' => 'active',
         ]);
+        if ($roleId === 7) { $this->grantStudyEligibilityFixture($user); }
+        return $user;
     }
 
     private function student(string $email, int $schoolId): User

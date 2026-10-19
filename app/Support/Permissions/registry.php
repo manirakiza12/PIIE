@@ -388,7 +388,6 @@ return [
         'admin.tuition_payments.waiver' => 'academic.course_registration.fee_waiver',
         'admin.tuition_payments.*' => 'finance.view',
         'admin.payment.pesapal.check' => 'finance.view',
-        'admin.update_offline_payment' => 'finance.payments',
         'admin.fee_structures.*' => 'finance.fee_structures',
         'admin.expense.*' => 'finance.expenses',
         'admin.expenses.*' => 'finance.expenses',
