@@ -28,14 +28,21 @@ class PesaPalApplicantPaymentUiTest extends TestCase
             ['COMPLETED','paid',null,'Successful'],['UNKNOWN','pending',null,'Awaiting payment'],
             [null,'pending',null,'Awaiting payment']] as [$classification,$status,$reason,$label]) {
             $payment=new ApplicationPayment(['method'=>'pesapal','status'=>$status,'amount'=>'50000','reference'=>'TEST-ONLY',
+                'gateway_txn_id'=>'7e6b62d9-883e-440f-a63e-e1105bbfadc3',
                 'gateway_payload'=>['classification'=>$classification,'verified_failure_reason'=>$reason]]);
             $payment->id=123;$payment->created_at=now();
             $html=view('applicant.partials._payment',['admission'=>$admission,'amount'=>50000,'methods'=>[
-                ['key'=>'pesapal','label'=>'PesaPal','icon'=>'bi-credit-card']], 'bankDetails'=>null,'payments'=>collect([$payment])])->render();
+                ['key'=>'pesapal','label'=>'PesaPal','icon'=>'bi-credit-card','configured'=>true]], 'payments'=>collect([$payment])])->render();
             $this->assertStringContainsString($label,$html);
             $this->assertStringContainsString('MTN Mobile Money',$html);
             $this->assertStringContainsString('Airtel Money',$html);
             $this->assertStringContainsString('bank card',$html);
+            $this->assertStringNotContainsString('Bank Deposit / Mobile Money',$html);
+            $this->assertStringNotContainsString('Submit Payment Details',$html);
+            if ($status === 'pending') {
+                $this->assertStringContainsString('name="confirmation_code"', $html);
+                $this->assertStringContainsString('A typed code alone never marks a fee as paid.', $html);
+            }
             $this->assertStringNotContainsString('Sandbox checkout is blocked',$html);
             if($classification==='FAILED'&&$reason===null)$this->assertStringContainsString('did not provide a specific failure reason',$html);
         }
@@ -43,8 +50,8 @@ class PesaPalApplicantPaymentUiTest extends TestCase
         $final = view('applicant.application.payment', [
             'errors' => new \Illuminate\Support\ViewErrorBag(),
             'admission' => $admission, 'amount' => 50000,
-            'methods' => [['key' => 'pesapal', 'label' => 'PesaPal', 'icon' => 'bi-credit-card']],
-            'bankDetails' => null, 'payments' => collect(), 'readOnly' => true,
+            'methods' => [['key' => 'pesapal', 'label' => 'PesaPal', 'icon' => 'bi-credit-card', 'configured' => true]],
+            'payments' => collect(), 'readOnly' => true,
             'step' => 'payment', 'steps' => \App\Support\Admissions\ApplicationProgress::applicableSteps($admission),
             'percent' => \App\Support\Admissions\ApplicationProgress::percent($admission),
             'canSubmit' => true, 'blockers' => [],

@@ -293,7 +293,6 @@ Route::middleware('applicant')->group(function () {
     Route::controller(\App\Http\Controllers\Applicant\PaymentController::class)->group(function () {
         Route::get('applicant/payment', 'index')->name('applicant.payment');
         Route::post('applicant/payment/pesapal/{payment}/status', 'checkPesaPalStatus')->middleware('throttle:10,1')->name('applicant.payment.pesapal.status');
-        Route::post('applicant/payment/offline', 'submitOffline')->name('applicant.payment.offline');
         Route::post('applicant/payment/{gateway}/start', 'startGateway')->name('applicant.payment.gateway.start');
         Route::get('applicant/payment/{gateway}/return/{payment}', 'gatewayReturn')->name('applicant.payment.gateway.return');
         Route::get('applicant/payment/{gateway}/cancel/{payment}', 'gatewayCancel')->name('applicant.payment.gateway.cancel');

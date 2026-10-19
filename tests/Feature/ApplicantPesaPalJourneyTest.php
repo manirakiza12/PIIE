@@ -92,6 +92,29 @@ class ApplicantPesaPalJourneyTest extends TestCase
         $this->assertTrue($admission->fresh()->isFeeSettled());
     }
 
+    public function test_applicant_prn_must_match_the_completed_provider_status_before_settlement(): void
+    {
+        $admission = $this->application();
+        $payment = ApplicantPesaPalPayment::start($admission);
+        $this->code = 1;
+        $this->description = 'COMPLETED';
+        $this->statusChanges = ['confirmation_code' => 'PRN-UG-123456'];
+
+        try {
+            ApplicantPesaPalPayment::reconcile($payment, null, 'PRN-WRONG');
+            $this->fail('A PRN belonging to no provider payment was accepted.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('confirmation_code', $exception->errors());
+        }
+        $this->assertSame(ApplicationPayment::STATUS_PENDING, $payment->fresh()->status);
+        $this->assertSame(Admission::FEE_PENDING, $admission->fresh()->fee_status);
+
+        ApplicantPesaPalPayment::reconcile($payment->fresh(), null, 'PRN-UG-123456');
+        $this->assertSame(ApplicationPayment::STATUS_PAID, $payment->fresh()->status);
+        $this->assertSame('PRN-UG-123456', $payment->fresh()->gateway_payload['provider_confirmation_code']);
+        $this->assertTrue($admission->fresh()->isFeeSettled());
+    }
+
     public static function channels(): array { return [['public'], ['staff_entry']]; }
 
     public function test_applicant_checkout_and_settlement_leave_subscription_and_admin_records_unchanged(): void

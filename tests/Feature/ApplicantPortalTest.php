@@ -599,7 +599,7 @@ class ApplicantPortalTest extends TestCase
 
     // ── Fee ──────────────────────────────────────────────────────────────
 
-    public function test_offline_payment_is_recorded_as_pending_and_never_self_confirmed(): void
+    public function test_applicant_cannot_submit_manual_payment_details_and_sees_pesapal_readiness(): void
     {
         $this->signIn();
         $this->get(route('applicant.dashboard'));
@@ -608,22 +608,18 @@ class ApplicantPortalTest extends TestCase
             'intake_session_id' => $this->makeIntakeSession($this->schoolId, ['application_fee' => 50000]),
         ]);
 
-        $response = $this->post(route('applicant.payment.offline'), [
+        $this->post('/applicant/payment/offline', [
             'reference' => 'TXN-12345',
             'proof'     => UploadedFile::fake()->create('slip.pdf', 30, 'application/pdf'),
-        ]);
+        ])->assertNotFound();
 
-        $response->assertSessionHasNoErrors();
-
-        $payment = ApplicationPayment::first();
-        $this->assertSame(ApplicationPayment::STATUS_PENDING, $payment->status);
-        $this->assertSame('50000.00', $payment->amount);
-        $this->assertSame(Admission::FEE_PENDING, Admission::first()->fee_status);
-
-        $privateProof = \App\Support\Payments\ApplicationPaymentProof::path($payment);
-        $this->assertFileExists($privateProof);
-        $this->assertFileDoesNotExist(public_path(ApplicationPayment::PROOF_DIR . '/' . $payment->proof_file));
-        @unlink($privateProof);
+        $this->get(route('applicant.application.step', 'payment'))->assertOk()
+            ->assertSee('PesaPal')
+            ->assertSee('not ready to accept payments yet')
+            ->assertDontSee('Bank Deposit / Mobile Money')
+            ->assertDontSee('Submit Payment Details')
+            ->assertDontSee('name="proof"', false);
+        $this->assertSame(0, ApplicationPayment::count());
     }
 
     // ── Flutterwave ──────────────────────────────────────────────────────
@@ -679,6 +675,20 @@ class ApplicantPortalTest extends TestCase
         $methods = ApplicationFee::availableMethods($this->schoolId);
 
         $this->assertNotContains('marzpay', array_column($methods, 'key'));
+    }
+
+    public function test_pesapal_option_is_visible_but_disabled_until_configuration_and_ipn_are_ready(): void
+    {
+        $this->signIn();
+        $this->get(route('applicant.dashboard'));
+        Admission::first()->update([
+            'intake_session_id' => $this->makeIntakeSession($this->schoolId, ['application_fee' => 50000]),
+        ]);
+
+        $methods = ApplicationFee::availableMethods($this->schoolId);
+
+        $this->assertSame('pesapal', $methods[0]['key']);
+        $this->assertFalse($methods[0]['configured']);
     }
 
     private function enableMarzpay(): void
