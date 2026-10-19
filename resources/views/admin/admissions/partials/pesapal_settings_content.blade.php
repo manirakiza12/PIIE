@@ -31,7 +31,7 @@
                             <option value="sandbox" @selected(old('environment', $environment) === 'sandbox')>Sandbox (test payments)</option>
                             <option value="live" @selected(old('environment', $environment) === 'live')>Live (real payments)</option>
                         </select>
-                        <small class="text-muted d-block mt-2" id="environment-help">Select Sandbox for local integration testing.</small>
+                        <small class="text-muted d-block mt-2" id="environment-help">Select Sandbox for testing. Saving Live with Live credentials routes new checkouts to PesaPal Live automatically; no code change is needed. Register the IPN for the selected environment before accepting payments. Existing orders remain tied to the environment in which they started.</small>
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="eForm-label" for="pesapal-key">Consumer Key</label>

@@ -45,7 +45,8 @@ class ApplicantPesaPalAdminUiTest extends TestCase
             ->assertSee('assets/vendors/bootstrap-5.1.3/css/bootstrap.min.css', false)
             ->assertSee('assets/css/style.css', false)
             ->assertSee('New Application')->assertSee('Application Payments')
-            ->assertSee('Failed Payment Notifications')->assertSee('Shared application payment configuration');
+            ->assertSee('Failed Payment Notifications')->assertSee('Shared application payment configuration')
+            ->assertSee('routes new checkouts to PesaPal Live automatically; no code change is needed.');
         Http::assertNothingSent();
     }
 
