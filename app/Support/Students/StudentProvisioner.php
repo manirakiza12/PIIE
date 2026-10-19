@@ -71,6 +71,7 @@ final class StudentProvisioner
                     'next_of_kin_address'     => $data['next_of_kin_address'] ?? null,
                     'next_of_kin_contact'     => $data['next_of_kin_contact'] ?? null,
                     'status'                  => $data['status'] ?? 'active',
+                    ...StudentProfile::affiliationAttributes($data),
                 ]
             );
 

@@ -1913,11 +1913,13 @@ class AdminController extends Controller
             optional($profile?->intakeSession)->name,
             $profile->nationality ?? '',
             $profile->status ?? 'active',
+            $profile->affiliated_institution_name ?? '',
+            $profile->affiliated_student_id ?? '',
         ]];
 
         return \App\Support\Export\ExcelExportService::download(
             'student_' . ($student_details['code'] ?? $id),
-            ['Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Blood Group', 'Programme', 'Intake', 'Nationality', 'Status'],
+            ['Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Blood Group', 'Programme', 'Intake', 'Nationality', 'Status', 'Affiliated University / School', 'Student ID at Affiliated Institution'],
             $rows
         );
     }
@@ -2080,7 +2082,8 @@ class AdminController extends Controller
     {
         $this->findStudentOrFail($id);
         $student_details = (new CommonController)->get_student_details_by_id($id);
-        return view('admin.student.student_profile', ['student_details' => $student_details]);
+        return view('admin.student.student_profile', ['student_details' => $student_details,
+            'studentProfile' => StudentProfile::where('user_id', $id)->first()]);
     }
 
     public function studentEditModal(Request $request, $id)
@@ -2139,6 +2142,8 @@ class AdminController extends Controller
         ]);
 
         $this->validateStudentAcademicScope($data);
+
+        $affiliation = StudentProfile::affiliationAttributes($data);
 
         if (!empty($data['section_id']) && !Section::where('id', $data['section_id'])->where('class_id', $data['class_id'])->exists()) {
             throw ValidationException::withMessages(['section_id' => 'The selected section does not belong to the selected class.']);
@@ -2227,7 +2232,7 @@ class AdminController extends Controller
             $profileData['additional_image'] = $additionalImageName;
         }
 
-        StudentProfile::updateOrCreate(['user_id' => $id], $profileData);
+        StudentProfile::updateOrCreate(['user_id' => $id], array_merge($profileData, $affiliation));
 
         return redirect()->back()->with('message', 'You have successfully update student.');
     }

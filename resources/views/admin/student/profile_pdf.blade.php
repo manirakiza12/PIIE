@@ -27,6 +27,8 @@
         <tr><td class="label">{{ get_phrase('Programme') }}</td><td>{{ optional($profile?->programme)->name ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Intake') }}</td><td>{{ optional($profile?->intakeSession)->name ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Year of Study') }}</td><td>{{ $profile->year_of_study ?? '-' }}</td></tr>
+        <tr><td class="label">{{ get_phrase('Affiliated University / School') }}</td><td>{{ $profile->affiliated_institution_name ?? '-' }}</td></tr>
+        <tr><td class="label">{{ get_phrase('Student ID at Affiliated Institution') }}</td><td>{{ $profile->affiliated_student_id ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Nationality') }}</td><td>{{ $profile->nationality ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('National ID/Passport') }}</td><td>{{ $profile->national_id_or_passport ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Next of Kin Address') }}</td><td>{{ $profile->next_of_kin_address ?? '-' }}</td></tr>

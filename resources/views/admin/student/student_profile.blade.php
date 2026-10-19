@@ -53,6 +53,8 @@
                         </div>
                         <div class="name_title mt-3 text-center">
                             <h4>{{ get_phrase('Name') }} : {{ $student_details['name'] }}</h4>
+                            <h4>{{ get_phrase('Affiliated University / School') }} : {{ $studentProfile->affiliated_institution_name ?? '—' }}</h4>
+                            <h4>{{ get_phrase('Student ID at Affiliated Institution') }} : {{ $studentProfile->affiliated_student_id ?? '—' }}</h4>
                             <h4>{{ get_phrase('Email') }} : {{ null_checker($student_details['email']) }}</h4>
 
                         </div>
