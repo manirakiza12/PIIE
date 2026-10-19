@@ -323,6 +323,7 @@ class AdmissionPaymentTest extends TestCase
             'app_number' => 'PIIE-2627-O-P5001',
             'email' => 'mailme@example.com',
             'intake_session_id' => $intakeId,
+            'submitted_at' => now(),
         ]);
 
         $this->actingAs($admin)->post(route('admin.hei_admissions.payment.request', $admissionId));
