@@ -152,7 +152,7 @@ final class ApplicantPesaPalPayment
         return DecimalAmount::decimal(max(0, ($required ?? 0) - $paid));
     }
 
-    public static function reconcile(ApplicationPayment $payment, ?string $notifiedId = null): string
+    public static function reconcile(ApplicationPayment $payment, ?string $notifiedId = null, ?string $confirmationCode = null): string
     {
         if($guard=config('sandbox.checkout.reconcile_guard')) { $guard($payment); }
         if ($payment->method !== 'pesapal') { throw new PesaPalException(); }
@@ -165,8 +165,18 @@ final class ApplicantPesaPalPayment
         $status = (new PesaPalService($configuration))->getTransactionStatus($id);
         if ($status->merchantReference !== $payment->reference || $status->currency !== $payment->currency
             || DecimalAmount::minorUnits($status->amount) !== DecimalAmount::minorUnits($payment->amount)) { throw new PesaPalException(); }
+        if ($confirmationCode !== null && ($status->classification() !== 'COMPLETED'
+            || blank($status->confirmationCode)
+            || ! hash_equals($status->confirmationCode, trim($confirmationCode)))) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'confirmation_code' => 'That PRN does not match a completed PesaPal payment for this application.',
+            ]);
+        }
         $observation=['classification'=>$status->classification(),'last_checked_at'=>now()->toIso8601String(),
             'verified_failure_reason'=>$status->classification()==='FAILED'?PesaPalPaymentExperience::failureReason($status->description):null];
+        if (filled($status->confirmationCode)) {
+            $observation['provider_confirmation_code'] = $status->confirmationCode;
+        }
 
         DB::transaction(function () use ($payment, $status) {
             $locked = ApplicationPayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();

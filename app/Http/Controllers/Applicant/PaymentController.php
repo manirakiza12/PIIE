@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Applicant;
 
 use App\Models\Admission;
 use App\Models\ApplicationPayment;
-use App\Models\AuditLog;
-use App\Support\Admissions\ApplicantNotifier;
 use App\Support\Admissions\ApplicationFee;
 use App\Support\Admissions\ApplicationProgress;
 use App\Support\Payments\ApplicationPaymentSettlement;
@@ -16,11 +14,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
 /**
- * Application fees: shared PesaPal checkout and retained offline proof review.
+ * Applicant application fees: PesaPal checkout and provider verification.
  *
- * Nothing here ever marks a fee paid on the applicant's say-so. A deposit is
- * recorded as 'pending' for the finance office to confirm; online payments
- * require server-side verification. Historical gateway verification remains
+ * Nothing here ever marks a fee paid on the applicant's say-so. Online
+ * payments require server-side verification. Historical gateway verification remains
  * available. The redirect back from a gateway is a hint that
  * something happened, not evidence of it.
  */
@@ -40,66 +37,9 @@ class PaymentController extends BaseApplicantController
             'admission'   => $admission,
             'amount'      => ApplicationFee::amountFor($admission),
             'methods'     => ApplicationFee::availableMethods($admission->school_id),
-            'bankDetails' => ApplicationFee::bankInstructions(),
             'payments'    => $admission->payments()->latest('id')->get(),
             'percent'     => ApplicationProgress::percent($admission),
         ]);
-    }
-
-    /**
-     * Bank deposit / mobile money: the applicant tells us what they paid and
-     * uploads proof; finance confirms it later from the admin review screen.
-     */
-    public function submitOffline(Request $request)
-    {
-        $admission = $this->currentApplication();
-        $amount    = ApplicationFee::amountFor($admission);
-
-        if ($amount <= 0) {
-            return redirect()->route('applicant.dashboard');
-        }
-
-        if ($admission->isFeeSettled()) {
-            return back()->with('error', get_phrase('Your application fee has already been settled.'));
-        }
-
-        $validated = $request->validate([
-            'reference' => 'required|string|max:100',
-            'note'      => 'nullable|string|max:500',
-            'proof'     => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-        ], [
-            'reference.required' => get_phrase('Please enter the transaction or deposit reference.'),
-            'proof.required'     => get_phrase('Please attach your deposit slip or transaction message.'),
-        ]);
-
-        $storedAs = \App\Support\Payments\ApplicationPaymentProof::store($request->file('proof'), $admission->id);
-
-        $payment = ApplicationPayment::create([
-            'school_id'    => $admission->school_id,
-            'admission_id' => $admission->id,
-            'applicant_id' => $this->applicant()->id,
-            'amount'       => $amount,
-            'currency'     => ApplicationFee::currencyFor($admission),
-            'method'       => 'offline',
-            'status'       => ApplicationPayment::STATUS_PENDING,
-            'reference'    => $validated['reference'],
-            'note'         => $validated['note'] ?? null,
-            'proof_file'   => $storedAs,
-        ]);
-
-        ApplicationFee::refreshStatus($admission);
-
-        AuditLog::record('create', 'Admissions', "Applicant submitted offline application-fee payment for {$admission->app_number} (ref {$payment->reference}).", [
-            'event_type'  => 'DATA',
-            'record_type' => ApplicationPayment::class,
-            'record_id'   => $payment->id,
-            'school_id'   => $admission->school_id,
-        ]);
-
-        ApplicantNotifier::paymentReceived($admission, $payment);
-
-        return redirect()->route('applicant.payment')
-            ->with('success', get_phrase('Thank you. Your payment details have been sent to the finance office for confirmation.'));
     }
 
     /**
@@ -126,12 +66,14 @@ class PaymentController extends BaseApplicantController
         return back()->with('error', 'New online application payments use PesaPal.');
     }
 
-    public function checkPesaPalStatus(int $paymentId)
+    public function checkPesaPalStatus(Request $request, int $paymentId)
     {
+        $validated = $request->validate(['confirmation_code' => 'nullable|string|max:100']);
         $admission = $this->currentApplication();
         $payment = $admission->payments()->where('school_id', $admission->school_id)->where('method', 'pesapal')->findOrFail($paymentId);
         try {
-            $result = \App\Support\Payments\ApplicantPesaPalPayment::reconcile($payment);
+            $result = \App\Support\Payments\ApplicantPesaPalPayment::reconcile($payment, null,
+                filled($validated['confirmation_code'] ?? null) ? $validated['confirmation_code'] : null);
             return back()->with('success', 'Payment status: ' . $result);
         } catch (\App\Support\Payments\PesaPalException $exception) {
             return back()->with('error', 'Payment verification is unavailable. Do not pay again; contact finance.');

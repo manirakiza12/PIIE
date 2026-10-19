@@ -137,11 +137,9 @@ class ApplicationFee
     /**
      * Payment options offered to applicants.
      *
-     * Bank deposit is always available: it needs no third-party
-     * configuration and is how most fees are actually paid at the
-     * institutions this serves. Gateways appear only when a school has
-     * switched them on and saved keys, so an applicant is never shown a
-     * checkout button that cannot complete.
+     * Applicant fees use PesaPal only. Keep its option visible even before
+     * configuration is complete so applicants get a clear readiness message
+     * instead of being silently offered a manual payment path.
      *
      * Only gateways this deployment can actually take an applicant through
      * are listed — see App\Http\Controllers\Applicant\PaymentController.
@@ -165,21 +163,10 @@ class ApplicationFee
 
     public static function availableMethods(int $schoolId): array
     {
-        $methods = [
-            [
-                'key'         => 'offline',
-                'label'       => get_phrase('Bank Deposit / Mobile Money'),
-                'description' => get_phrase('Pay into the institution account, then upload your deposit slip or transaction message for confirmation.'),
-                'icon'        => 'bi-bank',
-            ],
-        ];
+        $methods = [];
 
         foreach (self::SUPPORTED_GATEWAYS as $name => $meta) {
             if (! in_array($name, self::ENABLED_GATEWAYS, true)) {
-                continue;
-            }
-
-            if (! self::gatewayIsConfigured($name, $schoolId)) {
                 continue;
             }
 
@@ -188,6 +175,7 @@ class ApplicationFee
                 'label'       => get_phrase($meta['label']),
                 'description' => get_phrase('Continue to PesaPal. Your fee is settled only after provider verification.'),
                 'icon'        => $meta['icon'],
+                'configured'  => self::gatewayIsConfigured($name, $schoolId),
             ];
         }
 
@@ -244,15 +232,4 @@ class ApplicationFee
             : get_payment_keys('flutterwave', 'test_secret_key');
     }
 
-    /**
-     * Bank details shown on the offline payment screen, edited by staff under
-     * Admissions settings. Free text on purpose — account names, branch codes
-     * and mobile-money short codes vary too much between countries to model.
-     */
-    public static function bankInstructions(): ?string
-    {
-        $instructions = get_settings('application_fee_bank_details');
-
-        return $instructions !== null && $instructions !== '' ? $instructions : null;
-    }
 }

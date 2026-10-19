@@ -1,7 +1,7 @@
 @extends('applicant.layout')
 
 @section('title', get_phrase('Pay and Submit'))
-@section('subtitle', get_phrase('Submit your reviewed application and complete the application fee payment here.'))
+@section('subtitle', get_phrase('Your application is submitted. Complete the application fee securely through PesaPal.'))
 
 @section('content')
 

@@ -1,7 +1,7 @@
 {{--
     Application fee: what is owed, how to pay it, and what has been submitted
     so far. Shared by the wizard's Payment step and the standalone Fee page.
-    Expects: $admission, $amount, $methods, $bankDetails, $payments.
+    Expects: $admission, $amount, $methods, $payments.
 --}}
 
 @php
@@ -9,7 +9,7 @@
 
     $settled  = $admission->isFeeSettled();
     $pending  = $admission->fee_status === \App\Models\Admission::FEE_PENDING;
-    $gateways = collect($methods)->where('key', '!=', 'offline');
+    $gateways = collect($methods);
     $sandboxCheckoutBlocked = config('sandbox.connectivity') !== null
         && !(class_exists(\PiieSandbox\ControlledCheckout::class)
             && \PiieSandbox\ControlledCheckout::buttonEnabled($admission));
@@ -53,16 +53,16 @@
         <i class="bi bi-hourglass-split mt-1"></i>
         <div>
             <strong>{{ get_phrase('Your payment is being verified.') }}</strong><br>
-            {{ get_phrase('Payment confirmation is outstanding. Online payments are verified with the provider; deposit proof is reviewed by finance.') }}
+            {{ get_phrase('Payment confirmation is outstanding. PesaPal will verify your payment directly.') }}
         </div>
     </div>
 @endif
 
 @unless($settled)
     <div class="row g-4 mt-1">
-        {{-- Online payment --}}
-        @if($gateways->isNotEmpty())
-            <div class="col-lg-5">
+        {{-- PesaPal hosted payment --}}
+        @forelse($gateways as $gateway)
+            <div class="col-12">
                 <div class="ap-card h-100">
                     <div class="ap-card-head">
                         <h2 class="ap-card-title"><i class="bi bi-lightning-charge"></i> {{ get_phrase('Pay Online') }}</h2>
@@ -70,7 +70,9 @@
 
                     <p class="ap-hint mb-2">Choose MTN Mobile Money, Airtel Money or a bank card on PesaPal's secure checkout. Available methods depend on your currency and merchant account.</p>
                     <p class="ap-hint mb-3">Approve Mobile Money on your phone when prompted. Enter card details only on PesaPal's hosted page. A prompt or a return to PIIE does not confirm payment; PIIE checks the result with PesaPal.</p>
-                    @if($sandboxCheckoutBlocked)
+                    @if(!($gateway['configured'] ?? false))
+                        <div class="alert alert-warning" role="status">PesaPal is not ready to accept payments yet. Admissions must finish the secure PesaPal configuration and HTTPS notification setup.</div>
+                    @elseif($sandboxCheckoutBlocked)
                         <div class="alert alert-info" role="status">
                             @if($payments->isNotEmpty())
                                 The one-use sandbox checkout has already been used or closed. Do not start another payment. Your application fee is settled only after successful provider verification.
@@ -84,63 +86,17 @@
                         </div>
                     @endif
 
-                    @foreach($gateways as $gateway)
-                        <form action="{{ route('applicant.payment.gateway.start', $gateway['key']) }}" method="POST" class="mb-2">
-                            @csrf
-                            @if($gateway['key'] === 'marzpay')
-                                <label class="form-label" for="marzpay_phone_number">{{ get_phrase('Mobile Money Number') }}</label>
-                                <input type="tel" class="form-control mb-2" id="marzpay_phone_number" name="phone_number" placeholder="e.g. 0712345678" required>
-                            @endif
-                            <button type="submit" class="ap-btn ap-btn-accent w-100" @disabled($sandboxCheckoutBlocked || !\App\Support\Payments\ApplicantPesaPalPayment::eligible($admission))>
-                                <i class="bi {{ $gateway['icon'] }}"></i> {{ $gateway['key']==='pesapal' ? \App\Support\Payments\PesaPalPaymentExperience::checkoutLabel($payments) : $gateway['label'] }}
-                            </button>
-                        </form>
-                    @endforeach
+                    <form action="{{ route('applicant.payment.gateway.start', $gateway['key']) }}" method="POST" class="mb-2">
+                        @csrf
+                            <button type="submit" class="ap-btn ap-btn-accent w-100" @disabled(!($gateway['configured'] ?? false) || $sandboxCheckoutBlocked || !\App\Support\Payments\ApplicantPesaPalPayment::eligible($admission))>
+                            <i class="bi {{ $gateway['icon'] }}"></i> {{ \App\Support\Payments\PesaPalPaymentExperience::checkoutLabel($payments) }}
+                        </button>
+                    </form>
                 </div>
             </div>
-        @endif
-
-        {{-- Bank deposit --}}
-        <div class="{{ $gateways->isNotEmpty() ? 'col-lg-7' : 'col-12' }}">
-            <div class="ap-card h-100">
-                <div class="ap-card-head">
-                    <h2 class="ap-card-title"><i class="bi bi-bank"></i> {{ get_phrase('Bank Deposit / Mobile Money') }}</h2>
-                </div>
-
-                @if($bankDetails)
-                    <div class="p-3 mb-3" style="background:#f9fafb; border:1px solid var(--ap-line); border-radius:9px; white-space:pre-line; font-size:14px;">{{ $bankDetails }}</div>
-                @else
-                    <div class="alert alert-warning py-2 px-3" style="font-size:14px;">
-                        {{ get_phrase('Contact the admissions office for the institution bank details, then record your payment below.') }}
-                    </div>
-                @endif
-
-                <form action="{{ route('applicant.payment.offline') }}" method="POST" enctype="multipart/form-data">
-                    @csrf
-
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">{{ get_phrase('Transaction / Deposit Reference') }} <span class="req">*</span></label>
-                            <input type="text" name="reference" class="form-control" value="{{ old('reference') }}" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">{{ get_phrase('Proof of Payment') }} <span class="req">*</span></label>
-                            <input type="file" name="proof" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
-                            <div class="ap-hint">{{ get_phrase('A photo of the deposit slip or a screenshot of the transaction message.') }}</div>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">{{ get_phrase('Note') }}</label>
-                            <input type="text" name="note" class="form-control" value="{{ old('note') }}"
-                                   placeholder="{{ get_phrase('Optional — anything the finance office should know.') }}">
-                        </div>
-                    </div>
-
-                    <button type="submit" class="ap-btn ap-btn-primary mt-3">
-                        <i class="bi bi-send"></i> {{ get_phrase('Submit Payment Details') }}
-                    </button>
-                </form>
-            </div>
-        </div>
+        @empty
+            <div class="col-12"><div class="alert alert-warning">Application fee payment is temporarily unavailable. Please contact Admissions.</div></div>
+        @endforelse
     </div>
 @endunless
 
@@ -178,7 +134,13 @@
                                     <p class="ap-hint mb-1">{{ $experience['message'] }}</p>
                                     @if($experience['reason'])<p class="ap-hint mb-1">{{ $experience['reason'] }}</p>@endif
                                     @if($payment->gateway_payload['last_checked_at'] ?? null)<div class="ap-hint mb-1">Last provider check: {{ \Carbon\Carbon::parse($payment->gateway_payload['last_checked_at'])->format('d M Y H:i T') }}</div>@endif
-                                    <form method="post" action="{{ route('applicant.payment.pesapal.status', $payment->id) }}">@csrf<button type="submit" class="ap-btn" @disabled(config('sandbox.connectivity') !== null && !config('sandbox.connectivity.transactions', false))>Check existing payment</button></form>
+                                    @if($payment->status === 'pending' && filled($payment->gateway_txn_id))
+                                        <form method="post" action="{{ route('applicant.payment.pesapal.status', $payment->id) }}" class="mt-2">@csrf
+                                            <label class="form-label" for="pesapal-prn-{{ $payment->id }}">PesaPal PRN / confirmation code <span class="text-muted">(optional)</span></label>
+                                            <div class="d-flex flex-wrap gap-2"><input id="pesapal-prn-{{ $payment->id }}" name="confirmation_code" class="form-control" maxlength="100" autocomplete="off" placeholder="Enter PRN to verify it with PesaPal"><button type="submit" class="ap-btn" @disabled(config('sandbox.connectivity') !== null && !config('sandbox.connectivity.transactions', false))>Verify payment with PesaPal</button></div>
+                                            <p class="ap-hint mt-1 mb-0">We confirm the PRN against this application’s PesaPal order. A typed code alone never marks a fee as paid.</p>
+                                        </form>
+                                    @endif
                                 @endif
                                 @if($payment->status === 'rejected' && $payment->note)
                                     <div class="ap-hint text-danger">{{ $payment->note }}</div>

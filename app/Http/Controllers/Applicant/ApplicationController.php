@@ -105,7 +105,6 @@ class ApplicationController extends BaseApplicantController
                     'canSubmit'   => ApplicationProgress::canSubmit($admission),
                     'amount'      => ApplicationFee::amountFor($admission),
                     'methods'     => ApplicationFee::availableMethods($admission->school_id),
-                    'bankDetails' => ApplicationFee::bankInstructions(),
                     'payments'    => $admission->payments()->latest('id')->get(),
                 ]);
 
