@@ -202,6 +202,20 @@ class TuitionPesaPalJourneyTest extends TestCase
         $this->assertFalse($eligibility->allows($this->student));
     }
 
+    public function test_legacy_integer_balances_are_widened_before_crediting_fractional_minimum_payments(): void
+    {
+        $fee = $this->fee(['session_id' => 1, 'total_amount' => 5001]);
+        (require database_path('migrations/2026_10_19_160000_preserve_school_fee_payment_precision.php'))->up();
+        $this->assertSame('numeric', Schema::getColumnType('student_fee_managers', 'paid_amount'));
+        $payment = TuitionPesaPalPayment::start($fee, null, 'minimum');
+        $this->assertSame('1000.20', $payment->amount);
+        $this->amount = '1000.20'; $this->code = 1; $this->description = 'COMPLETED';
+        TuitionPesaPalPayment::reconcile($payment);
+        $this->assertEquals('1000.20', $fee->fresh()->paid_amount);
+        $this->assertTrue(app(\App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility::class)->allows($this->student));
+        $this->assertSame('unpaid', $fee->fresh()->status);
+    }
+
     public function test_minimum_payment_uses_all_current_session_invoices_and_excludes_old_sessions(): void
     {
         $fee = $this->fee(['session_id' => 1, 'paid_amount' => 500]);

@@ -28,7 +28,7 @@ Historical offline records are preserved. An invoice already awaiting offline re
 
 ## Rollout
 
-1. Deploy the code and run `php artisan migrate --force` to create the payment-attempt ledger and ensure the existing student fee registration waiver migration has run before enabling these routes.
+1. Deploy the code and run `php artisan migrate --force` to create the payment-attempt ledger, widen legacy whole-number invoice totals/paid balances to `DECIMAL(18,2)`, and ensure the existing student fee registration waiver migration has run before enabling these routes. The widening preserves existing values; code rollback intentionally retains decimal precision rather than discarding fractional payments.
 2. Confirm the existing PesaPal configuration, registered IPN and school's ISO currency (for example `UGX`). The existing `/payments/pesapal/ipn` registration handles both applications and school fees; no second IPN registration is needed.
 3. Refresh application route/view caches through the normal deployment process.
 4. Exercise one school fee checkout in the configured sandbox environment, check its callback/IPN and verify Finance → Fee Payments and the student's balance. Production money movement must be verified separately in the live environment.
