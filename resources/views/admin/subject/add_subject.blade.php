@@ -1,3 +1,4 @@
+@include('admin.subject.programme_search')
 <div class="eoff-form">
     <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.create.subject') }}">
         @csrf
@@ -5,7 +6,7 @@
             @if($isHigherEducation)
                 <div class="mb-3">
                     <label for="programme_id_on_create" class="eForm-label">{{ get_phrase('Programme') }} <span class="text-danger" aria-hidden="true">*</span></label>
-                    <select name="programme_id" id="programme_id_on_create" class="form-select eForm-select eChoice-multiple-with-remove" required>
+                    <select name="programme_id" data-dropdown-css-class="course-unit-programme-dropdown" data-minimum-results-for-search="0" data-width="100%" id="programme_id_on_create" class="form-select eForm-select eChoice-multiple-with-remove" required>
                         <option value="">{{ get_phrase('Select a Programme') }}</option>
                         @foreach($programmes as $programme)
                             <option value="{{ $programme->id }}" @selected((string)old('programme_id', request()->query('programme_id')) === (string)$programme->id)>{{ $programme->code }} — {{ $programme->name }}</option>
@@ -25,7 +26,7 @@
                 </div>
                 <div class="mb-3">
                     <label for="programme_id_on_create" class="eForm-label">{{ get_phrase('Programme') }}</label>
-                    <select name="programme_id" id="programme_id_on_create" class="form-select eForm-select eChoice-multiple-with-remove">
+                    <select name="programme_id" data-dropdown-css-class="course-unit-programme-dropdown" data-minimum-results-for-search="0" data-width="100%" id="programme_id_on_create" class="form-select eForm-select eChoice-multiple-with-remove">
                         <option value="">{{ get_phrase('No Programme association') }}</option>
                         @foreach($programmes as $programme)<option value="{{ $programme->id }}" @selected((string)old('programme_id', request()->query('programme_id')) === (string)$programme->id)>{{ $programme->code }} — {{ $programme->name }}</option>@endforeach
                     </select>
