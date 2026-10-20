@@ -1086,7 +1086,9 @@
 
                             <div class="piie-grid piie-grid--2" style="margin-top:2.5rem;">
                                 @foreach($piieBlockItems as $piieMessage)
-                                    @php($piieMessageText = trim((string) ($piieMessage->description ?: $piieMessage->content)))
+                                    @php
+                                        $piieMessageText = trim((string) ($piieMessage->description ?: $piieMessage->content));
+                                    @endphp
                                     <article class="piie-card piie-card--info">
                                         @if($piieImage($piieMessage->image))
                                             <div class="piie-card__media">
