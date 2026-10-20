@@ -2575,6 +2575,49 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         ]);
     }
 
+
+    public function test_same_lecturer_can_be_assigned_to_another_programme_from_the_chooser(): void
+    {
+        $tenant = $this->tenants[1];
+        $other = $tenant;
+        $other['programme'] = $this->makeProgramme($tenant['school'], ['name' => 'Another Teaching Programme', 'code' => 'OTHER']);
+        $curriculum = $this->curriculumFor($other, 'approved', 'other-v1');
+        $stage = (int) DB::table('curriculum_stages')->insertGetId(['school_id' => $tenant['school'], 'curriculum_id' => $curriculum, 'label' => 'Year 1', 'sequence' => 1]);
+        $member = $this->createMembership($other, $curriculum, $tenant['subject'], 'semester', 1, $stage);
+        $first = $this->createOffering($tenant, 'PROGRAMME-FIRST');
+        $second = $this->createOffering($other, 'PROGRAMME-SECOND');
+        $this->attach($tenant, $first, $tenant['member']);
+        $this->attach($other, $second, $member);
+        $teacher = User::factory()->create(['name' => 'Lecturer Across Programmes', 'role_id' => 3, 'school_id' => $tenant['school'], 'account_status' => 'active', 'staff_status' => 'active']);
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+        $payload = ['user_id' => $teacher->id, 'role' => 'primary_lecturer', 'starts_on' => '2026-02-01', 'ends_on' => '2026-06-30'];
+        $this->post(route('admin.course_offerings.lecturers.store', $first->id), $payload)->assertSessionHasNoErrors();
+        $this->get(route('admin.course_offerings.lecturers.index', $first->id))->assertOk()->assertSee('Assign to another programme');
+        $this->get(route('admin.lecturer_assignments.index', ['lecturer_id' => $teacher->id, 'programme_id' => $tenant['programme']]))->assertOk()->assertSee('View existing assignment');
+        $chooser = $this->get(route('admin.lecturer_assignments.index', ['lecturer_id' => $teacher->id, 'programme_id' => $other['programme']]));
+        $chooser->assertOk()->assertSee('Assign Lecturer to Another Programme')->assertSee('PROGRAMME-SECOND')->assertDontSee('PROGRAMME-FIRST');
+        $form = $this->get(route('admin.course_offerings.lecturers.create', [$second->id, 'user_id' => $teacher->id]))->assertOk();
+        $dom = new \DOMDocument(); @$dom->loadHTML($form->getContent());
+        $this->assertSame(1, (new \DOMXPath($dom))->query('//select[@id="lecturer-user"]/option[@selected and @value="'.$teacher->id.'"]')->length);
+        $this->post(route('admin.course_offerings.lecturers.store', $second->id), $payload)->assertSessionHasNoErrors();
+        $this->assertSame(2, DB::table('course_offering_lecturer_allocations')->where('user_id', $teacher->id)->count());
+        $this->post(route('admin.course_offerings.lecturers.store', $second->id), $payload)->assertSessionHasErrors('allocation');
+        $this->assertStringContainsString('this same Course Allocation', session('errors')->first('allocation'));
+    }
+
+    public function test_another_programme_chooser_preserves_tenant_and_management_boundaries(): void
+    {
+        $teacher = User::factory()->create(['role_id' => 3, 'school_id' => $this->tenants[1]['school']]);
+        $foreign = User::factory()->create(['role_id' => 3, 'school_id' => $this->tenants[2]['school']]);
+        $this->actingAs($this->staff(1, ['academic.course_offering.lecturer.view']))
+            ->get(route('admin.lecturer_assignments.index', ['lecturer_id' => $teacher->id]))->assertForbidden();
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+        $this->get(route('admin.lecturer_assignments.index', ['lecturer_id' => $foreign->id]))->assertNotFound();
+        $this->get(route('admin.lecturer_assignments.index', ['programme_id' => $this->tenants[2]['programme']]))->assertNotFound();
+        $offering = $this->createOffering($this->tenants[1], 'PRESELECT-GUARD');
+        $this->get(route('admin.course_offerings.lecturers.create', [$offering->id, 'user_id' => $foreign->id]))->assertNotFound();
+    }
+
     private function createOffering(array $tenant, string $reference, ?int $subject = null): CourseOffering
     {
         return app(CourseOfferingService::class)->createDraft($tenant['school'],$subject ?? $tenant['subject'],$tenant['year'],$tenant['period'],$reference);

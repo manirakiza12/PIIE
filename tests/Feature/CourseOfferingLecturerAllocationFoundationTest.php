@@ -153,6 +153,21 @@ class CourseOfferingLecturerAllocationFoundationTest extends TestCase
         $this->assertSame(3, DB::table('course_offering_lecturer_allocations')->count());
     }
 
+
+    public function test_one_lecturer_can_be_primary_on_different_allocations_with_overlapping_dates(): void
+    {
+        $lecturer = $this->user(1, 77);
+        $second = (array) DB::table('course_offerings')->where('id', $this->offerings[1])->first();
+        $second['id'] = 1001;
+        DB::table('course_offerings')->insert($second);
+        DB::table('course_offerings')->whereIn('id', [$this->offerings[1], 1001])->update(['status' => 'open']);
+        foreach ([$this->offerings[1], 1001] as $offeringId) {
+            $assignment = $this->allocations->createPlanned(1, $offeringId, (int) $lecturer->id, 'primary_lecturer', '2026-01-01', '2026-06-30');
+            $this->allocations->activate(1, $assignment->id);
+        }
+        $this->assertSame(2, DB::table('course_offering_lecturer_allocations')->where('user_id', $lecturer->id)->where('status', 'active')->count());
+    }
+
     public function test_overlapping_primary_and_same_user_allocations_are_rejected_inclusively(): void
     {
         $first = $this->user(1, 1);

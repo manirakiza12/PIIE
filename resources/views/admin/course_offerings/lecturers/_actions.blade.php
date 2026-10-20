@@ -3,6 +3,7 @@
     $failedHere = (int)old('_allocation_id', 0) === (int)$item->id;
     $canChange = $canManage && $canMutateOffering;
 @endphp
+@if($canManage && $item->lecturer)<a class="btn btn-sm btn-outline-primary mb-2" href="{{ route('admin.lecturer_assignments.index', ['lecturer_id' => $item->user_id]) }}">Assign to another programme</a>@endif
 
 @if($canChange && $item->status === \App\Models\CourseOfferingLecturerAllocation::STATUS_PLANNED)
     <form method="POST" action="{{ route('admin.course_offerings.lecturers.destroy', [$offering->id, $item->id]) }}" onsubmit="return confirm('Delete this unused planned lecturer assignment?')" class="mb-2">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete Planned</button></form>

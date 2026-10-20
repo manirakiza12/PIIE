@@ -365,6 +365,83 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertSame('Research Methods', $offering->subject?->name);
     }
 
+
+    public function test_simple_registration_uses_current_period_and_searches_registration_number(): void
+    {
+        $admin = User::factory()->create(['role_id' => 2, 'school_id' => $this->fixture['school'], 'account_status' => 'active']);
+        $this->fixture['studentA']->forceFill(['code' => '20/U/TEST/001'])->save();
+        $this->actingAs($admin)->get(route('admin.course_registrations.index', [
+            'programme_id' => $this->fixture['programme'], 'student_search' => '20/U/TEST/001',
+        ]))->assertOk()->assertSee('Student A')->assertDontSee('Student B')
+            ->assertSee('Register and confirm selected students')->assertSee('Find student by name or registration number');
+        $this->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1], 'student_search' => '20/U/TEST/001',
+            'confirm_now' => 1,
+        ])->assertRedirect(route('admin.course_registrations.index', $this->programmeFilters() + ['student_search' => '20/U/TEST/001']));
+        $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentA']->id, 'status' => 'confirmed']);
+        $summary = session('programme_registration_results')[0]['summary'];
+        $this->assertSame(1, $summary['registered']);
+        $this->assertSame(1, $summary['confirmed']);
+    }
+
+    public function test_one_step_confirmation_requires_confirmation_permission_before_any_mutation(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage', 'academic.programme_cohort.membership']);
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentIneligible']->id], 'offering_ids' => [1], 'place_missing' => 1, 'confirm_now' => 1,
+        ])->assertForbidden();
+        $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id]);
+        $this->assertDatabaseMissing('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id]);
+    }
+
+    public function test_register_and_confirm_preserves_fee_gate_and_existing_confirmed_records(): void
+    {
+        $admin = User::factory()->create(['role_id' => 2, 'school_id' => $this->fixture['school'], 'account_status' => 'active']);
+        DB::table('student_fee_managers')->where('student_id', $this->fixture['studentAlready']->id)->update(['paid_amount' => 0]);
+        $this->actingAs($admin)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id, $this->fixture['studentAlready']->id], 'offering_ids' => [1], 'confirm_now' => 1,
+        ])->assertRedirect();
+        $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentA']->id, 'status' => 'confirmed']);
+        $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentAlready']->id, 'status' => 'registered']);
+        $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
+        $this->assertStringContainsString('20%', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
+        $count = DB::table('course_registrations')->count();
+        $this->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1], 'confirm_now' => 1,
+        ])->assertRedirect();
+        $this->assertSame($count, DB::table('course_registrations')->count());
+        $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentA']->id, 'status' => 'confirmed']);
+    }
+
+    public function test_registration_can_place_register_and_confirm_in_one_submit(): void
+    {
+        $admin = User::factory()->create(['role_id' => 2, 'school_id' => $this->fixture['school'], 'account_status' => 'active']);
+        $fee = (array) DB::table('student_fee_managers')->where('student_id', $this->fixture['studentA']->id)->first();
+        unset($fee['id']);
+        $fee['student_id'] = $this->fixture['studentIneligible']->id;
+        DB::table('student_fee_managers')->insert($fee);
+        $this->actingAs($admin)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentIneligible']->id], 'offering_ids' => [1], 'place_missing' => 1, 'confirm_now' => 1,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id, 'entry_curriculum_stage_id' => 1]);
+        $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id, 'status' => 'confirmed']);
+    }
+
+    public function test_ambiguous_years_of_study_and_periods_still_require_a_choice(): void
+    {
+        DB::table('curriculum_stages')->insert(['id' => 2, 'school_id' => $this->fixture['school'], 'curriculum_id' => 1, 'label' => 'Year 2', 'sequence' => 2]);
+        DB::table('academic_periods')->insert(['id' => 2, 'school_id' => $this->fixture['school'], 'academic_year_id' => 1, 'type' => 'semester', 'label' => 'Semester 2', 'sequence' => 2, 'status' => 'active']);
+        DB::table('schools')->where('id', $this->fixture['school'])->update(['current_academic_period_id' => null]);
+        $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
+        $this->actingAs($viewer);
+        $request = \Illuminate\Http\Request::create('/admin/course-registrations', 'GET', ['programme_id' => $this->fixture['programme']]);
+        $request->setUserResolver(fn () => $viewer);
+        $data = app(\App\Http\Controllers\AcademicDeliveryWorkspaceController::class)->registrations($request)->getData();
+        $this->assertNull($data['stage']);
+        $this->assertNull($data['period']);
+        $this->assertFalse((bool)$data['ready']);
+    }
+
     private function makeFixture(): array
     {
         $school = $this->makeSchool(['school_type' => 'higher_ed']);

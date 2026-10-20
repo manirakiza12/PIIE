@@ -92,12 +92,17 @@ class CourseOfferingLecturerController extends Controller
 
     public function create(Request $request, int $offering)
     {
+        $request->validate(['user_id' => 'nullable|integer|min:1']);
         $schoolId = (int) $request->user()->school_id;
         $context = $this->offeringContext($schoolId, $offering);
         $canManage = $this->permissions->allows($request->user(), 'academic.course_offering.lecturer.manage');
+        $candidates = $canManage ? $this->allocations->eligibleLecturersForOffering($schoolId, $offering) : collect();
+        if ($request->filled('user_id')) {
+            abort_unless($candidates->contains('id', $request->integer('user_id')), 404);
+        }
 
         return view('admin.course_offerings.lecturers.create', $context + [
-            'candidates' => $canManage ? $this->allocations->eligibleLecturersForOffering($schoolId, $offering) : collect(),
+            'candidates' => $candidates,
             'roleLabels' => $this->roleLabels(),
             'canManage' => $canManage,
             'canMutateOffering' => $this->offeringCanBeMutated($context['offering']),
@@ -387,6 +392,6 @@ class CourseOfferingLecturerController extends Controller
             return "Primary Lecturer conflict: {$name} has an overlapping {$role} allocation ({$dates}). {$next}";
         }
 
-        return "Lecturer conflict: {$name} already has an overlapping {$role} allocation ({$dates}). Choose another lecturer or resolve that allocation first.";
+        return "Lecturer conflict: {$name} is already assigned as {$role} to this same Course Allocation ({$dates}). Use the existing assignment here, or choose another Course Allocation to teach a different programme.";
     }
 }
