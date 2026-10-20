@@ -25,9 +25,10 @@ class AcademicWorkflowGuideTest extends TestCase
         $this->assertNotContains('teaching-groups', $keys);
         $this->assertNotContains('admin.class_list', array_column($data['steps'], 'route'));
         $this->assertNotContains('admin.programme_cohorts.index', array_column($data['steps'], 'route'));
-        $this->assertContains('admin.academic.placements.index', array_column($data['steps'], 'route'));
+        $this->assertNotContains('admin.academic.placements.index', array_column($data['steps'], 'route'));
         $this->assertLessThan(array_search('units',$keys),array_search('curricula',$keys));
-        $this->assertLessThan(array_search('lecturers',$keys),array_search('offerings',$keys));
+        $this->assertNotContains('lecturers', $keys);
+        $this->assertLessThan(array_search('registrations',$keys),array_search('offerings',$keys));
         foreach($data['steps'] as $step) $this->assertTrue(app('router')->getRoutes()->hasNamedRoute($step['route']));
         $user->menu_permission=json_encode(['admin.subject_list']);
         $restricted = $guide->forRequest($user,Request::create('/admin/course-unit/setup'));

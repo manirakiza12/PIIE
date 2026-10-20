@@ -81,7 +81,7 @@ class ProgrammeRegistrationController extends Controller
         return view('admin.academic.programme_registration', $c + compact('offerings', 'subjects', 'students', 'placements', 'cells'));
     }
 
-    public function register(Request $request, CourseOfferingRegistrationBatch $batch)
+    public function register(Request $request, CourseOfferingRegistrationBatch $batch, StudentCurriculumAssignmentService $assignments)
     {
         $data = $this->selection($request);
         $c = $this->context($request);
@@ -89,12 +89,30 @@ class ProgrammeRegistrationController extends Controller
         $studentIds = $this->students($c)->whereIn('id', $data['student_ids'])->pluck('id');
         $offerings = $this->offerings($c)->whereIn('id', $data['offering_ids']);
         abort_unless($studentIds->count() === count(array_unique($data['student_ids'])) && $offerings->count() === count(array_unique($data['offering_ids'])), 422);
+        $placementResults = [];
+        if ($request->boolean('place_missing')) {
+            abort_unless($request->user()->hasPermission('academic.programme_cohort.membership'), 403);
+            $unplaced = $this->students($c)->whereIn('id', $studentIds)
+                ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('student_curriculum_assignments')
+                    ->whereColumn('student_id', 'users.id')->where('school_id', $c['schoolId'])->whereNull('ended_at'))->get();
+            foreach ($unplaced as $student) {
+                try {
+                    $assignments->assignDirectPlacement($c['schoolId'], (int) $student->id, (int) $c['programme']->id,
+                        (int) $c['curriculum']->id, (int) $c['stage']->id, (int) $c['year']->id, (int) $request->user()->id);
+                    $placementResults[] = ['student' => $student->name, 'message' => 'Year of study saved.'];
+                } catch (\DomainException $exception) {
+                    $studentIds = $studentIds->reject(fn ($id) => (int) $id === (int) $student->id);
+                    $placementResults[] = ['student' => $student->name, 'message' => 'Not registered: '.$exception->getMessage()];
+                }
+            }
+        }
         $outcomes = [];
         foreach ($offerings as $offering) {
             $summary = $batch->register($offering, $studentIds, (int) $request->user()->id);
             $outcomes[] = ['course' => $offering->subject?->name ?? $offering->reference, 'summary' => $summary];
         }
-        return redirect()->route('admin.course_registrations.index', $this->filters($c))->with('programme_registration_results', $outcomes);
+        return redirect()->route('admin.course_registrations.index', $this->filters($c))
+            ->with('programme_registration_results', $outcomes)->with('programme_placement_results', $placementResults);
     }
 
     public function place(Request $request, StudentCurriculumAssignmentService $assignments)

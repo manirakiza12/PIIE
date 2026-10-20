@@ -14,11 +14,11 @@
         [$showCourseUnits, academic_term('subjects', $user->school_id), 'admin.subject_list', [], request()->is('admin/subject*','admin/course-unit*'), 'bi-journal-bookmark'],
         [!$showCourseUnits && $canSeeProgrammes && $menuAllows('admin.curriculum_units.index', 'admin.curricula.index', 'admin.subject_list') && $navCan('admin.curriculum_units.index'), 'Course Units', 'admin.curriculum_units.index', [], request()->is('admin/curriculum-course-units'), 'bi-journal-bookmark'],
         [$showClasses && academic_education_level($user->school_id) !== 'tertiary', academic_term('classes', $user->school_id), 'admin.class_list', [], request()->is('admin/class_list','admin/class/*','admin/class_create'), 'bi-collection'],
-        [academic_education_level($user->school_id) === 'tertiary' && $user->hasPermission('academic.programme_cohort.membership'), 'Student Placement', 'admin.academic.placements.index', [], request()->is('admin/academic/direct-placement', 'admin/academic/student-placements*'), 'bi-person-plus'],
-        [$showOfferings, 'Course Allocation', 'admin.course_offerings.index', [], request()->routeIs('admin.course_offerings.index', 'admin.course_offerings.show', 'admin.course_offerings.create'), 'bi-journal-check'],
-        [academic_education_level($user->school_id) === 'tertiary' && $showStandaloneLecturers, 'Lecturer Assignments', 'admin.lecturer_assignments.index', [], request()->routeIs('admin.lecturer_assignments.*', 'admin.course_offerings.lecturers.*'), 'bi-person-check'],
+        [!$showCourseRegistrations && academic_education_level($user->school_id) === 'tertiary' && $user->hasPermission('academic.programme_cohort.membership'), 'Student Placement', 'admin.academic.placements.index', [], request()->is('admin/academic/direct-placement', 'admin/academic/student-placements*'), 'bi-person-plus'],
+        [$showOfferings, 'Course Allocation', 'admin.course_offerings.index', [], request()->is('admin/course-offerings*', 'admin/lecturer-assignments*') && !request()->routeIs('admin.course_offerings.registrations*', 'admin.course_offerings.eligible_students'), 'bi-journal-check'],
+        [!$showOfferings && academic_education_level($user->school_id) === 'tertiary' && $showStandaloneLecturers, 'Lecturer Assignments', 'admin.lecturer_assignments.index', [], request()->routeIs('admin.lecturer_assignments.*', 'admin.course_offerings.lecturers.*'), 'bi-person-check'],
         [academic_education_level($user->school_id) !== 'tertiary' && $showLecturers, academic_term('teacher_assignment', $user->school_id), 'admin.teacher.permission', [], request()->is('admin/permission*'), 'bi-person-check'],
-        [$showCourseRegistrations, 'Course Registrations', 'admin.course_registrations.index', [], request()->routeIs('admin.course_registrations.*', 'admin.course_offerings.registrations*', 'admin.course_offerings.eligible_students'), 'bi-person-check-fill'],
+        [$showCourseRegistrations, 'Student Course Registration', 'admin.course_registrations.index', [], request()->routeIs('admin.course_registrations.*', 'admin.course_offerings.registrations*', 'admin.course_offerings.eligible_students') || request()->is('admin/academic/direct-placement', 'admin/academic/student-placements*'), 'bi-person-check-fill'],
         [$showTimetable, 'Timetable', 'admin.routine', [], request()->is('admin/routine*'), 'bi-clock'],
         [$showLiveClasses, 'Live Classes', 'admin.live_classes.index', [], request()->is('admin/live-classes*'), 'bi-camera-video'],
         [$showAttendance, 'Attendance', 'admin.daily_attendance', [], request()->is('admin/attendance*'), 'bi-check2-square'],
@@ -27,8 +27,15 @@
         [$showOnlineExams, 'Online Exams', 'admin.online_exams.index', [], request()->is('admin/online-exams*'), 'bi-laptop'],
         [$showResults, 'Marks & Results', 'admin.gradebook', [], request()->is('admin/gradebook*'), 'bi-clipboard-check'],
     ];
+    $setupRoutes = academic_education_level($user->school_id) === 'tertiary' ? ['admin.department.schools_faculties', 'admin.department.departments', 'admin.programmes.index', 'admin.academic_structure.index', 'admin.settings.session_manager', 'admin.settings.academic', 'admin.curricula.index', 'admin.programme_years.index', 'admin.subject_list', 'admin.curriculum_units.index', 'admin.class_list'] : [];
+    $setupLinks = array_values(array_filter($academicLinks, fn ($link) => $link[0] && in_array($link[2], $setupRoutes, true)));
+    $dailyLinks = array_values(array_filter($academicLinks, fn ($link) => !in_array($link[2], $setupRoutes, true)));
 @endphp
-@foreach($academicLinks as [$visible, $label, $route, $parameters, $active, $icon])
+@foreach(['daily' => $dailyLinks, 'setup' => $setupLinks] as $group => $links)
+@if($group === 'setup' && $links)
+<li class="academic-setup-menu"><details @if(collect($links)->contains(fn ($link) => $link[4])) open @endif><summary class="p-3 text-muted">Academic setup</summary><ul class="ps-0">
+@endif
+@foreach($links as [$visible, $label, $route, $parameters, $active, $icon])
     @if($visible)
     <li class="nav-links-li">
         <div class="iocn-link"><a href="{{ route($route, $parameters) }}" class="{{ $active ? 'active' : '' }}" @if($active) aria-current="page" @endif>
@@ -36,4 +43,6 @@
         </a></div>
     </li>
     @endif
+@endforeach
+@if($group === 'setup' && $links)</ul></details></li>@endif
 @endforeach
