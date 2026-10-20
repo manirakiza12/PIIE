@@ -65,9 +65,9 @@ class RegistrationNumberTest extends TestCase
         RegistrationNumber::student($this->assignment);
         DB::table('intake_sessions')->where('id', $this->assignment['intake_session_id'])->update(['start_date' => '2027-01-04']);
         $this->assertSame('2027/01/MPAM/001', RegistrationNumber::student($this->assignment));
-        $this->assertSame(now()->format('Y/m').'/TRS/001/', RegistrationNumber::staff(3));
-        $this->assertSame(now()->format('Y/m').'/TRS/002/', RegistrationNumber::staff(3));
-        $this->assertSame(now()->format('Y/m').'/ADM/001/', RegistrationNumber::staff(2));
+        $this->assertSame(now()->format('Y/m').'/TRS/001', RegistrationNumber::staff(3));
+        $this->assertSame(now()->format('Y/m').'/TRS/002', RegistrationNumber::staff(3));
+        $this->assertSame(now()->format('Y/m').'/ADM/001', RegistrationNumber::staff(2));
     }
 
     public function test_foreign_intake_is_rejected(): void

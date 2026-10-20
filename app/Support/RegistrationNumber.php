@@ -55,7 +55,7 @@ final class RegistrationNumber
     public static function staff(int $roleId): string
     {
         $role = [2 => 'ADM', 3 => 'TRS', 4 => 'ACC', 5 => 'LIB', 10 => 'WDN', 20 => 'STF'][$roleId] ?? 'STF';
-        return self::next(now()->format('Y/m').'/'.$role.'/');
+        return rtrim(self::next(now()->format('Y/m').'/'.$role.'/'), '/');
     }
 
     public static function next(string $prefix): string
