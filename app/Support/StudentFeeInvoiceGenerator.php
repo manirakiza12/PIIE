@@ -3,16 +3,17 @@
 namespace App\Support;
 
 use App\Models\FeeStructure;
+use App\Models\Enrollment;
+use App\Models\StudentProfile;
 use App\Models\StudentFeeManager;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Auto-generates a student's applicable fee invoices from their Programme's
- * mandatory FeeStructure rows, on creation only (admission conversion or
- * manual admin creation) — never on a later Programme change, so changing
- * a student's programme afterwards does not silently re-bill them; that
- * remains a deliberate, authorized Finance action.
+ * Auto-generates a student's applicable fee invoices from mandatory
+ * FeeStructure rows on admission conversion or student creation, and
+ * backfills eligible legacy students when they open Fee Manager. It never
+ * runs on a later Programme change, which remains a deliberate Finance action.
  *
  * Idempotent: keyed on (student_id, fee_structure_id, session_id) via
  * student_fee_managers.fee_structure_id, so calling this more than once for
@@ -21,6 +22,44 @@ use Illuminate\Support\Facades\DB;
  */
 class StudentFeeInvoiceGenerator
 {
+    /**
+     * Backfill a legacy student's current-session mandatory invoices from the
+     * programme or class already assigned to their student record. This is
+     * safe to call whenever the student opens Fee Manager: existing invoices
+     * are detected and repeated requests do not create duplicates.
+     */
+    public static function ensureForStudent(User $student): array
+    {
+        $schoolId = (int) $student->school_id;
+        $sessionId = DB::table('schools')->where('id', $schoolId)->value('running_session');
+
+        if (! $schoolId || ! $sessionId) {
+            return [];
+        }
+
+        return DB::transaction(function () use ($student, $schoolId, $sessionId) {
+            User::whereKey($student->id)->where('school_id', $schoolId)->lockForUpdate()->firstOrFail();
+
+            $profile = StudentProfile::where('school_id', $schoolId)
+                ->where('user_id', $student->id)
+                ->first();
+
+            if ($profile?->programme_id) {
+                return self::generateForStudent($student, (int) $profile->programme_id, $schoolId);
+            }
+
+            $classId = Enrollment::where('school_id', $schoolId)
+                ->where('user_id', $student->id)
+                ->where('session_id', $sessionId)
+                ->where('class_id', '>', 0)
+                ->value('class_id');
+
+            return $classId
+                ? self::generateForClassBasedStudent($student, (int) $classId, $schoolId)
+                : [];
+        });
+    }
+
     /**
      * @return StudentFeeManager[] newly created invoices (empty if none
      *                             applicable or all already exist)
@@ -55,9 +94,21 @@ class StudentFeeInvoiceGenerator
                 continue;
             }
 
+            // Older Finance-created invoices predate fee_structure_id. Avoid
+            // charging the same named obligation again during automatic
+            // backfill, even when the legacy invoice was not structure-linked.
+            if (StudentFeeManager::where('school_id', $schoolId)
+                ->where('student_id', $student->id)
+                ->where('session_id', $sessionId)
+                ->whereNull('fee_structure_id')
+                ->where('title', $fee->name)
+                ->exists()) {
+                continue;
+            }
+
             $created[] = StudentFeeManager::create([
                 'title'            => $fee->name,
-                'total_amount'     => (int) round((float) $fee->amount),
+                'total_amount'     => $fee->amount,
                 'amount'           => $fee->amount,
                 'discounted_price' => 0,
                 // No class/section concept for a programme-based (HEI)
@@ -125,9 +176,18 @@ class StudentFeeInvoiceGenerator
                 continue;
             }
 
+            if (StudentFeeManager::where('school_id', $schoolId)
+                ->where('student_id', $student->id)
+                ->where('session_id', $sessionId)
+                ->whereNull('fee_structure_id')
+                ->where('title', $fee->name)
+                ->exists()) {
+                continue;
+            }
+
             $created[] = StudentFeeManager::create([
                 'title'            => $fee->name,
-                'total_amount'     => (int) round((float) $fee->amount),
+                'total_amount'     => $fee->amount,
                 'amount'           => $fee->amount,
                 'discounted_price' => 0,
                 'class_id'         => $classId,
