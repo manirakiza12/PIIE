@@ -3761,8 +3761,9 @@ class AdminController extends Controller
         ));
     }
 
-    public function createSubject()
+    public function createSubject(?Request $request = null)
     {
+        $request ??= request();
         $schoolId = (int) auth()->user()->school_id;
         $educationLevel = academic_education_level($schoolId);
         $isHigherEducation = in_array($educationLevel, ['tertiary', 'vocational'], true);
@@ -3771,12 +3772,21 @@ class AdminController extends Controller
         $programmes = Programme::where('school_id', $schoolId)->where('is_active', 1)->orderBy('name')->get();
 
         $unitSetup = ($isHigherEducation || $isMixed) ? app(\App\Support\Curriculum\CourseUnitSetup::class)->formData() : null;
-        return view('admin.subject.add_subject', compact('classes', 'programmes', 'isHigherEducation', 'isMixed', 'unitSetup'));
+        $courseUnitSearch = trim((string) $request->query('search', ''));
+        $existingCourseUnits = collect();
+        if (($isHigherEducation || $isMixed) && $courseUnitSearch !== '') {
+            $existingCourseUnits = Subject::query()->where('school_id', $schoolId)
+                ->where(fn ($query) => $query->where('name', 'like', '%'.$courseUnitSearch.'%')
+                    ->orWhere('code', 'like', '%'.$courseUnitSearch.'%'))
+                ->with(['programme' => fn ($query) => $query->where('school_id', $schoolId)])
+                ->orderBy('name')->limit(10)->get();
+        }
+        return view('admin.subject.add_subject', compact('classes', 'programmes', 'isHigherEducation', 'isMixed', 'unitSetup', 'courseUnitSearch', 'existingCourseUnits'));
     }
 
-    public function courseUnitSetup(?int $id = null)
+    public function courseUnitSetup(Request $request, ?int $id = null)
     {
-        $form = $id === null ? $this->createSubject() : $this->editSubject($id);
+        $form = $id === null ? $this->createSubject($request) : $this->editSubject($id);
         return view('admin.subject.setup', $form->getData() + ['formView' => $form->name()]);
     }
 

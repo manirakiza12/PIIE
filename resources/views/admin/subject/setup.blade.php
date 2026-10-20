@@ -17,6 +17,33 @@
 
 </div>
 @endif
+@if(($isHigherEducation || $isMixed) && !isset($subject))
+<div class="eSection-wrap mt-3">
+    <h5>{{ get_phrase('Find an existing Course Unit') }}</h5>
+    <p class="text-muted">{{ get_phrase('Search by name or code before creating a new unit.') }}</p>
+    <form method="GET" action="{{ route('admin.subject.setup') }}" class="row g-2 align-items-end" role="search">
+        <div class="col-12 col-md-8">
+            <label for="existing-course-unit-search" class="form-label">{{ get_phrase('Course Unit name or code') }}</label>
+            <input id="existing-course-unit-search" class="form-control" type="search" name="search" value="{{ $courseUnitSearch }}" placeholder="{{ get_phrase('Search by name or code') }}">
+        </div>
+        <div class="col-auto"><button class="btn btn-outline-primary" type="submit">{{ get_phrase('Search') }}</button></div>
+        @if($courseUnitSearch !== '')<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ route('admin.subject.setup') }}">{{ get_phrase('Clear') }}</a></div>@endif
+    </form>
+    @if($courseUnitSearch !== '')
+        @if($existingCourseUnits->isEmpty())
+            <p class="mt-3 mb-0" role="status">{{ get_phrase('No matching Course Units found.') }}</p>
+        @else
+            <div class="table-responsive mt-3"><table class="table table-sm align-middle mb-0">
+                <thead><tr><th>{{ get_phrase('Code') }}</th><th>{{ get_phrase('Course Unit') }}</th><th>{{ get_phrase('Programme') }}</th><th class="text-end">{{ get_phrase('Actions') }}</th></tr></thead>
+                <tbody>@foreach($existingCourseUnits as $existingUnit)
+                    <tr><td class="text-nowrap">{{ $existingUnit->code }}</td><td>{{ $existingUnit->name }}</td><td>{{ $existingUnit->programme?->name ?: '—' }}</td>
+                        <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.subject.setup', ['id' => $existingUnit->id]) }}">{{ get_phrase('Edit') }}</a></td></tr>
+                @endforeach</tbody>
+            </table></div>
+        @endif
+    @endif
+</div>
+@endif
 @if($errors->any())<div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 <div class="eSection-wrap mt-3">
     <p class="text-muted">{{ institution_name() }}</p>
