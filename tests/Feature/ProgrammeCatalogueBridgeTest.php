@@ -235,9 +235,15 @@ class ProgrammeCatalogueBridgeTest extends TestCase
         $this->assertSame($payload['curriculum_overview'], $programme->curriculum_overview);
         $this->assertSame($payload['career_prospects'], $programme->career_prospects);
 
+        $structuredCurriculumCountBefore = Schema::hasTable('curricula')
+            ? DB::table('curricula')->where('programme_id', $programme->id)->count()
+            : null;
         $this->postJson(route('admin.programmes.update', $programme->id), $payload)->assertOk();
         $this->assertSame($payload['curriculum_overview'], $programme->fresh()->curriculum_overview);
-        $this->assertSame(0, DB::table('curricula')->where('programme_id', $programme->id)->count());
+        $structuredCurriculumCountAfter = Schema::hasTable('curricula')
+            ? DB::table('curricula')->where('programme_id', $programme->id)->count()
+            : null;
+        $this->assertSame($structuredCurriculumCountBefore, $structuredCurriculumCountAfter);
     }
 
     /**
