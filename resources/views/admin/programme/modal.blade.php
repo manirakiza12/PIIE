@@ -89,6 +89,22 @@
                 </div>
             </div>
 
+            <fieldset class="mt-3 pt-3" style="border:1px solid var(--piie-line,#e6e9ef);border-radius:8px;padding:1rem;">
+                <legend class="h6" style="font-size:.95rem;margin-bottom:.15rem;">{{ get_phrase('Programme information') }}</legend>
+                <p class="text-muted" style="font-size:.8125rem;line-height:1.5;">{{ get_phrase('Optional information about this programme. The curriculum overview is separate from the structured curriculum and units managed elsewhere.') }}</p>
+                <div class="fpb-7">
+                    <label class="eForm-label" for="piie-description">{{ get_phrase('Programme Description') }}</label>
+                    <textarea id="piie-description" class="form-control eForm-control" name="description" rows="4" maxlength="50000">{{ old('description', $programme->description ?? '') }}</textarea>
+                </div>
+                <div class="fpb-7">
+                    <label class="eForm-label" for="piie-curriculum-overview">{{ get_phrase('Programme Curriculum') }}</label>
+                    <textarea id="piie-curriculum-overview" class="form-control eForm-control" name="curriculum_overview" rows="4" maxlength="50000">{{ old('curriculum_overview', $programme->curriculum_overview ?? '') }}</textarea>
+                </div>
+                <div class="fpb-7 mb-0">
+                    <label class="eForm-label" for="piie-career-prospects">{{ get_phrase('Career Prospects') }}</label>
+                    <textarea id="piie-career-prospects" class="form-control eForm-control" name="career_prospects" rows="4" maxlength="50000">{{ old('career_prospects', $programme->career_prospects ?? '') }}</textarea>
+                </div>
+            </fieldset>
             {{-- ══════════════════════════════════════════════════════════
                  TUITION: AMOUNT + CURRENCY + BASIS
             ══════════════════════════════════════════════════════════ --}}

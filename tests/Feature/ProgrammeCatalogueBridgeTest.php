@@ -98,22 +98,27 @@ class ProgrammeCatalogueBridgeTest extends TestCase
      */
     private function addCatalogueColumns(): void
     {
-        if (Schema::hasColumn('programmes', 'tuition_fee_basis')) {
-            return; // The shared fixture already declares them.
+        if (! Schema::hasColumn('programmes', 'tuition_fee_basis')) {
+            Schema::table('programmes', function ($table): void {
+                $table->string('cover_image_path', 255)->nullable();
+                $table->string('cover_image_name', 191)->nullable();
+                $table->string('cover_image_mime', 100)->nullable();
+                $table->unsignedBigInteger('cover_image_size')->nullable();
+                $table->dateTime('cover_image_updated_at')->nullable();
+                $table->string('tuition_currency', 10)->nullable();
+                $table->string('tuition_fee_basis', 32)->nullable();
+                $table->tinyInteger('is_published')->default(0);
+                $table->integer('website_sort_order')->nullable();
+                $table->dateTime('published_at')->nullable();
+                $table->unsignedBigInteger('website_item_id')->nullable();
+            });
         }
-
         Schema::table('programmes', function ($table): void {
-            $table->string('cover_image_path', 255)->nullable();
-            $table->string('cover_image_name', 191)->nullable();
-            $table->string('cover_image_mime', 100)->nullable();
-            $table->unsignedBigInteger('cover_image_size')->nullable();
-            $table->dateTime('cover_image_updated_at')->nullable();
-            $table->string('tuition_currency', 10)->nullable();
-            $table->string('tuition_fee_basis', 32)->nullable();
-            $table->tinyInteger('is_published')->default(0);
-            $table->integer('website_sort_order')->nullable();
-            $table->dateTime('published_at')->nullable();
-            $table->unsignedBigInteger('website_item_id')->nullable();
+            foreach (['description', 'curriculum_overview', 'career_prospects'] as $column) {
+                if (! Schema::hasColumn('programmes', $column)) {
+                    $table->text($column)->nullable();
+                }
+            }
         });
     }
 
@@ -210,6 +215,29 @@ class ProgrammeCatalogueBridgeTest extends TestCase
         $this->assertFalse($programme->fresh()->is_published);
         $this->assertSame($cover, $programme->fresh()->cover_image_path);
         $this->assertSame(0, (int) $item->fresh()->status);
+    }
+
+    public function test_programme_information_fields_save_and_round_trip_without_touching_structured_curriculum(): void
+    {
+        $school = $this->makeSchool();
+        $admin = $this->makeAdminUser($school);
+        $payload = [
+            'code' => 'INFO-1', 'name' => 'Programme with information',
+            'level' => 'Diploma', 'mode' => 'ODEL',
+            'description' => 'A practical programme description.',
+            'curriculum_overview' => 'A summary of the programme curriculum.',
+            'career_prospects' => 'Graduate careers include teaching and research.',
+        ];
+
+        $this->actingAs($admin)->postJson(route('admin.programmes.store'), $payload)->assertOk();
+        $programme = Programme::where('school_id', $school)->where('code', 'INFO-1')->firstOrFail();
+        $this->assertSame($payload['description'], $programme->description);
+        $this->assertSame($payload['curriculum_overview'], $programme->curriculum_overview);
+        $this->assertSame($payload['career_prospects'], $programme->career_prospects);
+
+        $this->postJson(route('admin.programmes.update', $programme->id), $payload)->assertOk();
+        $this->assertSame($payload['curriculum_overview'], $programme->fresh()->curriculum_overview);
+        $this->assertSame(0, DB::table('curricula')->where('programme_id', $programme->id)->count());
     }
 
     /**
