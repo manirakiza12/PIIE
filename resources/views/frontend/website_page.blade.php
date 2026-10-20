@@ -1072,8 +1072,46 @@
                     $piieAlt = ! (bool) ($piieSection->sort_order % 2);
                 @endphp
 
+                {{-- Welcome messages are full statements, not short card excerpts. --}}
+                @if($piieKey === 'welcome_messages' && $piieBlockItems->isNotEmpty())
+                    <section class="piie-section @if($piieAlt) piie-section--alt @endif" id="{{ $piieKey }}"
+                             aria-labelledby="piie-{{ $piieKey }}">
+                        <div class="piie-wrap">
+                            <div class="piie-head-center">
+                                <h2 id="piie-{{ $piieKey }}">{{ $piieSection->title ?? 'Welcome Messages' }}</h2>
+                                @if($piieSection->subtitle)
+                                    <p class="piie-lede">{{ $piieSection->subtitle }}</p>
+                                @endif
+                            </div>
+
+                            <div class="piie-grid piie-grid--2" style="margin-top:2.5rem;">
+                                @foreach($piieBlockItems as $piieMessage)
+                                    @php
+                                        $piieMessageText = trim((string) ($piieMessage->description ?: $piieMessage->content));
+                                    @endphp
+                                    <article class="piie-card piie-card--info">
+                                        @if($piieImage($piieMessage->image))
+                                            <div class="piie-card__media">
+                                                <img src="{{ $piieImage($piieMessage->image) }}" alt="{{ $piieMessage->title }}" loading="lazy" decoding="async">
+                                            </div>
+                                        @endif
+                                        <div class="piie-card__body">
+                                            <h3 class="piie-card__title">{{ $piieMessage->title }}</h3>
+                                            @if($piieMessage->subtitle)
+                                                <div class="piie-card__meta">{{ $piieMessage->subtitle }}</div>
+                                            @endif
+                                            @if($piieMessageText !== '')
+                                                <p class="piie-card__excerpt">{!! nl2br(e($piieMessageText)) !!}</p>
+                                            @endif
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </div>
+                        </div>
+                    </section>
+
                 {{-- Leadership: a GRID of profiles, driven entirely by the database. --}}
-                @if($piieKey === 'leadership_team' && $piieBlockItems->isNotEmpty())
+                @elseif($piieKey === 'leadership_team' && $piieBlockItems->isNotEmpty())
                     <section class="piie-section piie-section--alt" id="{{ $piieKey }}" aria-labelledby="piie-lead-title">
                         <div class="piie-wrap">
                             <div class="piie-head-center">
