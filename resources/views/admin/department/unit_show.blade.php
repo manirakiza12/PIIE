@@ -6,7 +6,7 @@
     <dl class="row">
         <dt class="col-sm-3">Type</dt><dd class="col-sm-9">{{ ucfirst($unit->type) }}</dd>
         <dt class="col-sm-3">Code</dt><dd class="col-sm-9">{{ $unit->code ?: 'Not set' }}</dd>
-        <dt class="col-sm-3">Dean / Director / Head</dt><dd class="col-sm-9">{{ $unit->head_name ? trim(($unit->head_title ? $unit->head_title.' - ' : '').$unit->head_name) : 'Not assigned' }}</dd>
+        <dt class="col-sm-3">{{ $unit->type === 'faculty' ? "Dean's Name" : 'Director / Head Name' }}</dt><dd class="col-sm-9">{{ $unit->head_name ? trim(($unit->head_title ? $unit->head_title.' - ' : '').$unit->head_name) : 'Not assigned' }}</dd>
         <dt class="col-sm-3">Belongs To</dt><dd class="col-sm-9">{{ $unit->parent ? $unit->parent->hierarchy_label : 'Top-level' }}</dd>
         <dt class="col-sm-3">Description</dt><dd class="col-sm-9">{{ $unit->description ?: '—' }}</dd>
         <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ ucfirst($unit->status) }}</dd>

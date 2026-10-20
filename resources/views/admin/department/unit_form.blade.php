@@ -40,7 +40,7 @@
             @error('parent_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
         <div class="col-12 col-md-4">
-            <label for="unit-head-name" class="form-label">Dean / Director / Head <span class="text-muted">(optional)</span></label>
+            <label id="unit-head-label" for="unit-head-name" class="form-label">{{ $type === 'faculty' ? "Dean's Name" : ($type === 'school' ? 'Director / Head Name' : 'Dean / Director / Head Name') }} <span class="text-muted">(optional)</span></label>
             <input id="unit-head-name" class="form-control @error('head_name') is-invalid @enderror" name="head_name" value="{{ old('head_name', $unit?->head_name) }}" maxlength="255" autocomplete="name" placeholder="Enter the person's name">
             @error('head_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
@@ -57,6 +57,7 @@
     const parent = document.getElementById('unit-parent');
     const nameType = document.getElementById('unit-name-type');
     const codeType = document.getElementById('unit-code-type');
+    const headLabel = document.getElementById('unit-head-label');
     const sync = () => {
         const faculty = type.value === 'faculty';
         parentWrap.hidden = !faculty;
@@ -64,6 +65,7 @@
         parent.required = faculty;
         nameType.textContent = type.value ? (faculty ? 'Faculty' : 'School') : 'School / Faculty';
         codeType.textContent = nameType.textContent;
+        headLabel.firstChild.textContent = faculty ? "Dean's Name " : (type.value ? 'Director / Head Name ' : 'Dean / Director / Head Name ');
     };
     type.addEventListener('change', sync);
     sync();

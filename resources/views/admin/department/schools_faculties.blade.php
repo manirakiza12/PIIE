@@ -28,7 +28,7 @@
                     <td>{{ $unit->code ?: '—' }}</td>
                     <td><span class="badge text-bg-light">{{ ucfirst($unit->type) }}</span></td>
                     <td>{{ $unit->parent ? $unit->parent->hierarchy_label : 'Top-level' }}</td>
-                    <td>{{ $unit->head_name ? trim(($unit->head_title ? $unit->head_title.' - ' : '').$unit->head_name) : 'Not assigned' }}</td>
+                    <td><span class="visually-hidden">{{ $unit->type === 'faculty' ? "Dean: " : 'Director / Head: ' }}</span>{{ $unit->head_name ? trim(($unit->head_title ? $unit->head_title.' - ' : '').$unit->head_name) : 'Not assigned' }}</td>
                     <td>{{ $unit->departments_count }}</td><td>{{ $unit->programmes_count }}</td>
                     <td><span class="badge {{ $unit->status === 'active' ? 'text-bg-success' : 'text-bg-secondary' }}">{{ ucfirst($unit->status) }}</span></td>
                     <td class="text-end"><div class="d-inline-flex gap-2 align-items-center"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.department.units.show', $unit->id) }}">View</a><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.department.units.edit', $unit->id) }}">Edit</a>@if($unit->legacy_department_id)<button class="btn btn-sm btn-outline-secondary" type="button" disabled title="The linked legacy Department ID is retained to protect existing records.">In use</button>@else<form method="POST" action="{{ route('admin.department.units.destroy', $unit->id) }}" onsubmit="return confirm('Delete this School / Faculty? Units with departments or child units cannot be deleted.')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form>@endif</div></td>
