@@ -255,8 +255,8 @@
                                             <div class="col-md-2 fpb-7"><input type="text" class="form-control eForm-control" name="link" value="{{ $item->link }}"></div>
                                             <div class="col-md-1 fpb-7"><input type="number" class="form-control eForm-control" name="sort_order" value="{{ $item->sort_order }}"></div>
                                             <div class="col-md-1 fpb-7"><select name="status" class="form-control eForm-control"><option value="1" {{ $item->status ? 'selected' : '' }}>Active</option><option value="0" {{ !$item->status ? 'selected' : '' }}>Inactive</option></select></div>
-                                            <div class="col-md-4 fpb-7"><textarea class="form-control eForm-control" name="description" rows="2">{{ $item->description }}</textarea></div>
-                                            <div class="col-md-4 fpb-7"><textarea class="form-control eForm-control" name="content" rows="2">{{ $item->content }}</textarea></div>
+                                            <div class="col-md-4 fpb-7"><label class="eForm-label" for="item-description-{{ $item->id }}">Description / welcome message</label><textarea id="item-description-{{ $item->id }}" class="form-control eForm-control" name="description" rows="6">{{ $item->description }}</textarea></div>
+                                            <div class="col-md-4 fpb-7"><label class="eForm-label" for="item-content-{{ $item->id }}">Additional content</label><textarea id="item-content-{{ $item->id }}" class="form-control eForm-control" name="content" rows="6">{{ $item->content }}</textarea></div>
                                             @include('website_management.partials.item_image_field', [
                                                 'idSuffix'     => 'item-'.$item->id,
                                                 // The item's own section is known here, so
