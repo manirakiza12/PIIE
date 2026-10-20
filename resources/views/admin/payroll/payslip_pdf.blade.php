@@ -16,6 +16,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #333; }
 .footer { margin-top: 30px; display: flex; justify-content: space-between; }
 .sig-line { border-top: 1px solid #333; width: 150px; text-align: center; padding-top: 4px; font-size: 10px; }
 </style>
+@include('shared.pdf_layout')
 </head>
 <body>
 <div class="header">

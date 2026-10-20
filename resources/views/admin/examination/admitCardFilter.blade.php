@@ -254,19 +254,12 @@ use App\Http\Controllers\CommonController;
     html2canvas:  { scale: 2 }
     };
 
-    html2pdf().set(opt).from(element).save();
+    window.exportReportPdf(element, opt.filename);
     }
 
 
     function printableDiv(printableAreaDivId) {
-    var printContents = document.getElementById(printableAreaDivId).innerHTML;
-    var originalContents = document.body.innerHTML;
-
-    document.body.innerHTML = printContents;
-
-    window.print();
-
-    document.body.innerHTML = originalContents;
+        window.printReport(printableAreaDivId);
     }
 
     function classWiseSection(classId) {

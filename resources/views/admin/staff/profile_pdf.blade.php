@@ -10,6 +10,7 @@
         td { padding: 6px 8px; border-bottom: 1px solid #e0e0e0; }
         td.label { color: #666; width: 200px; }
     </style>
+@include('shared.pdf_layout')
 </head>
 <body>
     <?php

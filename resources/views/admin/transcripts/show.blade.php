@@ -2,7 +2,7 @@
 @section('content')
 
 @if(session('print'))
-<script>window.onload = function() { window.print(); }</script>
+<script>window.onload = function() { window.printReport('transcript-doc'); }</script>
 @endif
 
 <div class="mainSection-title d-print-none"><div class="row"><div class="col-12">

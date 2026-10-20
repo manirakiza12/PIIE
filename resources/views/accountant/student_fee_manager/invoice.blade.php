@@ -177,8 +177,8 @@
   "use strict"
 
   function printableDiv(printableAreaDivId) {
-    window.print();
-  }
+        window.printReport(printableAreaDivId);
+    }
   
 </script>
 @include('shared.invoice_email_action')

@@ -10,6 +10,7 @@
         th, td { padding: 6px 8px; border-bottom: 1px solid #e0e0e0; text-align: left; }
         th { background: #f5f5f5; }
     </style>
+@include('shared.pdf_layout')
 </head>
 <body>
     <h2>{{ $title }}</h2>

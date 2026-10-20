@@ -181,8 +181,8 @@
   "use strict"
 
   function printableDiv(printableAreaDivId) {
-    window.print();
-  }
+        window.printReport(printableAreaDivId);
+    }
   
 </script>
 @endsection

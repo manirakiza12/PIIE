@@ -1028,29 +1028,11 @@ $active_session = get_school_settings(auth()->user()->school_id)->value('running
     }
 
      function Export() {
-        html2canvas(document.getElementById('class_routines'), {
-            onrendered: function(canvas) {
-                var data = canvas.toDataURL();
-                var docDefinition = {
-                    content: [{
-                        image: data,
-                        width: 500
-                    }]
-                };
-                pdfMake.createPdf(docDefinition).download("routine.pdf");
-            }
-        });
+        window.exportReportPdf(document.getElementById('class_routines'), "routine.pdf");
     }
 
     function printableDiv(printableAreaDivId) {
-        var printContents = document.getElementById(printableAreaDivId).innerHTML;
-        var originalContents = document.body.innerHTML;
-
-        document.body.innerHTML = printContents;
-
-        window.print();
-
-        document.body.innerHTML = originalContents;
+        window.printReport(printableAreaDivId);
     }
 
 </script>

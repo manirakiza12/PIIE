@@ -81,14 +81,7 @@
   "use strict";
 
     function ePrintDiv(ePrintDivId) {
-        var printContents = document.getElementById(ePrintDivId).innerHTML;
-        var originalContents = document.body.innerHTML;
-
-        document.body.innerHTML = printContents;
-
-        window.print();
-
-        document.body.innerHTML = originalContents;
+        window.printReport(ePrintDivId);
     }
 
     function generatePDF() {
@@ -111,7 +104,7 @@
         };
 
         // New Promise-based usage:
-        html2pdf().set(opt).from(clonedElement).save();
+        window.exportReportPdf(clonedElement, opt.filename);
 
         // remove cloned element
         clonedElement.remove();

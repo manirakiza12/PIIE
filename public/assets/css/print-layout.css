@@ -1,0 +1,45 @@
+/* Shared by browser printing and the PDF export clone. */
+@page { size: A4; margin: 12mm; }
+#report-print-output { display: none; }
+@media print {
+    body.report-printing > :not(#report-print-output) { display: none !important; }
+    body.report-printing > #report-print-output { display: block !important; width: 100% !important; }
+    body.report-printing > #report-print-output,
+    body.report-printing > #report-print-output * { visibility: visible !important; }
+    html, body { width: auto !important; height: auto !important; overflow: visible !important; background: white !important; }
+    .sidebar, .home-header, .navbar, .copyright-text, .page-toolbar,
+    .print-hidden, .no-print, #printPageButton, .modal-backdrop { display: none !important; }
+    .home-section, #app, .main_content, .mainSection, .container, .container-fluid {
+        position: static !important; left: auto !important; width: auto !important;
+        max-width: none !important; min-width: 0 !important; height: auto !important;
+        margin: 0 !important; padding: 0 !important; overflow: visible !important;
+        transform: none !important;
+    }
+    .table-responsive, .dataTables_scroll, .dataTables_scrollBody, .card,
+    .card-body, .eSection-wrap, #page-print-area {
+        height: auto !important; max-height: none !important; overflow: visible !important;
+        min-width: 0 !important; max-width: 100% !important;
+        break-inside: auto !important; page-break-inside: auto !important;
+    }
+    table { width: 100% !important; min-width: 0 !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; }
+    th, td { min-width: 0 !important; white-space: normal !important; overflow-wrap: anywhere; word-wrap: break-word; height: auto !important; overflow: visible !important; text-overflow: clip !important; position: static !important; }
+    thead { display: table-header-group; }
+    tfoot { display: table-row-group; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    h1, h2, h3, h4 { break-after: avoid; }
+    img, svg, canvas { max-width: 100% !important; }
+    pre { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+    .row { --bs-gutter-x: 0; margin-left: 0 !important; margin-right: 0 !important; }
+}
+.pdf-export { background: white; color: #222; box-sizing: border-box; }
+.pdf-export *, .pdf-export *::before, .pdf-export *::after { box-sizing: border-box; }
+.pdf-export .print-header { display: block !important; margin-bottom: 12px; }
+.pdf-export .table-responsive, .pdf-export .card, .pdf-export .card-body,
+.pdf-export .eSection-wrap, .pdf-export .dataTables_scrollBody {
+    overflow: visible !important; height: auto !important; max-height: none !important;
+    min-width: 0 !important; max-width: 100% !important;
+}
+.pdf-export table { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; }
+.pdf-export th, .pdf-export td { white-space: normal !important; overflow-wrap: anywhere; word-wrap: break-word; min-width: 0 !important; height: auto !important; overflow: visible !important; text-overflow: clip !important; position: static !important; }
+.pdf-export img, .pdf-export canvas, .pdf-export svg { max-width: 100% !important; }
+.pdf-export .row { margin-left: 0 !important; margin-right: 0 !important; }

@@ -285,18 +285,7 @@ use App\Http\Controllers\CommonController;
 
   function Export() {
 
-    html2canvas(document.getElementById('pdf_table'), {
-        onrendered: function(canvas) {
-            var data = canvas.toDataURL();
-            var docDefinition = {
-                content: [{
-                    image: data,
-                    width: 500
-                }]
-            };
-            pdfMake.createPdf(docDefinition).download("AttendenceReport.pdf");
-        }
-    });
+    window.exportReportPdf(document.getElementById('pdf_table'), "AttendenceReport.pdf");
 
   }
 

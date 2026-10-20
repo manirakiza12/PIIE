@@ -238,7 +238,7 @@
             }
             };
 
-            html2pdf().set(opt).from(clonedElement).save();
+            window.exportReportPdf(clonedElement, opt.filename);
 
 
 

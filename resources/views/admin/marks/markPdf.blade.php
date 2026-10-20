@@ -1,3 +1,4 @@
+@include('shared.pdf_layout')
 <style>
  td{
     width: 150px;

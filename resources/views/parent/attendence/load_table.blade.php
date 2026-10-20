@@ -133,17 +133,6 @@ if(count($attendance_of_students) > 0): ?>
     };
 
     function Export() {
-        html2canvas(document.getElementById('attendence_report'), {
-            onrendered: function(canvas) {
-                var data = canvas.toDataURL();
-                var docDefinition = {
-                    content: [{
-                        image: data,
-                        width: 500
-                    }]
-                };
-                pdfMake.createPdf(docDefinition).download("attendence_report.pdf");
-            }
-        });
+        window.exportReportPdf(document.getElementById('attendence_report'), "attendence_report.pdf");
     }
 </script>

@@ -97,6 +97,7 @@
             color: #52606d;
         }
     </style>
+@include('shared.pdf_layout')
 </head>
 <body>
     <div class="header">

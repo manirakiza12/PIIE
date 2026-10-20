@@ -81,8 +81,7 @@
                 display: table-footer-group;
             }
 
-            tr,
-            .card {
+            tr {
                 break-inside: avoid;
                 page-break-inside: avoid;
             }
@@ -105,16 +104,6 @@
 
             function getPrintableRoot(targetId) {
                 return document.getElementById(targetId || 'page-print-area');
-            }
-
-            function removeToolbarNodes(root) {
-                if (!root) {
-                    return;
-                }
-
-                root.querySelectorAll('.page-toolbar, .print-hidden, .no-print').forEach(function (node) {
-                    node.remove();
-                });
             }
 
             function guessPageTitle(root) {
@@ -155,52 +144,12 @@
 
             window.printCurrentPage = function (targetId) {
                 var source = getPrintableRoot(targetId);
-
-                if (!source) {
-                    window.print();
-                    return;
-                }
-
-                var header = buildPrintHeader(source);
-                source.insertBefore(header, source.firstChild);
-
-                var cleanup = function () {
-                    header.remove();
-                    window.removeEventListener('afterprint', cleanup);
-                };
-                window.addEventListener('afterprint', cleanup);
-
-                window.print();
+                if (source) return window.printReport(source, buildPrintHeader(source));
             };
 
             window.exportCurrentPagePdf = function (targetId) {
                 var source = getPrintableRoot(targetId);
-
-                if (!source) {
-                    window.print();
-                    return;
-                }
-
-                if (typeof window.html2pdf === 'undefined') {
-                    window.print();
-                    return;
-                }
-
-                var cloned = source.cloneNode(true);
-                removeToolbarNodes(cloned);
-
-                var wrapper = document.createElement('div');
-                wrapper.appendChild(buildPrintHeader(source));
-                wrapper.appendChild(cloned);
-
-                html2pdf().set({
-                    margin: 0.5,
-                    filename: exportFileBaseName() + '.pdf',
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2 },
-                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-                    pagebreak: { mode: ['css', 'legacy'] }
-                }).from(wrapper).save();
+                if (source) return window.exportReportPdf(source, exportFileBaseName() + '.pdf', buildPrintHeader(source));
             };
 
             function cellText(cell) {

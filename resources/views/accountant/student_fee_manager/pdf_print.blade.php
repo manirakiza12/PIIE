@@ -111,29 +111,11 @@ if($selected_class == ""){
 
 
     function Export() {
-        html2canvas(document.getElementById('student_fee_export'), {
-            onrendered: function(canvas) {
-                var data = canvas.toDataURL();
-                var docDefinition = {
-                    content: [{
-                        image: data,
-                        width: 500
-                    }]
-                };
-                pdfMake.createPdf(docDefinition).download("student_fee-{{ $date_from.'-'.$date_to.'-'.$sel_class.'-'.$sel_status }}.pdf");
-            }
-        });
+        window.exportReportPdf(document.getElementById('student_fee_export'), "student_fee-{{ $date_from.'-'.$date_to.'-'.$sel_class.'-'.$sel_status }}.pdf");
     }
 
     function printableDiv(printableAreaDivId) {
-        var printContents = document.getElementById(printableAreaDivId).innerHTML;
-        var originalContents = document.body.innerHTML;
-
-        document.body.innerHTML = printContents;
-
-        window.print();
-
-        document.body.innerHTML = originalContents;
+        window.printReport(printableAreaDivId);
     }
 
 </script>

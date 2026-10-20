@@ -916,21 +916,14 @@ $active_session = get_school_settings(auth()->user()->school_id)->value('running
         };
 
         // New Promise-based usage:
-        html2pdf().set(opt).from(clonedElement).save();
+        window.exportReportPdf(clonedElement, opt.filename);
 
         // remove cloned element
         clonedElement.remove();
     }
 
     function printableDiv(printableAreaDivId) {
-        var printContents = document.getElementById(printableAreaDivId).innerHTML;
-        var originalContents = document.body.innerHTML;
-
-        document.body.innerHTML = printContents;
-
-        window.print();
-
-        document.body.innerHTML = originalContents;
+        window.printReport(printableAreaDivId);
     }
 
 </script>

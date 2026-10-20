@@ -156,29 +156,11 @@ use App\Models\Grade;
     }
 
     function Export() {
-        html2canvas(document.getElementById('mark_report'), {
-            onrendered: function(canvas) {
-                var data = canvas.toDataURL();
-                var docDefinition = {
-                    content: [{
-                        image: data,
-                        width: 500
-                    }]
-                };
-                pdfMake.createPdf(docDefinition).download("mark_report.pdf");
-            }
-        });
+        window.exportReportPdf(document.getElementById('mark_report'), "mark_report.pdf");
     }
 
     function printableDiv(printableAreaDivId) {
-        var printContents = document.getElementById(printableAreaDivId).innerHTML;
-        var originalContents = document.body.innerHTML;
-
-        document.body.innerHTML = printContents;
-
-        window.print();
-
-        document.body.innerHTML = originalContents;
+        window.printReport(printableAreaDivId);
     }
 
 </script>

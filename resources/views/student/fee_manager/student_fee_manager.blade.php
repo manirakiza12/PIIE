@@ -195,16 +195,12 @@ if ($date_to == "" || $date_to === null) {
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2 }
         };
-        html2pdf().set(opt).from(clonedElement).save();
+        window.exportReportPdf(clonedElement, opt.filename);
         clonedElement.remove();
     }
 
     function printableDiv(printableAreaDivId) {
-        var printContents = document.getElementById(printableAreaDivId).innerHTML;
-        var originalContents = document.body.innerHTML;
-        document.body.innerHTML = printContents;
-        window.print();
-        document.body.innerHTML = originalContents;
+        window.printReport(printableAreaDivId);
     }
 </script>
 @endsection
