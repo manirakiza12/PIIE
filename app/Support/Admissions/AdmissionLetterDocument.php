@@ -111,6 +111,9 @@ final class AdmissionLetterDocument
     private static function mode(?string $mode): string
     {
         return match (strtolower(trim($mode ?? ''))) {
+            'day' => 'Day',
+            'evening' => 'Evening',
+            'odel/blended' => 'ODEL/Blended',
             'odel', 'online', 'online_distance_learning' => 'Online Distance Learning',
             'fulltime', 'full_time', 'full time' => 'Full Time',
             'parttime', 'part_time' => 'Part Time',

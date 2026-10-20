@@ -137,16 +137,16 @@ class ProgrammeManagementTest extends TestCase
         $response = $this->actingAs($admin)->post(route('admin.programmes.store'), [
             'code' => 'NEW1',
             'name' => 'New Style Programme',
-            'level' => 'Bachelors',
+            'level' => "Bachelor's",
             'mode' => 'ODEL',
             'tuition_fee' => 500,
         ]);
 
         $response->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('programmes', ['code' => 'NEW1', 'level' => 'Bachelors', 'mode' => 'ODEL']);
+        $this->assertDatabaseHas('programmes', ['code' => 'NEW1', 'level' => "Bachelor's", 'mode' => 'ODEL']);
     }
 
-    public function test_the_create_modal_offers_every_current_and_legacy_level_and_mode(): void
+    public function test_the_create_modal_offers_current_levels_and_only_the_requested_modes(): void
     {
         $schoolId = $this->makeSchool();
         $admin = $this->makeAdminUser($schoolId);
@@ -154,11 +154,17 @@ class ProgrammeManagementTest extends TestCase
         $response = $this->actingAs($admin)->get(route('admin.programmes.open_modal'));
 
         $response->assertStatus(200);
-        foreach (array_merge(Programme::LEVELS, Programme::LEVELS_LEGACY) as $level) {
-            $response->assertSee('value="' . $level . '"', false);
+        foreach (Programme::LEVELS as $level) {
+            $response->assertSee('value="' . htmlspecialchars($level, ENT_QUOTES, 'UTF-8') . '"', false);
         }
-        foreach (array_merge(Programme::MODES, Programme::MODES_LEGACY) as $mode) {
+        foreach (Programme::LEVELS_LEGACY as $level) {
+            $response->assertDontSee('value="' . $level . '"', false);
+        }
+        foreach (Programme::MODES as $mode) {
             $response->assertSee('value="' . $mode . '"', false);
+        }
+        foreach (Programme::MODES_LEGACY as $mode) {
+            $response->assertDontSee('value="' . $mode . '"', false);
         }
     }
 

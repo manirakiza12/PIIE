@@ -174,6 +174,7 @@ class PublicProgrammeCategoriesTest extends TestCase
     public function test_each_stored_level_maps_to_the_expected_category(): void
     {
         $this->assertSame(ProgrammeCategories::POSTGRADUATE, ProgrammeCategories::forLevel('Masters'));
+        $this->assertSame(ProgrammeCategories::BACHELORS, ProgrammeCategories::forLevel("Bachelor's"));
         $this->assertSame(ProgrammeCategories::BACHELORS, ProgrammeCategories::forLevel('Bachelors'));
         // 'Degree' is the legacy spelling of a bachelor's award and is a real
         // enum value, so it must land with the bachelor's programmes.
@@ -182,6 +183,9 @@ class PublicProgrammeCategoriesTest extends TestCase
         // PGD is a Postgraduate Diploma, which is a diploma award.
         $this->assertSame(ProgrammeCategories::DIPLOMA, ProgrammeCategories::forLevel('PGD'));
         $this->assertSame(ProgrammeCategories::CERTIFICATE, ProgrammeCategories::forLevel('Certificate'));
+        $this->assertSame(ProgrammeCategories::CERTIFICATE, ProgrammeCategories::forLevel('HEC'));
+        $this->assertSame(ProgrammeCategories::OTHER, ProgrammeCategories::forLevel('Professional Course'));
+        $this->assertSame(ProgrammeCategories::OTHER, ProgrammeCategories::forLevel('Short course'));
         $this->assertSame(ProgrammeCategories::OTHER, ProgrammeCategories::forLevel('Short Course'));
         $this->assertSame(ProgrammeCategories::OTHER, ProgrammeCategories::forLevel('PhD'));
     }

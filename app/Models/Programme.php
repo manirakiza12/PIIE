@@ -84,16 +84,33 @@ class Programme extends Model
             ->orderBy('name');
     }
 
-    /**
-     * Client-preferred Level/Mode option lists, shown first in dropdowns.
-     * LEGACY_* values are kept selectable (never removed from the DB enum)
-     * so existing programmes using them don't lose data — see migration
-     * 2026_07_27_050000_normalize_programme_levels_modes_and_code_uniqueness.
-     */
-    public const LEVELS = ['Certificate', 'Diploma', 'Bachelors', 'PGD', 'Masters', 'Short Course'];
-    public const LEVELS_LEGACY = ['Degree', 'PhD'];
-    public const MODES = ['ODEL', 'Full Time', 'Weekend'];
+    /** Client-preferred Level/Mode option lists. */
+    public const LEVELS = ['HEC', 'Certificate', 'Diploma', "Bachelor's", 'Masters', 'PhD', 'Professional Course', 'Short course'];
+    public const LEVELS_LEGACY = ['Degree', 'Bachelors', 'PGD', 'Short Course'];
+    public const MODES = ['Day', 'Evening', 'Weekend', 'ODEL/Blended', 'ODEL'];
     public const MODES_LEGACY = ['fulltime', 'parttime', 'online', 'blended'];
+
+    /** Keep an existing legacy value visible while editing its record. */
+    public static function selectableModes(?string $existing = null): array
+    {
+        $modes = self::MODES;
+        if ($existing !== null && $existing !== '' && ! in_array($existing, $modes, true)) {
+            $modes[] = $existing;
+        }
+
+        return $modes;
+    }
+
+    /** Keep a programme's existing legacy category visible while editing. */
+    public static function selectableLevels(?string $existing = null): array
+    {
+        $levels = self::LEVELS;
+        if ($existing !== null && $existing !== '' && ! in_array($existing, $levels, true)) {
+            $levels[] = $existing;
+        }
+
+        return $levels;
+    }
 
     public function department()
     {
