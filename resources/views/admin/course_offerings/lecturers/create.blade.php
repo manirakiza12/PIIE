@@ -7,10 +7,12 @@
     <h5>{{ get_phrase('Assign Lecturer') }}</h5>
     <p class="text-muted">{{ get_phrase('This creates a Planned allocation. Activate it separately when the Allocation and lecturer are eligible.') }}</p>
 
+    <p class="text-muted">A lecturer can teach different programmes and courses during the same semester. Assign them to each programme's Course Allocation. A shared allocation uses one teaching team for all its linked programmes.</p>
     @if($errors->any())
         <div class="alert alert-danger" role="alert" aria-labelledby="lecturer-errors-title">
             <h6 id="lecturer-errors-title" class="alert-heading">{{ get_phrase('Please review this allocation') }}</h6>
             <ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+            @if(old('user_id'))<a class="btn btn-outline-primary mt-2" href="{{ route('admin.lecturer_assignments.index', ['lecturer_id' => old('user_id')]) }}">Assign this lecturer to another programme</a>@endif
         </div>
     @endif
 
@@ -41,7 +43,7 @@
                     <option value="">{{ get_phrase('Choose a lecturer') }}</option>
                     @foreach($candidates as $candidate)
                         @php($onLeave = $candidate->staff_status === \App\Support\Staff\StaffStatus::ON_LEAVE)
-                        <option value="{{ $candidate->id }}" @selected((string)old('user_id') === (string)$candidate->id)>
+                        <option value="{{ $candidate->id }}" @selected((string)old('user_id', request('user_id')) === (string)$candidate->id)>
                             {{ $candidate->name ?: $candidate->email }}
                             @if($candidate->code) · {{ get_phrase('Staff No.') }} {{ $candidate->code }}@endif
                             @if($candidate->department) · {{ $candidate->department->name }}@endif
