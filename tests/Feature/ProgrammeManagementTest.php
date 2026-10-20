@@ -155,7 +155,7 @@ class ProgrammeManagementTest extends TestCase
 
         $response->assertStatus(200);
         foreach (Programme::LEVELS as $level) {
-            $response->assertSee('value="' . $level . '"', false);
+            $response->assertSee('value="' . htmlspecialchars($level, ENT_QUOTES, 'UTF-8') . '"', false);
         }
         foreach (Programme::LEVELS_LEGACY as $level) {
             $response->assertDontSee('value="' . $level . '"', false);
