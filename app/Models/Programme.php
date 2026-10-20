@@ -12,6 +12,7 @@ class Programme extends Model
     protected $fillable = [
         'school_id', 'code', 'name', 'level', 'duration', 'mode',
         'tuition_fee', 'department_id', 'is_active',
+        'description', 'curriculum_overview', 'career_prospects',
         // Catalogue publication (added 2026_10_04_000003). `is_active` above
         // governs whether the programme is OFFERED academically; `is_published`
         // governs whether it is ADVERTISED. They are separate on purpose: a

@@ -222,6 +222,9 @@ class ProgrammeController extends Controller
             'level'         => ['required', 'string', 'max:100', Rule::in($allowedLevels)],
             'duration'      => 'nullable|max:50',
             'mode'          => ['required', Rule::in($allowedModes)],
+            'description'         => 'nullable|string|max:50000',
+            'curriculum_overview' => 'nullable|string|max:50000',
+            'career_prospects'    => 'nullable|string|max:50000',
             'tuition_fee'   => 'nullable|numeric|min:0',
             'department_id' => [
                 'nullable',
