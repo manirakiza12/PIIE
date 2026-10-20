@@ -70,7 +70,7 @@ final class ProgrammeCategories
         ],
         self::BACHELORS => [
             'label'  => 'Bachelor’s Degree Programmes',
-            'levels' => ['Bachelors', 'Degree'],
+            'levels' => ["Bachelor's", 'Bachelors', 'Degree'],
         ],
         self::DIPLOMA => [
             'label'  => 'Diploma Programmes',
@@ -78,11 +78,11 @@ final class ProgrammeCategories
         ],
         self::CERTIFICATE => [
             'label'  => 'Certificate Programmes',
-            'levels' => ['Certificate'],
+            'levels' => ['HEC', 'Certificate'],
         ],
         self::OTHER => [
             'label'  => 'Other Programmes',
-            'levels' => ['Short Course', 'PhD'],
+            'levels' => ['Professional Course', 'Short course', 'Short Course', 'PhD'],
         ],
     ];
 

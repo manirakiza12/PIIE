@@ -150,7 +150,7 @@ class AdmissionWizardController extends Controller
                 return view('admin.admissions.wizard.programme', $shared + [
                     'programmes'   => Programme::where('school_id', $admission->school_id)->where('is_active', 1)->orderBy('name')->get(),
                     'intakes'      => IntakeSession::where('school_id', $admission->school_id)->where('is_open', 1)->orderByDesc('id')->get(),
-                    'modes'        => array_merge(Programme::MODES, Programme::MODES_LEGACY),
+                    'modes'        => Programme::selectableModes($admission->study_mode),
                     'sponsorTypes' => self::SPONSOR_TYPES,
                     'heardAbout'   => self::HEARD_ABOUT,
                 ]);
@@ -284,7 +284,7 @@ class AdmissionWizardController extends Controller
                 'required',
                 Rule::exists('intake_sessions', 'id')->where(fn ($q) => $q->where('school_id', $schoolId)->where('is_open', 1)),
             ],
-            'study_mode'       => 'nullable|string|max:30',
+            'study_mode'       => ['nullable', 'string', 'max:30', Rule::in(Programme::selectableModes($admission->study_mode))],
             'sponsor_type'     => ['nullable', Rule::in(self::SPONSOR_TYPES)],
             'sponsor_name'     => 'nullable|string|max:150',
             'sponsor_phone'    => 'nullable|string|max:30',

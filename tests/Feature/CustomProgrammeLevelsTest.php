@@ -18,44 +18,45 @@ class CustomProgrammeLevelsTest extends TestCase
         (require database_path('migrations/2026_10_14_180000_add_custom_programme_levels.php'))->up();
     }
 
-    public function test_admin_adds_level_then_saves_and_edits_a_programme_using_it(): void
+    public function test_programme_categories_are_fixed_and_existing_legacy_categories_remain_editable(): void
     {
         $school = $this->makeSchool();
         $this->actingAs($this->makeAdminUser($school));
-        $name = 'Higher Education Certificate (HEC)';
-        $this->postJson(route('admin.programmes.levels.store'), ['name' => $name, 'school_id' => 999])
-            ->assertOk()->assertJsonPath('name', $name);
-        $this->assertDatabaseHas('programme_levels', ['school_id' => $school, 'name' => $name]);
-        $this->postJson(route('admin.programmes.store'), ['name' => 'HEC Science', 'code' => 'HECS', 'level' => $name, 'mode' => 'ODEL'])->assertOk();
+        $name = "Bachelor's";
+        $this->postJson(route('admin.programmes.levels.store'), ['name' => 'Unlisted Category'])
+            ->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->postJson(route('admin.programmes.store'), ['name' => 'HEC Science', 'code' => 'HECS', 'level' => 'HEC', 'mode' => 'ODEL'])->assertOk();
         $programme = Programme::where('school_id', $school)->where('code', 'HECS')->firstOrFail();
-        $this->get(route('admin.programmes.open_modal', ['id' => $programme->id]))->assertOk()->assertSee($name)->assertSee('piie-add-level');
-        $this->postJson(route('admin.programmes.update', $programme->id), ['name' => 'HEC Science Revised', 'code' => 'HECS', 'level' => $name, 'mode' => 'ODEL'])->assertOk();
-        $this->assertDatabaseHas('programmes', ['id' => $programme->id, 'level' => $name, 'name' => 'HEC Science Revised']);
+        $this->get(route('admin.programmes.open_modal', ['id' => $programme->id]))->assertOk()->assertSee($name)->assertDontSee('piie-add-level');
+        $programme->update(['level' => 'Degree']);
+        $this->get(route('admin.programmes.open_modal', ['id' => $programme->id]))->assertOk()->assertSee('Degree (');
+        $this->postJson(route('admin.programmes.update', $programme->id), ['name' => 'HEC Science Revised', 'code' => 'HECS', 'level' => 'Degree', 'mode' => 'ODEL'])->assertOk();
+        $this->assertDatabaseHas('programmes', ['id' => $programme->id, 'level' => 'Degree', 'name' => 'HEC Science Revised']);
     }
 
-    public function test_duplicates_reuse_the_existing_level_and_builtins(): void
+    public function test_category_endpoint_accepts_only_exact_builtin_labels_without_creating_custom_rows(): void
     {
         $school = $this->makeSchool();
         $this->actingAs($this->makeAdminUser($school));
         $url = route('admin.programmes.levels.store');
         $this->postJson($url, ['name' => 'HEC'])->assertOk()->assertJsonPath('name', 'HEC');
-        $this->postJson($url, ['name' => '  hec  '])->assertOk()->assertJsonPath('name', 'HEC');
-        $this->postJson($url, ['name' => ' certificate '])->assertOk()->assertJsonPath('name', 'Certificate');
-        $this->assertSame(1, DB::table('programme_levels')->count());
+        $this->postJson($url, ['name' => '  hec  '])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->postJson($url, ['name' => 'Certificate'])->assertOk()->assertJsonPath('name', 'Certificate');
+        $this->assertSame(0, DB::table('programme_levels')->count());
         $this->postJson($url, ['name' => '   '])->assertUnprocessable()->assertJsonValidationErrors('name');
         $this->postJson($url, ['name' => str_repeat('a', 101)])->assertUnprocessable();
     }
 
-    public function test_custom_levels_are_isolated_to_their_school(): void
+    public function test_custom_category_values_are_rejected_for_every_school(): void
     {
         $one = $this->makeSchool();
         $two = $this->makeSchool();
-        $this->actingAs($this->makeAdminUser($one))->postJson(route('admin.programmes.levels.store'), ['name' => 'Private HEC'])->assertOk();
+        $this->actingAs($this->makeAdminUser($one))->postJson(route('admin.programmes.levels.store'), ['name' => 'Private HEC'])->assertUnprocessable();
         $this->actingAs($this->makeAdminUser($two));
         $this->get(route('admin.programmes.open_modal'))->assertOk()->assertDontSee('Private HEC');
         $this->postJson(route('admin.programmes.store'), ['code' => 'HEC', 'name' => 'Test', 'level' => 'Private HEC', 'mode' => 'ODEL'])->assertUnprocessable()->assertJsonValidationErrors('level');
-        $this->postJson(route('admin.programmes.levels.store'), ['name' => 'Private HEC'])->assertOk();
-        $this->assertSame(2, DB::table('programme_levels')->count());
+        $this->postJson(route('admin.programmes.levels.store'), ['name' => 'Private HEC'])->assertUnprocessable();
+        $this->assertSame(0, DB::table('programme_levels')->count());
     }
 
     public function test_student_cannot_create_a_level(): void
@@ -78,13 +79,12 @@ class CustomProgrammeLevelsTest extends TestCase
         $this->assertSame(0, DB::table('programme_levels')->count());
     }
 
-    public function test_custom_level_is_available_for_admission_document_requirements(): void
+    public function test_only_requested_categories_are_available_for_admission_document_requirements(): void
     {
         $school = $this->makeSchool();
         $this->actingAs($this->makeAdminUser($school));
-        $name = 'Higher Education Certificate (HEC)';
-        $this->postJson(route('admin.programmes.levels.store'), ['name' => $name])->assertOk();
-        $this->get(route('admin.admissions_documents.index'))->assertOk()->assertSee($name);
+        $name = 'HEC';
+        $this->get(route('admin.admissions_documents.index'))->assertOk()->assertSee($name)->assertDontSee('Private HEC');
         $this->post(route('admin.admissions_documents.store'), [
             'key' => 'hec_results', 'label' => 'HEC Results', 'applies_to_levels' => [$name],
         ])->assertSessionHasNoErrors();

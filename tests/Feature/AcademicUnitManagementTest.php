@@ -317,12 +317,12 @@ class AcademicUnitManagementTest extends TestCase
             ->assertSee('Previously under FACULTY OF EDUCATION');
         $this->post(route('admin.programmes.store'), [
             'name' => 'Another Education Programme', 'code' => 'EDU2', 'level' => 'Diploma',
-            'mode' => 'Full Time', 'department_id' => $legacyIds['FACULTY OF EDUCATION'],
+            'mode' => 'Day', 'department_id' => $legacyIds['FACULTY OF EDUCATION'],
         ])->assertSessionHasErrors('department_id');
         $educationProgramme = Programme::query()->where('school_id', $schoolId)->where('code', 'EDU1')->firstOrFail();
         $this->postJson(route('admin.programmes.update', $educationProgramme->id), [
             'name' => $educationProgramme->name, 'code' => $educationProgramme->code,
-            'level' => $educationProgramme->level, 'mode' => 'Full Time',
+            'level' => $educationProgramme->level, 'mode' => 'Day',
             'department_id' => $normalDepartmentId,
         ])->assertOk();
         $this->assertDatabaseHas('programmes', [
