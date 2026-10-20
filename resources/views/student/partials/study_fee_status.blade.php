@@ -6,7 +6,9 @@
 @elseif($studyFeeStatus['total_minor'] > 0)
 <p class="mb-0">Paid {{ number_format($studyFeeStatus['paid_minor'] / 100, 2) }} of {{ number_format($studyFeeStatus['total_minor'] / 100, 2) }} in current-session fees. Minimum for studying: {{ number_format($studyFeeStatus['required_minor'] / 100, 2) }}.
 @if(!$studyFeeStatus['eligible']) Pay another {{ number_format($studyFeeStatus['shortfall_minor'] / 100, 2) }} through PesaPal, or contact the administrator about a waiver.@endif</p>
+@elseif(!$studyFeeStatus['session_id'])
+<p class="mb-0">The school has not set a current fee session, so study eligibility cannot be calculated yet.</p>
 @else
-<p class="mb-0">Contact Finance to confirm your current fee session and school fee invoices.</p>
+<p class="mb-0">No current-session invoice is linked yet. <a href="{{ route('student.fee_manager.list') }}">Open Student Fees</a> to load any mandatory fee that matches your programme or class automatically.</p>
 @endif
 </div>

@@ -889,6 +889,12 @@ class StudentController extends Controller
         $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
         $student        = auth()->user();
 
+        // Existing students without historical invoices receive any matching
+        // current-session mandatory fee structures here. The generator is
+        // idempotent and protects legacy Finance-created invoices from being
+        // charged twice.
+        \App\Support\StudentFeeInvoiceGenerator::ensureForStudent($student);
+
         if (count($request->all()) > 0) {
             $data            = $request->all();
             $date            = explode('-', $data['eDateRange']);
