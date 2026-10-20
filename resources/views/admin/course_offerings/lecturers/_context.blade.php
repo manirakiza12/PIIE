@@ -2,7 +2,7 @@
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
             <ul class="d-flex align-items-center eBreadcrumb-2 mb-2">
-                <li><a href="{{ route('admin.lecturer_assignments.index') }}">Lecturer Assignments</a></li>
+                <li>@if(auth()->user()->hasPermission('academic.course_offering.view'))<a href="{{ route('admin.course_offerings.show', $offering->id) }}">Course Allocation</a>@else<a href="{{ route('admin.lecturer_assignments.index') }}">Lecturer Assignments</a>@endif</li>
                 <li>{{ get_phrase('Lecturers') }}</li>
             </ul>
             <h4>{{ get_phrase('Teaching Team') }} · {{ $offering->reference ?: '#'.$offering->id }}</h4>

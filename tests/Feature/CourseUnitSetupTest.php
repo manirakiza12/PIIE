@@ -174,7 +174,7 @@ class CourseUnitSetupTest extends TestCase
         $before = $member->getAttributes();
         $response = $this->get(route('admin.subject.setup', $member->subject_id))->assertOk()
             ->assertSee('Curriculum applies from Academic Year')->assertSee('2026\/2027', false)->assertSee('data-curriculum-year',false)
-            ->assertDontSee('Schedule this Course Unit')->assertSee('Academic setup order and next steps');
+            ->assertDontSee('Schedule this Course Unit')->assertSee('Setup help and next steps');
         $doc = new \DOMDocument(); @$doc->loadHTML($response->getContent()); $xpath = new \DOMXPath($doc);
         $this->assertSame(1,$xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
         $this->assertSame(1,$xpath->query('//input[@id="unit-curriculum-academic-year" and @readonly and not(@name)]')->length);
@@ -184,7 +184,7 @@ class CourseUnitSetupTest extends TestCase
         $viewDoc = new \DOMDocument(); @$viewDoc->loadHTML($view->getContent());
         $this->assertGreaterThanOrEqual(1, (new \DOMXPath($viewDoc))->query('//fieldset[@disabled]')->length);
         $view->assertDontSee('Remove placement');
-        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Student Placement');
+        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Student Course Registration');
     }
 
     private function payload(array $overrides = []): array

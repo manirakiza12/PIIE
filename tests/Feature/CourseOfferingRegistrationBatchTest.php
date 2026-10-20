@@ -193,7 +193,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertSame('registered', $data['cells'][$this->fixture['studentAlready']->id][1]['registration']->status);
         $source = str_replace(["@extends('admin.navigation')", "@section('content')", '@endsection'], '', file_get_contents(resource_path('views/admin/academic/programme_registration.blade.php')));
         $html = \Illuminate\Support\Facades\Blade::render($source, $data + ['errors' => new \Illuminate\Support\ViewErrorBag]);
-        $this->assertStringContainsString('Register Students for Courses', $html);
+        $this->assertStringContainsString('Student Course Registration', $html);
         $this->assertStringContainsString('Year of study missing', $html);
         $this->assertStringContainsString('Research Methods', $html);
         $this->assertStringNotContainsString('Set Year 1 for 2026', $html);
@@ -214,7 +214,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
     public function test_programme_workspace_http_page_renders_with_navigation(): void
     {
         $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
-        $this->actingAs($viewer)->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Register Students for Courses');
+        $this->actingAs($viewer)->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Student Course Registration');
         $this->get(route('admin.course_registrations.index', $this->programmeFilters()))->assertOk()
             ->assertSee('Year of study missing')->assertSee('Student Ineligible')->assertSee('Research Methods');
     }
@@ -293,6 +293,76 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         ])->assertRedirect();
         $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
         $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentA']->id]);
+    }
+
+
+    public function test_registration_can_set_missing_placement_without_replacing_existing_placements(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage', 'academic.programme_cohort.membership']);
+        $manager->forceFill(['role_id' => 19])->save();
+        $fee = (array) DB::table('student_fee_managers')->where('student_id', $this->fixture['studentA']->id)->first();
+        unset($fee['id']);
+        $fee['student_id'] = $this->fixture['studentIneligible']->id;
+        DB::table('student_fee_managers')->insert($fee);
+        $before = DB::table('student_curriculum_assignments')->where('student_id', $this->fixture['studentA']->id)->first();
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id, $this->fixture['studentIneligible']->id],
+            'offering_ids' => [1], 'place_missing' => 1,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('student_curriculum_assignments', [
+            'school_id' => $this->fixture['school'], 'student_id' => $this->fixture['studentIneligible']->id,
+            'curriculum_id' => 1, 'entry_curriculum_stage_id' => 1, 'entry_academic_year_id' => 1,
+        ]);
+        $this->assertSame(2, session('programme_registration_results')[0]['summary']['registered'], json_encode(session('programme_registration_results')));
+        $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id, 'course_offering_id' => 1]);
+        $this->assertEquals($before, DB::table('student_curriculum_assignments')->where('id', $before->id)->first());
+        $this->assertCount(1, session('programme_placement_results'));
+        $this->assertSame(2, session('programme_registration_results')[0]['summary']['registered']);
+    }
+
+    public function test_registration_cannot_set_placement_without_placement_permission(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage']);
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentIneligible']->id], 'offering_ids' => [1], 'place_missing' => 1,
+        ])->assertForbidden();
+        $this->assertDatabaseMissing('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id]);
+        $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id]);
+    }
+
+    public function test_placement_failure_does_not_block_other_students_or_create_registration(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage', 'academic.programme_cohort.membership']);
+        $manager->forceFill(['role_id' => 19])->save();
+        $this->partialMock(\App\Support\Curriculum\StudentCurriculumAssignmentService::class, function ($mock) {
+            $mock->shouldReceive('assignDirectPlacement')->once()->andThrow(new \DomainException('Placement needs review.'));
+        });
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id, $this->fixture['studentIneligible']->id], 'offering_ids' => [1], 'place_missing' => 1,
+        ])->assertRedirect();
+        $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentA']->id]);
+        $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id]);
+        $this->assertStringContainsString('Placement needs review.', session('programme_placement_results')[0]['message']);
+    }
+
+
+    public function test_combined_placement_and_registration_still_enforces_fees(): void
+    {
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage', 'academic.programme_cohort.membership']);
+        $manager->forceFill(['role_id' => 19])->save();
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentIneligible']->id], 'offering_ids' => [1], 'place_missing' => 1,
+        ])->assertRedirect();
+        $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id]);
+        $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id]);
+        $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
+        $this->assertStringContainsString('20%', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
+    }
+
+    public function test_eager_loaded_course_unit_has_a_name(): void
+    {
+        $offering = \App\Models\CourseOffering::where('school_id', $this->fixture['school'])->with('subject')->findOrFail(1);
+        $this->assertSame('Research Methods', $offering->subject?->name);
     }
 
     private function makeFixture(): array

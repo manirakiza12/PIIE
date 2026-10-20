@@ -192,7 +192,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $allocation = $this->createOffering($this->tenants[1], 'STANDALONE');
         $foreign = $this->createOffering($this->tenants[2], 'FOREIGN');
         $this->actingAs($this->staff(1, [], ['role_id' => 2]));
-        $this->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Register Students for Courses')->assertDontSee('FOREIGN');
+        $this->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Student Course Registration')->assertDontSee('FOREIGN');
         $this->get(route('admin.lecturer_assignments.index'))->assertOk()->assertSee('Manage Assignments')->assertDontSee('FOREIGN');
         $this->get(route('admin.course_registrations.index', ['allocation_id' => $allocation->id]))->assertOk()->assertSee('Student Registration');
         $this->get(route('admin.lecturer_assignments.index', ['allocation_id' => $allocation->id]))->assertOk();
@@ -341,7 +341,7 @@ $table->timestamps();
             ->assertDontSee('Open registered students')
             ->assertSee('A Programme Study Plan must be linked before this Course Allocation can be opened.')
             ->assertDontSee('View Teaching Team')
-            ->assertDontSee(route('admin.course_offerings.lecturers.index', $draft->id), false)
+            ->assertSee(route('admin.course_offerings.lecturers.index', $draft->id), false)
             ->assertDontSee(route('admin.course_offerings.eligible_students', $draft->id), false);
         $this->get(route('admin.course_offerings.show', $generatedDraft->id))->assertOk()
             ->assertSee('CORE-1-2026-S1')->assertSee('Allocation Reference:');
@@ -600,7 +600,7 @@ app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
             ->assertSee('TEACHING-TEAM-CONTEXT')
             ->assertSee('No teaching team members are assigned to this Course Allocation yet.')
             ->assertSee('Assign Lecturer')
-            ->assertSee('Lecturer Assignments');
+            ->assertSee('Course Allocation');
 
         $this->get(route('admin.course_offerings.lecturers.create', $offering->id))
             ->assertOk()
@@ -679,7 +679,7 @@ app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
 
         $empty = $this->get(route('admin.course_offerings.index'));
         $empty->assertOk()
-            ->assertSee('Allocate reusable Course Units and approved curricula to each Academic Year and Semester. Lecturer Assignments and Course Registrations are managed in their own modules.')
+            ->assertSee('Allocate reusable Course Units and approved curricula to each Academic Year and Semester. Manage the teaching team inside each allocation. Register students from Student Course Registration.')
             ->assertSee('Create Course Allocation')
             ->assertSee('All Programme Curriculum')
             ->assertSee('Applicable Programme Curriculum')
@@ -693,7 +693,7 @@ app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
 
         DB::table('schools')->where('id', $tenant['school'])->update(['school_type' => 'k12', 'academic_calendar_pattern' => 'term']);
         $k12Label = $this->get(route('admin.course_offerings.index', ['search' => 'no-such-course-unit']));
-        $k12Label->assertOk()->assertSee('Academic Year and Term. Lecturer Assignments and Course Registrations are managed in their own modules.')
+        $k12Label->assertOk()->assertSee('Academic Year and Term. Manage the teaching team inside each allocation. Register students from Student Course Registration.')
             ->assertSee('<label class="form-label" for="offering-period">Term</label>', false);
     }
 
@@ -888,7 +888,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         // Render the shared admin shell on a simple authorized page and assert the K12 sidebar does not expose Allocations.
         $k12manager = $this->staffForSchool($k12school, ['academic.course_offering.view','academic.course_offering.manage']);
         $this->actingAs($k12manager)
-            ->get(route('admin.course_offerings.index'))->assertOk()->assertDontSee('>Course Registrations</span>', false);
+            ->get(route('admin.course_offerings.index'))->assertOk()->assertDontSee('>Student Course Registration</span>', false);
         $this->get(route('admin.course_offerings.create'))->assertOk()
             ->assertSee('Academic Year and Term for this teaching period.')
             ->assertSee('<label class="form-label" for="period">Term</label>', false);
@@ -926,21 +926,22 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         foreach ($xpath->query('//div[contains(concat(" ",normalize-space(@class)," ")," sidebar ")]//a[@href]') as $link) {
             $destinations[] = $link->getAttribute('href');
         }
+        $this->assertSame(1, $xpath->query('//li[@class="academic-setup-menu"]/details[not(@open)]')->length);
         $previousPosition = -1;
         foreach ([
             route('admin.department.schools_faculties'), route('admin.department.departments'), route('admin.programmes.index'),
             route('admin.academic_structure.index'), route('admin.academic_structure.index', ['section'=>'semesters']),
             route('admin.settings.academic'), route('admin.curricula.index'), route('admin.programme_years.index'), route('admin.subject_list'),
-            route('admin.academic.placements.index'), route('admin.course_offerings.index'), route('admin.lecturer_assignments.index'), route('admin.course_registrations.index'), route('admin.routine'), route('admin.live_classes.index'),
-            route('admin.daily_attendance'), route('admin.question_bank.index'), route('admin.online_exams.index'),
-            route('admin.gradebook'),
         ] as $destination) {
             $positions = array_keys($destinations, $destination, true);
             $this->assertCount(1, $positions, 'Academic destination must appear once: '.$destination);
             $this->assertGreaterThan($previousPosition, $positions[0], 'Academic dependency order: '.$destination);
             $previousPosition = $positions[0];
         }
-        $page->assertSee('>Schools / Faculties</span>', false)
+        $this->assertNotContains(route('admin.academic.placements.index'), $destinations);
+        $this->assertNotContains(route('admin.lecturer_assignments.index'), $destinations);
+        $page->assertSee('Academic setup')->assertSee('>Student Course Registration</span>', false)
+            ->assertSee('>Schools / Faculties</span>', false)
             ->assertSee('>Departments</span>', false)
             ->assertDontSee('>Teaching Groups</span>', false)
             ->assertDontSee('>Programme Student Groups</span>', false)
@@ -948,7 +949,7 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             ->assertDontSee('>Classes</span>', false);
         $this->assertNotContains(route('admin.programme_cohorts.index'), $destinations);
         $this->assertNotContains(route('admin.class_list'), $destinations);
-        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Student Placement');
+        $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Student Course Registration');
         // Keep the direct destination when a legacy restriction prevents opening Programmes.
         $admin->forceFill(['menu_permission'=>json_encode(['admin.programme_cohorts.index'])])->save();
         $restricted=$this->actingAs($admin->fresh())->get(route('admin.course_offerings.index'))->assertOk();

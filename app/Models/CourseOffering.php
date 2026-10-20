@@ -68,7 +68,11 @@ class CourseOffering extends Model
 
     public function subject()
     {
-        return $this->belongsTo(Subject::class, 'subject_id')->where('school_id', $this->school_id);
+        $relation = $this->belongsTo(Subject::class, 'subject_id');
+
+        return $this->school_id !== null
+            ? $relation->where('school_id', $this->school_id)
+            : $relation;
     }
 
     /**
