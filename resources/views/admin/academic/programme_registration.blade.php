@@ -7,15 +7,16 @@
     $canPlace = $permissions->allows(auth()->user(), 'academic.programme_cohort.membership');
     $filters = ['programme_id' => $programme?->id, 'curriculum_id' => $curriculum?->id, 'stage_id' => $stage?->id, 'academic_year_id' => $year?->id, 'period_id' => $period?->id];
     if ($page > 1) $filters['page'] = $page;
+    if ($studentSearch !== '') $filters['student_search'] = $studentSearch;
 @endphp
-<div class="mainSection-title"><div><h4>Student Course Registration</h4><p class="text-muted mb-0">Choose the programme and teaching period, then select students and courses. Missing years of study can be saved when you register.</p></div></div>
+<div class="mainSection-title"><div><h4>Student Course Registration</h4><p class="text-muted mb-0">Choose the programme, select course units and students, then register. Missing years of study are handled here.</p></div></div>
 <section class="eSection-wrap">
     @if($errors->any())<div class="alert alert-danger" role="alert">@foreach($errors->all() as $error)<p class="mb-1">{{ $error }}</p>@endforeach</div>@endif
     @if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}</div>@endif
     @if(session('programme_registration_results'))
     <div class="alert alert-info" role="status"><strong>Results</strong>
         @foreach(session('programme_registration_results') as $result)
-        <p class="mb-1">{{ $result['course'] }}: {{ $result['summary']['registered'] }} registered, {{ $result['summary']['confirmed'] }} confirmed, {{ $result['summary']['already'] }} already done, {{ $result['summary']['skipped'] }} need attention.</p>
+        <p class="mb-1">{{ $result['course'] }}: {{ $result['summary']['registered'] }} registered, {{ $result['summary']['confirmed'] }} confirmed, {{ $result['summary']['already'] }} already registered, {{ $result['summary']['skipped'] }} need attention.</p>
         @if($result['summary']['details'])<ul>@foreach($result['summary']['details'] as $detail)<li>{{ $detail['student'] }}: {{ $detail['reason'] }}</li>@endforeach</ul>@endif
         @endforeach
     </div>
@@ -26,7 +27,8 @@
         @if($curricula->count() > 1)<div class="col-md-4"><label for="curriculum" class="form-label">Programme curriculum</label><select id="curriculum" name="curriculum_id" class="form-select" required><option value="">Choose approved version</option>@foreach($curricula as $item)<option value="{{ $item->id }}" @selected($curriculum?->id == $item->id)>Version {{ $item->version }}</option>@endforeach</select></div>@elseif($curriculum)<input type="hidden" name="curriculum_id" value="{{ $curriculum->id }}">@endif
         <div class="col-md-4"><label for="study-year" class="form-label">Year of study</label><select id="study-year" name="stage_id" class="form-select" required @disabled(!$curriculum)><option value="">Choose year of study</option>@foreach($stages as $item)<option value="{{ $item->id }}" @selected($stage?->id == $item->id)>{{ $item->label }}</option>@endforeach</select></div>
         <div class="col-md-4"><label for="period" class="form-label">Semester / term</label><select id="period" name="period_id" class="form-select" required><option value="">Choose semester / term</option>@foreach($periods as $item)<option value="{{ $item->id }}" @selected($period?->id == $item->id)>{{ $item->label }}</option>@endforeach</select></div>
-        <div class="col-md-4 d-flex align-items-end"><button class="btn btn-primary" formnovalidate>Show students and courses</button></div>
+        <div class="col-md-8"><label for="student-search" class="form-label">Find student by name or registration number</label><input id="student-search" type="search" name="student_search" value="{{ $studentSearch }}" maxlength="100" class="form-control" placeholder="All students in this programme"></div>
+        <div class="col-md-4 d-flex align-items-end gap-2"><button class="btn btn-primary" formnovalidate>Find students and course units</button>@if($studentSearch !== '')<a class="btn btn-outline-secondary" href="{{ route('admin.course_registrations.index', array_diff_key($filters, ['student_search' => true, 'page' => true])) }}">Clear search</a>@endif</div>
     </form>
     @if($programme && $curricula->isEmpty())<div class="alert alert-warning mt-3">This programme needs an approved curriculum with its years of study and course units before registration. @if($permissions->allows(auth()->user(), 'academic.curriculum.view'))<a href="{{ route('admin.curricula.index', ['programme_id' => $programme->id]) }}">Set up this programme curriculum</a>@else Ask the academic office to approve its curriculum.@endif</div>@endif
     @if(!$ready)@unless($programme && $curricula->isEmpty())<p class="text-muted mt-4">Choose the programme, year of study and semester / term above to continue.</p>@endunless @else
@@ -34,17 +36,17 @@
     @if(session('programme_placement_results'))<div class="alert alert-info" role="status">@foreach(session('programme_placement_results') as $result)<p class="mb-1">{{ $result['student'] }}: {{ $result['message'] }}</p>@endforeach</div>@endif
     <h5>{{ $programme->code }} · {{ $stage->label }} · {{ $year->label }} · {{ $period->label }}</h5>
     @if($offerings->isEmpty())
-        <div class="alert alert-warning">No courses have been allocated for this programme year and teaching period. @if($permissions->allows(auth()->user(), 'academic.course_offering.view'))<a href="{{ route('admin.course_offerings.index') }}">Review course allocations</a>@else Ask the academic office to allocate its courses.@endif</div>
+        <div class="alert alert-warning">No courses have been allocated for this programme year and teaching period. @if($permissions->allows(auth()->user(), 'academic.course_offering.view'))<a href="{{ route('admin.course_offerings.index', ['programme_id' => $programme->id, 'year_id' => $year->id, 'period_id' => $period->id]) }}">Review course allocations</a>@else Ask the academic office to allocate its courses.@endif</div>
     @endif
     <form id="register-students" method="POST" action="{{ route('admin.course_registrations.register') }}">@csrf
         @foreach($filters as $key => $value)<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endforeach
         @if($offerings->isNotEmpty())
-        <fieldset class="my-3"><legend class="fs-6">Courses to register</legend><div class="d-flex flex-wrap gap-3">
-        @foreach($offerings as $offering)<label class="border rounded p-2"><input type="checkbox" name="offering_ids[]" value="{{ $offering->id }}" @checked($offering->status === 'open')> {{ $subjects->get($offering->subject_id)?->name ?? $offering->reference }} <span class="text-muted">({{ \App\Support\CourseOffering\CourseOfferingService::statusLabel($offering->status) }})</span></label>@endforeach
+        <fieldset class="my-3"><legend class="fs-6">1. Choose course units</legend><div class="d-flex flex-wrap gap-3">
+        @foreach($offerings as $offering)<label class="border rounded p-2"><input type="checkbox" name="offering_ids[]" value="{{ $offering->id }}" @checked($offering->status === 'open')> {{ $subjects->get($offering->subject_id)?->code }} &mdash; {{ $subjects->get($offering->subject_id)?->name ?? $offering->reference }} <span class="text-muted">({{ \App\Support\CourseOffering\CourseOfferingService::statusLabel($offering->status) }})</span></label>@endforeach
         </div></fieldset>
         @endif
     </form>
-    <p class="text-muted">Select students below. Students with an existing placement keep their academic history.</p>
+    <h6>2. Select students</h6><p class="text-muted">Select all students on this page or choose individuals. Existing placements and registrations are preserved.</p>
     <div class="table-responsive"><table class="table align-middle"><caption class="visually-hidden">Programme students and their course registration status</caption><thead><tr><th><input type="checkbox" id="select-page" aria-label="Select all students on this page"></th><th>Student</th><th>Year of study</th><th>Courses and registration status</th></tr></thead><tbody>
     @forelse($students as $student)
         @php $placement = $placements->get($student->id, collect())->first(); @endphp
@@ -77,9 +79,13 @@
     </tbody></table></div>
     @if($students->isNotEmpty() && $offerings->isNotEmpty())
     @if($canPlace && $canManage)<div class="form-check my-3"><input form="register-students" class="form-check-input" type="checkbox" name="place_missing" value="1" id="place-missing" checked><label class="form-check-label" for="place-missing">Set missing years of study to {{ $stage->label }} for {{ $year->label }} when registering. Existing placements stay unchanged.</label></div>@endif
-    <div class="d-flex flex-wrap gap-2 my-3">@if($canManage)<button form="register-students" class="btn btn-primary">Register selected students</button>@endif
-    @if($canConfirm)<button form="register-students" formaction="{{ route('admin.course_registrations.confirm') }}" class="btn btn-outline-primary">Confirm selected registrations</button>@endif</div>
-    <p class="text-muted small">Applies to the selected courses and students on this page. Students who need attention are skipped with an explanation. Confirmation checks academic and fee requirements again.</p>
+    <div class="d-flex flex-wrap gap-2 my-3">
+    @if($canManage && $canConfirm)<button form="register-students" name="confirm_now" value="1" class="btn btn-primary">Register and confirm selected students</button>
+    @elseif($canManage)<button form="register-students" class="btn btn-primary">Register selected students</button>
+    @elseif($canConfirm)<button form="register-students" formaction="{{ route('admin.course_registrations.confirm') }}" class="btn btn-primary">Confirm selected registrations</button>@endif
+    </div>
+    <p class="text-muted small">Applies only to the selected students and course units. Academic and fee checks still apply. Any student who cannot proceed is listed with a reason.</p>
+    @if($canManage && $canConfirm)<details class="my-3"><summary>Other registration actions</summary><div class="d-flex flex-wrap gap-2 mt-2"><button form="register-students" class="btn btn-outline-secondary">Register without confirmation</button><button form="register-students" formaction="{{ route('admin.course_registrations.confirm') }}" class="btn btn-outline-secondary">Confirm existing registrations</button></div></details>@endif
     @endif
     @if($canPlace)<details class="my-3"><summary>Placement history and corrections</summary><p class="mt-2 mb-0"><a href="{{ route('admin.academic.placements.index') }}">Review student placements</a>. Use this only to review history or correct a placement.</p></details>@endif
     {{ $students->links() }}
@@ -96,9 +102,11 @@ document.addEventListener('DOMContentLoaded', function () {
             form.submit();
         });
     }
-    changeFilter('programme', ['curriculum_id', 'stage_id']);
+    changeFilter('programme', ['curriculum_id', 'stage_id', 'student_search']);
     changeFilter('curriculum', ['stage_id']);
     changeFilter('academic-year', ['period_id']);
+    changeFilter('study-year', []);
+    changeFilter('period', []);
     const selectPage = document.getElementById('select-page');
     if (selectPage) selectPage.addEventListener('change', function () {
         document.querySelectorAll('input[name="student_ids[]"]').forEach(box => { box.checked = selectPage.checked; });
