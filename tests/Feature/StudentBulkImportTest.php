@@ -39,6 +39,7 @@ class StudentBulkImportTest extends TestCase
         \Illuminate\Support\Facades\Mail::fake();
         $this->actingAs($this->admin)->post(route('admin.student.create'), [
             'name' => 'Partner Student', 'email' => 'partner@example.test',
+            'next_of_kin_name' => 'Mary Example',
             'registration_number' => 'PIIE/OLD/0042', 'password_option' => 'auto',
             'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
             'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0012/ABC',
@@ -46,17 +47,20 @@ class StudentBulkImportTest extends TestCase
         $student = User::where('email', 'partner@example.test')->firstOrFail();
         $this->assertSame('PIIE/OLD/0042', $student->code);
         $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id,
-            'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0012/ABC']);
+            'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0012/ABC',
+            'next_of_kin_name' => 'Mary Example']);
         $this->assertSame(0, DB::table('admissions')->count());
         $this->assertSame(0, DB::table('enrollment')->count());
         $this->actingAs($this->admin)->post(route('admin.student.update', $student->id), [
             'name' => $student->name, 'email' => $student->email,
             'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
             'class_id' => DB::table('classes')->where('school_id', $this->school)->value('id'),
+            'next_of_kin_name' => 'John Example',
             'affiliated_institution_name' => 'Updated University', 'affiliated_student_id' => '0005/EDIT',
         ])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id,
-            'affiliated_institution_name' => 'Updated University', 'affiliated_student_id' => '0005/EDIT']);
+            'affiliated_institution_name' => 'Updated University', 'affiliated_student_id' => '0005/EDIT',
+            'next_of_kin_name' => 'John Example']);
         $this->assertSame(['affiliated_institution_name' => null, 'affiliated_student_id' => null],
             \App\Models\StudentProfile::affiliationAttributes(['affiliated_institution_name' => '', 'affiliated_student_id' => '']));
     }
@@ -78,13 +82,45 @@ class StudentBulkImportTest extends TestCase
         (require base_path('database/migrations/2026_10_19_060000_add_affiliation_to_student_profiles.php'))->up();
         $path = tempnam(sys_get_temp_dir(), 'affiliation');
         $handle = fopen($path, 'w');
-        fputcsv($handle, ['name', 'email', 'registration_number', 'affiliated_institution_name', 'affiliated_student_id']);
-        fputcsv($handle, ['Partner Import', 'partner-import@example.test', 'PIIE/OLD/0044', 'Partner University', '0009/X']);
+        fputcsv($handle, ['name', 'email', 'registration_number', 'affiliated_institution_name', 'affiliated_student_id', 'next_of_kin_name']);
+        fputcsv($handle, ['Partner Import', 'partner-import@example.test', 'PIIE/OLD/0044', 'Partner University', '0009/X', 'Jane Import']);
         fclose($handle);
         $this->actingAs($this->admin)->post(route('admin.student.import.run'), ['file' => $this->file($path)])->assertOk();
         $student = User::where('email', 'partner-import@example.test')->firstOrFail();
         $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id,
-            'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0009/X']);
+            'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0009/X',
+            'next_of_kin_name' => 'Jane Import']);
+    }
+
+    /**
+     * `sections` has no school_id in the real schema - it belongs to a class -
+     * so the fixture mirrors that rather than inventing a column.
+     */
+
+    public function test_next_of_kin_name_is_limited_to_150_characters(): void
+    {
+        $this->actingAs($this->admin)->post(route('admin.student.create'), [
+            'name' => 'Invalid Kin Student', 'email' => 'invalid-kin@example.test',
+            'registration_number' => 'PIIE/OLD/0099',
+            'next_of_kin_name' => str_repeat('N', 151),
+        ])->assertSessionHasErrors('next_of_kin_name');
+        $this->assertFalse(User::where('email', 'invalid-kin@example.test')->exists());
+    }
+
+    public function test_next_of_kin_name_migration_preserves_existing_contact_details(): void
+    {
+        \Illuminate\Support\Facades\Schema::table('student_profiles', function ($table) {
+            $table->dropColumn('next_of_kin_name');
+        });
+        DB::table('student_profiles')->insert([
+            'user_id' => 99999, 'school_id' => $this->school,
+            'next_of_kin_contact' => '+256700000001', 'next_of_kin_address' => 'Kampala',
+        ]);
+        (require base_path('database/migrations/2026_10_20_120000_add_next_of_kin_name_to_student_profiles.php'))->up();
+        $this->assertDatabaseHas('student_profiles', [
+            'user_id' => 99999, 'next_of_kin_name' => null,
+            'next_of_kin_contact' => '+256700000001', 'next_of_kin_address' => 'Kampala',
+        ]);
     }
 
     /**

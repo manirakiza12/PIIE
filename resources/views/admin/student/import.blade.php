@@ -35,7 +35,7 @@
             <p class="mb-2">Required: <code>name</code>, <code>email</code>, <code>registration_number</code>.</p>
             <p class="mb-2">Optional: <code>class_name</code>, <code>section_name</code>, <code>programme_name</code>,
                 <code>department_name</code>, <code>year_of_study</code>, <code>nationality</code>,
-                <code>national_id_or_passport</code>, <code>next_of_kin_contact</code>,
+                <code>national_id_or_passport</code>, <code>next_of_kin_name</code>, <code>next_of_kin_contact</code>,
                 <code>next_of_kin_address</code>, <code>status</code>,
                 <code>affiliated_institution_name</code>, <code>affiliated_student_id</code>.</p>
             <p class="mb-0 text-muted">Classes, programmes and departments are matched by name exactly as

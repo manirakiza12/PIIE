@@ -68,6 +68,7 @@ final class StudentProvisioner
                     'year_of_study'           => $data['year_of_study'] ?? null,
                     'nationality'             => $data['nationality'] ?? null,
                     'national_id_or_passport' => $data['national_id_or_passport'] ?? null,
+                    'next_of_kin_name' => $data['next_of_kin_name'] ?? null,
                     'next_of_kin_address'     => $data['next_of_kin_address'] ?? null,
                     'next_of_kin_contact'     => $data['next_of_kin_contact'] ?? null,
                     'status'                  => $data['status'] ?? 'active',

@@ -300,6 +300,7 @@ trait AdmissionsTestHelper
             $table->unsignedTinyInteger('year_of_study')->nullable();
             $table->string('nationality', 80)->nullable();
             $table->string('national_id_or_passport', 50)->nullable();
+            $table->string('next_of_kin_name', 150)->nullable();
             $table->text('next_of_kin_address')->nullable();
             $table->string('next_of_kin_contact', 30)->nullable();
             $table->string('additional_image')->nullable();

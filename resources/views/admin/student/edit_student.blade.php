@@ -225,6 +225,11 @@
         </div>
 
         <div class="fpb-7">
+            <label for="next_of_kin_name" class="eForm-label">{{ get_phrase('Next of Kin Name') }}</label>
+            <input type="text" class="form-control eForm-control" id="next_of_kin_name" name="next_of_kin_name" maxlength="150" value="{{ old('next_of_kin_name', optional($studentProfile)->next_of_kin_name) }}">
+        </div>
+
+        <div class="fpb-7">
             <label for="next_of_kin_address" class="eForm-label">{{ get_phrase('Next of Kin Address') }}</label>
             <textarea class="form-control eForm-control" id="next_of_kin_address" name="next_of_kin_address" rows="3">{{ optional($studentProfile)->next_of_kin_address }}</textarea>
         </div>

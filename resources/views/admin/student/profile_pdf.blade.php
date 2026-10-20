@@ -33,6 +33,7 @@
         <tr><td class="label">{{ get_phrase('Student ID at Affiliated Institution') }}</td><td>{{ $profile->affiliated_student_id ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Nationality') }}</td><td>{{ $profile->nationality ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('National ID/Passport') }}</td><td>{{ $profile->national_id_or_passport ?? '-' }}</td></tr>
+        <tr><td class="label">{{ get_phrase('Next of Kin Name') }}</td><td>{{ $profile->next_of_kin_name ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Next of Kin Address') }}</td><td>{{ $profile->next_of_kin_address ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Next of Kin Contact') }}</td><td>{{ $profile->next_of_kin_contact ?? '-' }}</td></tr>
         <tr><td class="label">{{ get_phrase('Status') }}</td><td>{{ ucfirst($profile->status ?? 'active') }}</td></tr>

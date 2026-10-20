@@ -20,13 +20,13 @@ class StudentImportController extends Controller
     private const COLUMNS = [
         'name', 'email', 'registration_number', 'class', 'section', 'programme', 'department',
         'year_of_study', 'nationality', 'national_id_or_passport',
-        'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake', 'affiliated_institution_name', 'affiliated_student_id',
+        'next_of_kin_name', 'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake', 'affiliated_institution_name', 'affiliated_student_id',
     ];
 
     private const HEADER_ROW = [
         'name', 'email', 'registration_number', 'class_name', 'section_name', 'programme_name',
         'department_name', 'year_of_study', 'nationality',
-        'national_id_or_passport', 'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name', 'affiliated_institution_name', 'affiliated_student_id',
+        'national_id_or_passport', 'next_of_kin_name', 'next_of_kin_contact', 'next_of_kin_address', 'status', 'intake_name', 'affiliated_institution_name', 'affiliated_student_id',
     ];
 
     private function schoolId(): int
@@ -198,11 +198,13 @@ class StudentImportController extends Controller
 
             $validator = Validator::make([
                 'name'  => $r['name'] ?? '',
+                'next_of_kin_name' => $r['next_of_kin_name'] ?? null,
                 'email' => $r['email'] ?? '',
                 'registration_number' => trim((string) ($r['registration_number'] ?? '')),
                 'affiliated_institution_name' => trim((string) ($r['affiliated_institution_name'] ?? '')),
                 'affiliated_student_id' => trim((string) ($r['affiliated_student_id'] ?? '')),
             ], [
+                'next_of_kin_name' => 'nullable|string|max:150',
                 'name'  => 'required|max:255',
                 'email' => 'required|email|max:255',
                 'registration_number' => 'required|string|max:255',
@@ -286,6 +288,7 @@ class StudentImportController extends Controller
                                         ? (int) $r['year_of_study'] : null,
                 'nationality'      => ($r['nationality'] ?? '') !== '' ? $r['nationality'] : null,
                 'national_id_or_passport' => ($r['national_id_or_passport'] ?? '') !== '' ? $r['national_id_or_passport'] : null,
+                'next_of_kin_name' => ($r['next_of_kin_name'] ?? '') !== '' ? $r['next_of_kin_name'] : null,
                 'next_of_kin_contact' => ($r['next_of_kin_contact'] ?? '') !== '' ? $r['next_of_kin_contact'] : null,
                 'next_of_kin_address'  => ($r['next_of_kin_address'] ?? '') !== '' ? $r['next_of_kin_address'] : null,
                 'status'           => $status,
