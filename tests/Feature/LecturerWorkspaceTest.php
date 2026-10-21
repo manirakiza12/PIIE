@@ -412,6 +412,21 @@ class LecturerWorkspaceTest extends TestCase
         );
     }
 
+    public function test_teacher_dashboard_shows_each_student_and_parent_statistic_label_once(): void
+    {
+        $html = $this->actingAs($this->lecturerA)
+            ->get(route('teacher.dashboard'))
+            ->assertOk()
+            ->getContent();
+
+        // The old cards titled "Students" and "Parents" repeated the same
+        // concepts immediately below as "Total Student" and "Total Parent".
+        $this->assertSame(2, substr_count($html, 'class="total_info"'));
+        $this->assertStringContainsString('Total Student', $html);
+        $this->assertStringContainsString('Total Parent', $html);
+        $this->assertDoesNotMatchRegularExpression('/<h5 class="title">(?:Students|Parents)<\/h5>/', $html);
+    }
+
     /**
      * The staffing counts must not merely be hidden - they must not be fetched.
      *

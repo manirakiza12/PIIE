@@ -218,4 +218,22 @@ $table->timestamps();
         $response->assertSee('No Course Found');
         $response->assertSee('No Progress to show');
     }
+
+    public function test_dashboard_does_not_repeat_courses_or_fees_as_quick_launch_items(): void
+    {
+        $schoolId = $this->makeSchool();
+        $student = $this->makeStudent($schoolId, 'dashboard.shortcuts@example.com');
+
+        $html = $this->actingAs($student)->get(route('student.dashboard'))->assertOk()->getContent();
+
+        // Course registrations and the fee balance already have dedicated
+        // dashboard panels with View All links, so quick launch should not
+        // present a second copy of either destination.
+        $this->assertStringNotContainsString('title="My Courses"', $html);
+        $this->assertStringNotContainsString('title="Fee Manager"', $html);
+        // One sidebar link and one dashboard View All link remain for each
+        // destination; no extra shortcut or programme-card link is present.
+        $this->assertSame(2, substr_count($html, route('student.my_courses')));
+        $this->assertSame(2, substr_count($html, route('student.fee_manager.list')));
+    }
 }
