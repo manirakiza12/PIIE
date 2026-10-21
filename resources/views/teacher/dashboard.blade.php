@@ -92,11 +92,6 @@
                    <div class="col-md-6">
                      <div class="dashboard_ShortListItem">
                        <div
-                         class="dsHeader d-flex justify-content-between align-items-center"
-                       >
-                         <h5 class="title">{{ get_phrase('Students') }}</h5>
-                       </div>
-                       <div
                          class="dsBody d-flex justify-content-between align-items-center"
                        >
                          <div class="ds_item_details">
@@ -114,11 +109,6 @@
                    </div>
                    <div class="col-md-6">
                      <div class="dashboard_ShortListItem">
-                       <div
-                         class="dsHeader d-flex justify-content-between align-items-center"
-                       >
-                         <h5 class="title">{{ get_phrase('Parents') }}</h5>
-                       </div>
                        <div
                          class="dsBody d-flex justify-content-between align-items-center"
                        >
