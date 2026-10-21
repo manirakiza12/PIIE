@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\{StudentFeeManager, StudentOpeningPayment, TuitionPayment, User};
+use App\Models\{StudentFeeManager, StudentOpeningPayment, StudentProfile, TuitionPayment, User};
 use App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility;
 use App\Support\Payments\StudentOpeningPayments;
 use Illuminate\Database\Schema\Blueprint;
@@ -28,6 +28,7 @@ class StudentOpeningPaymentsTest extends TestCase
         $school = $this->makeSchool(['running_session' => 1]);
         $this->admin = $this->makeAdminUser($school);
         $this->student = User::create(['school_id' => $school, 'role_id' => 7, 'name' => 'Existing Student', 'email' => 'existing@example.test']);
+        StudentProfile::create(['school_id' => $school, 'user_id' => $this->student->id, 'was_existing_at_portal_creation' => true]);
         $this->fee = StudentFeeManager::create(['school_id' => $school, 'student_id' => $this->student->id,
             'title' => 'Current session fees', 'total_amount' => 1000, 'amount' => 1000, 'paid_amount' => 0,
             'class_id' => 0, 'session_id' => 1, 'payment_method' => '', 'status' => 'unpaid', 'timestamp' => time()]);
@@ -237,6 +238,25 @@ class StudentOpeningPaymentsTest extends TestCase
             'action' => 'record', 'amount' => '600.00', 'paid_on' => now()->toDateString(),
             'reference' => 'UNAUTHORIZED', 'reason' => 'Staff cannot approve payment without permission.'])->assertForbidden();
         $this->assertEquals(0, $this->fee->fresh()->paid_amount);
+        $this->assertSame(0, StudentOpeningPayment::count());
+    }
+
+    public function test_online_applicant_and_regular_student_invoice_cannot_use_opening_payment_feature(): void
+    {
+        $regularStudent = User::create(['school_id' => $this->fee->school_id, 'role_id' => 7, 'name' => 'Regular Student', 'email' => 'regular@example.test']);
+        StudentProfile::create(['school_id' => $this->fee->school_id, 'user_id' => $regularStudent->id]);
+        $regularFee = $this->fee->replicate();
+        $regularFee->forceFill(['student_id' => $regularStudent->id, 'paid_amount' => 0, 'opening_paid_amount' => 0])->save();
+        $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $regularFee->id))
+            ->assertOk()->assertDontSee('Record a verified prior payment');
+        try {
+            app(StudentOpeningPayments::class)->change($this->admin, $regularFee->id, [
+                'action' => 'record', 'amount' => '100.00', 'paid_on' => now()->toDateString(),
+                'reference' => 'REGULAR-ACCOUNT', 'reason' => 'Regular admissions students excluded.']);
+            $this->fail('Regular student account accepted');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(404, $e->getStatusCode());
+        }
         $this->assertSame(0, StudentOpeningPayment::count());
     }
 }

@@ -16,6 +16,8 @@ final class StudentOpeningPayments
             // Serialize receipt allocation within an institution, including different invoices.
             DB::table('schools')->where('id', $actor->school_id)->lockForUpdate()->firstOrFail();
             $fee = StudentFeeManager::whereKey($feeId)->where('school_id', $actor->school_id)->lockForUpdate()->firstOrFail();
+            abort_unless(\App\Models\StudentProfile::where('user_id', $fee->student_id)->where('school_id', $fee->school_id)
+                ->where('was_existing_at_portal_creation', true)->exists(), 404);
             $unresolved = TuitionPayment::where('school_id', $fee->school_id)->where('fee_id', $fee->id)
                 ->where(function ($q) { $q->where('status', 'pending')->orWhere(fn ($q) => $q->where('status', 'failed')->whereNotNull('gateway_txn_id')); })->exists();
             if ($unresolved || in_array($fee->status, ['pending', 'processing'], true)) {

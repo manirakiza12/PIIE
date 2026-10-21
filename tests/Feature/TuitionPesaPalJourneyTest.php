@@ -14,6 +14,7 @@ class TuitionPesaPalJourneyTest extends TestCase
 {
     use AdmissionsTestHelper;
     private const GUID = '7e6b62d9-883e-440f-a63e-e1105bbfadc3';
+    private const SECOND_GUID = '8e6b62d9-883e-440f-a63e-e1105bbfadc4';
     private int $school;
     private User $student;
     private string $reference = '';
@@ -21,6 +22,8 @@ class TuitionPesaPalJourneyTest extends TestCase
     private int $code = 0;
     private string $description = 'INVALID';
     private string $amount = '5000.00';
+    private string $channel = 'Card';
+    private string $trackingId = self::GUID;
     private bool $timeout = false;
 
     protected function setUp(): void
@@ -40,12 +43,12 @@ class TuitionPesaPalJourneyTest extends TestCase
             if (str_contains($request->url(), 'SubmitOrderRequest')) {
                 $this->orders++; $this->reference = $request['id'];
                 if ($this->timeout) { throw new \Illuminate\Http\Client\ConnectionException('timeout'); }
-                return Http::response(['order_tracking_id' => self::GUID, 'merchant_reference' => $this->reference,
-                    'redirect_url' => 'https://cybqa.pesapal.com/pay?OrderTrackingId=' . self::GUID, 'status' => '200', 'error' => null]);
+                return Http::response(['order_tracking_id' => $this->trackingId, 'merchant_reference' => $this->reference,
+                    'redirect_url' => 'https://cybqa.pesapal.com/pay?OrderTrackingId=' . $this->trackingId, 'status' => '200', 'error' => null]);
             }
             if (str_contains($request->url(), 'GetTransactionStatus')) { return Http::response(['merchant_reference' => $this->reference,
                 'amount' => $this->amount, 'currency' => 'UGX', 'status_code' => $this->code, 'payment_status_description' => $this->description,
-                'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]); }
+                'payment_method' => $this->channel, 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]); }
             throw new \RuntimeException('Unexpected request');
         });
     }
@@ -60,6 +63,7 @@ class TuitionPesaPalJourneyTest extends TestCase
     public function test_prior_payment_leaves_only_remaining_balance_for_online_payment(): void
     {
         (require database_path('migrations/2026_10_21_060000_create_student_opening_payments.php'))->up();
+        \App\Models\StudentProfile::create(['school_id' => $this->school, 'user_id' => $this->student->id, 'was_existing_at_portal_creation' => true]);
         $fee = $this->fee();
         app(\App\Support\Payments\StudentOpeningPayments::class)->change($this->makeAdminUser($this->school), $fee->id, [
             'action' => 'record', 'amount' => '3000.00', 'paid_on' => now()->subMonth()->toDateString(),
@@ -73,11 +77,31 @@ class TuitionPesaPalJourneyTest extends TestCase
         $this->assertEquals(3000, $fee->fresh()->opening_paid_amount);
         $this->assertEquals(2000, $fee->fresh()->collected_amount);
         $this->assertSame('paid', $fee->fresh()->status);
+        $this->assertSame('Card', $payment->fresh()->gateway_payload['payment_channel']);
         $this->code = 3; $this->description = 'REVERSED';
         TuitionPesaPalPayment::reconcile($payment);
         $this->assertEquals(3000, $fee->fresh()->paid_amount);
         $this->assertEquals(3000, $fee->fresh()->opening_paid_amount);
         $this->assertEquals(0, $fee->fresh()->collected_amount);
+    }
+
+    public function test_multiple_online_channels_each_keep_their_verified_amount_and_channel(): void
+    {
+        $fee = $this->fee(['paid_amount' => 200]);
+        $this->amount = '2400.00'; $this->channel = 'Mobile Money'; $this->code = 1; $this->description = 'COMPLETED';
+        $mobileMoney = TuitionPesaPalPayment::start($fee, null, 'custom', '2400.00');
+        TuitionPesaPalPayment::reconcile($mobileMoney);
+        $this->assertSame('Mobile Money', $mobileMoney->fresh()->gateway_payload['payment_channel']);
+        $this->assertEquals(2400, $fee->fresh()->total_amount - $fee->fresh()->paid_amount);
+
+        $this->amount = '2400.00'; $this->channel = 'Card';
+        $this->trackingId = self::SECOND_GUID;
+        $card = TuitionPesaPalPayment::start($fee, null, 'custom', '2400.00');
+        TuitionPesaPalPayment::reconcile($card);
+        $this->assertSame('Card', $card->fresh()->gateway_payload['payment_channel']);
+        $this->assertEquals(5000, $fee->fresh()->paid_amount);
+        $this->assertEquals(0, $fee->fresh()->total_amount - $fee->fresh()->paid_amount);
+        $this->assertCount(2, TuitionPayment::where('fee_id', $fee->id)->where('status', 'paid')->get());
     }
 
     public function test_checkout_resumes_same_order_and_only_verified_success_credits_once(): void

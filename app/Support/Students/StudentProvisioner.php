@@ -63,6 +63,8 @@ final class StudentProvisioner
                 ['user_id' => $student->id],
                 [
                     'school_id'               => $schoolId,
+                    // This provisioner is used only by the admin's existing-student add/import flows.
+                    'was_existing_at_portal_creation' => true,
                     'programme_id'            => $data['programme_id'] ?? null,
                     'intake_session_id'       => $data['intake_session_id'] ?? null,
                     'year_of_study'           => $data['year_of_study'] ?? null,

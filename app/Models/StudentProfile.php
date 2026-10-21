@@ -13,7 +13,7 @@ class StudentProfile extends Model
         'user_id', 'school_id', 'first_name', 'last_name', 'programme_id',
         'intake_session_id', 'year_of_study', 'nationality',
         'national_id_or_passport', 'next_of_kin_name', 'next_of_kin_address', 'next_of_kin_contact',
-        'additional_image', 'status', 'affiliated_institution_name', 'affiliated_student_id',
+        'additional_image', 'status', 'affiliated_institution_name', 'affiliated_student_id', 'was_existing_at_portal_creation',
     ];
 
     public static function affiliationAttributes(array $data): array

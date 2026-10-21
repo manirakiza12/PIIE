@@ -106,6 +106,9 @@ final class TuitionPesaPalPayment
             $classification = $status->classification();
             $payload = array_merge($locked->gateway_payload, ['classification' => $classification,
                 'provider_confirmation_code' => $status->confirmationCode, 'last_checked_at' => now()->toIso8601String()]);
+            if (filled($status->paymentMethod)) {
+                $payload['payment_channel'] = mb_substr(trim(strip_tags($status->paymentMethod)), 0, 100);
+            }
             $changes = ['gateway_txn_id' => $status->orderTrackingId, 'gateway_payload' => $payload];
             if ($classification === 'REVERSED') {
                 if ($locked->status === 'paid') {

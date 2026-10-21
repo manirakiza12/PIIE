@@ -32,10 +32,13 @@ final class TuitionPesaPalController extends Controller
         $fee = $this->fee($request, $id);
         $student = \App\Models\User::whereKey($fee->student_id)->where('school_id', $fee->school_id)->firstOrFail();
         $eligibility = app(\App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility::class)->summary($student);
+        $isAdminAddedExisting = \App\Models\StudentProfile::where('user_id', $student->id)->where('school_id', $fee->school_id)
+            ->where('was_existing_at_portal_creation', true)->exists();
         $canManageWaiver = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'academic.course_registration.fee_waiver');
         return response()->view('shared.tuition_payment', ['fee' => $fee, 'eligibility' => $eligibility, 'canManageWaiver' => $canManageWaiver,
-            'openingPayments' => \Illuminate\Support\Facades\Schema::hasTable('student_opening_payments') ? $fee->openingPayments()->latest('id')->get() : collect(),
-            'canManageOpeningPayments' => app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'),
+            'openingPayments' => $isAdminAddedExisting && \Illuminate\Support\Facades\Schema::hasTable('student_opening_payments') ? $fee->openingPayments()->latest('id')->get() : collect(),
+            'isAdminAddedExisting' => $isAdminAddedExisting,
+            'canManageOpeningPayments' => $isAdminAddedExisting && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'),
             'area' => $request->routeIs('parent.*') ? 'parent' : ($request->routeIs('student.*') ? 'student' : 'admin'),
             'payments' => TuitionPayment::where('fee_id', $fee->id)->where('school_id', $fee->school_id)->latest('id')->get()])
             ->header('Cache-Control', 'private, no-store');

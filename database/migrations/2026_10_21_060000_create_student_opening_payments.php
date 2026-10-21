@@ -8,6 +8,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('student_fee_managers', fn (Blueprint $table) => $table->decimal('opening_paid_amount', 18, 2)->default(0));
+        Schema::table('student_profiles', fn (Blueprint $table) => $table->boolean('was_existing_at_portal_creation')->default(false));
         Schema::create('student_opening_payments', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('school_id');
@@ -36,5 +37,6 @@ return new class extends Migration {
         }
         Schema::dropIfExists('student_opening_payments');
         Schema::table('student_fee_managers', fn (Blueprint $table) => $table->dropColumn('opening_paid_amount'));
+        Schema::table('student_profiles', fn (Blueprint $table) => $table->dropColumn('was_existing_at_portal_creation'));
     }
 };
