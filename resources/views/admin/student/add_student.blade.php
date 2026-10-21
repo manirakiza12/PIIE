@@ -75,6 +75,16 @@
             </div>
 
             <div class="fpb-7">
+                <label for="next_of_kin_relationship" class="eForm-label">{{ get_phrase('Next of Kin Relationship') }}</label>
+                <input type="text" class="form-control eForm-control" id="next_of_kin_relationship" name="next_of_kin_relationship" maxlength="100" value="{{ old('next_of_kin_relationship') }}">
+            </div>
+
+            <div class="fpb-7">
+                <label for="next_of_kin_email" class="eForm-label">{{ get_phrase('Next of Kin Email (Optional)') }}</label>
+                <input type="email" class="form-control eForm-control" id="next_of_kin_email" name="next_of_kin_email" maxlength="255" value="{{ old('next_of_kin_email') }}" autocomplete="email">
+            </div>
+
+            <div class="fpb-7">
                 <label for="next_of_kin_address" class="eForm-label">{{ get_phrase('Next of Kin Address') }}</label>
                 <textarea class="form-control eForm-control" id="next_of_kin_address" name="next_of_kin_address" rows="3"></textarea>
             </div>

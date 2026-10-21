@@ -193,6 +193,47 @@ class StudentBulkImportTest extends TestCase
         $this->actingAs($student)->get(route('student.dashboard'))->assertRedirect(route('student.password', 'edit'));
     }
 
+    public function test_single_add_saves_next_of_kin_relationship_and_optional_email(): void
+    {
+        $this->actingAs($this->admin)->post(route('admin.student.create'), [
+            'name' => 'Continuing Student', 'email' => 'nok-details@x.test',
+            'registration_number' => 'PIIE/2018/0008', 'password_option' => 'auto',
+            'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
+            'next_of_kin_name' => 'Jane Example', 'next_of_kin_relationship' => 'Mother',
+            'next_of_kin_email' => 'jane@example.test',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $student = User::where('email', 'nok-details@x.test')->firstOrFail();
+        $this->assertDatabaseHas('student_profiles', [
+            'user_id' => $student->id,
+            'next_of_kin_name' => 'Jane Example',
+            'next_of_kin_relationship' => 'Mother',
+            'next_of_kin_email' => 'jane@example.test',
+        ]);
+    }
+
+    public function test_next_of_kin_email_is_optional_but_must_be_valid_when_provided(): void
+    {
+        $base = [
+            'name' => 'No NOK Email Student', 'email' => 'nok-no-email@x.test',
+            'registration_number' => 'PIIE/2018/0009', 'password_option' => 'auto',
+            'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
+            'next_of_kin_name' => 'John Example', 'next_of_kin_relationship' => 'Guardian',
+        ];
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $base)
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $student = User::where('email', 'nok-no-email@x.test')->firstOrFail();
+        $this->assertDatabaseHas('student_profiles', [
+            'user_id' => $student->id, 'next_of_kin_email' => null,
+        ]);
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), array_merge($base, [
+            'email' => 'invalid-nok-email@x.test', 'registration_number' => 'PIIE/2018/0010',
+            'next_of_kin_email' => 'not-an-email',
+        ]))->assertSessionHasErrors('next_of_kin_email');
+        $this->assertFalse(User::where('email', 'invalid-nok-email@x.test')->exists());
+    }
+
     public function test_missing_and_duplicate_registration_numbers_are_rejected(): void
     {
         $this->actingAs($this->admin)->post(route('admin.student.create'), [
