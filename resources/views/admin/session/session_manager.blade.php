@@ -7,7 +7,7 @@
 use App\Models\Session;
 
 $current_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-$running_session = Session::find($current_session);
+$running_session = Session::where('school_id', auth()->user()->school_id)->find($current_session);
 
 ?>
 <div class="mainSection-title">
@@ -17,22 +17,36 @@ $running_session = Session::find($current_session);
               class="d-flex justify-content-between align-items-center flex-wrap gr-15"
             >
                 <div class="d-flex flex-column">
-                    <h4>{{ get_phrase('Session Manager') }}</h4>
+                    <h4>{{ get_phrase('Class-based Session Manager') }}</h4>
                     <ul class="d-flex align-items-center eBreadcrumb-2">
                         <li><a href="#">{{ get_phrase('Home') }}</a></li>
                         <li><a href="#">{{ get_phrase('Settings') }}</a></li>
-                        <li><a href="#">{{ get_phrase('Session Manager') }}</a></li>
+                        <li><a href="#">{{ get_phrase('Class-based Sessions') }}</a></li>
                     </ul>
                 </div>
                 <div class="export-btn-area">
                     @if(app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'academic.structure.manage'))
                         <a href="{{ route('admin.academic_structure.index') }}" class="export_btn me-2">{{ get_phrase('Academic Years & Periods') }}</a>
                     @endif
-                    <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.create.session') }}', '{{ get_phrase('Create Session') }}')"><i class="bi bi-plus"></i>{{ get_phrase('Add Session') }}</a>
+                    <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.create.session') }}', '{{ get_phrase('Create Class-based Session') }}')"><i class="bi bi-plus"></i>{{ get_phrase('Add Class-based Session') }}</a>
                 </div>
             </div>
         </div>
     </div>
+</div>
+
+@if($sessions->isEmpty())
+<div class="alert alert-warning mt-3" role="status">
+    {{ get_phrase('No class-based sessions are configured yet. Add one here only if your school uses the existing class-based timetable and records.') }}
+</div>
+@endif
+
+<div class="alert alert-info mt-3" role="note">
+    <strong>{{ get_phrase('What this setting controls') }}</strong>
+    {{ get_phrase('The active class-based session is used by existing class timetables and other class-based records. It is separate from the Academic Year and Term or Semester calendar used for course and programme planning. Activating a session here does not change that calendar selection; keep the dates aligned if your school uses both.') }}
+    @if(app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'academic.structure.manage'))
+        <a class="alert-link ms-1" href="{{ route('admin.academic_structure.index') }}">{{ get_phrase('Review Academic Years and Terms') }}</a>
+    @endif
 </div>
 
 <div class="row">
@@ -42,8 +56,8 @@ $running_session = Session::find($current_session);
 				<div class="row">
 					<div class="col-md-6 pb-3">
 						<div class="eAlert eBtn-blueish" role="alert">
-							{{ get_phrase('Active session ') }}
-                        	<span class="text-white eBtn-green p-1" id="active_session">{{ $running_session->session_title }}</span>
+							{{ get_phrase('Active class-based session') }}
+                            <span class="text-white eBtn-green p-1" id="active_session">{{ $running_session?->session_title ?? get_phrase('No active session selected') }}</span>
 						</div>
 						<div class="row">
 							<div class="col-9">

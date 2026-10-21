@@ -19,7 +19,7 @@ class CourseOfferingAdministrationTest extends TestCase
 
     private array $tenants;
 
-    public function test_programme_modules_render_independently_and_keep_guidance_without_quick_links(): void
+    public function test_programme_pages_keep_guidance_in_the_academic_workspace_instead_of_repeating_it(): void
     {
         $tenant = $this->tenants[1];
         $draft = $this->curriculumFor($tenant, 'draft', 'workspace-draft');
@@ -42,14 +42,14 @@ class CourseOfferingAdministrationTest extends TestCase
             'registration-eligible' => route('admin.course_registrations.index', ['allocation_id' => $allocation->id, 'view' => 'eligible']),
         ];
         foreach ($pages as $name => $url) {
-            $response = $this->get($url)->assertOk()->assertSee('Academic workflow guidance');
+            $response = $this->get($url)->assertOk()->assertDontSee('Academic workflow guidance');
             $dom = new \DOMDocument();
             $previous = libxml_use_internal_errors(true);
             $dom->loadHTML($response->getContent());
             libxml_clear_errors();
             libxml_use_internal_errors($previous);
             $xpath = new \DOMXPath($dom);
-            $this->assertSame(0, $xpath->query('//aside[@aria-label="Academic workflow guidance"]//a')->length);
+            $this->assertSame(0, $xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
             if ($name === 'curriculum-draft' || $name === 'curriculum-approved') {
                 foreach (['admin.course_offerings.create', 'admin.subject.setup', 'admin.programme_years.store'] as $route) {
                     $this->assertSame(0, $xpath->query('//*[@id="page-print-area"]//a[starts-with(@href,"'.route($route).'")]')->length);
@@ -926,6 +926,8 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         foreach ($xpath->query('//div[contains(concat(" ",normalize-space(@class)," ")," sidebar ")]//a[@href]') as $link) {
             $destinations[] = $link->getAttribute('href');
         }
+        $this->assertCount(1, array_keys($destinations, route('admin.academic.workspace'), true), 'Keep one Academic Dashboard entry in the sidebar; semester preparation is an action on that dashboard.');
+        $page->assertDontSee('>Prepare a New Semester</span>', false);
         $this->assertSame(1, $xpath->query('//li[@class="academic-setup-menu"]/details[not(@open)]')->length);
         $previousPosition = -1;
         foreach ([
@@ -954,6 +956,89 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $admin->forceFill(['menu_permission'=>json_encode(['admin.programme_cohorts.index'])])->save();
         $restricted=$this->actingAs($admin->fresh())->get(route('admin.course_offerings.index'))->assertOk();
         $this->assertStringContainsString('>Student Placement</span>', $restricted->getContent());
+    }
+
+    public function test_academic_dashboard_and_semester_checklist_use_the_selected_tenant_period(): void
+    {
+        $tenant = $this->tenants[1];
+        $this->createOffering($tenant, 'DASHBOARD-OWN');
+        $this->createOffering($this->tenants[2], 'DASHBOARD-FOREIGN');
+        Schema::table('sessions', fn (Blueprint $table) => $table->unsignedBigInteger('academic_year_id')->nullable());
+        $legacyYear = (int) DB::table('academic_years')->insertGetId([
+            'school_id' => $tenant['school'], 'label' => '2025', 'start_date' => '2025-01-01',
+            'end_date' => '2025-12-31', 'status' => 'completed', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $activeSession = (int) DB::table('sessions')->insertGetId([
+            'session_title' => '2025 legacy session', 'status' => 1, 'school_id' => $tenant['school'],
+            'academic_year_id' => $legacyYear, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('schools')->where('id', $tenant['school'])->update(['running_session' => $activeSession]);
+        DB::table('routines')->insert([
+            'class_id' => 1, 'section_id' => 1, 'subject_id' => $tenant['subject'],
+            'starting_hour' => 8, 'ending_hour' => 9, 'starting_minute' => 0, 'ending_minute' => 0,
+            'day' => 'monday', 'teacher_id' => 1, 'room_id' => 1, 'session_id' => $activeSession,
+            'school_id' => $tenant['school'], 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+
+        $this->get(route('admin.academic.workspace', ['year' => $tenant['year'], 'period' => $tenant['period']]))
+            ->assertOk()->assertSee('Academic Dashboard')->assertSee('Course allocations in this period')
+            ->assertSee('Allocations without a lecturer')->assertSee('data-academic-offering-count="1"', false)
+            ->assertSee('Timetable entries in the active academic session')->assertSee('2025 legacy session')
+            ->assertDontSee('DASHBOARD-FOREIGN');
+        $this->get(route('admin.academic.workspace', ['mode' => 'prepare', 'year' => $tenant['year'], 'period' => $tenant['period']]))
+            ->assertOk()->assertSee('Prepare a New Semester')->assertSee('Review course allocations and lecturers')
+            ->assertSee('Action required')->assertSee('1 timetable entries are saved for the active academic session')
+            ->assertSee('You can return here at any time');
+    }
+
+    public function test_academic_workspace_respects_existing_user_permission_restrictions(): void
+    {
+        $restricted = $this->staff(1, [], ['role_id' => 2, 'menu_permission' => json_encode(['admin.programme_cohorts.index'])]);
+        $this->actingAs($restricted)->get(route('admin.academic.workspace'))->assertForbidden();
+    }
+
+    public function test_semester_checklist_links_registration_to_allocations_when_the_period_has_none(): void
+    {
+        $tenant = $this->tenants[1];
+        // This fixture otherwise models the legacy session-based registration
+        // table. Add the existing offering link used by the current registration
+        // workflow so the checklist can evaluate this prerequisite faithfully.
+        Schema::table('course_registrations', fn (Blueprint $table) => $table->unsignedBigInteger('course_offering_id')->nullable());
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+
+        $allocationUrl = route('admin.course_offerings.index', [
+            'year_id' => $tenant['year'],
+            'period_id' => $tenant['period'],
+        ]);
+
+        $this->get(route('admin.academic.workspace', [
+            'mode' => 'prepare',
+            'year' => $tenant['year'],
+            'period' => $tenant['period'],
+        ]))
+            ->assertOk()
+            ->assertSee('Blocked by a prerequisite')
+            ->assertSee('Create or reuse course allocations for this period before reviewing student registrations.')
+            ->assertSee($allocationUrl);
+    }
+
+    public function test_term_based_school_sees_class_based_session_explanation_and_term_wording(): void
+    {
+        $tenant = $this->tenant(3, 'k12');
+        DB::table('schools')->where('id', $tenant['school'])->update(['academic_calendar_pattern' => 'term']);
+        DB::table('academic_periods')->where('id', $tenant['period'])->update(['type' => 'term']);
+        $this->actingAs($this->staffForSchool($tenant['school'], [], ['role_id' => 2]));
+
+        $this->get(route('admin.academic.workspace', [
+            'mode' => 'prepare', 'year' => $tenant['year'], 'period' => $tenant['period'],
+        ]))
+            ->assertOk()
+            ->assertSee('Prepare a New Term')
+            ->assertSee('Term preparation')
+            ->assertSee('Class-based sessions are separate from this academic calendar.')
+            ->assertSee(route('admin.settings.session_manager'), false)
+            ->assertSee('>Class-based Sessions</span>', false);
     }
 
     public function test_scheduling_a_saved_unit_prefills_its_name_and_keeps_dated_year_selection(): void
