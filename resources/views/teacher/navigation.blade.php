@@ -96,6 +96,7 @@
           </span>
         </div>
 		<ul class="nav-links">
+            @include('shared.staff_id_navigation')
       <li class="nav-links-li {{ request()->is('teacher/library*') ? 'showMenu' : '' }}"><div class="iocn-link"><a href="{{ route('teacher.library.dashboard') }}"><div class="sidebar_icon"><i class="bi bi-journals" aria-hidden="true"></i></div><span class="link_name">{{ get_phrase('Library') }}</span></a></div></li>
 			<!-- sidebar title -->
 			<li class="nav-links-li {{ request()->is('teacher/dashboard') ? 'showMenu':'' }}">

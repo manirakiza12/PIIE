@@ -28,7 +28,7 @@
         <div class="verify-header {{ $isActive ? 'is-active' : 'is-inactive' }}">
             <div class="verify-status">
                 @if($isActive)
-                    ✓ {{ get_phrase('VALID STUDENT ID') }}
+                    ✓ {{ get_phrase(($staffCard ?? false) ? 'VALID STAFF ID' : 'VALID STUDENT ID') }}
                 @else
                     ✕ {{ get_phrase('THIS ACCOUNT IS NOT ACTIVE') }}
                 @endif
@@ -42,7 +42,12 @@
             <div class="verify-code">{{ null_checker($studentDetails['code']) }}</div>
 
             <div class="verify-fields">
-                @if($programme)
+                @if($staffCard ?? false)
+                    <div class="verify-field-row"><span class="verify-field-label">{{ get_phrase('Position') }}</span>{{ $staffPosition }}</div>
+                    @if($staffDepartment)
+                        <div class="verify-field-row"><span class="verify-field-label">{{ get_phrase('Department') }}</span>{{ $staffDepartment }}</div>
+                    @endif
+                @elseif($programme)
                     <div class="verify-field-row"><span class="verify-field-label">{{ get_phrase('Programme') }}</span>{{ $programme->name }}</div>
                 @else
                     <div class="verify-field-row"><span class="verify-field-label">{{ get_phrase('Class') }}</span>{{ empty($studentDetails['class_name']) ? get_phrase('Not assigned') : $studentDetails['class_name'] }}</div>

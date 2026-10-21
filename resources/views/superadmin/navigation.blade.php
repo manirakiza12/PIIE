@@ -187,6 +187,7 @@
         </div>
 
         <ul class="nav-links">
+            @include('shared.staff_id_navigation')
 
             <!-- ============================================ -->
             <!-- MAIN SECTION - Dashboard                     -->

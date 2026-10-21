@@ -76,6 +76,7 @@
       </span>
     </div>
     	<ul class="nav-links">
+            @include('shared.staff_id_navigation')
 			<!-- sidebar title -->
       <li class="nav-links-li {{ request()->is('librarian/dashboard') ? 'showMenu':'' }}">
         <div class="iocn-link">

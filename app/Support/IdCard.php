@@ -18,6 +18,8 @@ use SimpleSoftwareIO\QrCode\Facades\QrCode;
  */
 class IdCard
 {
+    public const INSTITUTION_PHONE = '+256772973574';
+
     public static function cardNumber(User $student): string
     {
         return (string) $student->code;
