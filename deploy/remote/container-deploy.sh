@@ -2,6 +2,7 @@
 # Docker runtime counterpart to deploy-release.sh. No container/volume recreation.
 set -euo pipefail
 BASE=/home/piie/deployments/piie
+source "$(dirname "$0")/container-app.sh"
 RID=${1:?release id}; ART=${2:?archive}; SUM=${3:?checksum}; MODE=${4:-stage}
 fail() { echo "ERROR: $*" >&2; exit 1; }
 [[ "$RID" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{12}$ ]] || fail 'Invalid release id'
@@ -38,7 +39,7 @@ mkdir -p "$REL/bootstrap/cache"
 chown root:www-data "$REL/bootstrap/cache"; chmod 2775 "$REL/bootstrap/cache"
 if [ -e "$REL/public/storage" ]; then fail 'Unexpected packaged public/storage'; fi
 ln -s ../../../shared/storage/app/public "$REL/public/storage"
-artisan() { docker exec --user www-data -w "/srv/piie/releases/$RID" piie-app php artisan "$@"; }
+artisan() { app_run "/srv/piie/releases/$RID" php artisan "$@"; }
 artisan package:discover --no-interaction >/dev/null
 artisan --version
 if [ "${PIIE_CODE_ONLY:-0}" = 1 ]; then
@@ -91,13 +92,13 @@ cleanup() {
   local status=$?
   if [ "$status" -ne 0 ] && [ "$SWITCHED" = 1 ]; then
     ln -s "$PREV" "$BASE/current.rollback"; mv -Tf "$BASE/current.rollback" "$BASE/current"
-    docker exec piie-app apache2ctl -k graceful || true
+    app_apache_reload || true
     echo 'Code rolled back; forward database migrations retained.' >&2
   fi
-  if [ "$MAINTENANCE" = 1 ]; then docker exec --user www-data -w /srv/piie/current piie-app php artisan up || true; fi
+  if [ "$MAINTENANCE" = 1 ]; then app_run /srv/piie/current php artisan up || true; fi
 }
 trap cleanup EXIT
-docker exec --user www-data -w /srv/piie/current piie-app php artisan down --retry=30
+app_run /srv/piie/current php artisan down --retry=30
 MAINTENANCE=1
 # Copy runtime files under maintenance, then candidate baseline. Existing files win.
 if [ "$LIVE_UPLOADS" != "$SHARED" ]; then merge_uploads "$LIVE_UPLOADS"; fi
@@ -117,12 +118,12 @@ artisan route:clear
 [ "$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)" = "$ENV_SUM" ] || fail 'Environment changed'
 ln -s "releases/$RID" "$BASE/current.new"; mv -Tf "$BASE/current.new" "$BASE/current"
 SWITCHED=1
-docker exec piie-app apache2ctl -k graceful
+app_apache_reload
 artisan up; MAINTENANCE=0
 for url in /health / /login /careers /applicant/login /assets/css/typography.css /assets/css/workspace-ui.css; do
-  docker exec piie-app curl --fail --silent --show-error --retry 3 --retry-delay 2 -H 'Host: piie.ac.ug' "http://127.0.0.1$url" -o /dev/null || fail "HTTP smoke failed: $url"
+  app_run /srv/piie/current curl --fail --silent --show-error --retry 3 --retry-delay 2 -H 'Host: piie.ac.ug' "http://127.0.0.1$url" -o /dev/null || fail "HTTP smoke failed: $url"
 done
 # Host cron executes the scheduler in the same runtime as HTTP, without host PHP.
-printf '%s\n' '* * * * * root /usr/bin/docker exec --user www-data -w /srv/piie/current piie-app php artisan schedule:run >> /home/piie/deployments/piie/shared/storage/logs/scheduler.log 2>&1' > /etc/cron.d/piie-scheduler
+printf '%s\n' '* * * * * root /bin/bash /home/piie/deployments/piie/bin/container-app.sh /srv/piie/current php artisan schedule:run >> /home/piie/deployments/piie/shared/storage/logs/scheduler.log 2>&1' > /etc/cron.d/piie-scheduler
 chmod 644 /etc/cron.d/piie-scheduler
 echo "DEPLOYED $SHA; verified backup $BACK; previous $PREV retained"
