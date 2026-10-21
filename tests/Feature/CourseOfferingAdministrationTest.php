@@ -1001,6 +1001,10 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
     public function test_semester_checklist_links_registration_to_allocations_when_the_period_has_none(): void
     {
         $tenant = $this->tenants[1];
+        // This fixture otherwise models the legacy session-based registration
+        // table. Add the existing offering link used by the current registration
+        // workflow so the checklist can evaluate this prerequisite faithfully.
+        Schema::table('course_registrations', fn (Blueprint $table) => $table->unsignedBigInteger('course_offering_id')->nullable());
         $this->actingAs($this->staff(1, [], ['role_id' => 2]));
 
         $allocationUrl = route('admin.course_offerings.index', [
