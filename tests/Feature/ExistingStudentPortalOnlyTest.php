@@ -28,6 +28,7 @@ class ExistingStudentPortalOnlyTest extends TestCase
 
     public function test_existing_student_email_sets_password_then_goes_only_to_student_portal(): void
     {
+        (require database_path('migrations/2026_10_21_060000_create_student_opening_payments.php'))->up();
         Mail::fake();
         $this->enableSmtpSettings();
         $school = $this->makeSchool();
@@ -38,6 +39,7 @@ class ExistingStudentPortalOnlyTest extends TestCase
             'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
         ])->assertSessionHasNoErrors()->assertRedirect();
         $student = User::where('email', 'existing-only@example.test')->firstOrFail();
+        $this->assertTrue((bool) DB::table('student_profiles')->where('user_id', $student->id)->value('was_existing_at_portal_creation'));
         $mail = Mail::sent(StudentPortalActivationEmail::class)->first();
         $html = $mail->render();
         $this->assertStringContainsString('Set Password &amp; Open Student Portal', $html);

@@ -211,7 +211,7 @@ class AdminController extends Controller
             'totalSubjects'   => Subject::where('school_id', $schoolId)->count(),
             'attendanceToday' => DailyAttendances::where('school_id', $schoolId)->whereBetween('timestamp', [$todayStart, $todayEnd])->count(),
             'classesToday'    => Routine::where('school_id', $schoolId)->where('day', strtolower(date('l')))->count(),
-            'feeCollectedThisMonth' => (float) StudentFeeManager::where('school_id', $schoolId)->whereBetween('timestamp', [$monthStart, $monthEnd])->sum('paid_amount'),
+            'feeCollectedThisMonth' => (float) StudentFeeManager::where('school_id', $schoolId)->whereBetween('timestamp', [$monthStart, $monthEnd])->sum(DB::raw(StudentFeeManager::collectionAmountSql())),
             'outstandingFees' => max(0, (float) StudentFeeManager::where('school_id', $schoolId)->sum('total_amount') - (float) StudentFeeManager::where('school_id', $schoolId)->sum('paid_amount')),
             'pendingApprovals'    => Admission::where('school_id', $schoolId)->whereIn('status', ['submitted', 'under_review'])->count(),
             'totalBooks'          => Book::where('school_id', $schoolId)->count(),
@@ -4525,6 +4525,7 @@ class AdminController extends Controller
     {
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $id) {
             $existing = \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
+            abort_if($existing->hasOpeningPaymentHistory(), 422, 'An invoice with prior payment history cannot be edited or deleted. Use the prior payment controls for corrections.');
             abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be edited.');
             $request->merge(['paid_amount' => $existing->paid_amount, 'status' => $existing->status, 'payment_method' => $existing->payment_method]);
             $data = $request->all();
@@ -4575,6 +4576,7 @@ class AdminController extends Controller
     {
         return \Illuminate\Support\Facades\DB::transaction(function () use ($id) {
             $existing = \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
+            abort_if($existing->hasOpeningPaymentHistory(), 422, 'An invoice with prior payment history cannot be edited or deleted. Use the prior payment controls for corrections.');
             abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be deleted.');
             \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
             $invoice = StudentFeeManager::find($id);

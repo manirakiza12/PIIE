@@ -46,7 +46,7 @@ class AccountantController extends Controller
             ->get();
 
         $totalInvoiced = (float) $invoices->sum('total_amount');
-        $totalCollected = (float) $invoices->sum('paid_amount');
+        $totalCollected = (float) $invoices->sum('collected_amount');
         $totalOutstanding = (float) $invoices->sum(fn ($i) => max(0, (float) $i->total_amount - (float) $i->paid_amount));
         $collectionRate = $totalInvoiced > 0 ? round($totalCollected / $totalInvoiced * 100, 1) : 0;
 
@@ -64,7 +64,7 @@ class AccountantController extends Controller
             ->map(fn ($group, $classId) => [
                 'name' => Classes::find($classId)?->name ?? get_phrase('Unknown'),
                 'invoiced' => (float) $group->sum('total_amount'),
-                'collected' => (float) $group->sum('paid_amount'),
+                'collected' => (float) $group->sum('collected_amount'),
                 'outstanding' => (float) $group->sum(fn ($i) => max(0, (float) $i->total_amount - (float) $i->paid_amount)),
             ])
             ->sortByDesc('outstanding')
@@ -75,13 +75,14 @@ class AccountantController extends Controller
             ->map(fn ($group, $programmeId) => [
                 'name' => Programme::find($programmeId)?->name ?? get_phrase('Unknown'),
                 'invoiced' => (float) $group->sum('total_amount'),
-                'collected' => (float) $group->sum('paid_amount'),
+                'collected' => (float) $group->sum('collected_amount'),
                 'outstanding' => (float) $group->sum(fn ($i) => max(0, (float) $i->total_amount - (float) $i->paid_amount)),
             ])
             ->sortByDesc('outstanding')
             ->values();
 
-        $recentPayments = $invoices->where('paid_amount', '>', 0)
+        $openingPaymentsTotal = (float) $invoices->sum('opening_paid_amount');
+        $recentPayments = $invoices->filter(fn ($invoice) => $invoice->collected_amount > 0)
             ->sortByDesc('timestamp')
             ->take(8)
             ->map(function ($invoice) {
@@ -109,6 +110,7 @@ class AccountantController extends Controller
             ->values();
 
         return view('accountant.dashboard', compact(
+            'openingPaymentsTotal',
             'totalInvoiced',
             'totalCollected',
             'totalOutstanding',
@@ -446,6 +448,7 @@ class AccountantController extends Controller
     {
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $id) {
             $existing = \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
+            abort_if($existing->hasOpeningPaymentHistory(), 422, 'An invoice with prior payment history cannot be edited or deleted. Use the prior payment controls for corrections.');
             abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be edited.');
             $request->merge(['paid_amount' => $existing->paid_amount, 'status' => $existing->status, 'payment_method' => $existing->payment_method]);
             $data = $request->all();
@@ -496,6 +499,7 @@ class AccountantController extends Controller
     {
         return \Illuminate\Support\Facades\DB::transaction(function () use ($id) {
             $existing = \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
+            abort_if($existing->hasOpeningPaymentHistory(), 422, 'An invoice with prior payment history cannot be edited or deleted. Use the prior payment controls for corrections.');
             abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be deleted.');
             \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
             $invoice = StudentFeeManager::find($id);

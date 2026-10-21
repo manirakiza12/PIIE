@@ -23,10 +23,11 @@
     </div></div>
     <div class="col-md-4"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #198754">
         <div style="font-size:22px;font-weight:800;color:#198754">UGX {{ number_format($totals->collected ?? 0) }}</div>
-        <div style="font-size:11px;color:#6c757d">{{ get_phrase('Total Collected') }}</div>
+        <div style="font-size:11px;color:#6c757d">{{ get_phrase('New Collections') }}</div>
+        <div class="small text-muted">Prior payments: UGX {{ number_format(max(0, ($totals->paid ?? 0) - ($totals->collected ?? 0)), 2) }} (included in paid balances)</div>
     </div></div>
     <div class="col-md-4"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #dc3545">
-        <div style="font-size:22px;font-weight:800;color:#dc3545">UGX {{ number_format(max(0,($totals->invoiced ?? 0)-($totals->collected ?? 0))) }}</div>
+        <div style="font-size:22px;font-weight:800;color:#dc3545">UGX {{ number_format(max(0,($totals->invoiced ?? 0)-($totals->paid ?? 0))) }}</div>
         <div style="font-size:11px;color:#6c757d">{{ get_phrase('Outstanding') }}</div>
     </div></div>
 </div>

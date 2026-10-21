@@ -32,8 +32,13 @@ final class TuitionPesaPalController extends Controller
         $fee = $this->fee($request, $id);
         $student = \App\Models\User::whereKey($fee->student_id)->where('school_id', $fee->school_id)->firstOrFail();
         $eligibility = app(\App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility::class)->summary($student);
+        $isAdminAddedExisting = \App\Models\StudentProfile::where('user_id', $student->id)->where('school_id', $fee->school_id)
+            ->where('was_existing_at_portal_creation', true)->exists();
         $canManageWaiver = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'academic.course_registration.fee_waiver');
         return response()->view('shared.tuition_payment', ['fee' => $fee, 'eligibility' => $eligibility, 'canManageWaiver' => $canManageWaiver,
+            'openingPayments' => $isAdminAddedExisting && \Illuminate\Support\Facades\Schema::hasTable('student_opening_payments') ? $fee->openingPayments()->latest('id')->get() : collect(),
+            'isAdminAddedExisting' => $isAdminAddedExisting,
+            'canManageOpeningPayments' => $isAdminAddedExisting && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'),
             'area' => $request->routeIs('parent.*') ? 'parent' : ($request->routeIs('student.*') ? 'student' : 'admin'),
             'payments' => TuitionPayment::where('fee_id', $fee->id)->where('school_id', $fee->school_id)->latest('id')->get()])
             ->header('Cache-Control', 'private, no-store');
@@ -60,6 +65,21 @@ final class TuitionPesaPalController extends Controller
             $result = TuitionPesaPalPayment::reconcile($attempt, $data['order_tracking_id'] ?? null, $data['confirmation_code'] ?? null);
             return back()->with('success', 'Payment status: ' . $result);
         } catch (PesaPalException $exception) { return back()->with('error', 'Payment could not be verified. Do not pay again; contact finance.'); }
+    }
+
+    public function openingPayment(Request $request, int $id)
+    {
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'), 403);
+        $data = $request->validate([
+            'action' => 'required|in:record,reverse',
+            'amount' => ['required_if:action,record', 'nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
+            'paid_on' => 'required_if:action,record|nullable|date_format:Y-m-d|before_or_equal:today',
+            'reference' => 'required_if:action,record|nullable|string|max:150',
+            'reason' => 'required|string|min:10|max:500',
+            'opening_payment_id' => 'required_if:action,reverse|nullable|integer|min:1',
+        ]);
+        app(\App\Support\Payments\StudentOpeningPayments::class)->change($request->user(), $id, $data);
+        return back()->with('success', 'Prior payment updated. The student balance has been recalculated; this is not a new collection.');
     }
 
     public function waiver(Request $request, int $id)

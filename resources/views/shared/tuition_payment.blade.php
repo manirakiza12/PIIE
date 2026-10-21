@@ -30,6 +30,7 @@
 <label for="waiver_reason">Reason (required)</label><textarea id="waiver_reason" name="reason" class="form-control mb-2" required minlength="10" maxlength="500"></textarea>
 <button class="btn btn-warning">{{ $eligibility['waived'] ? 'Revoke waiver' : 'Grant waiver' }}</button></form></details>
 @endif
+@if($isAdminAddedExisting ?? false)@include('shared.opening_payments')@endif
 @if($area !== 'admin' && $fee->status !== 'paid')
 <p>Pay securely through PesaPal. Your invoice updates after PesaPal confirms payment. If a payment is pending, check its status before trying again.</p>
 <form method="post" action="{{ route($area . '.payment.pesapal.start', $fee->id) }}">@csrf
@@ -45,7 +46,7 @@
 @forelse($payments as $payment)
 <article class="card mb-3"><div class="card-body">
 <h3 class="h6">PRN: {{ $payment->reference }}</h3>
-<p>{{ $payment->currency }} {{ number_format($payment->amount, 2) }} · {{ $payment->status }} · {{ $payment->created_at }}</p>
+<p>{{ $payment->currency }} {{ number_format($payment->amount, 2) }} · {{ $payment->status }} · {{ $payment->gateway_payload['payment_channel'] ?? ($payment->status === 'paid' ? $payment->method : 'Payment channel pending confirmation') }} · {{ $payment->created_at }}</p>
 <p>Tracking ID: {{ $payment->gateway_txn_id ?: 'Awaiting provider response' }}<br>Confirmation: {{ $payment->gateway_payload['provider_confirmation_code'] ?? 'Awaiting confirmation' }}</p>
 <form method="post" action="{{ route($area . '.payment.pesapal.check', ['id' => $fee->id, 'payment' => $payment->id]) }}">@csrf
 @if($area === 'admin')<label class="form-label">PesaPal order tracking ID (for recovery)</label><input name="order_tracking_id" class="form-control mb-2" value="{{ $payment->gateway_txn_id }}">@endif
