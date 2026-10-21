@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 BASE=/home/piie/deployments/piie
+source "$(dirname "$0")/container-app.sh"
 [ "$(id -u)" = 0 ] || { echo 'Container deployment requires the verified VPS administrator.'; exit 1; }
 command -v docker >/dev/null
 [ "$(docker inspect -f '{{.State.Running}}' piie-app)" = true ]
@@ -13,10 +14,17 @@ echo "Active SHA: $(cat "$BASE/current/RELEASE_SHA")"
 [ -s "$BASE/shared/.env" ]
 [ -d "$BASE/shared/storage" ]
 [ "$(stat -c %a "$BASE/shared/.env")" = 640 ] || [ "$(stat -c %a "$BASE/shared/.env")" = 600 ]
-docker exec --user www-data piie-app test -r /srv/piie/shared/.env
-docker exec --user www-data piie-app test -w /srv/piie/shared/storage
-docker exec piie-app php -r 'exit(PHP_VERSION_ID >= 80300 && extension_loaded("pdo_mysql") ? 0 : 1);'
-docker exec piie-app grep -F 'DocumentRoot /srv/piie/current/public' /etc/apache2/sites-enabled/000-default.conf
+echo 'Checking application environment readability as www-data'
+app_run /srv/piie/current test -r /srv/piie/shared/.env
+echo 'Checking application storage writability as www-data'
+app_run /srv/piie/current test -w /srv/piie/shared/storage
+echo 'Checking application PHP and pdo_mysql'
+app_run /srv/piie/current php -r 'exit(PHP_VERSION_ID >= 80300 && extension_loaded("pdo_mysql") ? 0 : 1);'
+echo 'Checking live Apache document root and parent process'
+# Read the actual running container's config, including writable-layer changes.
+docker cp -L piie-app:/etc/apache2/sites-enabled/000-default.conf - | tar -xOf - |
+  grep -E '^[[:space:]]*DocumentRoot[[:space:]]+/srv/piie/current/public[[:space:]]*$' >/dev/null
+app_apache_master
 (
   db_env=$(mktemp)
   chmod 600 "$db_env"
