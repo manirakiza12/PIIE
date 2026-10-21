@@ -70,7 +70,7 @@
                         <tr><td class="label">{{ get_phrase('Section') }}</td><td>{{ null_checker($student_details['section_name']) }}</td></tr>
                     @endif
                     <tr><td class="label">{{ get_phrase('Blood') }}</td><td>{{ null_checker(strtoupper((string) $student_details['blood_group'])) }}</td></tr>
-                    <tr><td class="label">{{ get_phrase('Contact') }}</td><td>{{ null_checker($student_details['phone']) }}</td></tr>
+                    <tr><td class="label">{{ get_phrase('Contact') }}</td><td>{{ \App\Support\IdCard::INSTITUTION_PHONE }}</td></tr>
                 </table>
             </td>
         </tr></table>
@@ -91,7 +91,7 @@
         <div class="back-body">
             {{ str_replace(':school', optional($schoolData)->title ?: get_phrase('the school'), get_phrase('This card is the property of :school and must be carried at all times on campus. It is non-transferable. If found, please return it to the school administration office.')) }}
             <br><br>
-            <b>{{ get_phrase('Emergency') }}:</b> {{ null_checker($student_details['parent_name'] ?? '') }}{{ !empty($student_details['phone']) ? ' — ' . $student_details['phone'] : '' }}
+            <b>{{ get_phrase('Institution contact') }}:</b> {{ \App\Support\IdCard::INSTITUTION_PHONE }}
 
             <table class="signature-table">
                 <tr>
@@ -103,7 +103,7 @@
         </div>
         <div class="back-footer">
             {{ optional($schoolData)->address }}
-            @if(!empty($schoolData?->phone)) · {{ $schoolData->phone }} @endif
+            &middot; {{ \App\Support\IdCard::INSTITUTION_PHONE }}
             @if(!empty($schoolData?->email)) · {{ $schoolData->email }} @endif
         </div>
     </div>

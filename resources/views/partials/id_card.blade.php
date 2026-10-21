@@ -11,6 +11,7 @@
     (App\Models\Programme|null), $cardNumber (string), $validFor
     (string|null), $qrDataUri (string).
 --}}
+@php($staffCard = $staffCard ?? false)
 <style>
     .idc-wrap { display: table; margin: 0 auto; }
     .idc-card {
@@ -83,7 +84,9 @@
             <table class="idc-header-table"><tr>
                 <td style="width: 34px;">
                     <div class="idc-logo">
-                        @if(!empty($school?->school_logo))
+                        @if(!empty($cardLogoSrc))
+                            <img src="{{ $cardLogoSrc }}" alt="">
+                        @elseif(!empty($school?->school_logo))
                             <img src="{{ asset('assets/uploads/school_logo/' . $school->school_logo) }}" alt="">
                         @else
                             <img src="{{ asset('assets/images/id_logo.png') }}" alt="">
@@ -91,27 +94,34 @@
                     </div>
                 </td>
                 <td class="idc-school-name">{{ $school->title ?? get_phrase('School') }}</td>
-                <td class="idc-card-type">{{ get_phrase('STUDENT ID') }}</td>
+                <td class="idc-card-type">{{ get_phrase($staffCard ? 'STAFF ID' : 'STUDENT ID') }}</td>
             </tr></table>
         </div>
 
         <table class="idc-body-table"><tr>
             <td class="idc-photo-cell">
-                <img class="idc-photo" src="{{ $studentDetails['photo'] }}" alt="">
+                @if(!empty($studentDetails['photo']))<img class="idc-photo" src="{{ $studentDetails['photo'] }}" alt="">@endif
             </td>
             <td class="idc-details-cell">
                 <div class="idc-name">{{ $studentDetails['name'] }}</div>
                 <div class="idc-code">{{ null_checker($studentDetails['code']) }}</div>
 
                 <table class="idc-fields">
-                    @if($programme)
+                    @if($staffCard)
+                        <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Position') }}</span><span class="idc-field-value">{{ $staffPosition }}</span></td></tr>
+                        @if($staffDepartment)
+                            <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Department') }}</span><span class="idc-field-value">{{ $staffDepartment }}</span></td></tr>
+                        @endif
+                    @elseif($programme)
                         <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Programme') }}</span><span class="idc-field-value">{{ $programme->name }}</span></td></tr>
                     @else
                         <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Class') }}</span><span class="idc-field-value">{{ empty($studentDetails['class_name']) ? get_phrase('Not assigned') : $studentDetails['class_name'] }}</span></td></tr>
                         <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Section') }}</span><span class="idc-field-value">{{ empty($studentDetails['section_name']) ? get_phrase('Not assigned') : $studentDetails['section_name'] }}</span></td></tr>
                     @endif
-                    <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Blood') }}</span><span class="idc-field-value">{{ null_checker(strtoupper((string) $studentDetails['blood_group'])) }}</span></td></tr>
-                    <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Contact') }}</span><span class="idc-field-value">{{ null_checker($studentDetails['phone']) }}</span></td></tr>
+                    @unless($staffCard)
+                        <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Blood') }}</span><span class="idc-field-value">{{ null_checker(strtoupper((string) $studentDetails['blood_group'])) }}</span></td></tr>
+                    @endunless
+                    <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Contact') }}</span><span class="idc-field-value">{{ \App\Support\IdCard::INSTITUTION_PHONE }}</span></td></tr>
                 </table>
             </td>
         </tr></table>
@@ -137,18 +147,18 @@
                 {{ str_replace(':school', $school->title ?? get_phrase('the school'), get_phrase('This card is the property of :school and must be carried at all times on campus. It is non-transferable. If found, please return it to the school administration office.')) }}
             </p>
             <table class="idc-fields">
-                <tr class="idc-field-row"><td><span class="idc-field-label" style="width: 76px;">{{ get_phrase('Emergency') }}</span><span class="idc-field-value">{{ null_checker($studentDetails['parent_name'] ?? '') }}{{ !empty($studentDetails['phone']) ? ' — ' . $studentDetails['phone'] : '' }}</span></td></tr>
+                <tr class="idc-field-row"><td><span class="idc-field-label" style="width: 76px;">{{ get_phrase('Institution') }}</span><span class="idc-field-value">{{ \App\Support\IdCard::INSTITUTION_PHONE }}</span></td></tr>
             </table>
 
             <table class="idc-signature-table"><tr>
-                <td class="idc-signature-cell">{{ get_phrase('Student Signature') }}</td>
+                <td class="idc-signature-cell">{{ get_phrase($staffCard ? 'Staff Signature' : 'Student Signature') }}</td>
                 <td style="width: 8%;"></td>
                 <td class="idc-signature-cell">{{ get_phrase('Authorized Signature') }}</td>
             </tr></table>
         </div>
         <div class="idc-back-footer">
             {{ $school->address ?? '' }}
-            @if(!empty($school?->phone)) · {{ $school->phone }} @endif
+            &middot; {{ \App\Support\IdCard::INSTITUTION_PHONE }}
             @if(!empty($school?->email)) · {{ $school->email }} @endif
         </div>
     </div>
