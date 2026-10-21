@@ -6,7 +6,9 @@ use App\Models\Admission;
 use App\Models\AdmissionDocument;
 use App\Models\ApplicationPayment;
 use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Support\AdmissionsTestHelper;
 use Tests\TestCase;
 
@@ -25,6 +27,10 @@ class AdminDashboardScopeTest extends TestCase
     {
         parent::setUp();
         $this->bootAdmissionsTestSchema();
+        Schema::create('payment_history', function (Blueprint $table): void {
+            $table->id();
+            $table->string('status')->nullable();
+        });
     }
 
     public function test_admin_dashboard_renders_and_never_mentions_platform_widgets(): void
