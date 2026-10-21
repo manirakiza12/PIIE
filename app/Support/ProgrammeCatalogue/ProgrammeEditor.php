@@ -33,9 +33,6 @@ class ProgrammeEditor
         if (($uploads || $removals) && ! $this->gallery->ready()) {
             throw ValidationException::withMessages(['gallery_images' => 'The programme gallery is not available yet.']);
         }
-        if ($request->boolean('is_published') && $existing && ! $existing->is_active) {
-            throw ValidationException::withMessages(['is_published' => 'Activate this programme before publishing it.']);
-        }
         // Decode every image before changing any record or replacing existing files.
         $prepared = [];
         foreach (array_filter(['cover_image' => $cover]) + collect($uploads)->mapWithKeys(fn ($file, $i) => ['gallery_images.'.$i => $file])->all() as $key => $file) {
@@ -81,7 +78,11 @@ class ProgrammeEditor
                     if ($request->boolean('is_published')) $this->publisher->publish($programme, $request->input('section_key'));
                     elseif ($programme->is_published) $this->publisher->unpublish($programme);
                 } elseif ($programme->is_published) {
-                    $this->publisher->refreshProjection($programme);
+                    $item = $this->publisher->refreshProjection($programme);
+                    if (! $programme->is_active && $item) {
+                        $item->status = 0;
+                        $item->save();
+                    }
                 }
                 return $programme->refresh();
             });

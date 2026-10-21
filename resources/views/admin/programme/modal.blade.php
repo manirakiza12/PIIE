@@ -8,6 +8,10 @@
     $piieCurrencies = $piieHasCurrencyTable
         ? \App\Models\Currency::orderBy('code')->pluck('code', 'code')->filter()
         : collect();
+    $selectedDepartment = old('department_id', $programme?->department_id);
+    $selectedContext = $departmentContext[$selectedDepartment] ?? [
+        'faculty' => get_phrase('Select a department'), 'hod' => get_phrase('Select a department'),
+    ];
 @endphp
 
 <div class="eoff-form">
@@ -57,9 +61,9 @@
                 <div class="col-12 fpb-7">
                     <label class="eForm-label" for="piie-dept">{{ get_phrase('Department') }}</label>
                     <select id="piie-dept" class="form-control eForm-control" name="department_id">
-                        <option value="">{{ get_phrase('— None —') }}</option>
+                        <option value="" data-faculty="{{ get_phrase('Select a department') }}" data-hod="{{ get_phrase('Select a department') }}">{{ get_phrase('— None —') }}</option>
                         @foreach($departments as $dept)
-                            <option value="{{ $dept->id }}" {{ (string) old('department_id', $programme->department_id ?? '') === (string) $dept->id ? 'selected' : '' }}>{{ $dept->name }}</option>
+                            <option value="{{ $dept->id }}" data-faculty="{{ $departmentContext[$dept->id]['faculty'] }}" data-hod="{{ $departmentContext[$dept->id]['hod'] }}" {{ (string) $selectedDepartment === (string) $dept->id ? 'selected' : '' }}>{{ $dept->name }}</option>
                         @endforeach
                     </select>
                     @if($programme?->legacy_department_id && $programme->legacyDepartment)
@@ -72,6 +76,21 @@
                         </small>
                     @endif
                 </div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-12 col-sm-6 fpb-7"><label class="eForm-label" for="piie-faculty">{{ get_phrase('Faculty / School') }}</label><input id="piie-faculty" class="form-control eForm-control" type="text" value="{{ $selectedContext['faculty'] }}" readonly></div>
+                <div class="col-12 col-sm-6 fpb-7"><label class="eForm-label" for="piie-hod">{{ get_phrase('Head of Department (HOD)') }}</label><input id="piie-hod" class="form-control eForm-control" type="text" value="{{ $selectedContext['hod'] }}" readonly></div>
+                <div class="col-12"><small class="text-muted">{{ get_phrase('Faculty / School and HOD are supplied by the selected department.') }}</small></div>
+            </div>
+            <div class="fpb-7 mt-2">
+                <label class="eForm-label" for="piie-active">{{ get_phrase('Active') }}</label>
+                <select id="piie-active" name="is_active" class="form-control eForm-control" required>
+                    <option value="1" @selected((string) old('is_active', $programme?->is_active ?? true) === '1')>{{ get_phrase('Yes') }}</option>
+                    <option value="0" @selected(in_array(old('is_active', $programme?->is_active ?? true), [0, '0', false], true))>{{ get_phrase('No') }}</option>
+                </select>
+                @error('is_active')<div class="text-danger" role="alert">{{ $message }}</div>@enderror
+                <small class="text-muted">{{ get_phrase('Inactive programmes are unavailable to new applicants and cannot be published.') }}</small>
             </div>
 
             <fieldset class="mt-3 pt-3" style="border:1px solid var(--piie-line,#e6e9ef);border-radius:8px;padding:1rem;">
@@ -252,3 +271,4 @@
         });
     })();
 </script>
+<script src="{{ asset('assets/js/programme-form-context.js') }}?v=20261021-1"></script>
