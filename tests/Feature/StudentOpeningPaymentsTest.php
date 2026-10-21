@@ -24,6 +24,7 @@ class StudentOpeningPaymentsTest extends TestCase
         $this->bootAdmissionsTestSchema();
         (require database_path('migrations/2026_10_19_160000_preserve_school_fee_payment_precision.php'))->up();
         (require database_path('migrations/2026_10_21_060000_create_student_opening_payments.php'))->up();
+        (require database_path('migrations/2026_10_22_000000_add_method_to_student_opening_payments.php'))->up();
         Schema::table('schools', fn (Blueprint $table) => $table->string('school_currency')->default('UGX'));
         $school = $this->makeSchool(['running_session' => 1]);
         $this->admin = $this->makeAdminUser($school);
@@ -37,7 +38,7 @@ class StudentOpeningPaymentsTest extends TestCase
     private function record(array $extra = []): void
     {
         app(StudentOpeningPayments::class)->change($this->admin, $this->fee->id, array_merge([
-            'action' => 'record', 'amount' => '600.00', 'paid_on' => now()->subMonth()->toDateString(),
+            'action' => 'record', 'amount' => '600.00', 'paid_on' => now()->subMonth()->toDateString(), 'method' => 'bank_transfer',
             'reference' => 'OLD-RECEIPT-001', 'reason' => 'Verified against the original bank receipt.'], $extra));
     }
 
@@ -101,7 +102,7 @@ class StudentOpeningPaymentsTest extends TestCase
         $other = $this->fee->replicate(); $other->forceFill(['paid_amount' => 0, 'opening_paid_amount' => 0])->save();
         try {
             app(StudentOpeningPayments::class)->change($this->admin, $other->id, [
-                'action' => 'record', 'amount' => '100.00', 'paid_on' => now()->toDateString(),
+                'action' => 'record', 'amount' => '100.00', 'paid_on' => now()->toDateString(), 'method' => 'cash',
                 'reference' => ' old-receipt-001 ', 'reason' => 'Accidental duplicate receipt entry.']);
             $this->fail('Duplicate accepted');
         } catch (ValidationException $e) {}
@@ -143,7 +144,7 @@ class StudentOpeningPaymentsTest extends TestCase
     {
         $url = route('admin.tuition_payments.opening_payment', $this->fee->id);
         $this->actingAs($this->admin)->post($url, ['action' => 'record', 'amount' => '600.00',
-            'paid_on' => now()->subDay()->toDateString(), 'reference' => 'BANK-OLD-1', 'reason' => 'Original receipt verified by finance.'])
+            'paid_on' => now()->subDay()->toDateString(), 'method' => 'bank_transfer', 'reference' => 'BANK-OLD-1', 'reason' => 'Original receipt verified by finance.'])
             ->assertRedirect()->assertSessionHasNoErrors();
         $this->get(route('admin.tuition_payments.show', $this->fee->id))->assertOk()->assertSee('BANK-OLD-1')->assertSee('Reverse incorrect prior payment');
         $this->post($url, ['action' => 'reverse', 'opening_payment_id' => StudentOpeningPayment::first()->id,
@@ -154,15 +155,15 @@ class StudentOpeningPaymentsTest extends TestCase
     public function test_invalid_precision_future_dates_and_missing_receipts_are_rejected(): void
     {
         $this->actingAs($this->admin)->post(route('admin.tuition_payments.opening_payment', $this->fee->id), [
-            'action' => 'record', 'amount' => '1.001', 'paid_on' => now()->addDay()->toDateString(), 'reason' => 'short'])
-            ->assertSessionHasErrors(['amount', 'paid_on', 'reference', 'reason']);
+            'action' => 'record', 'amount' => '1.001', 'paid_on' => now()->addDay()->toDateString(), 'method' => 'cash', 'reason' => 'short'])
+            ->assertSessionHasErrors(['amount', 'paid_on', 'method', 'reference', 'reason']);
         $this->assertSame(0, StudentOpeningPayment::count());
     }
 
     public function test_student_and_other_institution_cannot_record_payments(): void
     {
         $data = ['action' => 'record', 'amount' => '600.00', 'paid_on' => now()->toDateString(),
-            'reference' => 'TENANT-1', 'reason' => 'Original payment verified by finance.'];
+            'reference' => 'TENANT-1', 'method' => 'cash', 'reason' => 'Original payment verified by finance.'];
         $url = route('admin.tuition_payments.opening_payment', $this->fee->id);
         $this->actingAs($this->student)->post($url, $data)->assertRedirect();
         $this->actingAs($this->makeAdminUser($this->makeSchool()))->post($url, $data)->assertNotFound();
@@ -235,7 +236,7 @@ class StudentOpeningPaymentsTest extends TestCase
         $lecturer = User::create(['school_id' => $this->fee->school_id, 'role_id' => 3, 'name' => 'Lecturer',
             'email' => 'lecturer@example.test', 'account_status' => 'active']);
         $this->actingAs($lecturer)->post(route('admin.tuition_payments.opening_payment', $this->fee->id), [
-            'action' => 'record', 'amount' => '600.00', 'paid_on' => now()->toDateString(),
+            'action' => 'record', 'amount' => '600.00', 'paid_on' => now()->toDateString(), 'method' => 'cash',
             'reference' => 'UNAUTHORIZED', 'reason' => 'Staff cannot approve payment without permission.'])->assertForbidden();
         $this->assertEquals(0, $this->fee->fresh()->paid_amount);
         $this->assertSame(0, StudentOpeningPayment::count());
@@ -251,7 +252,7 @@ class StudentOpeningPaymentsTest extends TestCase
             ->assertOk()->assertDontSee('Record a verified prior payment');
         try {
             app(StudentOpeningPayments::class)->change($this->admin, $regularFee->id, [
-                'action' => 'record', 'amount' => '100.00', 'paid_on' => now()->toDateString(),
+                'action' => 'record', 'amount' => '100.00', 'paid_on' => now()->toDateString(), 'method' => 'cash',
                 'reference' => 'REGULAR-ACCOUNT', 'reason' => 'Regular admissions students excluded.']);
             $this->fail('Regular student account accepted');
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {

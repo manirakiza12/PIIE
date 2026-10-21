@@ -11,6 +11,7 @@
         {{ $billing['email'] }}<br>{{ $billing['phone'] ?: 'Phone not provided' }}</p>
     @include('shared.invoice_opening_payments', ['invoice_details' => $invoice])
     @php($currency = $school->school_currency ?: get_active_currency())
+    @include('shared.invoice_award', ['invoice_details' => $invoice])
     <table style="width:100%;border-collapse:collapse" cellpadding="10">
         <tr><td>Invoice</td><td>{{ $invoice['title'] }}</td></tr>
         <tr><td>Issued</td><td>{{ \Carbon\Carbon::parse($invoice['created_at'])->format('d F Y') }}</td></tr>

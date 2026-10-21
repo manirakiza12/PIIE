@@ -2834,6 +2834,7 @@ Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middle
     Route::get('admin/fee-payments/{id}', 'index')->name('admin.tuition_payments.show');
     Route::post('admin/fee-payments/{id}/study-waiver', 'waiver')->name('admin.tuition_payments.waiver');
     Route::post('admin/fee-payments/{id}/prior-payment', 'openingPayment')->name('admin.tuition_payments.opening_payment');
+    Route::post('admin/fee-payments/{id}/award', 'award')->name('admin.tuition_payments.award');
     Route::post('admin/fee-payments/{id}/{payment}/check', 'check')->middleware('throttle:10,1')->name('admin.payment.pesapal.check');
 });
 

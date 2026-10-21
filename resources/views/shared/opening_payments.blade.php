@@ -5,6 +5,7 @@ New payments received: {{ number_format($fee->collected_amount, 2) }}<br>
 Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount), 2) }}</p>
 @forelse($openingPayments as $entry)
 <article class="border-top pt-2 mt-2">
+<p>Method: {{ str_replace('_', ' ', ucfirst($entry->method ?? 'not recorded')) }}</p>
 <p>Receipt: {{ $entry->reference }} · {{ $entry->paid_on->format('d M Y') }} · {{ number_format($entry->amount, 2) }}
 <strong>{{ $entry->reversed_at ? 'Reversed' : 'Verified prior payment' }}</strong></p>
 @if($area === 'admin' && $canManageOpeningPayments)
@@ -31,6 +32,11 @@ Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount)
 <input id="opening_amount" name="amount" class="form-control mb-2" type="number" min="0.01" step="0.01" max="{{ max(0, $fee->total_amount - $fee->paid_amount) }}" value="{{ old('amount') }}" required>
 <label for="opening_paid_on" class="form-label">Original payment date</label>
 <input id="opening_paid_on" name="paid_on" class="form-control mb-2" type="date" max="{{ now()->toDateString() }}" value="{{ old('paid_on') }}" required>
+<label for="opening_method" class="form-label">Payment method</label>
+<select id="opening_method" name="method" class="form-select mb-2" required>
+<option value="">Select payment method</option>
+@foreach(['cash' => 'Cash', 'bank_transfer' => 'Bank transfer', 'mobile_money' => 'Mobile money', 'card' => 'Card', 'cheque' => 'Cheque', 'other' => 'Other'] as $value => $label)<option value="{{ $value }}" @selected(old('method') === $value)>{{ $label }}</option>@endforeach
+</select>
 <label for="opening_reference" class="form-label">Original receipt / payment reference</label>
 <input id="opening_reference" name="reference" class="form-control mb-2" maxlength="150" value="{{ old('reference') }}" required>
 <label for="opening_reason" class="form-label">Verification reason / supporting record</label>

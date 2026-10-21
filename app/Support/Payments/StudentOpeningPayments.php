@@ -40,7 +40,7 @@ final class StudentOpeningPayments
                     $this->reject('Prior payment must be greater than zero and no larger than the unpaid invoice balance.');
                 }
                 $entry = StudentOpeningPayment::create(['school_id' => $fee->school_id, 'fee_id' => $fee->id,
-                    'amount' => DecimalAmount::decimal($amount), 'paid_on' => $data['paid_on'], 'reference' => $reference,
+                    'amount' => DecimalAmount::decimal($amount), 'paid_on' => $data['paid_on'], 'method' => $data['method'], 'reference' => $reference,
                     'reference_hash' => $hash, 'reason' => $data['reason'], 'approved_by' => $actor->id, 'approved_by_name' => $actor->name]);
             } else {
                 $entry = StudentOpeningPayment::whereKey($data['opening_payment_id'])->where('school_id', $fee->school_id)
