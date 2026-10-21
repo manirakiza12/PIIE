@@ -45,7 +45,7 @@ class TenantIsolationSweepTest extends TestCase
         'admit_cards' => ['id' => 'n', 'template' => 's', 'heading' => 's', 'title' => 's', 'school_id' => 'n', 'exam_center' => 's', 'footer_text' => 's', 'left_logo' => 's', 'right_logo' => 's', 'sign' => 's', 'background_image' => 's', 'created_at' => 'd', 'updated_at' => 'd'],
         'syllabuses' => ['id' => 'n', 'title' => 's', 'class_id' => 'n', 'section_id' => 'n', 'subject_id' => 'n', 'file' => 's', 'school_id' => 'n', 'session_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
         'academic_units' => ['id' => 'n', 'school_id' => 'n', 'type' => 's', 'name' => 's', 'code' => 's', 'head_title' => 's', 'head_name' => 's', 'description' => 's', 'status' => 's', 'parent_id' => 'z', 'created_at' => 'd', 'updated_at' => 'd'],
-        'departments' => ['id' => 'n', 'name' => 's', 'school_id' => 'n', 'academic_unit_id' => 'z', 'code' => 's', 'hod_name' => 's', 'created_at' => 'd', 'updated_at' => 'd'],
+        'departments' => ['id' => 'n', 'name' => 's', 'school_id' => 'n', 'academic_unit_id' => 'z', 'code' => 's', 'hod_name' => 's', 'head_staff_id' => 'z', 'description' => 's', 'is_active' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
         'class_rooms' => ['id' => 'n', 'name' => 's', 'school_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],
         'sessions' => ['id' => 'n', 'session_title' => 's', 'status' => 'n', 'created_at' => 'd', 'updated_at' => 'd', 'school_id' => 'n'],
         'feedback' => ['id' => 'n', 'title' => 's', 'feedback_text' => 's', 'student_id' => 'n', 'admin_id' => 'n', 'parent_id' => 'n', 'class_id' => 'n', 'section_id' => 'n', 'school_id' => 'n', 'session_id' => 'n', 'created_at' => 'd', 'updated_at' => 'd'],

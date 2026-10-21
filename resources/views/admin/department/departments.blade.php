@@ -19,13 +19,14 @@
         <div class="alert alert-light border"><strong>No departments found.</strong><br>Create a Department and select its School or Faculty.</div>
     @else
         <div class="table-responsive"><table class="table eTable align-middle">
-            <thead><tr><th>Department</th><th>Code</th><th>Belongs To</th><th>Head of Department</th><th>Programmes</th><th class="text-end">Actions</th></tr></thead>
+            <thead><tr><th>Department</th><th>Code</th><th>Belongs To</th><th>Head of Department</th><th>Active</th><th>Programmes</th><th class="text-end">Actions</th></tr></thead>
             <tbody>@foreach($departments as $department)
                 <tr>
                     <td class="fw-semibold">{{ $department->name }}</td>
                     <td>{{ $department->code ?: '—' }}</td>
                     <td>{{ $department->academicUnit ? $department->academicUnit->hierarchy_label : 'Parent not assigned' }}</td>
-                    <td>{{ $department->hod_name ?: 'Not assigned' }}</td>
+                    <td>{{ $department->headStaff?->name ?: ($department->hod_name ?: 'Not assigned') }}</td>
+                    <td>{{ ($department->is_active ?? true) ? 'Yes' : 'No' }}</td>
                     <td>{{ $department->programmes_count }}</td>
                     <td class="text-end"><div class="d-inline-flex gap-2 align-items-center"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.department.show', $department->id) }}">View</a><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.department.departments.edit', $department->id) }}">Edit</a><form method="POST" action="{{ route('admin.department.departments.destroy', $department->id) }}" onsubmit="return confirm('Delete this Department? Departments with programmes, staff or student accounts, or enrollments cannot be deleted.')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form></div></td>
                 </tr>
