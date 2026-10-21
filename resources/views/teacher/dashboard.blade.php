@@ -38,6 +38,15 @@
        </div>
        </div>
 
+        @if(get_settings('ai_teaching_assistant_enabled') === '1')
+        <section class="eSection-wrap mb-3" aria-label="AI Teaching Assistant Pro">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div><h5 class="mb-1">AI Teaching Assistant Pro</h5><p class="text-muted mb-0">Open teaching and learning tools in a new tab.</p></div>
+            <a class="btn btn-primary" href="https://www.aiteachingassistantpro.ca/" target="_blank" rel="noopener noreferrer">Open AI Teaching Assistant</a>
+          </div>
+        </section>
+        @endif
+
         @if((app(\App\Support\TenantConfiguration::class)->terminology(auth()->user()->school)['profile'] ?? 'k12') !== 'k12')
         @php $myOfferings = app(\App\Support\CourseOffering\LecturerCourseOfferingAccess::class)->offerings(auth()->user()); $currentCount = $myOfferings->filter(fn ($offering) => $offering->my_allocation_is_current)->count(); @endphp
         <section class="eSection-wrap mb-3" aria-label="My Course Allocations">

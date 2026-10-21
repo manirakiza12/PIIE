@@ -593,6 +593,9 @@ class SuperAdminController extends Controller
 
     public function systemUpdate(Request $request)
     {
+        $request->validate([
+            'ai_teaching_assistant_enabled' => ['sometimes', 'in:0,1'],
+        ]);
         // Files are checked before any setting is written (no partial update on an invalid upload).
         $request->validate([
             'email_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'socialLogo1' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'socialLogo2' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'socialLogo3' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'],

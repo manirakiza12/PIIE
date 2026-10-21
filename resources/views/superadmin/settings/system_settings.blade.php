@@ -43,6 +43,16 @@
                                     <label for="system_title" class="eForm-label">{{ get_phrase('System Title') }}</label>
                                     <input type="text" class="form-control eForm-control" value="{{ get_settings('system_title') }}" id="system_title" name = "system_title" required>
                                 </div>
+                                <div class="fpb-7 border rounded p-3">
+                                    <h5>AI Teaching Assistant Pro</h5>
+                                    <p class="text-muted">Provide Admin and Lecturer portals with a secure shortcut to the external service. No portal or student data is sent when opening it.</p>
+                                    <input type="hidden" name="ai_teaching_assistant_enabled" value="0">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ai_teaching_assistant_enabled" name="ai_teaching_assistant_enabled" value="1" {{ get_settings('ai_teaching_assistant_enabled') === '1' ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="ai_teaching_assistant_enabled">Enable shortcuts for Admins and Lecturers</label>
+                                    </div>
+                                    <div class="small text-muted mt-2">Launch URL: <a href="https://www.aiteachingassistantpro.ca/" target="_blank" rel="noopener noreferrer">https://www.aiteachingassistantpro.ca/</a></div>
+                                </div>
                                 <div class="fpb-7">
                                     <label for="navbar_title" class="eForm-label">{{ get_phrase('Navbar Title') }}</label>
                                     <input type="text" class="form-control eForm-control" value="{{ get_settings('navbar_title') }}" id="navbar_title" name = "navbar_title" required>

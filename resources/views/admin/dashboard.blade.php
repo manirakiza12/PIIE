@@ -1,6 +1,14 @@
 @extends('admin.navigation')
 
 @section('content')
+@if(get_settings('ai_teaching_assistant_enabled') === '1')
+<div class="card-dashboard mb-3">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div><h5 class="mb-1">AI Teaching Assistant Pro</h5><p class="text-muted mb-0">Open teaching and learning tools in a new tab.</p></div>
+        <a class="btn btn-primary" href="https://www.aiteachingassistantpro.ca/" target="_blank" rel="noopener noreferrer">Open AI Teaching Assistant</a>
+    </div>
+</div>
+@endif
 {{-- The dashboard now uses the canonical admin sidebar (admin.navigation) like every other admin page.
      Font Awesome 6 (the stat-card icons) and the content-wrapper spacing below used to come from
      layouts.app; they are carried here so the dashboard looks exactly as before. --}}
