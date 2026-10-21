@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AcademicUnit;
 use App\Models\Department;
 use App\Models\Programme;
+use App\Models\User;
+use App\Support\Permissions\PermissionService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -45,7 +47,7 @@ class AcademicUnitController extends Controller
     {
         $schoolId = (int) $request->user()->school_id;
         $departments = $this->managedDepartments($schoolId)
-            ->with('academicUnit.parent.parent')
+            ->with(['academicUnit.parent.parent', 'headStaff' => fn ($q) => $q->where('school_id', $schoolId)])
             ->withCount(['programmes' => fn ($q) => $q->where('school_id', $schoolId)])
             ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.trim((string) $request->query('search')).'%'))
             ->when($request->filled('academic_unit_id'), fn ($q) => $q->where('academic_unit_id', (int) $request->query('academic_unit_id')))
@@ -159,27 +161,25 @@ class AcademicUnitController extends Controller
     {
         $department = null;
         $parents = AcademicUnit::query()->where('school_id', $request->user()->school_id)->where('status', 'active')->with('parent.parent')->orderBy('name')->get();
-        return view('admin.department.add_department', compact('department', 'parents'));
+        $staff = $this->departmentStaffOptions((int) $request->user()->school_id);
+        return view('admin.department.add_department', compact('department', 'parents', 'staff'));
     }
 
     public function createDepartmentPage(Request $request)
     {
         $department = null;
         $parents = AcademicUnit::query()->where('school_id', $request->user()->school_id)->where('status', 'active')->with('parent.parent')->orderBy('name')->get();
-        return view('admin.department.department_form', compact('department', 'parents'));
+        $staff = $this->departmentStaffOptions((int) $request->user()->school_id);
+        return view('admin.department.department_form', compact('department', 'parents', 'staff'));
     }
 
     public function storeDepartment(Request $request)
     {
         $schoolId = (int) $request->user()->school_id;
         $data = $this->validateDepartment($request, $schoolId);
-        DB::transaction(fn () => Department::query()->create([
-            'school_id' => $schoolId,
-            'name' => trim($data['name']),
-            'code' => $this->cleanOptional($data['code'] ?? null),
-            'hod_name' => $this->cleanOptional($data['hod_name'] ?? null),
-            'academic_unit_id' => (int) $data['academic_unit_id'],
-        ]));
+        DB::transaction(fn () => Department::query()->create(
+            ['school_id' => $schoolId] + $this->departmentAttributes($data, $schoolId)
+        ));
 
         return redirect()->route('admin.department.departments')->with('success', 'Department created.');
     }
@@ -187,7 +187,7 @@ class AcademicUnitController extends Controller
     public function showDepartment(Request $request, int $id)
     {
         $schoolId = (int) $request->user()->school_id;
-        $department = $this->managedDepartments($schoolId)->with('academicUnit.parent.parent')
+        $department = $this->managedDepartments($schoolId)->with(['academicUnit.parent.parent', 'headStaff' => fn ($q) => $q->where('school_id', $schoolId)])
             ->withCount(['programmes' => fn ($q) => $q->where('school_id', $schoolId)])->findOrFail($id);
         return view('admin.department.department_show', compact('department'));
     }
@@ -196,14 +196,16 @@ class AcademicUnitController extends Controller
     {
         $department = $this->managedDepartments((int) $request->user()->school_id)->findOrFail($id);
         $parents = AcademicUnit::query()->where('school_id', $request->user()->school_id)->where('status', 'active')->with('parent.parent')->orderBy('name')->get();
-        return view('admin.department.edit_department', compact('department', 'parents'));
+        $staff = $this->departmentStaffOptions((int) $request->user()->school_id, $department);
+        return view('admin.department.edit_department', compact('department', 'parents', 'staff'));
     }
 
     public function editDepartmentPage(Request $request, int $id)
     {
         $department = $this->managedDepartments((int) $request->user()->school_id)->findOrFail($id);
         $parents = AcademicUnit::query()->where('school_id', $request->user()->school_id)->where('status', 'active')->with('parent.parent')->orderBy('name')->get();
-        return view('admin.department.department_form', compact('department', 'parents'));
+        $staff = $this->departmentStaffOptions((int) $request->user()->school_id, $department);
+        return view('admin.department.department_form', compact('department', 'parents', 'staff'));
     }
 
     public function updateDepartment(Request $request, int $id)
@@ -211,12 +213,7 @@ class AcademicUnitController extends Controller
         $schoolId = (int) $request->user()->school_id;
         $department = $this->managedDepartments($schoolId)->findOrFail($id);
         $data = $this->validateDepartment($request, $schoolId, $department);
-        DB::transaction(fn () => $department->update([
-            'name' => trim($data['name']),
-            'code' => $this->cleanOptional($data['code'] ?? null),
-            'hod_name' => $this->cleanOptional($data['hod_name'] ?? null),
-            'academic_unit_id' => (int) $data['academic_unit_id'],
-        ]));
+        DB::transaction(fn () => $department->update($this->departmentAttributes($data, $schoolId, $department)));
 
         return redirect()->route('admin.department.departments')->with('success', 'Department updated.');
     }
@@ -298,11 +295,45 @@ class AcademicUnitController extends Controller
             'name' => ['required', 'string', 'max:255', Rule::unique('departments', 'name')->where(fn (Builder $query) => $query->where('school_id', $schoolId))->ignore($department?->id)],
             'code' => ['nullable', 'string', 'max:50', Rule::unique('departments', 'code')->where(fn (Builder $query) => $query->where('school_id', $schoolId))->ignore($department?->id)],
             'hod_name' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:10000'],
+            'is_active' => ['sometimes', 'required', 'boolean'],
+            'head_staff_id' => ['bail', 'nullable', 'integer', function ($attribute, $value, $fail) use ($schoolId, $department): void {
+                $staff = User::query()->where('school_id', $schoolId)->find($value);
+                $permissions = app(PermissionService::class);
+                if (! $staff || ! $permissions->isStaffRole((int) $staff->role_id)
+                    || (! $permissions->isActive($staff) && (int) $value !== (int) $department?->head_staff_id)) {
+                    $fail('Select an active staff member from this institution.');
+                }
+            }],
             'academic_unit_id' => ['required', 'integer', Rule::exists('academic_units', 'id')->where(fn (Builder $query) => $query->where('school_id', $schoolId)->whereIn('type', AcademicUnit::TYPES)->where('status', 'active'))],
         ], [
             'academic_unit_id.required' => 'Select the School or Faculty this Department belongs to.',
             'academic_unit_id.exists' => 'Select an active School or Faculty from this institution.',
         ]);
+    }
+
+    private function departmentStaffOptions(int $schoolId, ?Department $department = null)
+    {
+        $permissions = app(PermissionService::class);
+        return User::query()->where('school_id', $schoolId)->where('role_id', '>', 0)
+            ->whereNotIn('role_id', PermissionService::NON_STAFF_ROLES)->orderBy('name')->get()
+            ->filter(fn (User $staff) => $permissions->isActive($staff) || (int) $staff->id === (int) $department?->head_staff_id);
+    }
+
+    private function departmentAttributes(array $data, int $schoolId, ?Department $department = null): array
+    {
+        $headId = array_key_exists('head_staff_id', $data) ? $data['head_staff_id'] : $department?->head_staff_id;
+        $head = $headId ? User::query()->where('school_id', $schoolId)->findOrFail($headId) : null;
+
+        return [
+            'name' => trim($data['name']),
+            'code' => $this->cleanOptional($data['code'] ?? null),
+            'academic_unit_id' => (int) $data['academic_unit_id'],
+            'head_staff_id' => $head?->id,
+            'hod_name' => $head ? $head->name : $this->cleanOptional($data['hod_name'] ?? null),
+            'description' => array_key_exists('description', $data) ? $this->cleanOptional($data['description']) : $department?->description,
+            'is_active' => array_key_exists('is_active', $data) ? (bool) $data['is_active'] : ($department?->is_active ?? true),
+        ];
     }
 
     private function cleanOptional(?string $value): ?string

@@ -26,6 +26,7 @@ class AcademicUnitManagementTest extends TestCase
         (require database_path('migrations/2026_10_17_120000_add_codes_and_leadership_to_academic_divisions.php'))->up();
         (require database_path('migrations/2026_10_17_130000_promote_legacy_academic_units.php'))->up();
         (require database_path('migrations/2026_10_17_140000_detach_legacy_unit_programmes.php'))->up();
+        (require database_path('migrations/2026_10_21_030000_add_details_and_staff_head_to_departments.php'))->up();
     }
 
     private function createUnit(int $schoolId, string $type, string $name, ?int $parentId = null): int

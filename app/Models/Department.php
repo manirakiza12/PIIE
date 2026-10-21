@@ -17,8 +17,16 @@ class Department extends Model
      * @var array
      */
     protected $fillable = [
-        'name', 'code', 'hod_name', 'school_id', 'academic_unit_id'
+        'name', 'code', 'hod_name', 'school_id', 'academic_unit_id',
+        'head_staff_id', 'description', 'is_active',
     ];
+
+    protected $casts = ['is_active' => 'boolean'];
+
+    public function headStaff(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'head_staff_id');
+    }
 
     public function academicUnit(): BelongsTo
     {
