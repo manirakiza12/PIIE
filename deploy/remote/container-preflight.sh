@@ -23,7 +23,7 @@ app_run /srv/piie/current php -r 'exit(PHP_VERSION_ID >= 80300 && extension_load
 echo 'Checking live Apache document root and parent process'
 # Read the actual running container's config, including writable-layer changes.
 docker cp -L piie-app:/etc/apache2/sites-enabled/000-default.conf - | tar -xOf - |
-  grep -Eq '^[[:space:]]*DocumentRoot[[:space:]]+/srv/piie/current/public[[:space:]]*$'
+  grep -E '^[[:space:]]*DocumentRoot[[:space:]]+/srv/piie/current/public[[:space:]]*$' >/dev/null
 app_apache_master
 (
   db_env=$(mktemp)

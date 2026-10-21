@@ -2,7 +2,15 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 S=$(mktemp -d)
-trap 'rm -rf "$S"' EXIT
+cleanup_fixture() {
+  local status=$?
+  if [ "$status" != 0 ]; then
+    # Only synthetic fixture data; expose failures otherwise hidden by redirects.
+    for log in "$S"/*.log; do echo "--- $log"; tail -n 30 "$log"; done
+  fi
+  rm -rf "$S"
+}
+trap cleanup_fixture EXIT
 mkdir -p "$S/bin" "$S/shared/storage" "$S/releases/old/public/assets/uploads" "$S/incoming" "$S/fixture/vendor" "$S/fixture/public/assets/uploads" "$S/scripts"
 SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 printf '%s\n' "$SHA" > "$S/releases/old/RELEASE_SHA"
