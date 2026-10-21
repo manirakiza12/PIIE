@@ -28,5 +28,12 @@ class StudentFeeManager extends Model
         'gateway_payload' => 'array',
     ];
 
+    public function awards() { return $this->hasMany(StudentFeeAward::class, 'fee_id')->where('school_id', $this->school_id); }
+
+    public function hasAwardHistory(): bool
+    {
+        return \Illuminate\Support\Facades\Schema::hasTable('student_fee_awards') && $this->awards()->exists();
+    }
+
     public function student() { return $this->belongsTo(User::class, 'student_id'); }
 }

@@ -14,7 +14,7 @@ class StudentRegistrationConfirmationEligibility
     public function summary(User $student): array
     {
         $result = ['eligible' => false, 'waived' => false, 'session_id' => null, 'total_minor' => 0,
-            'paid_minor' => 0, 'required_minor' => 0, 'shortfall_minor' => 0, 'waiver' => null];
+            'paid_minor' => 0, 'required_minor' => 0, 'shortfall_minor' => 0, 'waiver' => null, 'fully_covered' => false];
         if (! Schema::hasTable('schools') || ! Schema::hasColumn('schools', 'running_session')
             || ! Schema::hasTable('student_fee_managers')) { return $result; }
         $sessionId = DB::table('schools')->where('id', $student->school_id)->value('running_session');
@@ -37,7 +37,10 @@ class StudentRegistrationConfirmationEligibility
         $result['shortfall_minor'] = max(0, $result['required_minor'] - $result['paid_minor']);
         $result['waiver'] = $waiver;
         $result['waived'] = $waiver !== null;
-        $result['eligible'] = $waiver !== null || ($result['total_minor'] > 0 && $result['shortfall_minor'] === 0);
+        $result['fully_covered'] = $invoices->isNotEmpty() && $result['total_minor'] === 0
+            && Schema::hasTable('student_fee_awards')
+            && \App\Models\StudentFeeAward::where('school_id', $student->school_id)->whereIn('fee_id', $invoices->pluck('id'))->whereNull('revoked_at')->exists();
+        $result['eligible'] = $waiver !== null || $result['fully_covered'] || ($result['total_minor'] > 0 && $result['shortfall_minor'] === 0);
         return $result;
     }
 }

@@ -57,6 +57,21 @@ class TuitionPesaPalJourneyTest extends TestCase
             'payment_method' => '', 'status' => 'unpaid'], $extra));
     }
 
+    public function test_scholarship_only_charges_net_fee_and_verified_cash_remains_separate(): void
+    {
+        (require database_path('migrations/2026_10_21_050000_create_student_fee_awards_table.php'))->up();
+        $fee = $this->fee();
+        app(\App\Support\Billing\StudentFeeAwards::class)->change($this->makeAdminUser($this->school), $fee->id,
+            ['action' => 'grant', 'type' => 'scholarship', 'amount' => '2000.00', 'reason' => 'Approved merit scholarship.']);
+        $payment = TuitionPesaPalPayment::start($fee);
+        $this->assertEquals(3000, $payment->amount);
+        $this->amount = '3000.00'; $this->code = 1; $this->description = 'COMPLETED';
+        TuitionPesaPalPayment::reconcile($payment);
+        $this->assertEquals(3000, $fee->fresh()->paid_amount);
+        $this->assertSame('paid', $fee->fresh()->status);
+        $this->assertSame(1, TuitionPayment::count());
+    }
+
     public function test_checkout_resumes_same_order_and_only_verified_success_credits_once(): void
     {
         $fee = $this->fee();
