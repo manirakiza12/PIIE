@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\Department;
+use App\Models\AcademicUnit;
+use App\Models\User;
 use App\Models\Programme;
 use App\Models\ProgrammeGalleryImage;
 use App\Support\ProgrammeCatalogue\ProgrammeCatalogueSchema;
@@ -147,8 +149,9 @@ class ProgrammeController extends Controller
         $id          = $request->id;
         $programme   = $id ? $this->findOwned($id) : null;
         $departments = $this->selectableDepartments();
+        $departmentContext = $this->programmeDepartmentContext($departments);
 
-        return view('admin.programme.modal', compact('programme', 'departments'))
+        return view('admin.programme.modal', compact('programme', 'departments', 'departmentContext'))
             ->with([
                 'levels' => Programme::selectableLevels($programme?->level),
                 'coverUrl'      => $programme ? $this->covers->url($programme) : null,
@@ -194,6 +197,7 @@ class ProgrammeController extends Controller
             'level'         => ['required', 'string', 'max:100', Rule::in($allowedLevels)],
             'duration'      => 'nullable|max:50',
             'mode'          => ['required', Rule::in($allowedModes)],
+            'is_active'     => ['sometimes', 'required', 'boolean'],
             'description'         => 'nullable|string|max:50000',
             'curriculum_overview' => 'nullable|string|max:50000',
             'career_prospects'    => 'nullable|string|max:50000',
@@ -239,6 +243,21 @@ class ProgrammeController extends Controller
             $query->whereNotIn('id', DB::table('academic_units')->select('legacy_department_id')->whereNotNull('legacy_department_id'));
         }
         return $query->orderBy('name')->get();
+    }
+
+    private function programmeDepartmentContext($departments): array
+    {
+        $units = Schema::hasTable('academic_units')
+            ? AcademicUnit::query()->where('school_id', $this->school_id)
+                ->whereIn('id', $departments->pluck('academic_unit_id')->filter())->pluck('name', 'id')
+            : collect();
+        $heads = User::query()->where('school_id', $this->school_id)
+            ->whereIn('id', $departments->pluck('head_staff_id')->filter())->pluck('name', 'id');
+
+        return $departments->mapWithKeys(fn (Department $department) => [$department->id => [
+            'faculty' => $units->get($department->academic_unit_id) ?: get_phrase('Not assigned'),
+            'hod' => $heads->get($department->head_staff_id) ?: ($department->hod_name ?: get_phrase('Not assigned')),
+        ]])->all();
     }
 
     /**
@@ -328,7 +347,7 @@ class ProgrammeController extends Controller
         $validated = $this->normalisePriceMetadata($validated);
 
         $validated['school_id']  = $this->school_id;
-        $validated['is_active']  = 1;
+        $validated['is_active']  = (int) ($validated['is_active'] ?? 1);
         $programme = $this->editor->save($request, $validated);
         AuditLog::record('create', 'Programmes', "Created programme: {$programme->name}");
 

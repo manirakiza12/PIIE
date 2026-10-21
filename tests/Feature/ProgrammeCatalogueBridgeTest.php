@@ -217,6 +217,46 @@ class ProgrammeCatalogueBridgeTest extends TestCase
         $this->assertSame(0, (int) $item->fresh()->status);
     }
 
+    public function test_editor_can_activate_and_publish_a_previously_inactive_programme_in_one_save(): void
+    {
+        $school = $this->makeSchool();
+        $programme = $this->programme($school, ['is_active' => 0]);
+        $this->actingAs($this->makeAdminUser($school))->postJson(route('admin.programmes.update', $programme->id), [
+            'code' => $programme->code, 'name' => $programme->name, 'level' => $programme->level,
+            'mode' => $programme->mode, 'is_active' => 1, 'is_published' => 1,
+        ])->assertOk();
+        $this->assertTrue($programme->fresh()->is_active);
+        $this->assertTrue($programme->fresh()->is_published);
+        $this->assertCount(1, $this->catalogueItems($school));
+    }
+
+    public function test_editor_rejects_publishing_an_inactive_programme_without_partially_saving_it(): void
+    {
+        $school = $this->makeSchool();
+        $programme = $this->programme($school, ['is_active' => 1]);
+        $this->actingAs($this->makeAdminUser($school))->postJson(route('admin.programmes.update', $programme->id), [
+            'code' => $programme->code, 'name' => 'Must Roll Back', 'level' => $programme->level,
+            'mode' => $programme->mode, 'is_active' => 0, 'is_published' => 1,
+        ])->assertUnprocessable()->assertJsonValidationErrors('is_published');
+        $this->assertTrue($programme->fresh()->is_active);
+        $this->assertSame($programme->name, $programme->fresh()->name);
+        $this->assertCount(0, $this->catalogueItems($school));
+    }
+
+    public function test_editor_deactivation_without_a_publication_field_withdraws_the_existing_projection(): void
+    {
+        $school = $this->makeSchool();
+        $programme = $this->programme($school);
+        $item = app(ProgrammePublisher::class)->publish($programme);
+        $this->actingAs($this->makeAdminUser($school))->postJson(route('admin.programmes.update', $programme->id), [
+            'code' => $programme->code, 'name' => $programme->name, 'level' => $programme->level,
+            'mode' => $programme->mode, 'is_active' => 0,
+        ])->assertOk();
+        $this->assertFalse($programme->fresh()->is_active);
+        $this->assertSame(0, (int) $item->fresh()->status);
+        $this->assertTrue($programme->fresh()->is_published);
+    }
+
     public function test_programme_information_fields_save_and_round_trip_without_touching_structured_curriculum(): void
     {
         $school = $this->makeSchool();
