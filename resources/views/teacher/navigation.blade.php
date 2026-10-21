@@ -98,6 +98,9 @@
 		<ul class="nav-links">
             @include('shared.staff_id_navigation')
       <li class="nav-links-li {{ request()->is('teacher/library*') ? 'showMenu' : '' }}"><div class="iocn-link"><a href="{{ route('teacher.library.dashboard') }}"><div class="sidebar_icon"><i class="bi bi-journals" aria-hidden="true"></i></div><span class="link_name">{{ get_phrase('Library') }}</span></a></div></li>
+      @if(get_settings('ai_teaching_assistant_enabled') === '1')
+      <li class="nav-links-li"><div class="iocn-link"><a href="https://www.aiteachingassistantpro.ca/" target="_blank" rel="noopener noreferrer"><div class="sidebar_icon"><i class="bi bi-stars" aria-hidden="true"></i></div><span class="link_name">AI Teaching Assistant</span></a></div></li>
+      @endif
 			<!-- sidebar title -->
 			<li class="nav-links-li {{ request()->is('teacher/dashboard') ? 'showMenu':'' }}">
 	            <div class="iocn-link">

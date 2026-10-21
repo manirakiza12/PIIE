@@ -307,8 +307,12 @@ class LecturerWorkspaceTest extends TestCase
     {
         $this->allocated($this->tenants['a'], $this->lecturerA, 'BBIT3102', CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER, 'in_progress');
 
+        DB::table('global_settings')->insert(['key' => 'ai_teaching_assistant_enabled', 'value' => '1']);
+
         $this->actingAs($this->lecturerA)->get(route('teacher.dashboard'))
             ->assertOk()
+            ->assertSee('AI Teaching Assistant Pro')
+            ->assertSee('https://www.aiteachingassistantpro.ca/', false)
             ->assertSee('View My Course Allocations')
             ->assertSee('My Course Allocations')
             ->assertSee(route('teacher.course_offerings.index'), false);

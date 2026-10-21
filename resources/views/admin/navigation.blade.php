@@ -306,6 +306,17 @@
                 </div>
             </li>
 
+            @if(get_settings('ai_teaching_assistant_enabled') === '1')
+            <li class="nav-links-li">
+                <div class="iocn-link">
+                    <a href="https://www.aiteachingassistantpro.ca/" target="_blank" rel="noopener noreferrer">
+                        <div class="sidebar_icon"><i class="bi bi-stars" aria-hidden="true"></i></div>
+                        <span class="link_name">AI Teaching Assistant</span>
+                    </a>
+                </div>
+            </li>
+            @endif
+
             <!-- Students -->
             @if((empty($user->menu_permission) || in_array('admin.student', $menu_permission) || in_array('admin.parent', $menu_permission)) && $navCan('admin.student'))
             <li class="nav-links-li {{ request()->is('admin/student*') || request()->is('admin/parent*') ? 'showMenu' : '' }}">

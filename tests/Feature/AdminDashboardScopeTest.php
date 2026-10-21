@@ -6,7 +6,9 @@ use App\Models\Admission;
 use App\Models\AdmissionDocument;
 use App\Models\ApplicationPayment;
 use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Support\AdmissionsTestHelper;
 use Tests\TestCase;
 
@@ -25,6 +27,10 @@ class AdminDashboardScopeTest extends TestCase
     {
         parent::setUp();
         $this->bootAdmissionsTestSchema();
+        Schema::create('payment_history', function (Blueprint $table): void {
+            $table->id();
+            $table->string('status')->nullable();
+        });
     }
 
     public function test_admin_dashboard_renders_and_never_mentions_platform_widgets(): void
@@ -48,6 +54,57 @@ class AdminDashboardScopeTest extends TestCase
         $response->assertSee('Total Students', false);
         $response->assertSee('Teachers', false);
         $response->assertSee('Fee Collected This Month', false);
+    }
+
+    public function test_ai_teaching_assistant_shortcut_is_only_shown_when_superadmin_enables_it(): void
+    {
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+
+        $this->actingAs($admin)->get(route('admin.dashboard'))
+            ->assertOk()->assertDontSee('AI Teaching Assistant Pro');
+
+        DB::table('global_settings')->insert(['key' => 'ai_teaching_assistant_enabled', 'value' => '1']);
+        $response = $this->get(route('admin.dashboard'))->assertOk()
+            ->assertSee('AI Teaching Assistant Pro')
+            ->assertSee('https://www.aiteachingassistantpro.ca/', false)
+            ->assertSee('rel="noopener noreferrer"', false);
+
+        $superAdmin = User::factory()->create(['role_id' => 1, 'school_id' => null]);
+        $this->actingAs($superAdmin)->get(route('superadmin.system_settings'))
+            ->assertOk()->assertSee('Enable shortcuts for Admins and Lecturers');
+        $this->post(route('superadmin.system.update'), ['ai_teaching_assistant_enabled' => '0'])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('0', get_settings('ai_teaching_assistant_enabled'));
+        $this->from(route('superadmin.system_settings'))
+            ->post(route('superadmin.system.update'), ['ai_teaching_assistant_enabled' => 'enabled'])
+            ->assertRedirect(route('superadmin.system_settings'))
+            ->assertSessionHasErrors('ai_teaching_assistant_enabled');
+        $this->assertSame('0', get_settings('ai_teaching_assistant_enabled'));
+    }
+
+    public function test_superadmin_can_save_https_api_configuration_with_an_encrypted_secret(): void
+    {
+        $superAdmin = User::factory()->create(['role_id' => 1, 'school_id' => null]);
+        $this->actingAs($superAdmin)->get(route('superadmin.system_settings'))
+            ->assertOk()->assertSee('AI Teaching Assistant API Settings');
+
+        $this->post(route('superadmin.ai_teaching_assistant.api.update'), [
+            'ai_teaching_assistant_api_endpoint' => 'https://api.provider.example/v1',
+            'ai_teaching_assistant_api_key' => 'institution-secret-token',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $encryptedKey = get_settings('ai_teaching_assistant_api_key');
+        $this->assertNotSame('institution-secret-token', $encryptedKey);
+        $this->assertSame('institution-secret-token', \Illuminate\Support\Facades\Crypt::decryptString($encryptedKey));
+        $this->assertSame('https://api.provider.example/v1', get_settings('ai_teaching_assistant_api_endpoint'));
+
+        $this->from(route('superadmin.system_settings'))
+            ->post(route('superadmin.ai_teaching_assistant.api.update'), [
+                'ai_teaching_assistant_api_endpoint' => 'http://api.provider.example/v1',
+            ])->assertRedirect(route('superadmin.system_settings'))
+            ->assertSessionHasErrors('ai_teaching_assistant_api_endpoint');
+        $this->assertSame('https://api.provider.example/v1', get_settings('ai_teaching_assistant_api_endpoint'));
     }
 
     public function test_admin_dashboard_counts_are_scoped_to_the_admins_own_school(): void

@@ -43,6 +43,16 @@
                                     <label for="system_title" class="eForm-label">{{ get_phrase('System Title') }}</label>
                                     <input type="text" class="form-control eForm-control" value="{{ get_settings('system_title') }}" id="system_title" name = "system_title" required>
                                 </div>
+                                <div class="fpb-7 border rounded p-3">
+                                    <h5>AI Teaching Assistant Pro</h5>
+                                    <p class="text-muted">Provide Admin and Lecturer portals with a secure shortcut to the external service. No portal or student data is sent when opening it.</p>
+                                    <input type="hidden" name="ai_teaching_assistant_enabled" value="0">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ai_teaching_assistant_enabled" name="ai_teaching_assistant_enabled" value="1" {{ get_settings('ai_teaching_assistant_enabled') === '1' ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="ai_teaching_assistant_enabled">Enable shortcuts for Admins and Lecturers</label>
+                                    </div>
+                                    <div class="small text-muted mt-2">Launch URL: <a href="https://www.aiteachingassistantpro.ca/" target="_blank" rel="noopener noreferrer">https://www.aiteachingassistantpro.ca/</a></div>
+                                </div>
                                 <div class="fpb-7">
                                     <label for="navbar_title" class="eForm-label">{{ get_phrase('Navbar Title') }}</label>
                                     <input type="text" class="form-control eForm-control" value="{{ get_settings('navbar_title') }}" id="navbar_title" name = "navbar_title" required>
@@ -139,6 +149,36 @@
                     <span class="eBadge ebg-info mb-1 p-2"><?php echo 'Post max size'; ?>: <?php echo ini_get('post_max_size'); ?></span>
                     <span class="eBadge ebg-danger mb-1 p-2"><?php echo '"post_max_size" '.get_phrase("Has to be bigger than").' "upload_max_filesize"'; ?></span>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-7">
+        <div class="eSection-wrap">
+            <div class="eMain">
+                <p class="column-title">AI Teaching Assistant API Settings</p>
+                <p class="text-muted">Optional connection details. The provider has not published an API specification, so saving these values does not activate an API connection. Do not enter a key until the provider issues one for your institution.</p>
+                <form method="POST" action="{{ route('superadmin.ai_teaching_assistant.api.update') }}">
+                    @csrf
+                    <div class="fpb-7">
+                        <label for="ai_teaching_assistant_api_endpoint" class="eForm-label">API endpoint (HTTPS)</label>
+                        <input type="url" class="form-control eForm-control" id="ai_teaching_assistant_api_endpoint" name="ai_teaching_assistant_api_endpoint" value="{{ get_settings('ai_teaching_assistant_api_endpoint') }}" placeholder="https://provider.example/api">
+                    </div>
+                    <div class="fpb-7">
+                        <label for="ai_teaching_assistant_api_key" class="eForm-label">API key</label>
+                        <input type="password" class="form-control eForm-control" id="ai_teaching_assistant_api_key" name="ai_teaching_assistant_api_key" autocomplete="new-password" value="" placeholder="{{ $aiTeachingAssistantApiKeyConfigured ? 'Key saved; enter a new key only to replace it' : 'No key saved' }}">
+                        <small class="text-muted">{{ $aiTeachingAssistantApiKeyConfigured ? 'A key is saved encrypted. It is never displayed.' : 'No API key is currently saved.' }}</small>
+                    </div>
+                    @if($aiTeachingAssistantApiKeyConfigured)
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="clear_ai_teaching_assistant_api_key" name="clear_ai_teaching_assistant_api_key" value="1">
+                        <label class="form-check-label" for="clear_ai_teaching_assistant_api_key">Clear saved API key</label>
+                    </div>
+                    @endif
+                    <button type="submit" class="btn-form">Save API Settings</button>
+                </form>
             </div>
         </div>
     </div>
