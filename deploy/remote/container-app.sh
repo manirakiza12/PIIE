@@ -4,7 +4,10 @@
 set -euo pipefail
 
 app_run() (
-  local workdir=${1:?application working directory} command=${2:?command} image env_dir
+  # This function already has a subshell scope. Keep the cleanup path in that
+  # scope: Bash can unwind function-local variables before an EXIT trap on error.
+  workdir=${1:?application working directory}
+  command=${2:?command}
   shift 2
   case "$workdir" in /srv/piie/current|/srv/piie/releases/*) ;; *) echo 'Invalid application working directory' >&2; exit 1;; esac
   image=$(docker inspect --format '{{.Image}}' piie-app) || exit 1
