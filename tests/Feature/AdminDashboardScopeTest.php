@@ -77,6 +77,30 @@ class AdminDashboardScopeTest extends TestCase
         $this->assertSame('0', get_settings('ai_teaching_assistant_enabled'));
     }
 
+    public function test_superadmin_can_save_https_api_configuration_with_an_encrypted_secret(): void
+    {
+        $superAdmin = User::factory()->create(['role_id' => 1, 'school_id' => null]);
+        $this->actingAs($superAdmin)->get(route('superadmin.system_settings'))
+            ->assertOk()->assertSee('AI Teaching Assistant API Settings');
+
+        $this->post(route('superadmin.ai_teaching_assistant.api.update'), [
+            'ai_teaching_assistant_api_endpoint' => 'https://api.provider.example/v1',
+            'ai_teaching_assistant_api_key' => 'institution-secret-token',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $encryptedKey = get_settings('ai_teaching_assistant_api_key');
+        $this->assertNotSame('institution-secret-token', $encryptedKey);
+        $this->assertSame('institution-secret-token', \Illuminate\Support\Facades\Crypt::decryptString($encryptedKey));
+        $this->assertSame('https://api.provider.example/v1', get_settings('ai_teaching_assistant_api_endpoint'));
+
+        $this->from(route('superadmin.system_settings'))
+            ->post(route('superadmin.ai_teaching_assistant.api.update'), [
+                'ai_teaching_assistant_api_endpoint' => 'http://api.provider.example/v1',
+            ])->assertRedirect(route('superadmin.system_settings'))
+            ->assertSessionHasErrors('ai_teaching_assistant_api_endpoint');
+        $this->assertSame('https://api.provider.example/v1', get_settings('ai_teaching_assistant_api_endpoint'));
+    }
+
     public function test_admin_dashboard_counts_are_scoped_to_the_admins_own_school(): void
     {
         $schoolA = $this->makeSchool();

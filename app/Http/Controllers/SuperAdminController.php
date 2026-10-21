@@ -7,6 +7,7 @@ use App\Http\Controllers\CommonController;
 use App\Models\Admin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Crypt;
 use App\Models\User;
 use App\Models\Session;
 use App\Models\School;
@@ -553,7 +554,40 @@ class SuperAdminController extends Controller
 
     public function systemSettings()
     {
-        return view('superadmin.settings.system_settings');
+        return view('superadmin.settings.system_settings', [
+            'aiTeachingAssistantApiKeyConfigured' => (string) get_settings('ai_teaching_assistant_api_key') !== '',
+        ]);
+    }
+
+    /** Save provider API connection details without exposing the secret again. */
+    public function updateAiTeachingAssistantApiSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'ai_teaching_assistant_api_endpoint' => ['nullable', 'url', 'max:2048', 'regex:/^https:\/\//i'],
+            'ai_teaching_assistant_api_key' => ['nullable', 'string', 'max:4096'],
+            'clear_ai_teaching_assistant_api_key' => ['nullable', 'boolean'],
+        ]);
+
+        if (array_key_exists('ai_teaching_assistant_api_endpoint', $validated)) {
+            GlobalSettings::updateOrCreate(
+                ['key' => 'ai_teaching_assistant_api_endpoint'],
+                ['value' => trim((string) $validated['ai_teaching_assistant_api_endpoint'])]
+            );
+        }
+
+        if (!empty($validated['clear_ai_teaching_assistant_api_key'])) {
+            GlobalSettings::updateOrCreate(
+                ['key' => 'ai_teaching_assistant_api_key'],
+                ['value' => '']
+            );
+        } elseif (!empty($validated['ai_teaching_assistant_api_key'])) {
+            GlobalSettings::updateOrCreate(
+                ['key' => 'ai_teaching_assistant_api_key'],
+                ['value' => Crypt::encryptString($validated['ai_teaching_assistant_api_key'])]
+            );
+        }
+
+        return redirect()->back()->with('message', 'AI Teaching Assistant API settings saved. Connection remains inactive until the provider supplies its API specification.');
     }
 
     public function frontendFeaturesCreate()

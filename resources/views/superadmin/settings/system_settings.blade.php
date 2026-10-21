@@ -154,6 +154,36 @@
     </div>
 </div>
 
+<div class="row mt-3">
+    <div class="col-7">
+        <div class="eSection-wrap">
+            <div class="eMain">
+                <p class="column-title">AI Teaching Assistant API Settings</p>
+                <p class="text-muted">Optional connection details. The provider has not published an API specification, so saving these values does not activate an API connection. Do not enter a key until the provider issues one for your institution.</p>
+                <form method="POST" action="{{ route('superadmin.ai_teaching_assistant.api.update') }}">
+                    @csrf
+                    <div class="fpb-7">
+                        <label for="ai_teaching_assistant_api_endpoint" class="eForm-label">API endpoint (HTTPS)</label>
+                        <input type="url" class="form-control eForm-control" id="ai_teaching_assistant_api_endpoint" name="ai_teaching_assistant_api_endpoint" value="{{ get_settings('ai_teaching_assistant_api_endpoint') }}" placeholder="https://provider.example/api">
+                    </div>
+                    <div class="fpb-7">
+                        <label for="ai_teaching_assistant_api_key" class="eForm-label">API key</label>
+                        <input type="password" class="form-control eForm-control" id="ai_teaching_assistant_api_key" name="ai_teaching_assistant_api_key" autocomplete="new-password" value="" placeholder="{{ $aiTeachingAssistantApiKeyConfigured ? 'Key saved; enter a new key only to replace it' : 'No key saved' }}">
+                        <small class="text-muted">{{ $aiTeachingAssistantApiKeyConfigured ? 'A key is saved encrypted. It is never displayed.' : 'No API key is currently saved.' }}</small>
+                    </div>
+                    @if($aiTeachingAssistantApiKeyConfigured)
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="clear_ai_teaching_assistant_api_key" name="clear_ai_teaching_assistant_api_key" value="1">
+                        <label class="form-check-label" for="clear_ai_teaching_assistant_api_key">Clear saved API key</label>
+                    </div>
+                    @endif
+                    <button type="submit" class="btn-form">Save API Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="col-12">
     <div class="eSection-wrap">
         <div class="eMain">

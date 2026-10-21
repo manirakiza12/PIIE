@@ -462,6 +462,7 @@ Route::controller(SuperAdminController::class)->middleware('auth', 'superAdmin')
     //System settings routes
     Route::get('superadmin/settings/system', 'systemSettings')->name('superadmin.system_settings');
     Route::post('superadmin/system/update', 'systemUpdate')->name('superadmin.system.update');
+    Route::post('superadmin/system/ai-teaching-assistant-api', 'updateAiTeachingAssistantApiSettings')->name('superadmin.ai_teaching_assistant.api.update');
 
     //Frontend features
     Route::get('superadmin/settings/frontendFeaturesCreate', 'frontendFeaturesCreate')->name('superadmin.settings.frontendFeaturesCreate');
