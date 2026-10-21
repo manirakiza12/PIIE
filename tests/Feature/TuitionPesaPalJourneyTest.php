@@ -57,6 +57,29 @@ class TuitionPesaPalJourneyTest extends TestCase
             'payment_method' => '', 'status' => 'unpaid'], $extra));
     }
 
+    public function test_prior_payment_leaves_only_remaining_balance_for_online_payment(): void
+    {
+        (require database_path('migrations/2026_10_21_060000_create_student_opening_payments.php'))->up();
+        $fee = $this->fee();
+        app(\App\Support\Payments\StudentOpeningPayments::class)->change($this->makeAdminUser($this->school), $fee->id, [
+            'action' => 'record', 'amount' => '3000.00', 'paid_on' => now()->subMonth()->toDateString(),
+            'reference' => 'OLD-RECEIPT-42', 'reason' => 'Original bank deposit verified.']);
+        $payment = TuitionPesaPalPayment::start($fee);
+        $this->assertEquals(2000, $payment->amount);
+        $this->amount = '2000.00'; $this->code = 1; $this->description = 'COMPLETED';
+        TuitionPesaPalPayment::reconcile($payment);
+        TuitionPesaPalPayment::reconcile($payment);
+        $this->assertEquals(5000, $fee->fresh()->paid_amount);
+        $this->assertEquals(3000, $fee->fresh()->opening_paid_amount);
+        $this->assertEquals(2000, $fee->fresh()->collected_amount);
+        $this->assertSame('paid', $fee->fresh()->status);
+        $this->code = 3; $this->description = 'REVERSED';
+        TuitionPesaPalPayment::reconcile($payment);
+        $this->assertEquals(3000, $fee->fresh()->paid_amount);
+        $this->assertEquals(3000, $fee->fresh()->opening_paid_amount);
+        $this->assertEquals(0, $fee->fresh()->collected_amount);
+    }
+
     public function test_checkout_resumes_same_order_and_only_verified_success_credits_once(): void
     {
         $fee = $this->fee();

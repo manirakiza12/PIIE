@@ -60,14 +60,14 @@ class ReportsController extends Controller
         // ── Finance stats ──────────────────────────────────────
         $fee_collected = StudentFeeManager::where('school_id', $school_id)
             ->where('status', 'paid')
-            ->sum('paid_amount');
+            ->sum(DB::raw(StudentFeeManager::collectionAmountSql()));
         $fee_invoiced  = StudentFeeManager::where('school_id', $school_id)->sum('total_amount');
-        $fee_outstanding = max(0, $fee_invoiced - $fee_collected);
+        $fee_outstanding = max(0, $fee_invoiced - (float) StudentFeeManager::where('school_id', $school_id)->sum('paid_amount'));
 
         // Monthly collection (last 6 months)
         $monthly_collections = StudentFeeManager::where('school_id', $school_id)
             ->where('status', 'paid')
-            ->selectRaw("DATE_FORMAT(FROM_UNIXTIME(timestamp), '%Y-%m') as month, SUM(paid_amount) as total")
+            ->selectRaw("DATE_FORMAT(FROM_UNIXTIME(timestamp), '%Y-%m') as month, SUM(" . StudentFeeManager::collectionAmountSql() . ") as total")
             ->groupBy('month')
             ->orderBy('month')
             ->limit(6)
@@ -131,7 +131,7 @@ class ReportsController extends Controller
         $totals = StudentFeeManager::where('school_id', $school_id)
             ->where('timestamp', '>=', $from_ts)
             ->where('timestamp', '<', $to_ts)
-            ->selectRaw('SUM(total_amount) as invoiced, SUM(paid_amount) as collected')
+            ->selectRaw('SUM(total_amount) as invoiced, SUM(paid_amount) as paid, SUM(' . StudentFeeManager::collectionAmountSql() . ') as collected')
             ->first();
 
         return view('admin.reports.finance', compact('invoices', 'totals', 'from', 'to'));

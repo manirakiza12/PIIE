@@ -26,7 +26,27 @@ class StudentFeeManager extends Model
 
     protected $casts = [
         'gateway_payload' => 'array',
+        'opening_paid_amount' => 'decimal:2',
     ];
+
+    public function openingPayments() { return $this->hasMany(StudentOpeningPayment::class, 'fee_id')->where('school_id', $this->school_id); }
+
+    public function hasOpeningPaymentHistory(): bool
+    {
+        return \Illuminate\Support\Facades\Schema::hasTable('student_opening_payments') && $this->openingPayments()->exists();
+    }
+
+    public function getCollectedAmountAttribute(): float
+    {
+        return max(0, (float) $this->paid_amount - (float) ($this->opening_paid_amount ?? 0));
+    }
+
+    /** Excludes imported money from new-collection reports; compatible with legacy test fixtures. */
+    public static function collectionAmountSql(): string
+    {
+        return \Illuminate\Support\Facades\Schema::hasColumn('student_fee_managers', 'opening_paid_amount')
+            ? '(paid_amount - opening_paid_amount)' : 'paid_amount';
+    }
 
     public function student() { return $this->belongsTo(User::class, 'student_id'); }
 }

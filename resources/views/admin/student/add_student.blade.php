@@ -5,6 +5,7 @@
     </div>
     <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.student.create') }}">
         <div class="alert alert-info">Add an existing student using their current registration number. The student receives only a password setup email for the student portal. After saving, upload the documents held by the administration on the Documents page. No applicant account, application fee or new enrolment is created.</div>
+        <div class="alert alert-secondary">Already paid fees? After saving, Finance must issue or sync the correct fee invoices, then open Student fees → Payments / prior payments to verify the original receipts. Only the remaining balance will be payable online.</div>
         <div class="fpb-7">
             <label for="registration_number" class="eForm-label">Existing registration number</label>
             <input type="text" class="form-control eForm-control" id="registration_number" name="registration_number" maxlength="255" required>

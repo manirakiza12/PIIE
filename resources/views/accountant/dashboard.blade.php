@@ -33,7 +33,8 @@
 @php
     $financeStatCards = [
         ['label' => 'Total Invoiced', 'value' => currency($totalInvoiced), 'color' => '#3a86ff'],
-        ['label' => 'Total Collected', 'value' => currency($totalCollected), 'color' => '#1fa971'],
+        ['label' => 'Prior Payments', 'value' => currency($openingPaymentsTotal), 'color' => '#6c757d'],
+        ['label' => 'New Collections', 'value' => currency($totalCollected), 'color' => '#1fa971'],
         ['label' => 'Total Outstanding', 'value' => currency($totalOutstanding), 'color' => $totalOutstanding > 0 ? '#e5484d' : '#1fa971'],
         ['label' => 'Collection Rate', 'value' => $collectionRate . '%', 'color' => '#f5a623'],
     ];
@@ -146,7 +147,7 @@
                         <tr>
                             <td>{{ $row->student_name }}</td>
                             <td>{{ $row->invoice->title }}</td>
-                            <td>{{ currency($row->invoice->paid_amount) }}</td>
+                            <td>{{ currency($row->invoice->collected_amount) }}</td>
                             <td>{{ $row->invoice->timestamp ? date('d M Y', $row->invoice->timestamp) : '—' }}</td>
                             <td><span class="badge bg-{{ $row->invoice->status === 'paid' ? 'success' : 'warning' }}">{{ ucfirst($row->invoice->status) }}</span></td>
                         </tr>

@@ -30,6 +30,7 @@
 <label for="waiver_reason">Reason (required)</label><textarea id="waiver_reason" name="reason" class="form-control mb-2" required minlength="10" maxlength="500"></textarea>
 <button class="btn btn-warning">{{ $eligibility['waived'] ? 'Revoke waiver' : 'Grant waiver' }}</button></form></details>
 @endif
+@include('shared.opening_payments')
 @if($area !== 'admin' && $fee->status !== 'paid')
 <p>Pay securely through PesaPal. Your invoice updates after PesaPal confirms payment. If a payment is pending, check its status before trying again.</p>
 <form method="post" action="{{ route($area . '.payment.pesapal.start', $fee->id) }}">@csrf

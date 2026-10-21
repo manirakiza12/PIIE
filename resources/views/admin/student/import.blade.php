@@ -1,6 +1,7 @@
 @extends('admin.navigation')
 @section('content')
 <div class="container-fluid">
+    <div class="alert alert-secondary">For fees already paid, Finance must issue or sync the correct invoices after import, then verify the original receipts under Student fees → Payments / prior payments. Only the remaining balance is payable online.</div>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="mb-0">Import existing students</h4>
         <a href="{{ route('admin.student.import.template') }}" class="btn btn-outline-secondary btn-sm">

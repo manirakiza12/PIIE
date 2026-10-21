@@ -385,6 +385,7 @@ return [
         'admin.edit.fee_manager' => 'finance.invoices',
         'admin.class_wise_student_invoice' => 'finance.invoices',
         'admin.offline_payment_pending' => 'finance.payments',
+        'admin.tuition_payments.opening_payment' => 'finance.payments',
         'admin.tuition_payments.waiver' => 'academic.course_registration.fee_waiver',
         'admin.tuition_payments.*' => 'finance.view',
         'admin.payment.pesapal.check' => 'finance.view',
