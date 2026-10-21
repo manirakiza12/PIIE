@@ -570,6 +570,8 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
 
     Route::get('admin/dashboard', 'adminDashboard')->name('admin.dashboard')->middleware('role_id');
 
+    Route::get('admin/academic-workspace', [\App\Http\Controllers\AcademicWorkspaceController::class, 'index'])->name('admin.academic.workspace');
+
     //Common routes
     Route::get('admin/section/{id}', 'classWiseSections')->name('admin.class_wise_sections');
     Route::get('admin/subjects/{id}', 'classWiseSubject')->name('admin.class_wise_subject');

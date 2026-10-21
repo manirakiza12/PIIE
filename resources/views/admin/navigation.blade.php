@@ -142,13 +142,15 @@
     | no use for, so they are hidden from its sidebar. Their routes, controllers
     | and data are untouched — this only hides the menu entry.
     |
-    |   Assignments       → superseded by Course Allocation assignments.
-    |                       AssignmentController@index deliberately lists
-    |                       Assignment::k12() rows ONLY, so on a programme-based
-    |                       school the screen can never show a real assignment.
-    |   Academic Sessions → superseded by Academic Years & Periods. The legacy
-    |                       `sessions` table is bridged onto AcademicYear by
-    |                       AcademicContextManager::mapLegacySession().
+    |   Assignments       → class-based homework, separate from lecturer allocation.
+    |                       AssignmentController@index lists
+    |                       Assignment::k12() rows only, so on a programme-based
+    |                       school this class-based homework screen has no applicable records.
+    |   Class-based Sessions → still active in class-based timetable and other
+    |                          legacy workflows. A year-link column/helper exists,
+    |                          but the UI does not map or synchronize the two
+    |                          current-context selectors; keep this menu visible
+    |                          for schools that use class-based workflows.
     |
     | Keyed on the school type, NOT on $canSeeClasses: that flag is also forced
     | on for higher_ed schools whose staff can reach Online Exams, which use
@@ -395,7 +397,7 @@
             <!-- ACADEMIC                                      -->
             <!-- Direct entries use the institution's academic vocabulary. -->
             <!-- ============================================ -->
-            @if($showAcademicStructureAny || $showTeachingAny || $showAssessmentAny || $navCan('admin.department_list') || $navCan('admin.settings.academic'))
+            @if($showAcademicStructureAny || $showTeachingAny || $showAssessmentAny || $navCan('admin.department_list') || $navCan('admin.settings.academic') || ($navCan('admin.reports.index') && $menuAllows('admin.reports')))
             <li class="nav-section-header">ACADEMIC</li>
             @endif
 
@@ -997,7 +999,6 @@
                     @include('shared.page_toolbar')
                 @endunless
                 <div id="page-print-area">
-                    @include('admin.partials.academic_workflow_guide')
                     @yield('content')
                 </div>
                 <!-- Start Footer -->
