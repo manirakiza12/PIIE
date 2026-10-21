@@ -34,6 +34,8 @@ final class TuitionPesaPalController extends Controller
         $eligibility = app(\App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility::class)->summary($student);
         $canManageWaiver = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'academic.course_registration.fee_waiver');
         return response()->view('shared.tuition_payment', ['fee' => $fee, 'eligibility' => $eligibility, 'canManageWaiver' => $canManageWaiver,
+            'awards' => \Illuminate\Support\Facades\Schema::hasTable('student_fee_awards') ? $fee->awards()->latest('id')->get() : collect(),
+            'canManageAwards' => app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices'),
             'area' => $request->routeIs('parent.*') ? 'parent' : ($request->routeIs('student.*') ? 'student' : 'admin'),
             'payments' => TuitionPayment::where('fee_id', $fee->id)->where('school_id', $fee->school_id)->latest('id')->get()])
             ->header('Cache-Control', 'private, no-store');
@@ -60,6 +62,20 @@ final class TuitionPesaPalController extends Controller
             $result = TuitionPesaPalPayment::reconcile($attempt, $data['order_tracking_id'] ?? null, $data['confirmation_code'] ?? null);
             return back()->with('success', 'Payment status: ' . $result);
         } catch (PesaPalException $exception) { return back()->with('error', 'Payment could not be verified. Do not pay again; contact finance.'); }
+    }
+
+    public function award(Request $request, int $id)
+    {
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices'), 403);
+        $data = $request->validate([
+            'action' => 'required|in:grant,revoke',
+            'type' => 'required_if:action,grant|nullable|in:bursary,scholarship',
+            'amount' => ['required_if:action,grant', 'nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
+            'reference' => 'nullable|string|max:150',
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+        app(\App\Support\Billing\StudentFeeAwards::class)->change($request->user(), $id, $data);
+        return back()->with('success', 'Fee award updated. The invoice balance has been recalculated; payments received are unchanged.');
     }
 
     public function waiver(Request $request, int $id)

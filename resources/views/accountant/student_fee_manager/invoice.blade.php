@@ -38,6 +38,7 @@
               <p class="sub-title">{{ get_phrase('Please find below the invoice') }}</p>
             </div>
             @include('shared.invoice_billing')
+            @include('shared.invoice_award')
           </div>
         </div>
         <div class="col-sm-5">
