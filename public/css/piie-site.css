@@ -962,19 +962,31 @@ html {
     .piie-utility { display: block; }
 }
 
-/* Desktop: the full navigation replaces the burger.
- *
- * `.piie-header__actions` is restored HERE and not at 992px. It used to be restored
- * at 992px while the navigation waited until 1024px, which produced a 32px-wide
- * window (992-1023) with the Apply Now CTA and the Student Portal on screen and no
- * navigation at all - a header that gave the visitor two actions and no menu. Eight
- * navigation entries plus two buttons do not fit at 992px, which is why the break is
- * here rather than lower; so the actions wait with them, and between 992 and 1024 the
- * bar is burger-only, with Apply Now and the portal available inside the panel. */
+/* Desktop: the full navigation replaces the burger. The complete action pair only
+ * returns at 1024px, where the navigation and both buttons fit together. */
 @media (min-width: 1024px) {
     .piie-nav { display: block; }
     .piie-burger { display: none; }
     .piie-header__actions { display: flex; }
+}
+
+/* Keep Login directly visible on phones and compact tablets. Apply Now remains in
+ * the expandable panel so the logo, Login and menu button fit without crowding. */
+@media (max-width: 1023.98px) {
+    .piie-header__actions {
+        display: flex;
+        grid-column: 2;
+        justify-self: end;
+    }
+
+    .piie-header__actions > .piie-btn--primary { display: none; }
+    .piie-header__actions > .piie-btn--ghost {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding-inline: .75rem;
+    }
 }
 
 @media (min-width: 1366px) {
