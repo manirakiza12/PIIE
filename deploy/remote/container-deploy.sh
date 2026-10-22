@@ -64,7 +64,12 @@ install -d -m 700 "$BACK"
     gzip > "$BACK/database.sql.gz"
 )
 gzip -t "$BACK/database.sql.gz"; [ "$(stat -c %s "$BACK/database.sql.gz")" -gt 100 ] || fail 'Empty database backup'
-tar -czf "$BACK/storage.tar.gz" -C "$BASE/shared" storage
+# Laravel log files are append-only and may change while tar reads them (the
+# scheduler writes storage/logs/scheduler.log every minute). They are operational
+# output, not persistent user data, so omit only .log files under storage/logs.
+# Keep the rest of storage, especially storage/app uploads, and let any other tar
+# error remain fatal under set -e.
+tar -czf "$BACK/storage.tar.gz" --exclude='storage/logs/*.log' -C "$BASE/shared" storage
 tar -tzf "$BACK/storage.tar.gz" >/dev/null
 LIVE_UPLOADS=$(readlink -f "$BASE/current/public/assets/uploads")
 case "$LIVE_UPLOADS" in "$BASE"/releases/*/public/assets/uploads|"$BASE"/shared/public-uploads) ;; *) fail 'Unexpected live uploads location';; esac
