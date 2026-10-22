@@ -1,6 +1,7 @@
 @extends('teacher.navigation')
 
 @section('content')
+@php($programmeAttendance = academic_education_level(auth()->user()->school_id) === 'tertiary')
 <div class="mainSection-title">
   <div class="row">
     <div class="col-12">
@@ -15,9 +16,11 @@
             <li><a href="#">{{ get_phrase('Daily Attendance') }}</a></li>
           </ul>
         </div>
+        @unless($programmeAttendance)
         <div class="export-btn-area">
           <a href="#" class="export_btn" onclick="rightModal('{{ route('teacher.take_attendance.open_modal') }}', '{{ get_phrase('Take Attendance') }}')">{{ get_phrase('Take Attendance') }}</a>
         </div>
+        @endunless
       </div>
     </div>
   </div>
@@ -26,6 +29,13 @@
 <div class="row">
   <div class="col-12">
     <div class="eSection-wrap-2">
+      @if($programmeAttendance)
+        <div class="alert alert-info mb-0" role="status">
+          <h5 class="alert-heading">{{ get_phrase('Attendance for programme courses') }}</h5>
+          <p class="mb-0">{{ get_phrase('Choose a course from My Course Allocations, then open its Attendance to record or review the register.') }}</p>
+          <a class="btn btn-sm btn-primary mt-3" href="{{ route('teacher.course_offerings.index') }}">{{ get_phrase('Open My Course Allocations') }}</a>
+        </div>
+      @else
       <!-- Filter area -->
       <form method="GET" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('teacher.daily_attendance.filter') }}">
         <div class="att-filter d-flex flex-wrap">
@@ -81,11 +91,13 @@
           <span class="">{{ get_phrase('No data found') }}</span>
         </div>
       </div>
+      @endif
     </div>
   </div>
 </div>
 @endsection
 
+@unless($programmeAttendance)
 <script type="text/javascript">
 
   "use strict";
@@ -136,3 +148,4 @@ var getDailtyAttendance = function () {
 
 
 </script>
+@endunless

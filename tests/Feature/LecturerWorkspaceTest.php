@@ -101,6 +101,22 @@ class LecturerWorkspaceTest extends TestCase
             ->assertDontSee('Total Teacher');
     }
 
+    public function test_daily_attendance_guides_higher_ed_lecturers_to_course_attendance_and_keeps_k12_filters(): void
+    {
+        $this->actingAs($this->lecturerA)
+            ->get(route('teacher.daily_attendance'))
+            ->assertOk()
+            ->assertSee('Attendance for programme courses')
+            ->assertSee(route('teacher.course_offerings.index'), false)
+            ->assertDontSee('name="class_id"', false)
+            ->assertDontSee('Take Attendance');
+
+        $this->actingAs($this->k12Teacher)
+            ->get(route('teacher.daily_attendance'))
+            ->assertOk()
+            ->assertSee('name="class_id"', false);
+    }
+
     // -------------------------------------------------------------- 14: IDOR
 
     public function test_cross_tenant_and_cross_lecturer_offers_are_denied(): void
