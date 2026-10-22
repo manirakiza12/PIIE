@@ -247,6 +247,27 @@ class PublicContactExperienceTest extends TestCase
         $this->assertStringContainsString('.piie-utility__list', $css);
     }
 
+    public function test_mobile_header_keeps_login_visible_without_opening_the_menu(): void
+    {
+        $css = (string) file_get_contents(public_path('css/piie-site.css'));
+
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*1023\.98px\)\s*\{[^}]*\.piie-header__actions\s*\{[^}]*display:\s*flex[^}]*grid-column:\s*2[^}]*justify-self:\s*end/s',
+            $css,
+            'the Login action must remain visible in the mobile header beside the menu button'
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.piie-header__actions\s*>\s*\.piie-btn--primary\s*\{\s*display:\s*none;\s*\}/',
+            $css,
+            'the wider Apply Now action stays in the mobile menu to preserve header room'
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.piie-header__actions\s*>\s*\.piie-btn--ghost\s*\{[^}]*display:\s*inline-flex[^}]*min-height:\s*44px/s',
+            $css,
+            'the direct Login action remains visible and touch-accessible'
+        );
+    }
+
     // ═══ 3. CONTACT PAGE ═══════════════════════════════════════════════════
 
     public function test_the_contact_page_has_the_four_channel_cards(): void
