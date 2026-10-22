@@ -197,7 +197,6 @@ class AcademicFinanceTenantSecurityTest extends TestCase
     {
         $admin = $this->staff(2, $this->A);
         $fee = $this->fee($this->A, ['amount' => 500, 'discounted_price' => 20, 'total_amount' => 480]);
-        $before = $this->feeRow($fee);
 
         $this->actingAs($admin)->get(route('admin.edit.fee_manager', $fee))
             ->assertOk()
@@ -225,6 +224,7 @@ class AcademicFinanceTenantSecurityTest extends TestCase
     {
         $admin = $this->staff(2, $this->A);
         $fee = $this->fee($this->A, ['amount' => 500, 'discounted_price' => 20, 'total_amount' => 480]);
+        $before = $this->feeRow($fee);
 
         $this->actingAs($admin)->post(route('admin.fee_manager.update', $fee), [
             'title' => 'Invalid discount',
