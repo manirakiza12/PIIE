@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\{StudentFeeManager, StudentOpeningPayment, StudentProfile, TuitionPayment, User};
+use App\Models\{StudentFeeAward, StudentFeeManager, StudentOpeningPayment, StudentProfile, TuitionPayment, User};
 use App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility;
 use App\Support\Payments\StudentOpeningPayments;
+use App\Support\Billing\StudentFeeAwards;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\{DB, Schema};
 use Illuminate\Validation\ValidationException;
@@ -25,6 +26,8 @@ class StudentOpeningPaymentsTest extends TestCase
         (require database_path('migrations/2026_10_19_160000_preserve_school_fee_payment_precision.php'))->up();
         (require database_path('migrations/2026_10_21_060000_create_student_opening_payments.php'))->up();
         (require database_path('migrations/2026_10_22_000000_add_method_to_student_opening_payments.php'))->up();
+        (require database_path('migrations/2026_10_21_050000_create_student_fee_awards_table.php'))->up();
+        (require database_path('migrations/2026_09_23_000003_create_rbac_tables.php'))->up();
         Schema::table('schools', fn (Blueprint $table) => $table->string('school_currency')->default('UGX'));
         $school = $this->makeSchool(['running_session' => 1]);
         $this->admin = $this->makeAdminUser($school);
@@ -152,6 +155,83 @@ class StudentOpeningPaymentsTest extends TestCase
         $this->assertEquals(0, $this->fee->fresh()->paid_amount);
     }
 
+    public function test_invoice_lists_link_once_to_their_own_payment_screen(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.fee_manager.list'))
+            ->assertOk()->assertSee('Invoice payments and fee awards')
+            ->assertSee(route('admin.tuition_payments.show', $this->fee->id))
+            ->assertDontSee('Payments / prior payments / awards');
+        $adminHtml = $this->get(route('admin.fee_manager.list'))->getContent();
+        $this->assertSame(1, substr_count($adminHtml, route('admin.tuition_payments.show', $this->fee->id)));
+
+        $accountant = User::create(['school_id' => $this->fee->school_id, 'role_id' => 4, 'name' => 'Finance',
+            'email' => 'finance-list@example.test', 'account_status' => 'active']);
+        $accountantHtml = $this->actingAs($accountant)->get(route('accountant.fee_manager.list'))
+            ->assertOk()->assertSee('Invoice payments and fee awards')
+            ->assertSee(route('accountant.tuition_payments.show', $this->fee->id))
+            ->getContent();
+        $this->assertSame(1, substr_count($accountantHtml, route('accountant.tuition_payments.show', $this->fee->id)));
+    }
+
+    public function test_accountant_can_reach_and_record_eligible_existing_student_prior_payment(): void
+    {
+        $accountant = User::create(['school_id' => $this->fee->school_id, 'role_id' => 4, 'name' => 'Finance',
+            'email' => 'finance-entry@example.test', 'account_status' => 'active']);
+        $this->assertTrue(app(\App\Support\Permissions\PermissionService::class)->allows($accountant, 'finance.payments'));
+
+        $this->actingAs($accountant)->get(route('accountant.tuition_payments.show', $this->fee->id))
+            ->assertOk()->assertSee('Record prior payment already received')
+            ->assertSee(route('accountant.tuition_payments.opening_payment', $this->fee->id))
+            ->assertDontSee('Pay with PesaPal / resume checkout');
+        $this->actingAs($accountant)->post(route('accountant.tuition_payments.opening_payment', $this->fee->id), [
+            'action' => 'record', 'amount' => '250.00', 'paid_on' => now()->subDay()->toDateString(),
+            'method' => 'bank_transfer', 'reference' => 'ACCOUNTANT-PRIOR-1', 'reason' => 'Original bank receipt verified.'])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertEquals(250, $this->fee->fresh()->opening_paid_amount);
+        $this->assertEquals(0, $this->fee->fresh()->collected_amount);
+    }
+
+    public function test_invoice_viewer_without_payment_permission_sees_reason_but_no_prior_entry_action(): void
+    {
+        $viewer = User::create(['school_id' => $this->fee->school_id, 'role_id' => 3, 'name' => 'Finance Viewer',
+            'email' => 'finance-viewer@example.test', 'account_status' => 'active']);
+        foreach (['finance.view', 'finance.invoices'] as $permission) {
+            DB::table('user_permissions')->insert(['school_id' => $this->fee->school_id, 'user_id' => $viewer->id,
+                'permission' => $permission, 'created_at' => now(), 'updated_at' => now()]);
+        }
+
+        $this->actingAs($viewer)->get(route('admin.tuition_payments.show', $this->fee->id))
+            ->assertOk()->assertSee('does not have the finance payment-approval permission')
+            ->assertSee('Record fee award')->assertDontSee('Verify and apply prior payment');
+        $this->actingAs($viewer)->post(route('admin.tuition_payments.opening_payment', $this->fee->id), [
+            'action' => 'record', 'amount' => '100.00', 'paid_on' => now()->toDateString(), 'method' => 'cash',
+            'reference' => 'VIEWER-UNAUTHORIZED', 'reason' => 'Viewer cannot approve prior payment.'])->assertForbidden();
+        $this->assertSame(0, StudentOpeningPayment::count());
+        $this->assertEquals(0, $this->fee->fresh()->paid_amount);
+    }
+
+    public function test_award_and_prior_payment_have_separate_invoice_actions_and_accounting(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $this->fee->id))
+            ->assertOk()->assertSee('Record prior payment already received')->assertSee('Record fee award');
+        $this->record(['amount' => '100.00']);
+        app(StudentFeeAwards::class)->change($this->admin, $this->fee->id, [
+            'action' => 'grant', 'type' => 'scholarship', 'amount' => '200.00', 'reference' => 'SCH-200',
+            'reason' => 'Approved scholarship coverage for this session.']);
+
+        $html = $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $this->fee->id))
+            ->assertOk()->assertSee('Prior payments already received')->assertSee('Record prior payment already received')
+            ->assertSee('Scholarship or bursary award')->assertSee('Revoke award and restore fee')->getContent();
+        $this->assertSame(2, substr_count($html, route('admin.tuition_payments.opening_payment', $this->fee->id)));
+        $this->assertSame(1, substr_count($html, route('admin.tuition_payments.award', $this->fee->id)));
+        $this->assertSame(1, StudentOpeningPayment::count());
+        $this->assertSame(1, StudentFeeAward::count());
+        $this->assertSame(0, TuitionPayment::count());
+        $this->assertEquals(100, $this->fee->fresh()->opening_paid_amount);
+        $this->assertEquals(0, $this->fee->fresh()->collected_amount);
+        $this->assertEquals(100, $this->fee->fresh()->paid_amount);
+    }
+
     public function test_invalid_precision_future_dates_and_missing_receipts_are_rejected(): void
     {
         $this->actingAs($this->admin)->post(route('admin.tuition_payments.opening_payment', $this->fee->id), [
@@ -249,7 +329,7 @@ class StudentOpeningPaymentsTest extends TestCase
         $regularFee = $this->fee->replicate();
         $regularFee->forceFill(['student_id' => $regularStudent->id, 'paid_amount' => 0, 'opening_paid_amount' => 0])->save();
         $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $regularFee->id))
-            ->assertOk()->assertDontSee('Record a verified prior payment');
+            ->assertOk()->assertSee('Prior payment entry unavailable')->assertDontSee('Record prior payment already received');
         try {
             app(StudentOpeningPayments::class)->change($this->admin, $regularFee->id, [
                 'action' => 'record', 'amount' => '100.00', 'paid_on' => now()->toDateString(), 'method' => 'cash',

@@ -41,7 +41,7 @@ final class TuitionPesaPalController extends Controller
             'canManageOpeningPayments' => $isAdminAddedExisting && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'),
             'awards' => \Illuminate\Support\Facades\Schema::hasTable('student_fee_awards') ? $fee->awards()->latest('id')->get() : collect(),
             'canManageAwards' => app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices'),
-            'area' => $request->routeIs('parent.*') ? 'parent' : ($request->routeIs('student.*') ? 'student' : 'admin'),
+            'area' => $request->routeIs('parent.*') ? 'parent' : ($request->routeIs('student.*') ? 'student' : ($request->routeIs('accountant.*') ? 'accountant' : 'admin')),
             'payments' => TuitionPayment::where('fee_id', $fee->id)->where('school_id', $fee->school_id)->latest('id')->get()])
             ->header('Cache-Control', 'private, no-store');
     }

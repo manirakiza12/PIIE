@@ -2838,6 +2838,13 @@ Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middle
     Route::post('admin/fee-payments/{id}/{payment}/check', 'check')->middleware('throttle:10,1')->name('admin.payment.pesapal.check');
 });
 
+Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middleware(['auth', 'accountant', 'admin', 'rbac'])->group(function () {
+    Route::get('accountant/fee-payments/{id}', 'index')->name('accountant.tuition_payments.show');
+    Route::post('accountant/fee-payments/{id}/prior-payment', 'openingPayment')->name('accountant.tuition_payments.opening_payment');
+    Route::post('accountant/fee-payments/{id}/award', 'award')->name('accountant.tuition_payments.award');
+    Route::post('accountant/fee-payments/{id}/{payment}/check', 'check')->middleware('throttle:10,1')->name('accountant.payment.pesapal.check');
+});
+
 // Personal staff IDs are available in every employee portal without admin permissions.
 Route::middleware(['auth', 'school_subscription'])->group(function () {
     Route::get('staff/id-card', [\App\Http\Controllers\StaffIdCardController::class, 'show'])->name('staff.id_card');
