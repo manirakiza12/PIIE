@@ -1,6 +1,15 @@
 @extends('admin.navigation')
 
 @section('content')
+@php
+  $programmeAttendance = academic_education_level(auth()->user()->school_id) === 'tertiary';
+  $adminMenuPermission = empty(auth()->user()->menu_permission) || auth()->user()->menu_permission == 'null'
+      ? []
+      : (json_decode(auth()->user()->menu_permission, true) ?: []);
+  $canOpenCourseAllocations = (empty(auth()->user()->menu_permission)
+      || in_array('admin.course_offerings.index', $adminMenuPermission, true))
+      && app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'academic.course_offering.view');
+@endphp
 <div class="mainSection-title">
   <div class="row">
     <div class="col-12">
@@ -15,9 +24,11 @@
             <li><a href="#">{{ get_phrase('Daily Attendance') }}</a></li>
           </ul>
         </div>
+        @unless($programmeAttendance)
         <div class="export-btn-area">
           <a href="#" class="export_btn" onclick="rightModal('{{ route('admin.take_attendance.open_modal') }}', '{{ get_phrase('Take Attendance') }}')">{{ get_phrase('Take Attendance') }}</a>
         </div>
+        @endunless
       </div>
     </div>
   </div>
@@ -26,6 +37,15 @@
 <div class="row">
   <div class="col-12">
     <div class="eSection-wrap-2">
+      @if($programmeAttendance)
+        <div class="alert alert-info mb-0" role="status">
+          <h5 class="alert-heading">{{ get_phrase('Attendance for programme courses') }}</h5>
+          <p class="mb-0">{{ get_phrase('This screen is for class-based attendance. For programme students, lecturers record attendance from My Course Allocations, within each course.') }}</p>
+          @if($canOpenCourseAllocations)
+            <a class="btn btn-sm btn-primary mt-3" href="{{ route('admin.course_offerings.index') }}">{{ get_phrase('Open Course Allocations') }}</a>
+          @endif
+        </div>
+      @else
       <!-- Filter area -->
       <form method="GET" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.daily_attendance.filter') }}">
         <div class="att-filter d-flex flex-wrap">
@@ -81,11 +101,13 @@
           <span class="">{{ get_phrase('No data found') }}</span>
         </div>
       </div>
+      @endif
     </div>
   </div>
 </div>
 @endsection
 
+@unless($programmeAttendance)
 <script type="text/javascript">
 
   "use strict";
@@ -136,3 +158,4 @@ var getDailtyAttendance = function () {
 
 
 </script>
+@endunless

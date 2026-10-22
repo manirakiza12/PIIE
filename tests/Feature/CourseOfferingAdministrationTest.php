@@ -952,6 +952,12 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
         $this->assertNotContains(route('admin.programme_cohorts.index'), $destinations);
         $this->assertNotContains(route('admin.class_list'), $destinations);
         $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Student Course Registration');
+        $this->get(route('admin.daily_attendance'))
+            ->assertOk()
+            ->assertSee('Attendance for programme courses')
+            ->assertSee(route('admin.course_offerings.index'), false)
+            ->assertDontSee('name="class_id"', false)
+            ->assertDontSee('Take Attendance');
         // Keep the direct destination when a legacy restriction prevents opening Programmes.
         $admin->forceFill(['menu_permission'=>json_encode(['admin.programme_cohorts.index'])])->save();
         $restricted=$this->actingAs($admin->fresh())->get(route('admin.course_offerings.index'))->assertOk();
