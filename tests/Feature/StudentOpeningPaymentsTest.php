@@ -222,7 +222,7 @@ class StudentOpeningPaymentsTest extends TestCase
         $html = $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $this->fee->id))
             ->assertOk()->assertSee('Prior payments already received')->assertSee('Record prior payment already received')
             ->assertSee('Scholarship or bursary award')->assertSee('Revoke award and restore fee')->getContent();
-        $this->assertSame(1, substr_count($html, route('admin.tuition_payments.opening_payment', $this->fee->id)));
+        $this->assertSame(2, substr_count($html, route('admin.tuition_payments.opening_payment', $this->fee->id)));
         $this->assertSame(1, substr_count($html, route('admin.tuition_payments.award', $this->fee->id)));
         $this->assertSame(1, StudentOpeningPayment::count());
         $this->assertSame(1, StudentFeeAward::count());
