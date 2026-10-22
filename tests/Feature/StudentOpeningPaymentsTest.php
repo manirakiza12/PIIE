@@ -212,6 +212,8 @@ class StudentOpeningPaymentsTest extends TestCase
 
     public function test_award_and_prior_payment_have_separate_invoice_actions_and_accounting(): void
     {
+        $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $this->fee->id))
+            ->assertOk()->assertSee('Record prior payment already received')->assertSee('Record fee award');
         $this->record(['amount' => '100.00']);
         app(StudentFeeAwards::class)->change($this->admin, $this->fee->id, [
             'action' => 'grant', 'type' => 'scholarship', 'amount' => '200.00', 'reference' => 'SCH-200',
@@ -219,7 +221,7 @@ class StudentOpeningPaymentsTest extends TestCase
 
         $html = $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $this->fee->id))
             ->assertOk()->assertSee('Prior payments already received')->assertSee('Record prior payment already received')
-            ->assertSee('Scholarship or bursary award')->assertSee('Record fee award')->getContent();
+            ->assertSee('Scholarship or bursary award')->assertSee('Revoke award and restore fee')->getContent();
         $this->assertSame(1, substr_count($html, route('admin.tuition_payments.opening_payment', $this->fee->id)));
         $this->assertSame(1, substr_count($html, route('admin.tuition_payments.award', $this->fee->id)));
         $this->assertSame(1, StudentOpeningPayment::count());
