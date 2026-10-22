@@ -193,6 +193,52 @@ class AcademicFinanceTenantSecurityTest extends TestCase
         $this->assertFalse(DB::table('student_fee_managers')->where('title', 'ForeignCreate')->exists());
     }
 
+    public function test_admin_invoice_edit_uses_existing_student_and_saves_gross_discount_and_net_amount(): void
+    {
+        $admin = $this->staff(2, $this->A);
+        $fee = $this->fee($this->A, ['amount' => 500, 'discounted_price' => 20, 'total_amount' => 480]);
+        $before = $this->feeRow($fee);
+
+        $this->actingAs($admin)->get(route('admin.edit.fee_manager', $fee))
+            ->assertOk()
+            ->assertSee('StudentASecret')
+            ->assertDontSee('Select a class')
+            ->assertDontSee('student_id_on_create');
+
+        $this->actingAs($admin)->post(route('admin.fee_manager.update', $fee), [
+            'title' => 'Updated tuition',
+            'amount' => '700.00',
+            'discounted_price' => '50.00',
+        ])->assertRedirect();
+
+        $updated = $this->feeRow($fee);
+        $this->assertSame('Updated tuition', $updated->title);
+        $this->assertEquals(700, $updated->amount);
+        $this->assertEquals(50, $updated->discounted_price);
+        $this->assertEquals(650, $updated->total_amount);
+        $this->assertSame($this->A['student']->id, (int) $updated->student_id);
+        $this->assertSame((int) $this->A['class'], (int) $updated->class_id);
+        $this->assertSame(1, (int) $updated->session_id);
+    }
+
+    public function test_admin_invoice_edit_rejects_a_discount_above_the_invoice_amount(): void
+    {
+        $admin = $this->staff(2, $this->A);
+        $fee = $this->fee($this->A, ['amount' => 500, 'discounted_price' => 20, 'total_amount' => 480]);
+
+        $this->actingAs($admin)->post(route('admin.fee_manager.update', $fee), [
+            'title' => 'Invalid discount',
+            'amount' => '100.00',
+            'discounted_price' => '150.00',
+        ])->assertSessionHasErrors('discounted_price');
+
+        $unchanged = $this->feeRow($fee);
+        $this->assertSame($before->title, $unchanged->title);
+        $this->assertEquals(500, $unchanged->amount);
+        $this->assertEquals(20, $unchanged->discounted_price);
+        $this->assertEquals(480, $unchanged->total_amount);
+    }
+
     public function test_same_school_invoice_management_cannot_forge_payment(): void
     {
         $admin = $this->staff(2, $this->A);

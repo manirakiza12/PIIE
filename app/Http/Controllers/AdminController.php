@@ -4514,11 +4514,13 @@ class AdminController extends Controller
 
     public function editFeeManager($id = '')
     {
-        $this->findSchoolFeeOrFail($id);
-        $invoice_details = StudentFeeManager::find($id);
-        $enrollments     = Enrollment::get()->where('class_id', $invoice_details->class_id);
-        $classes         = Classes::where('school_id', auth()->user()->school_id)->get();
-        return view('admin.student_fee_manager.edit', ['invoice_details' => $invoice_details, 'classes' => $classes, 'enrollments' => $enrollments]);
+        $invoice_details = $this->findSchoolFeeOrFail($id);
+        $student = User::whereKey($invoice_details->student_id)
+            ->where('school_id', auth()->user()->school_id)
+            ->where('role_id', 7)
+            ->firstOrFail();
+
+        return view('admin.student_fee_manager.edit', compact('invoice_details', 'student'));
     }
 
     public function feeManagerUpdate(Request $request, $id = '')
@@ -4529,43 +4531,56 @@ class AdminController extends Controller
             abort_if($existing->hasAwardHistory(), 422, 'Invoices with award history must be managed through the bursary and scholarship controls.');
             abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be edited.');
             $request->merge(['paid_amount' => $existing->paid_amount, 'status' => $existing->status, 'payment_method' => $existing->payment_method]);
-            $data = $request->all();
+            $data = $request->validate([
+                'title' => ['required', 'string', 'max:255'],
+                'amount' => ['nullable', 'numeric', 'min:0'],
+                'total_amount' => ['nullable', 'numeric', 'min:0'],
+                'discounted_price' => ['nullable', 'numeric', 'min:0'],
+                'student_id' => ['nullable', 'integer'],
+                'class_id' => ['nullable', 'integer'],
+            ]);
 
-            /*GET THE PREVIOUS INVOICE DETAILS FOR GETTING THE PAID AMOUNT*/
-            \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
-            if (!$this->isSchoolStudent($data['student_id'] ?? null)) {
+            $studentId = $data['student_id'] ?? $existing->student_id;
+            if (!$this->isSchoolStudent($studentId)) {
                 return redirect()->back()->with('error', 'Student not found.');
             }
-            $previous_invoice_data = StudentFeeManager::find($id);
 
-            if ($data['paid_amount'] > $data['total_amount']) {
+            $discountedPrice = (float) ($data['discounted_price'] ?? $existing->discounted_price ?? 0);
+            if (array_key_exists('amount', $data) && $data['amount'] !== null) {
+                $amount = (float) $data['amount'];
+            } elseif (array_key_exists('total_amount', $data) && $data['total_amount'] !== null) {
+                $amount = (float) $data['total_amount'] + $discountedPrice;
+            } else {
+                $amount = (float) ($existing->amount ?: $existing->total_amount);
+            }
+
+            if ($discountedPrice > $amount) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'discounted_price' => 'The discount cannot exceed the invoice amount.',
+                ]);
+            }
+
+            $totalAmount = array_key_exists('amount', $data) && $data['amount'] !== null
+                ? $amount - $discountedPrice
+                : (array_key_exists('total_amount', $data) && $data['total_amount'] !== null
+                    ? (float) $data['total_amount']
+                    : (float) $existing->total_amount);
+
+            if ((float) $existing->paid_amount > $totalAmount) {
 
                 return redirect()->back()->with('error', 'Paid amount can not get bigger than total amount');
             }
-            if ($data['status'] == 'paid' && $data['total_amount'] != $data['paid_amount']) {
+            if ($existing->status == 'paid' && $totalAmount != (float) $existing->paid_amount) {
                 return redirect()->back()->with('error', 'Paid amount is not equal to total amount');
             }
 
-            /*KEEPING TRACK OF PAYMENT DATE*/
-            if ($data['paid_amount'] != $previous_invoice_data['paid_amount'] && $data['paid_amount'] == $previous_invoice_data['total_amount']) {
-                $timestamp = strtotime(date('d-M-Y'));
-            } else {
-                $timestamp = $previous_invoice_data['timestamp'];
-            }
-
-            $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-
-            StudentFeeManager::where('id', $id)->update([
-                'title'          => $data['title'],
-                'total_amount'   => $data['total_amount'],
-                'class_id'       => $data['class_id'],
-                'student_id'     => $data['student_id'],
-                'paid_amount'    => $data['paid_amount'],
-                'payment_method' => $data['payment_method'],
-                'timestamp'      => $timestamp,
-                'status'         => $data['status'],
-                'school_id'      => auth()->user()->school_id,
-                'session_id'     => $active_session,
+            $existing->update([
+                'title' => $data['title'],
+                'amount' => $amount,
+                'discounted_price' => $discountedPrice,
+                'total_amount' => $totalAmount,
+                'class_id' => $data['class_id'] ?? $existing->class_id,
+                'student_id' => $studentId,
             ]);
 
             return redirect()->back()->with('message', 'You have successfully update invoice.');
