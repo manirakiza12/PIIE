@@ -30,6 +30,9 @@ final class StudentOpeningPayments
                 $this->reject('Finance must reconcile this invoice before recording prior payments.');
             }
             if ($data['action'] === 'record') {
+                if (! in_array($data['method'] ?? null, ['cash', 'bank_transfer', 'mobile_money', 'card', 'cheque', 'other'], true)) {
+                    $this->reject('Select the verified payment method.');
+                }
                 $reference = trim($data['reference']);
                 $hash = hash('sha256', mb_strtolower(preg_replace('/\s+/u', '', $reference)));
                 if (StudentOpeningPayment::where('school_id', $fee->school_id)->where('reference_hash', $hash)->exists()) {

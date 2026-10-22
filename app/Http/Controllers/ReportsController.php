@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ReportsController extends Controller
 {
@@ -122,17 +123,35 @@ class ReportsController extends Controller
         $from_ts = strtotime($from);
         $to_ts   = strtotime($to) + 86400;
 
-        $invoices = StudentFeeManager::where('school_id', $school_id)
+        $invoiceQuery = StudentFeeManager::where('school_id', $school_id)
             ->where('timestamp', '>=', $from_ts)
-            ->where('timestamp', '<', $to_ts)
-            ->orderByDesc('timestamp')
-            ->paginate(30);
+            ->where('timestamp', '<', $to_ts);
+        if (Schema::hasTable('student_fee_awards')) {
+            $invoiceQuery->with(['awards' => fn ($query) => $query->whereNull('revoked_at')]);
+        }
+        $invoices = $invoiceQuery->orderByDesc('timestamp')->paginate(30);
+
+        $awardAmounts = collect();
+        $awardsInPeriod = 0.0;
+        if (Schema::hasTable('student_fee_awards')) {
+            $awardAmounts = DB::table('student_fee_awards')->where('school_id', $school_id)->whereNull('revoked_at')
+                ->whereIn('fee_id', $invoices->getCollection()->pluck('id'))
+                ->selectRaw('fee_id, SUM(amount) as award_amount')->groupBy('fee_id')->pluck('award_amount', 'fee_id');
+            $awardsInPeriod = (float) DB::table('student_fee_awards')->join('student_fee_managers', 'student_fee_managers.id', '=', 'student_fee_awards.fee_id')
+                ->where('student_fee_awards.school_id', $school_id)->whereNull('student_fee_awards.revoked_at')
+                ->where('student_fee_managers.timestamp', '>=', $from_ts)->where('student_fee_managers.timestamp', '<', $to_ts)->sum('student_fee_awards.amount');
+        }
+        $invoices->getCollection()->each(function ($invoice) use ($awardAmounts) {
+            $invoice->award_amount = (float) ($awardAmounts[$invoice->id] ?? 0);
+        });
 
         $totals = StudentFeeManager::where('school_id', $school_id)
             ->where('timestamp', '>=', $from_ts)
             ->where('timestamp', '<', $to_ts)
             ->selectRaw('SUM(total_amount) as invoiced, SUM(paid_amount) as paid, SUM(' . StudentFeeManager::collectionAmountSql() . ') as collected')
             ->first();
+        $totals->awards = $awardsInPeriod;
+        $totals->gross_invoiced = (float) $totals->invoiced + $awardsInPeriod;
 
         return view('admin.reports.finance', compact('invoices', 'totals', 'from', 'to'));
     }
@@ -193,11 +212,16 @@ class ReportsController extends Controller
                         fputcsv($out, [$i+1, $s->name, $s->email, $s->code, $s->status ? 'Active' : 'Inactive', $s->created_at->format('Y-m-d')]);
                     });
             } elseif ($type === 'finance') {
-                fputcsv($out, ['#', 'Title', 'Total', 'Paid', 'Status']);
-                StudentFeeManager::where('school_id', $school_id)->orderByDesc('id')
-                    ->each(function ($f, $i) use ($out) {
-                        fputcsv($out, [$i+1, $f->title, $f->total_amount, $f->paid_amount, $f->status]);
-                    });
+                fputcsv($out, ['#', 'Title', 'Gross billed', 'Bursary / scholarship', 'Net payable', 'Paid balance', 'Cash collected', 'Status']);
+                $fees = StudentFeeManager::where('school_id', $school_id);
+                if (Schema::hasTable('student_fee_awards')) {
+                    $fees->with(['awards' => fn ($query) => $query->whereNull('revoked_at')]);
+                }
+                $fees->orderByDesc('id')->each(function ($f, $i) use ($out) {
+                    $awards = $f->relationLoaded('awards') ? (float) $f->awards->sum('amount') : 0.0;
+                    fputcsv($out, [$i+1, $f->title, (float) $f->total_amount + $awards, $awards, $f->total_amount,
+                        $f->paid_amount, $f->collected_amount, $f->status]);
+                });
             } elseif ($type === 'attendance') {
                 $classes  = Classes::where('school_id', $school_id)->get();
                 $class_id = $request->class_id ?? ($classes->first()?->id ?? null);

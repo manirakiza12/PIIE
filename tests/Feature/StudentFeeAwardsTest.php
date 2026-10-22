@@ -52,6 +52,18 @@ class StudentFeeAwardsTest extends TestCase
         $this->assertSame($this->admin->id, StudentFeeAward::first()->approved_by);
     }
 
+    public function test_finance_report_separates_awards_from_student_cash_and_net_balance(): void
+    {
+        $this->fee->update(['paid_amount' => 100, 'timestamp' => time()]);
+        $this->grant('400.00');
+
+        $this->actingAs($this->admin)->get(route('admin.reports.finance'))->assertOk()
+            ->assertViewHas('totals', fn ($totals) => (float) $totals->invoiced === 500.0
+                && (float) $totals->gross_invoiced === 900.0 && (float) $totals->awards === 400.0
+                && (float) $totals->paid === 100.0 && (float) $totals->collected === 100.0)
+            ->assertSee('Gross billed')->assertSee('Bursaries and scholarships');
+    }
+
     public function test_reduced_fee_drives_twenty_percent_requirement(): void
     {
         $this->fee->update(['paid_amount' => 100]);

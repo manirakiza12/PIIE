@@ -155,7 +155,7 @@ class StudentOpeningPaymentsTest extends TestCase
     public function test_invalid_precision_future_dates_and_missing_receipts_are_rejected(): void
     {
         $this->actingAs($this->admin)->post(route('admin.tuition_payments.opening_payment', $this->fee->id), [
-            'action' => 'record', 'amount' => '1.001', 'paid_on' => now()->addDay()->toDateString(), 'method' => 'cash', 'reason' => 'short'])
+            'action' => 'record', 'amount' => '1.001', 'paid_on' => now()->addDay()->toDateString(), 'reason' => 'short'])
             ->assertSessionHasErrors(['amount', 'paid_on', 'method', 'reference', 'reason']);
         $this->assertSame(0, StudentOpeningPayment::count());
     }
