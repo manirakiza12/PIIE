@@ -52,7 +52,7 @@ class StudentRequestsTest extends TestCase
         ]);
     }
 
-    public function test_a_student_can_submit_a_transfer_request(): void
+    public function test_generic_request_form_cannot_bypass_structured_transfer_application(): void
     {
         $schoolId = $this->makeSchool();
         $student = $this->makeStudent($schoolId, 'req.transfer@example.com');
@@ -63,13 +63,8 @@ class StudentRequestsTest extends TestCase
             'details' => 'I am relocating for work.',
         ]);
 
-        $response->assertRedirect(route('student.requests.index'));
-        $this->assertDatabaseHas('student_requests', [
-            'student_id' => $student->id,
-            'school_id' => $schoolId,
-            'type' => StudentRequest::TYPE_TRANSFER,
-            'status' => StudentRequest::STATUS_PENDING,
-        ]);
+        $response->assertSessionHasErrors('type');
+        $this->assertDatabaseMissing('student_requests', ['student_id' => $student->id]);
     }
 
     public function test_an_invalid_request_type_is_rejected(): void
@@ -230,6 +225,54 @@ class StudentRequestsTest extends TestCase
             'transfer_to_programme_id' => 999999,
             'transfer_reason' => 'career_change',
         ])->assertSessionHasErrors('transfer_to_programme_id');
+    }
+
+    public function test_a_transfer_application_cannot_target_another_schools_programme(): void
+    {
+        $schoolId = $this->makeSchool();
+        $otherSchoolId = $this->makeSchool();
+        $student = $this->makeStudent($schoolId, 'transfers.foreignprogramme@example.com');
+        $foreignProgrammeId = $this->makeProgramme($otherSchoolId, ['name' => 'Foreign Programme']);
+
+        $this->actingAs($student)->post(route('student.transfers.store'), [
+            'transfer_type' => 'change_of_programme',
+            'transfer_to_programme_id' => $foreignProgrammeId,
+            'transfer_reason' => 'career_change',
+        ])->assertSessionHasErrors('transfer_to_programme_id');
+
+        $this->assertDatabaseMissing('student_requests', ['student_id' => $student->id]);
+    }
+
+    public function test_submitting_or_reviewing_a_transfer_does_not_change_student_enrollment(): void
+    {
+        $schoolId = $this->makeSchool();
+        $student = $this->makeStudent($schoolId, 'transfers.noenrollmentchange@example.com');
+        $targetProgrammeId = $this->makeProgramme($schoolId);
+        $classId = $this->makeClass($schoolId, ['id' => 17]);
+        $sectionId = $this->makeSection($classId, ['id' => 23]);
+        \Illuminate\Support\Facades\DB::table('enrollment')->insert([
+            'user_id' => $student->id, 'class_id' => $classId, 'section_id' => $sectionId,
+            'school_id' => $schoolId, 'department_id' => 0, 'session_id' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->post(route('student.transfers.store'), [
+            'transfer_type' => 'change_of_programme',
+            'transfer_to_programme_id' => $targetProgrammeId,
+            'transfer_reason' => 'career_change',
+        ])->assertRedirect(route('student.transfers.index'));
+
+        $transfer = StudentRequest::where('student_id', $student->id)->firstOrFail();
+        $this->assertDatabaseHas('enrollment', ['user_id' => $student->id, 'class_id' => $classId, 'section_id' => $sectionId]);
+
+        $reviewer = $this->makeAdminUser($schoolId);
+        $this->actingAs($reviewer)->post(route('admin.student_requests.update', $transfer->id), [
+            'status' => StudentRequest::STATUS_APPROVED,
+            'admin_response' => 'Approved for review by the academic office.',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('enrollment', ['user_id' => $student->id, 'class_id' => $classId, 'section_id' => $sectionId]);
+        $this->assertEquals($targetProgrammeId, $transfer->fresh()->transfer_to_programme_id);
     }
 
     public function test_the_submitted_transfer_appears_in_my_transfers_with_readable_labels(): void

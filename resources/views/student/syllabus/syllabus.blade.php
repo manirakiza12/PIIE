@@ -1,7 +1,3 @@
-<?php
-use App\Models\Subject;
-?>
-
 @extends('student.navigation')
 
 @section('content')
@@ -12,11 +8,11 @@ use App\Models\Subject;
               class="d-flex justify-content-between align-items-center flex-wrap gr-15"
             >
                 <div class="d-flex flex-column">
-                    <h4>{{ get_phrase('Syllabus') }}</h4>
+                    <h4>{{ get_phrase('Syllabus & Learning Materials') }}</h4>
                     <ul class="d-flex align-items-center eBreadcrumb-2">
-                        <li><a href="#">{{ get_phrase('Home') }}</a></li>
-                        <li><a href="#">{{ get_phrase('Academic') }}</a></li>
-                        <li><a href="#">{{ get_phrase('Syllabus') }}</a></li>
+                        <li><a href="{{ route('student.dashboard') }}">{{ get_phrase('Home') }}</a></li>
+                        <li><a href="{{ route('student.my_courses') }}">{{ get_phrase('My Learning') }}</a></li>
+                        <li>{{ get_phrase('Syllabus & Learning Materials') }}</li>
                     </ul>
                 </div>
             </div>
@@ -25,36 +21,41 @@ use App\Models\Subject;
 </div>
 
 <div class="row">
-    <div class="col-8 offset-md-2">
+    <div class="col-12">
         <div class="eSection-wrap pb-2">
             @if(count($syllabuses) > 0)
-            <table id="basic-datatable" class="table eTable">
+            <div class="table-responsive">
+            <table id="basic-datatable" class="table eTable align-middle">
                 <thead>
                     <tr>
-                        <th>{{ get_phrase('Title') }}</th>
-                        <th>{{ get_phrase('Syllabus') }}</th>
-                        <th>{{ get_phrase('Subject') }}</th>
+                        <th scope="col">{{ get_phrase('Material') }}</th>
+                        <th scope="col">{{ get_phrase('Course Unit') }}</th>
+                        <th scope="col">{{ get_phrase('File') }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($syllabuses as $syllabus)
                         <tr>
-                            <td>{{ $syllabus['title'] }}</td>
-                            <td><a href="{{ asset('assets/uploads/syllabus') }}/{{ $syllabus['file'] }}" class="btn btn-primary btn-sm bi bi-download" download>{{ get_phrase('Download') }}</a></td>
+                            <td>{{ $syllabus->title }}</td>
+                            <td>{{ $syllabus->subject_name }}</td>
                             <td>
-                                <?php $subjects = Subject::find($syllabus['subject_id']); ?>
-                                {{ $subjects->name }}
+                                @if($syllabus->file)
+                                    <a href="{{ asset('assets/uploads/syllabus/'.basename($syllabus->file)) }}" class="btn btn-primary btn-sm" download>{{ get_phrase('Download') }}</a>
+                                @else
+                                    <span class="text-muted">{{ get_phrase('No file attached') }}</span>
+                                @endif
                             </td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
+            </div>
             {!! $syllabuses->appends(request()->all())->links() !!}
             @else
             <div class="empty_box center">
                 <img class="mb-3" width="150px" src="{{ asset('assets/images/empty_box.png') }}" />
                 <br>
-                <span class="">{{ get_phrase('No data found') }}</span>
+                <span>{{ get_phrase('No syllabus materials are available for your class and section this academic session.') }}</span>
             </div>
             @endif
         </div>

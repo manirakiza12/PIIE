@@ -1,5 +1,3 @@
-<?php use App\Models\Classes; ?>
-
 @extends('student.navigation')
    
 @section('content')
@@ -10,11 +8,12 @@
               class="d-flex justify-content-between align-items-center flex-wrap gr-15"
             >
                 <div class="d-flex flex-column">
-                    <h4>{{ get_phrase('Subjects') }}</h4>
+                    <h4>{{ get_phrase('Course Units') }}</h4>
                     <ul class="d-flex align-items-center eBreadcrumb-2">
                         <li><a href="#">{{ get_phrase('Home') }}</a></li>
                         <li><a href="#">{{ get_phrase('Academic') }}</a></li>
-                        <li><a href="#">{{ get_phrase('Subjects') }}</a></li>
+                        <li><a href="{{ route('student.my_courses') }}">{{ get_phrase('My Learning') }}</a></li>
+                        <li>{{ get_phrase('Course Units') }}</li>
                     </ul>
                 </div>
             </div>
@@ -29,18 +28,15 @@
         		<table id="basic-datatable" class="table eTable">
         			<thead>
 						<tr>
-							<th>{{ get_phrase('Name') }}</th>
+                            <th>{{ get_phrase('Course Unit') }}</th>
                             <th>{{ academic_term('class', auth()->user()->school_id) }}</th>
 						</tr>
 					</thead>
 					<tbody>
 						@foreach($subjects as $subject)
 						<tr>
-							<td>{{ $subject['name'] }}</td>
-                            <td>
-                                <?php $class_details = Classes::find($subject['class_id']); ?>
-                                {{ $class_details['name'] }}
-                            </td>
+                            <td>{{ $subject->code ? $subject->code.' — ' : '' }}{{ $subject->name }}</td>
+                            <td>{{ $subject->class_name }}</td>
 						</tr>
 						@endforeach
 					</tbody>
