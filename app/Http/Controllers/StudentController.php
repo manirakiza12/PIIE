@@ -743,11 +743,22 @@ class StudentController extends Controller
      */
     public function subjectList()
     {
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
+        $student = auth()->user();
 
-        $student_data = (new CommonController)->get_student_details_by_id(auth()->user()->id);
+        // The legacy Subjects page is class/session-backed. Programme students
+        // get their Course Units through Course Allocations on My Courses; the
+        // class_id=0 query below can never find those units and leaves them with
+        // a misleading empty list. Send them to the allocation-backed source.
+        if ($this->studentCoursePath($student) !== 'legacy') {
+            return redirect()->route('student.my_courses')
+                ->with('info', 'Programme Course Units and lecturer allocations are shown under My Courses.');
+        }
+
+        $active_session = get_school_settings($student->school_id)->value('running_session');
+
+        $student_data = (new CommonController)->get_student_details_by_id($student->id);
         $subjects     = Subject::where('class_id', $student_data['class_id'])
-            ->where('school_id', auth()->user()->school_id)
+            ->where('school_id', $student->school_id)
             ->where('session_id', $active_session)
             ->paginate(10);
 

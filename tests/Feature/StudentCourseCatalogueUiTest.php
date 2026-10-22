@@ -124,6 +124,14 @@ class StudentCourseCatalogueUiTest extends TestCase
             ->get(route('student.my_courses').($query ? '?'.http_build_query($query) : ''));
     }
 
+    public function test_programme_student_course_units_link_uses_allocation_backed_my_courses(): void
+    {
+        $this->actingAs($this->student)
+            ->get(route('student.subject_list'))
+            ->assertRedirect(route('student.my_courses'))
+            ->assertSessionHas('info', 'Programme Course Units and lecturer allocations are shown under My Courses.');
+    }
+
     /**
      * The course titles actually rendered on cards.
      *
