@@ -1,5 +1,6 @@
 <section class="border rounded p-3 my-3" aria-label="Prior payments">
-<h2 class="h5">Payments made before joining the system</h2>
+<h2 class="h5">Prior payments already received</h2>
+<p>These are verified payments the student made before their account was added. They reduce this invoice balance and are kept separate from new cash collections.</p>
 <p>Previously paid: {{ number_format($fee->opening_paid_amount ?? 0, 2) }}<br>
 New payments received: {{ number_format($fee->collected_amount, 2) }}<br>
 Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount), 2) }}</p>
@@ -8,13 +9,13 @@ Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount)
 <p>Method: {{ str_replace('_', ' ', ucfirst($entry->method ?? 'not recorded')) }}</p>
 <p>Receipt: {{ $entry->reference }} · {{ $entry->paid_on->format('d M Y') }} · {{ number_format($entry->amount, 2) }}
 <strong>{{ $entry->reversed_at ? 'Reversed' : 'Verified prior payment' }}</strong></p>
-@if($area === 'admin' && $canManageOpeningPayments)
+@if(in_array($area, ['admin', 'accountant'], true) && $canManageOpeningPayments)
 <p>Verified {{ $entry->created_at }} by {{ $entry->approved_by_name }}. {{ $entry->reason }}</p>
 @if($entry->reversed_at)
 <p>Reversed {{ $entry->reversed_at }} by {{ $entry->reversed_by_name }}. {{ $entry->reversal_reason }}</p>
 @else
 <details><summary>Reverse incorrect prior payment</summary>
-<form method="post" action="{{ route('admin.tuition_payments.opening_payment', $fee->id) }}">@csrf
+<form method="post" action="{{ route(($area === 'accountant' ? 'accountant' : 'admin') . '.tuition_payments.opening_payment', $fee->id) }}">@csrf
 <input type="hidden" name="action" value="reverse"><input type="hidden" name="opening_payment_id" value="{{ $entry->id }}">
 <label for="reversal_{{ $entry->id }}">Reason for reversal</label>
 <textarea id="reversal_{{ $entry->id }}" name="reason" class="form-control mb-2" minlength="10" maxlength="500" required></textarea>
@@ -23,10 +24,10 @@ Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount)
 @endif
 </article>
 @empty<p>No prior payments have been recorded for this invoice.</p>@endforelse
-@if($area === 'admin' && $canManageOpeningPayments)
-<details class="mt-3"><summary>Record a verified prior payment</summary>
-<p>Use only for money received before the student joined this system. Check the original receipt and allocate it to the correct invoice and academic session. Do not enter money already recorded here or through PesaPal. This records an opening payment, not a new collection.</p>
-<form method="post" action="{{ route('admin.tuition_payments.opening_payment', $fee->id) }}">@csrf
+@if(in_array($area, ['admin', 'accountant'], true) && $canManageOpeningPayments)
+<details class="mt-3"><summary>Record prior payment already received</summary>
+<p>Use only for money received before the student joined this system. Check the original receipt and allocate it to the correct invoice and academic session. Do not enter money already recorded here or through PesaPal. This updates the opening balance; it is not a new cash collection.</p>
+<form method="post" action="{{ route(($area === 'accountant' ? 'accountant' : 'admin') . '.tuition_payments.opening_payment', $fee->id) }}">@csrf
 <input type="hidden" name="action" value="record">
 <label for="opening_amount" class="form-label">Amount already paid</label>
 <input id="opening_amount" name="amount" class="form-control mb-2" type="number" min="0.01" step="0.01" max="{{ max(0, $fee->total_amount - $fee->paid_amount) }}" value="{{ old('amount') }}" required>
@@ -43,5 +44,7 @@ Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount)
 <textarea id="opening_reason" name="reason" class="form-control mb-2" minlength="10" maxlength="500" required>{{ old('reason') }}</textarea>
 <button class="btn btn-primary">Verify and apply prior payment</button>
 </form></details>
+@elseif(in_array($area, ['admin', 'accountant'], true))
+<p class="alert alert-info mt-3 mb-0" role="status">This student is eligible for prior-payment entry, but your account does not have the finance payment-approval permission. Ask your finance administrator to grant the appropriate role permission.</p>
 @endif
 </section>

@@ -31,9 +31,16 @@
 <label for="waiver_reason">Reason (required)</label><textarea id="waiver_reason" name="reason" class="form-control mb-2" required minlength="10" maxlength="500"></textarea>
 <button class="btn btn-warning">{{ $eligibility['waived'] ? 'Revoke waiver' : 'Grant waiver' }}</button></form></details>
 @endif
-@if($isAdminAddedExisting ?? false)@include('shared.opening_payments')@endif
+@if($isAdminAddedExisting ?? false)
+    @include('shared.opening_payments')
+@elseif(in_array($area, ['admin', 'accountant'], true))
+    <section class="alert alert-info my-3" aria-label="Prior payment entry eligibility">
+        <h2 class="h6">Prior payment entry unavailable</h2>
+        <p class="mb-0">This invoice belongs to a student who was not marked as added through Add Existing Student. Prior payments can only be entered for eligible continuing students; contact the registrar if this student was incorrectly classified.</p>
+    </section>
+@endif
 @include('shared.fee_awards')
-@if($area !== 'admin' && $fee->status !== 'paid' && $fee->total_amount > $fee->paid_amount)
+@if(in_array($area, ['student', 'parent'], true) && $fee->status !== 'paid' && $fee->total_amount > $fee->paid_amount)
 <p>Pay securely through PesaPal. Your invoice updates after PesaPal confirms payment. If a payment is pending, check its status before trying again.</p>
 <form method="post" action="{{ route($area . '.payment.pesapal.start', $fee->id) }}">@csrf
 <label class="form-label" for="payment_option">Payment option</label><select class="form-select mb-2" id="payment_option" name="payment_option">

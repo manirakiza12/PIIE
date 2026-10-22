@@ -73,8 +73,7 @@ use App\Http\Controllers\CommonController;
                             >
                               <li>
                                 <a class="dropdown-item" href="{{ route('accountant.studentFeeinvoice', ['id'=>$invoice['id']]) }}" target="_blank">{{ get_phrase('Print invoice') }}</a>
-                                <a class="dropdown-item" href="{{ route('admin.tuition_payments.show', ['id' => $invoice['id']]) }}">Payments / prior payments / awards</a>
-                                <a class="dropdown-item" href="{{ route('admin.tuition_payments.show', ['id' => $invoice['id']]) }}">Payments / prior payments / awards</a>
+                                <a class="dropdown-item" href="{{ route('accountant.tuition_payments.show', ['id' => $invoice['id']]) }}">Invoice payments and fee awards</a>
                               </li>
                               <li>
                                 <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('accountant.edit.fee_manager', ['id' => $invoice->id]) }}', '{{ get_phrase('Edit Invoice') }}')">{{ get_phrase('Edit') }}</a>
