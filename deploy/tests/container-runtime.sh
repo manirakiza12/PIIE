@@ -11,11 +11,13 @@ cleanup_fixture() {
   rm -rf "$S"
 }
 trap cleanup_fixture EXIT
-mkdir -p "$S/bin" "$S/shared/storage" "$S/releases/old/public/assets/uploads" "$S/incoming" "$S/fixture/vendor" "$S/fixture/public/assets/uploads" "$S/scripts"
+mkdir -p "$S/bin" "$S/shared/storage/app/public" "$S/shared/storage/logs" "$S/releases/old/public/assets/uploads" "$S/incoming" "$S/fixture/vendor" "$S/fixture/public/assets/uploads" "$S/scripts"
 SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 printf '%s\n' "$SHA" > "$S/releases/old/RELEASE_SHA"
 printf 'preserved' > "$S/shared/.env"
 chmod 600 "$S/shared/.env"
+printf 'persistent student upload\n' > "$S/shared/storage/app/public/student-upload.pdf"
+printf 'scheduler output that changes while the server is running\n' > "$S/shared/storage/logs/scheduler.log"
 printf 'DocumentRoot /srv/piie/current/public\n' > "$S/apache.conf"
 ln -s releases/old "$S/current"
 printf 'live-upload' > "$S/releases/old/public/assets/uploads/keep.txt"
@@ -64,9 +66,13 @@ set -e
 [ "$(cat "$S/shared/public-uploads/keep.txt")" = live-upload ]
 [ "$(cat "$S/shared/.env")" = preserved ]
 [ -s "$S/backups/20261014-120003-aaaaaaaaaaaa/database.sql.gz" ]
+[ -s "$S/backups/20261014-120003-aaaaaaaaaaaa/storage.tar.gz" ]
+tar -tzf "$S/backups/20261014-120003-aaaaaaaaaaaa/storage.tar.gz" > "$S/storage-backup.list"
+grep -qx 'storage/app/public/student-upload.pdf' "$S/storage-backup.list"
+! grep -q '^storage/logs/.*\.log$' "$S/storage-backup.list"
 grep -q 'run --rm --network piie-stack_private --env-file' "$S/docker.log"
 ! grep -q 'exec piie-db' "$S/docker.log"
-echo 'PASS: failed HTTP health rolls code back, preserving live uploads and environment'
+echo 'PASS: failed HTTP health rolls code back, preserving user data and environment while omitting mutable logs'
 EXPECTED_DEPLOYED_SHA="$SHA" bash "$S/scripts/container-deploy.sh" 20261014-120004-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/success.log" 2>&1
 [ "$(readlink "$S/current")" = releases/20261014-120004-aaaaaaaaaaaa ]
 [ "$(readlink "$S/current/.env")" = ../../shared/.env ]
@@ -101,3 +107,25 @@ set -e
 ! grep -q '^exec ' "$S/docker.log"
 while IFS= read -r file; do [ ! -e "$file" ]; done < "$S/env-paths.log"
 echo 'PASS: graceful reload failure rolls back and lifts maintenance without exec'
+
+# A genuine archive write/read error must still abort activation before the live
+# symlink is switched. This wrapper fails only the storage backup archive and
+# delegates every other tar operation to the host's real tar binary.
+REAL_TAR=$(command -v tar)
+cat > "$S/bin/tar" <<'STUB'
+#!/usr/bin/env bash
+if [ "${FAIL_STORAGE_ARCHIVE:-0}" = 1 ] && [[ "$*" == *"/storage.tar.gz"* ]]; then
+  echo 'tar: synthetic storage archive write error' >&2
+  exit 2
+fi
+exec "$REAL_TAR" "$@"
+STUB
+chmod +x "$S/bin/tar"
+export REAL_TAR
+set +e
+EXPECTED_DEPLOYED_SHA="$SHA" FAIL_STORAGE_ARCHIVE=1 bash "$S/scripts/container-deploy.sh" 20261014-120008-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/archive-error.log" 2>&1
+code=$?
+set -e
+[ "$code" -ne 0 ] && grep -q 'synthetic storage archive write error' "$S/archive-error.log"
+[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+echo 'PASS: meaningful storage archive errors remain fatal before activation'
