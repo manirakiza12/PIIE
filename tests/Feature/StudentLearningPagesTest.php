@@ -17,6 +17,43 @@ class StudentLearningPagesTest extends TestCase
     {
         parent::setUp();
         $this->bootAdmissionsTestSchema();
+        // The shared test schema is intentionally lightweight and does not run
+        // the MySQL-only production migrations. Mirror the assignment columns
+        // used by StudentController::routine (including later provenance
+        // columns) so this SQLite feature test exercises the real query path.
+        Schema::create('student_curriculum_assignments', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('school_id');
+            $table->unsignedBigInteger('student_id');
+            $table->unsignedBigInteger('programme_id');
+            $table->unsignedBigInteger('curriculum_id');
+            $table->unsignedBigInteger('entry_academic_year_id');
+            $table->unsignedBigInteger('effective_from_academic_year_id');
+            $table->timestamp('ended_at')->nullable();
+            $table->string('reason', 500)->nullable();
+            $table->unsignedBigInteger('assigned_by');
+            $table->unsignedBigInteger('programme_cohort_membership_id')->nullable();
+            $table->unsignedBigInteger('entry_curriculum_stage_id')->nullable();
+            $table->timestamps();
+
+            $table->index(['school_id', 'student_id', 'ended_at'], 'sca_student_current_idx');
+            $table->index(['school_id', 'student_id', 'effective_from_academic_year_id'], 'sca_student_history_idx');
+            $table->index(['school_id', 'curriculum_id'], 'sca_curriculum_idx');
+            $table->index(['school_id', 'programme_cohort_membership_id'], 'sca_cohort_membership_idx');
+            $table->index(['school_id', 'curriculum_id', 'entry_curriculum_stage_id'], 'sca_entry_stage_idx');
+        });
+        Schema::create('syllabuses', function (Blueprint $table): void {
+            $table->id();
+            $table->string('title');
+            $table->integer('class_id');
+            $table->integer('section_id');
+            $table->integer('subject_id');
+            $table->string('file');
+            $table->integer('school_id');
+            $table->integer('session_id');
+            $table->timestamps();
+        });
+
         Schema::table('schools', fn (Blueprint $table) => $table->string('school_type')->default('k12'));
         Schema::table('routines', function (Blueprint $table): void {
             $table->unsignedBigInteger('programme_id')->nullable();
@@ -86,7 +123,12 @@ class StudentLearningPagesTest extends TestCase
 
         $this->actingAs($student)->get(route('student.dailyAttendanceFilter_csv', [
             'month' => now()->format('M'), 'year' => now()->format('Y'),
-        ]))->assertOk()->assertHeader('content-type', 'text/csv')->assertSee('Student One')->assertSee('P')->assertDontSee('Student Two');
+        ]))
+            ->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=utf-8')
+            ->assertSee('Student One')
+            ->assertSee('P')
+            ->assertDontSee('Student Two');
     }
 
     public function test_class_student_course_units_and_syllabus_use_current_class_session(): void
