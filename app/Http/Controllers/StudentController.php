@@ -14,6 +14,7 @@ use App\Models\Club;
 use App\Models\ClubMember;
 use App\Models\ClubNotice;
 use App\Models\CourseRegistration;
+use App\Support\CourseOfferingAttendance\CourseOfferingAttendanceStatus;
 use App\Models\DailyAttendances;
 use App\Models\Enrollment;
 use App\Models\ExamCategory;
@@ -32,6 +33,7 @@ use App\Models\Programme;
 use App\Models\Routine;
 use App\Models\Section;
 use App\Models\StudentFeeManager;
+use App\Models\StudentCurriculumAssignment;
 use App\Support\Admissions\ApplicationDocuments;
 use App\Models\StudentProfile;
 use App\Models\School;
@@ -466,12 +468,16 @@ class StudentController extends Controller
 
         $requests = StudentRequest::forStudent($student->id)
             ->where('school_id', $student->school_id)
+            ->with(['transferToProgramme' => fn ($q) => $q->where('school_id', $student->school_id)])
             ->latest('id')
             ->get();
 
         return view('student.requests.index', [
             'requests' => $requests,
             'types' => StudentRequest::TYPES,
+            'submissionTypes' => array_diff_key(StudentRequest::TYPES, [StudentRequest::TYPE_TRANSFER => true]),
+            'transferTypes' => StudentRequest::TRANSFER_TYPES,
+            'transferReasons' => StudentRequest::TRANSFER_REASONS,
         ]);
     }
 
@@ -480,7 +486,9 @@ class StudentController extends Controller
         $student = auth()->user();
 
         $validated = $request->validate([
-            'type' => ['required', Rule::in(array_keys(StudentRequest::TYPES))],
+            // Transfers require the separate structured application; accepting
+            // a generic type=transfer would bypass its target/reason validation.
+            'type' => ['required', Rule::in(array_keys(array_diff_key(StudentRequest::TYPES, [StudentRequest::TYPE_TRANSFER => true])))],
             'subject' => ['required', 'string', 'max:191'],
             'details' => ['required', 'string'],
         ]);
@@ -512,12 +520,14 @@ class StudentController extends Controller
         $transfers = StudentRequest::forStudent($student->id)
             ->where('school_id', $student->school_id)
             ->where('type', StudentRequest::TYPE_TRANSFER)
-            ->with('transferToProgramme')
+            ->with(['transferToProgramme' => fn ($q) => $q->where('school_id', $student->school_id)])
             ->latest('id')
             ->get();
 
-        $studentProfile = StudentProfile::where('user_id', $student->id)->first();
-        $currentProgramme = $studentProfile?->programme_id ? Programme::find($studentProfile->programme_id) : null;
+        $studentProfile = StudentProfile::where('school_id', $student->school_id)->where('user_id', $student->id)->first();
+        $currentProgramme = $studentProfile?->programme_id
+            ? Programme::where('school_id', $student->school_id)->find($studentProfile->programme_id)
+            : null;
         $programmes = Programme::where('school_id', $student->school_id)
             ->where('is_active', 1)
             ->when($currentProgramme, fn ($q) => $q->where('id', '!=', $currentProgramme->id))
@@ -541,7 +551,10 @@ class StudentController extends Controller
 
         $validated = $request->validate([
             'transfer_type' => ['required', Rule::in(array_keys(StudentRequest::TRANSFER_TYPES))],
-            'transfer_to_programme_id' => ['required', 'exists:programmes,id'],
+            'transfer_to_programme_id' => [
+                'required',
+                Rule::exists('programmes', 'id')->where('school_id', $student->school_id)->where('is_active', 1),
+            ],
             'transfer_reason' => ['required', Rule::in(array_keys(StudentRequest::TRANSFER_REASONS))],
             'phone_number' => ['nullable', 'string', 'max:30'],
             'details' => ['nullable', 'string'],
@@ -608,46 +621,105 @@ class StudentController extends Controller
      */
     public function dailyAttendance(Request $request)
     {
-        if (! empty($request->all())) {
-            $data                         = $request->all();
-            $date                         = '01 ' . $data['month'] . ' ' . $data['year'];
-            $page_data['attendance_date'] = strtotime($date);
-            $page_data['month']           = $data['month'];
-            $page_data['year']            = $data['year'];
+        $student = $request->user();
+        $monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        $filters = $request->validate([
+            'month' => ['sometimes', 'required_with:year', Rule::in($monthNames)],
+            'year' => ['sometimes', 'required_with:month', 'integer', 'between:2015,'.date('Y')],
+        ]);
+        $month = $filters['month'] ?? date('M');
+        $year = (int) ($filters['year'] ?? date('Y'));
+        $periodStart = Carbon::createFromFormat('!M Y', $month.' '.$year)->startOfMonth();
+        $periodEnd = $periodStart->copy()->endOfMonth();
+        $schoolId = (int) $student->school_id;
+        $schoolSettings = get_school_settings($schoolId);
+        $sessionId = (int) ($schoolSettings?->value('running_session') ?? 0);
+        $path = $this->studentCoursePath($student);
 
-            $student_data = (new CommonController)->get_student_details_by_id(auth()->user()->id);
-            $classes      = Classes::where('school_id', auth()->user()->school_id)->get();
-            $sections     = Section::where(['class_id' => $student_data['class_id']])->get();
+        $attendanceRecords = collect();
+        $classContext = null;
+        $programmeContext = null;
+        $attendanceAvailable = $path !== 'hei';
 
-            return view('student.attendance.daily_attendance', ['student_data' => $student_data, 'classes' => $classes, 'sections' => $sections, 'page_data' => $page_data]);
-        } else {
+        if ($path === 'legacy') {
+            $enrollment = Enrollment::query()->where('user_id', $student->id)
+                ->where('school_id', $schoolId)->where('session_id', $sessionId)->latest('id')->first();
+            $class = $enrollment && $enrollment->class_id
+                ? Classes::query()->where('school_id', $schoolId)->find($enrollment->class_id)
+                : null;
+            $section = $enrollment && $enrollment->section_id
+                ? Section::query()->where('class_id', $class?->id ?? 0)->find($enrollment->section_id)
+                : null;
 
-            $date                         = '01 ' . date('M') . ' ' . date('Y');
-            $page_data['attendance_date'] = strtotime($date);
-            $page_data['month']           = date('M');
-            $page_data['year']            = date('Y');
+            $classContext = $class ? trim($class->name.' / '.($section?->name ?? '')) : null;
+            if ($class && $section && $sessionId > 0) {
+                $attendanceRecords = DailyAttendances::query()
+                    ->where('school_id', $schoolId)->where('session_id', $sessionId)
+                    ->where('student_id', $student->id)->where('class_id', $class->id)
+                    ->where('section_id', $section->id)
+                    ->whereBetween('timestamp', [$periodStart->timestamp, $periodEnd->endOfDay()->timestamp])
+                    ->orderBy('timestamp')->get();
+            }
+        } elseif ($path === 'hei'
+            && \Illuminate\Support\Facades\Schema::hasTable('course_offering_attendance_sessions')
+            && \Illuminate\Support\Facades\Schema::hasTable('course_offering_attendance_records')
+            && \Illuminate\Support\Facades\Schema::hasTable('course_registrations')
+            && \Illuminate\Support\Facades\Schema::hasColumn('course_registrations', 'course_offering_id')) {
+            $attendanceAvailable = true;
+            $profile = StudentProfile::query()->where('school_id', $schoolId)->where('user_id', $student->id)->first();
+            $assignment = StudentCurriculumAssignment::query()->where('school_id', $schoolId)
+                ->where('student_id', $student->id)->whereNull('ended_at')->orderByDesc('effective_from_academic_year_id')->first();
+            $programmeId = $assignment?->programme_id ?? $profile?->programme_id;
+            $programmeContext = $programmeId
+                ? Programme::query()->where('school_id', $schoolId)->whereKey($programmeId)->value('name')
+                : null;
 
-            $student_data = (new CommonController)->get_student_details_by_id(auth()->user()->id);
-            $classes      = Classes::where('school_id', auth()->user()->school_id)->get();
-            $sections     = Section::where(['class_id' => $student_data['class_id']])->get();
-            return view('student.attendance.daily_attendance', ['student_data' => $student_data, 'classes' => $classes, 'sections' => $sections, 'page_data' => $page_data]);
+            // Students see only their own confirmed-registration records after
+            // the lecturer has finalised the session. Draft registers remain private.
+            $attendanceRecords = DB::table('course_offering_attendance_records as ar')
+                ->join('course_offering_attendance_sessions as ats', function ($join) use ($schoolId): void {
+                    $join->on('ats.id', '=', 'ar.attendance_session_id')->on('ats.school_id', '=', 'ar.school_id');
+                })
+                ->join('course_registrations as cr', function ($join) use ($student, $schoolId): void {
+                    $join->on('cr.id', '=', 'ar.course_registration_id')->on('cr.school_id', '=', 'ar.school_id')
+                        ->where('cr.student_id', '=', $student->id)->where('cr.school_id', '=', $schoolId)
+                        ->where('cr.status', '=', CourseRegistration::STATUS_CONFIRMED);
+                })
+                ->join('course_offerings as co', function ($join) use ($schoolId): void {
+                    $join->on('co.id', '=', 'ats.course_offering_id')->on('co.school_id', '=', 'ats.school_id')
+                        ->where('co.school_id', '=', $schoolId);
+                })
+                ->join('subjects as sub', function ($join) use ($schoolId): void {
+                    $join->on('sub.id', '=', 'co.subject_id')->on('sub.school_id', '=', 'co.school_id')
+                        ->where('sub.school_id', '=', $schoolId);
+                })
+                ->where('ar.school_id', $schoolId)->where('ar.student_id', $student->id)
+                ->where('ats.status', 'finalised')
+                ->whereBetween('ats.session_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                ->orderBy('ats.session_date')->orderBy('ats.starts_at')
+                ->get(['ats.session_date', 'ats.starts_at', 'ats.ends_at', 'ats.topic', 'sub.name as course_name', 'ar.status'])
+                ->map(function ($record) {
+                    $record->status_label = CourseOfferingAttendanceStatus::label((int) $record->status);
+                    return $record;
+                });
         }
+
+        return view('student.attendance.daily_attendance', [
+            'attendanceRecords' => $attendanceRecords,
+            'attendanceMode' => $path,
+            'classContext' => $classContext,
+            'programmeContext' => $programmeContext,
+            'attendanceAvailable' => $attendanceAvailable,
+            'page_data' => ['month' => $month, 'year' => $year, 'attendance_date' => $periodStart->timestamp],
+        ]);
     }
 
     public function dailyAttendanceFilter_csv(Request $request)
     {
-        // The export encodes month/year in its first query key; without it answer with a validation error, never HTTP 500.
-        if (empty($request->all())) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['month' => get_phrase('Choose a month to export.')]);
-        }
-
-        $data = $request->all();
-
-        $store_get_data = array_keys($data);
-
-        $data['month']   = substr($store_get_data[0], 0, 3);
-        $data['year']    = substr($store_get_data[0], 4, 4);
-        $data['role_id'] = substr($store_get_data[0], 9, 5);
+        $data = $request->validate([
+            'month' => ['required', Rule::in(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'])],
+            'year' => ['required', 'integer', 'between:2015,'.date('Y')],
+        ]);
 
         $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
 
@@ -729,11 +801,53 @@ class StudentController extends Controller
      */
     public function routine()
     {
-        $student_data = (new CommonController)->get_student_details_by_id(auth()->user()->id);
-        $class_id     = $student_data['class_id'];
-        $section_id   = $student_data['section_id'];
-        $classes      = Classes::where('school_id', auth()->user()->school_id)->get();
-        return view('student.routine.routine', ['class_id' => $class_id, 'section_id' => $section_id, 'classes' => $classes]);
+        $student = auth()->user();
+        $schoolId = (int) $student->school_id;
+        $sessionId = (int) (get_school_settings($schoolId)?->value('running_session') ?? 0);
+
+        if ($this->studentCoursePath($student) === 'hei') {
+            $profile = StudentProfile::query()->where('school_id', $schoolId)->where('user_id', $student->id)->first();
+            $assignment = StudentCurriculumAssignment::query()->where('school_id', $schoolId)
+                ->where('student_id', $student->id)->whereNull('ended_at')->orderByDesc('effective_from_academic_year_id')->first();
+            $programmeId = $assignment?->programme_id ?? $profile?->programme_id;
+            $programme = $programmeId
+                ? Programme::query()->where('school_id', $schoolId)->find($programmeId)
+                : null;
+
+            $routines = $programme && $sessionId > 0
+                ? Routine::query()->where('school_id', $schoolId)->where('session_id', $sessionId)
+                    ->where('programme_id', $programme->id)->whereNull('class_id')->whereNull('section_id')
+                    ->orderByRaw("CASE LOWER(day) WHEN 'monday' THEN 1 WHEN 'tuesday' THEN 2 WHEN 'wednesday' THEN 3 WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7 ELSE 8 END")
+                    ->orderBy('starting_hour')->orderBy('starting_minute')->get()
+                : collect();
+            $subjectNames = Subject::query()->where('school_id', $schoolId)
+                ->whereIn('id', $routines->pluck('subject_id')->filter())->pluck('name', 'id');
+            $teacherNames = User::query()->where('school_id', $schoolId)->whereIn('role_id', [3, 6])
+                ->whereIn('id', $routines->pluck('teacher_id')->filter())->pluck('name', 'id');
+            $roomNames = \App\Models\ClassRoom::query()->where('school_id', $schoolId)
+                ->whereIn('id', $routines->pluck('room_id')->filter())->pluck('name', 'id');
+
+            return view('student.routine.programme_routine', compact('programme', 'routines', 'subjectNames', 'teacherNames', 'roomNames'));
+        }
+
+        $enrollment = Enrollment::query()->where('user_id', $student->id)->where('school_id', $schoolId)
+            ->where('session_id', $sessionId)->latest('id')->first();
+        $class = $enrollment && $enrollment->class_id
+            ? Classes::query()->where('school_id', $schoolId)->find($enrollment->class_id)
+            : null;
+        $section = $enrollment && $enrollment->section_id
+            ? Section::query()->where('class_id', $class?->id ?? 0)->find($enrollment->section_id)
+            : null;
+        $classRoutines = $class && $section && $sessionId > 0
+            ? Routine::query()->where('school_id', $schoolId)->where('session_id', $sessionId)
+                ->where('class_id', $class->id)->where('section_id', $section->id)->exists()
+            : false;
+        return view('student.routine.routine', [
+            'class_id' => $class?->id ?? 0,
+            'section_id' => $section?->id ?? 0,
+            'classes' => $class ? collect([$class]) : collect(),
+            'hasClassRoutine' => $classRoutines,
+        ]);
     }
 
     /**
@@ -756,10 +870,13 @@ class StudentController extends Controller
 
         $active_session = get_school_settings($student->school_id)->value('running_session');
 
-        $student_data = (new CommonController)->get_student_details_by_id($student->id);
-        $subjects     = Subject::where('class_id', $student_data['class_id'])
-            ->where('school_id', $student->school_id)
-            ->where('session_id', $active_session)
+        $enrollment = Enrollment::query()->where('user_id', $student->id)->where('school_id', $student->school_id)
+            ->where('session_id', $active_session)->latest('id')->first();
+        $subjects = Subject::query()->join('classes', function ($join) use ($student): void {
+                $join->on('classes.id', '=', 'subjects.class_id')->on('classes.school_id', '=', 'subjects.school_id');
+            })->where('subjects.class_id', $enrollment?->class_id ?? 0)
+            ->where('subjects.school_id', $student->school_id)->where('subjects.session_id', $active_session)
+            ->select('subjects.*', 'classes.name as class_name')
             ->paginate(10);
 
         return view('student.subject.subject_list', compact('subjects'));
@@ -772,16 +889,26 @@ class StudentController extends Controller
      */
     public function syllabus()
     {
-        if (auth()->user()->role_id != "" && auth()->user()->role_id == 7) {
-            $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-            $student_data   = (new CommonController)->get_student_details_by_id(auth()->user()->id);
-
-            $syllabuses = Syllabus::where(['class_id' => $student_data['class_id'], 'section_id' => $student_data['section_id'], 'session_id' => $active_session, 'school_id' => auth()->user()->school_id])->paginate(10);
-
-            return view('student.syllabus.syllabus', compact('syllabuses'));
-        } else {
-            return redirect('login')->with('error', "Please login first.");
+        $student = auth()->user();
+        if ($this->studentCoursePath($student) === 'hei') {
+            return redirect()->route('student.my_courses')
+                ->with('info', 'Published course materials for your registered Course Allocations are available under My Courses.');
         }
+
+        $schoolId = (int) $student->school_id;
+        $sessionId = (int) (get_school_settings($schoolId)?->value('running_session') ?? 0);
+        $enrollment = Enrollment::query()->where('user_id', $student->id)->where('school_id', $schoolId)
+            ->where('session_id', $sessionId)->latest('id')->first();
+
+        $syllabuses = $enrollment && $enrollment->class_id && $enrollment->section_id && $sessionId > 0
+            ? Syllabus::query()->join('subjects', function ($join) use ($schoolId): void {
+                $join->on('subjects.id', '=', 'syllabuses.subject_id')->on('subjects.school_id', '=', 'syllabuses.school_id');
+            })->where('syllabuses.school_id', $schoolId)->where('syllabuses.session_id', $sessionId)
+                ->where('syllabuses.class_id', $enrollment->class_id)->where('syllabuses.section_id', $enrollment->section_id)
+                ->orderBy('syllabuses.title')->select('syllabuses.*', 'subjects.name as subject_name')->paginate(10)
+            : Syllabus::query()->whereRaw('1 = 0')->paginate(10);
+
+        return view('student.syllabus.syllabus', compact('syllabuses'));
     }
 
     /**

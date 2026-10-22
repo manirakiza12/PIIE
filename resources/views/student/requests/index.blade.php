@@ -6,10 +6,10 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center flex-wrap gr-15">
                 <div class="d-flex flex-column">
-                    <h4>{{ get_phrase('Student Affairs') }}</h4>
+                    <h4>{{ get_phrase('Student Requests') }}</h4>
                     <ul class="d-flex align-items-center eBreadcrumb-2">
                         <li><a href="{{ route('student.dashboard') }}">{{ get_phrase('Home') }}</a></li>
-                        <li><a href="#">{{ get_phrase('Student Affairs') }}</a></li>
+                        <li>{{ get_phrase('Requests & Support') }}</li>
                     </ul>
                 </div>
             </div>
@@ -24,15 +24,16 @@
     <div class="col-md-5">
         <div class="eSection-wrap">
             <div class="title mb-3 pb-0 border-0">
-                <h3 class="mb-0">{{ get_phrase('New Request') }}</h3>
+                <h3 class="mb-1">{{ get_phrase('New Request') }}</h3>
+                <p class="text-muted small">{{ get_phrase('For transfer applications, use the structured') }} <a href="{{ route('student.transfers.index') }}">{{ get_phrase('My Transfers') }}</a> {{ get_phrase('form.') }}</p>
             </div>
             <form method="POST" action="{{ route('student.requests.store') }}">
                 @csrf
                 <div class="mb-3">
-                    <label class="eForm-label">{{ get_phrase('Type') }} *</label>
-                    <select name="type" class="form-select eForm-select" required>
+                    <label class="eForm-label" for="request-type">{{ get_phrase('Request type') }} *</label>
+                    <select id="request-type" name="type" class="form-select eForm-select" required>
                         <option value="">{{ get_phrase('Select type') }}</option>
-                        @foreach($types as $value => $label)
+                        @foreach($submissionTypes as $value => $label)
                             <option value="{{ $value }}" {{ old('type') === $value ? 'selected' : '' }}>{{ get_phrase($label) }}</option>
                         @endforeach
                     </select>
@@ -71,11 +72,18 @@
                                 <strong>{{ get_phrase('Response') }}:</strong> {{ $req->admin_response }}
                             </div>
                         @endif
-                        <span class="text-muted small">{{ $req->created_at->diffForHumans() }}</span>
+                        @if($req->type === \App\Models\StudentRequest::TYPE_TRANSFER)
+                            <p class="small text-muted mb-1">
+                                @if($req->transfer_type){{ $transferTypes[$req->transfer_type] ?? $req->transfer_type }}@endif
+                                @if($req->transferToProgramme) — {{ get_phrase('To') }} {{ $req->transferToProgramme->name }}@endif
+                                @if($req->transfer_reason) · {{ $transferReasons[$req->transfer_reason] ?? $req->transfer_reason }}@endif
+                            </p>
+                        @endif
+                        <time class="text-muted small" datetime="{{ $req->created_at->toIso8601String() }}">{{ $req->created_at->format('d M Y, H:i') }}</time>
                     </div>
                 </div>
             @empty
-                <p class="text-muted text-center py-4 mb-0">{{ get_phrase('No requests submitted yet') }}</p>
+                <div class="text-muted text-center py-4" role="status">{{ get_phrase('No requests submitted yet. You can submit a complaint or fee appeal here, or start a structured transfer application.') }}</div>
             @endforelse
         </div>
     </div>
