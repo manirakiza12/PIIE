@@ -40,6 +40,7 @@
               </div>
               @include('shared.invoice_billing')
             @include('shared.invoice_opening_payments')
+            @include('shared.invoice_award')
             </div>
           </div>
           <div class="col-sm-5">

@@ -63,10 +63,11 @@ class TuitionPesaPalJourneyTest extends TestCase
     public function test_prior_payment_leaves_only_remaining_balance_for_online_payment(): void
     {
         (require database_path('migrations/2026_10_21_060000_create_student_opening_payments.php'))->up();
+        (require database_path('migrations/2026_10_22_000000_add_method_to_student_opening_payments.php'))->up();
         \App\Models\StudentProfile::create(['school_id' => $this->school, 'user_id' => $this->student->id, 'was_existing_at_portal_creation' => true]);
         $fee = $this->fee();
         app(\App\Support\Payments\StudentOpeningPayments::class)->change($this->makeAdminUser($this->school), $fee->id, [
-            'action' => 'record', 'amount' => '3000.00', 'paid_on' => now()->subMonth()->toDateString(),
+            'action' => 'record', 'amount' => '3000.00', 'paid_on' => now()->subMonth()->toDateString(), 'method' => 'bank_transfer',
             'reference' => 'OLD-RECEIPT-42', 'reason' => 'Original bank deposit verified.']);
         $payment = TuitionPesaPalPayment::start($fee);
         $this->assertEquals(2000, $payment->amount);
@@ -102,6 +103,21 @@ class TuitionPesaPalJourneyTest extends TestCase
         $this->assertEquals(5000, $fee->fresh()->paid_amount);
         $this->assertEquals(0, $fee->fresh()->total_amount - $fee->fresh()->paid_amount);
         $this->assertCount(2, TuitionPayment::where('fee_id', $fee->id)->where('status', 'paid')->get());
+    }
+
+    public function test_scholarship_only_charges_net_fee_and_verified_cash_remains_separate(): void
+    {
+        (require database_path('migrations/2026_10_21_050000_create_student_fee_awards_table.php'))->up();
+        $fee = $this->fee();
+        app(\App\Support\Billing\StudentFeeAwards::class)->change($this->makeAdminUser($this->school), $fee->id,
+            ['action' => 'grant', 'type' => 'scholarship', 'amount' => '2000.00', 'reason' => 'Approved merit scholarship.']);
+        $payment = TuitionPesaPalPayment::start($fee);
+        $this->assertEquals(3000, $payment->amount);
+        $this->amount = '3000.00'; $this->code = 1; $this->description = 'COMPLETED';
+        TuitionPesaPalPayment::reconcile($payment);
+        $this->assertEquals(3000, $fee->fresh()->paid_amount);
+        $this->assertSame('paid', $fee->fresh()->status);
+        $this->assertSame(1, TuitionPayment::count());
     }
 
     public function test_checkout_resumes_same_order_and_only_verified_success_credits_once(): void

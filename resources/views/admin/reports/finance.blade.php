@@ -17,16 +17,20 @@
 </div></div></div>
 
 <div class="row mb-3">
-    <div class="col-md-4"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #1a3a6b">
-        <div style="font-size:22px;font-weight:800;color:#1a3a6b">UGX {{ number_format($totals->invoiced ?? 0) }}</div>
-        <div style="font-size:11px;color:#6c757d">{{ get_phrase('Total Invoiced') }}</div>
+    <div class="col-md-3"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #1a3a6b">
+        <div style="font-size:22px;font-weight:800;color:#1a3a6b">UGX {{ number_format($totals->gross_invoiced ?? $totals->invoiced ?? 0) }}</div>
+        <div style="font-size:11px;color:#6c757d">{{ get_phrase('Gross billed') }}</div>
     </div></div>
-    <div class="col-md-4"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #198754">
+    <div class="col-md-3"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #6c757d">
+        <div style="font-size:22px;font-weight:800;color:#6c757d">UGX {{ number_format($totals->awards ?? 0) }}</div>
+        <div style="font-size:11px;color:#6c757d">{{ get_phrase('Bursaries and scholarships') }}</div>
+    </div></div>
+    <div class="col-md-3"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #198754">
         <div style="font-size:22px;font-weight:800;color:#198754">UGX {{ number_format($totals->collected ?? 0) }}</div>
         <div style="font-size:11px;color:#6c757d">{{ get_phrase('New Collections') }}</div>
         <div class="small text-muted">Prior payments: UGX {{ number_format(max(0, ($totals->paid ?? 0) - ($totals->collected ?? 0)), 2) }} (included in paid balances)</div>
     </div></div>
-    <div class="col-md-4"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #dc3545">
+    <div class="col-md-3"><div class="eSection-wrap text-center p-3" style="border-top:3px solid #dc3545">
         <div style="font-size:22px;font-weight:800;color:#dc3545">UGX {{ number_format(max(0,($totals->invoiced ?? 0)-($totals->paid ?? 0))) }}</div>
         <div style="font-size:11px;color:#6c757d">{{ get_phrase('Outstanding') }}</div>
     </div></div>
@@ -43,13 +47,15 @@
 <div class="row"><div class="col-12"><div class="eSection-wrap">
     <div class="table-responsive">
         <table class="table eTable" style="font-size:12px">
-            <thead><tr><th>#</th><th>{{ get_phrase('Title') }}</th><th>{{ get_phrase('Total') }}</th><th>{{ get_phrase('Paid') }}</th><th>{{ get_phrase('Balance') }}</th><th>{{ get_phrase('Status') }}</th><th>{{ get_phrase('Date') }}</th></tr></thead>
+            <thead><tr><th>#</th><th>{{ get_phrase('Title') }}</th><th>{{ get_phrase('Gross billed') }}</th><th>{{ get_phrase('Award') }}</th><th>{{ get_phrase('Net payable') }}</th><th>{{ get_phrase('Paid') }}</th><th>{{ get_phrase('Balance') }}</th><th>{{ get_phrase('Status') }}</th><th>{{ get_phrase('Date') }}</th></tr></thead>
             <tbody>
             @forelse($invoices as $i => $inv)
             @php $bal = $inv->total_amount - $inv->paid_amount; @endphp
             <tr>
                 <td>{{ $invoices->firstItem() + $i }}</td>
                 <td>{{ $inv->title ?? '—' }}</td>
+                <td>{{ number_format($inv->total_amount + $inv->award_amount) }}</td>
+                <td>{{ number_format($inv->award_amount) }}</td>
                 <td>{{ number_format($inv->total_amount) }}</td>
                 <td style="color:#198754">{{ number_format($inv->paid_amount) }}</td>
                 <td style="color:{{ $bal>0?'#dc3545':'#198754' }}">{{ number_format($bal) }}</td>
@@ -57,7 +63,7 @@
                 <td>{{ date('d M Y', $inv->timestamp ?? 0) }}</td>
             </tr>
             @empty
-            <tr><td colspan="7" class="text-center text-muted py-4">{{ get_phrase('No records in this period') }}</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-4">{{ get_phrase('No records in this period') }}</td></tr>
             @endforelse
             </tbody>
         </table>

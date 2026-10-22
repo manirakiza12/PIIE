@@ -30,6 +30,9 @@ final class StudentOpeningPayments
                 $this->reject('Finance must reconcile this invoice before recording prior payments.');
             }
             if ($data['action'] === 'record') {
+                if (! in_array($data['method'] ?? null, ['cash', 'bank_transfer', 'mobile_money', 'card', 'cheque', 'other'], true)) {
+                    $this->reject('Select the verified payment method.');
+                }
                 $reference = trim($data['reference']);
                 $hash = hash('sha256', mb_strtolower(preg_replace('/\s+/u', '', $reference)));
                 if (StudentOpeningPayment::where('school_id', $fee->school_id)->where('reference_hash', $hash)->exists()) {
@@ -40,7 +43,7 @@ final class StudentOpeningPayments
                     $this->reject('Prior payment must be greater than zero and no larger than the unpaid invoice balance.');
                 }
                 $entry = StudentOpeningPayment::create(['school_id' => $fee->school_id, 'fee_id' => $fee->id,
-                    'amount' => DecimalAmount::decimal($amount), 'paid_on' => $data['paid_on'], 'reference' => $reference,
+                    'amount' => DecimalAmount::decimal($amount), 'paid_on' => $data['paid_on'], 'method' => $data['method'], 'reference' => $reference,
                     'reference_hash' => $hash, 'reason' => $data['reason'], 'approved_by' => $actor->id, 'approved_by_name' => $actor->name]);
             } else {
                 $entry = StudentOpeningPayment::whereKey($data['opening_payment_id'])->where('school_id', $fee->school_id)

@@ -449,6 +449,7 @@ class AccountantController extends Controller
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $id) {
             $existing = \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
             abort_if($existing->hasOpeningPaymentHistory(), 422, 'An invoice with prior payment history cannot be edited or deleted. Use the prior payment controls for corrections.');
+            abort_if($existing->hasAwardHistory(), 422, 'Invoices with award history must be managed through the bursary and scholarship controls.');
             abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be edited.');
             $request->merge(['paid_amount' => $existing->paid_amount, 'status' => $existing->status, 'payment_method' => $existing->payment_method]);
             $data = $request->all();
@@ -500,6 +501,7 @@ class AccountantController extends Controller
         return \Illuminate\Support\Facades\DB::transaction(function () use ($id) {
             $existing = \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
             abort_if($existing->hasOpeningPaymentHistory(), 422, 'An invoice with prior payment history cannot be edited or deleted. Use the prior payment controls for corrections.');
+            abort_if($existing->hasAwardHistory(), 422, 'Invoices with award history must be managed through the bursary and scholarship controls.');
             abort_if(\App\Models\TuitionPayment::where('fee_id', $existing->id)->exists() || in_array($existing->status, ['processing', 'pending', 'paid'], true) || (float) $existing->paid_amount > 0, 422, 'An invoice with payment activity cannot be deleted.');
             \App\Models\StudentFeeManager::whereKey($id)->where('school_id', auth()->user()->school_id)->lockForUpdate()->firstOrFail();
             $invoice = StudentFeeManager::find($id);

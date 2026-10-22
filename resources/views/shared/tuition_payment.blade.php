@@ -19,6 +19,7 @@
 <p class="mb-1">The requirement is 20% of all school fees billed for your current academic session.</p>
 <p class="mb-1">Session fees: {{ number_format($eligibility['total_minor'] / 100, 2) }} · Minimum required: {{ number_format($eligibility['required_minor'] / 100, 2) }} · Paid: {{ number_format($eligibility['paid_minor'] / 100, 2) }}</p>
 @if($eligibility['waived'])<p class="mb-0">20% requirement waived for this session. The school fee balance remains payable.</p>
+@elseif($eligibility['fully_covered'] ?? false)<p class="mb-0">Your current-session fees are fully covered by an approved bursary or scholarship. No payment is required.</p>
 @elseif($eligibility['total_minor'] <= 0)<p class="mb-0">Finance must configure the current session and issue school fee invoices before eligibility can be assessed.</p>
 @elseif(!$eligibility['eligible'])<p class="mb-0">Pay another {{ number_format($eligibility['shortfall_minor'] / 100, 2) }} to meet the study requirement. If this invoice's balance is smaller, continue with your other current-session invoices.</p>@endif
 </section>
@@ -31,7 +32,8 @@
 <button class="btn btn-warning">{{ $eligibility['waived'] ? 'Revoke waiver' : 'Grant waiver' }}</button></form></details>
 @endif
 @if($isAdminAddedExisting ?? false)@include('shared.opening_payments')@endif
-@if($area !== 'admin' && $fee->status !== 'paid')
+@include('shared.fee_awards')
+@if($area !== 'admin' && $fee->status !== 'paid' && $fee->total_amount > $fee->paid_amount)
 <p>Pay securely through PesaPal. Your invoice updates after PesaPal confirms payment. If a payment is pending, check its status before trying again.</p>
 <form method="post" action="{{ route($area . '.payment.pesapal.start', $fee->id) }}">@csrf
 <label class="form-label" for="payment_option">Payment option</label><select class="form-select mb-2" id="payment_option" name="payment_option">
