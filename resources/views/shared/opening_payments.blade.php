@@ -1,11 +1,8 @@
-<section class="border rounded p-3 my-3" aria-label="Prior payments">
+<section class="fee-panel" aria-label="Prior payments">
 <h2 class="h5">Prior payments already received</h2>
-<p>These are verified payments the student made before their account was added. They reduce this invoice balance and are kept separate from new cash collections.</p>
-<p>Previously paid: {{ number_format($fee->opening_paid_amount ?? 0, 2) }}<br>
-New payments received: {{ number_format($fee->collected_amount, 2) }}<br>
-Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount), 2) }}</p>
+<p class="fee-caption">Verified pre-PIIE cash and original receipts. These reduce the balance and remain separate from new collections.</p>
 @forelse($openingPayments as $entry)
-<article class="border-top pt-2 mt-2">
+<article class="fee-entry">
 <p>Method: {{ str_replace('_', ' ', ucfirst($entry->method ?? 'not recorded')) }}</p>
 <p>Receipt: {{ $entry->reference }} · {{ $entry->paid_on->format('d M Y') }} · {{ number_format($entry->amount, 2) }}
 <strong>{{ $entry->reversed_at ? 'Reversed' : 'Verified prior payment' }}</strong></p>
@@ -23,9 +20,9 @@ Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount)
 @endif
 @endif
 </article>
-@empty<p>No prior payments have been recorded for this invoice.</p>@endforelse
+@empty<div class="fee-empty">No prior payments have been recorded for this invoice.</div>@endforelse
 @if(in_array($area, ['admin', 'accountant'], true) && $canManageOpeningPayments)
-<details class="mt-3"><summary>Record prior payment already received</summary>
+<details class="fee-action"><summary>Record prior payment already received</summary>
 <p>Use only for money received before the student joined this system. Check the original receipt and allocate it to the correct invoice and academic session. Do not enter money already recorded here or through PesaPal. This updates the opening balance; it is not a new cash collection.</p>
 <form method="post" action="{{ route(($area === 'accountant' ? 'accountant' : 'admin') . '.tuition_payments.opening_payment', $fee->id) }}">@csrf
 <input type="hidden" name="action" value="record">

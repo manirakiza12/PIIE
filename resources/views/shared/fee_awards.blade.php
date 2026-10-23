@@ -1,17 +1,14 @@
 @php($activeAward = $awards->firstWhere('revoked_at', null))
-<section class="border rounded p-3 my-3" aria-label="Bursaries and scholarships">
+<section class="fee-panel" aria-label="Bursaries and scholarships">
 <h2 class="h5">Scholarship or bursary award</h2>
-<p>A fee award records approved sponsorship or fee coverage. It is not money received from the student and does not create a cash receipt.</p>
+<p class="fee-caption">Approved sponsorship or fee coverage. An award reduces the fee; it is not money received and does not create a cash receipt.</p>
 @if($activeAward)
-<p>Fee before award: {{ number_format($fee->total_amount + $activeAward->amount, 2) }}<br>
-{{ ucfirst($activeAward->type) }} reduction: {{ number_format($activeAward->amount, 2) }}<br>
-Fee after award: {{ number_format($fee->total_amount, 2) }}<br>
-Payments received: {{ number_format($fee->paid_amount, 2) }}<br>
-Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount), 2) }}</p>
+<div class="fee-active-award"><span>{{ ucfirst($activeAward->type) }} reduction</span><strong>{{ number_format($activeAward->amount, 2) }}</strong><span class="small">Applied to this invoice · not a cash payment</span></div>
 @if($activeAward->reference)<p>Approval reference: {{ $activeAward->reference }}</p>@endif
-@else<p>No active bursary or scholarship on this invoice.</p>@endif
+@else<div class="fee-empty">No active bursary or scholarship on this invoice.</div>@endif
 @if(in_array($area, ['admin', 'accountant'], true) && $canManageAwards)
-<p>An approved award reduces this invoice only. For a percentage award, enter its monetary value. Other invoices and future sessions require their own awards. External sponsor payments must be verified through the payment process.</p>
+<details class="fee-action" @if($errors->any() && in_array(old('action'), ['grant', 'revoke'], true)) open @endif><summary>{{ $activeAward ? 'Manage current award' : 'Record fee award' }}</summary>
+<p class="fee-caption">An approved award reduces this invoice only. For a percentage award, enter its monetary value. Other invoices and future sessions require their own awards. External sponsor payments must be verified through the payment process.</p>
 <form method="post" action="{{ route(($area === 'accountant' ? 'accountant' : 'admin') . '.tuition_payments.award', $fee->id) }}">@csrf
 <input type="hidden" name="action" value="{{ $activeAward ? 'revoke' : 'grant' }}">
 @unless($activeAward)
@@ -26,8 +23,9 @@ Balance payable: {{ number_format(max(0, $fee->total_amount - $fee->paid_amount)
 <textarea id="award_reason" name="reason" minlength="10" maxlength="500" class="form-control mb-2" required>{{ old('reason') }}</textarea>
 <button class="btn btn-{{ $activeAward ? 'warning' : 'primary' }}">{{ $activeAward ? 'Revoke award and restore fee' : 'Record fee award' }}</button>
 </form>
+</details>
 @if($awards->isNotEmpty())
-<details class="mt-3"><summary>Approval history</summary>
+<details class="fee-action"><summary>Approval history</summary>
 @foreach($awards as $award)
 <p class="mt-2">{{ ucfirst($award->type) }}: {{ number_format($award->amount, 2) }} — {{ $award->revoked_at ? 'Revoked' : 'Active' }}<br>
 Approved {{ $award->created_at }} by {{ $award->approved_by_name }}. {{ $award->reason }}
