@@ -2832,6 +2832,7 @@ Route::get('payments/tuition/pesapal/callback', [\App\Http\Controllers\TuitionPe
 Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middleware(['auth', 'admin', 'rbac'])->group(function () {
     Route::get('admin/fee-payments', 'payments')->name('admin.tuition_payments.index');
     Route::get('admin/fee-payments/{id}', 'index')->name('admin.tuition_payments.show');
+    Route::post('admin/fee-payments/{id}/financial-setup/{item}/confirm', 'confirmFinancialSetup')->whereIn('item', ['prior_payment', 'award', 'study_waiver'])->name('admin.tuition_payments.setup.confirm');
     Route::post('admin/fee-payments/{id}/study-waiver', 'waiver')->name('admin.tuition_payments.waiver');
     Route::post('admin/fee-payments/{id}/prior-payment', 'openingPayment')->name('admin.tuition_payments.opening_payment');
     Route::post('admin/fee-payments/{id}/award', 'award')->name('admin.tuition_payments.award');
@@ -2840,6 +2841,7 @@ Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middle
 
 Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middleware(['auth', 'accountant', 'admin', 'rbac'])->group(function () {
     Route::get('accountant/fee-payments/{id}', 'index')->name('accountant.tuition_payments.show');
+    Route::post('accountant/fee-payments/{id}/financial-setup/{item}/confirm', 'confirmFinancialSetup')->whereIn('item', ['prior_payment', 'award'])->name('accountant.tuition_payments.setup.confirm');
     Route::post('accountant/fee-payments/{id}/prior-payment', 'openingPayment')->name('accountant.tuition_payments.opening_payment');
     Route::post('accountant/fee-payments/{id}/award', 'award')->name('accountant.tuition_payments.award');
     Route::post('accountant/fee-payments/{id}/{payment}/check', 'check')->middleware('throttle:10,1')->name('accountant.payment.pesapal.check');

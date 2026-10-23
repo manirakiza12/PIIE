@@ -1968,12 +1968,15 @@ class AdminController extends Controller
         $intakeSessions = IntakeSession::where('school_id', $school_id)->orderByDesc('id')->get();
         $canRecordExistingStudentFees = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices')
             && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments');
+        $canRequestStudyWaiver = $canRecordExistingStudentFees
+            && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'academic.course_registration.fee_waiver');
         $feeStructures = $canRecordExistingStudentFees
             ? FeeStructure::where('school_id', $school_id)->where('is_mandatory', 1)->whereNull('class_id')->orderBy('name')->get()
             : collect();
         $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'departments' => $departments, 'programmes' => $programmes,
             'intakeSessions' => $intakeSessions, 'feeStructures' => $feeStructures,
             'canRecordExistingStudentFees' => $canRecordExistingStudentFees,
+            'canRequestStudyWaiver' => $canRequestStudyWaiver,
             'runningSessionId' => get_school_settings($school_id)->value('running_session')];
         if (! $request->ajax()) {
             return view('admin.common.modal_standalone_wrapper', [
@@ -1993,7 +1996,11 @@ class AdminController extends Controller
             && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments');
         $recordFees = $request->boolean('record_fees');
         $financialFields = ['fee_session_id', 'fee_structure_id', 'actual_fee_amount', 'prior_paid_amount',
-            'prior_paid_on', 'prior_payment_method', 'prior_payment_reference', 'prior_payment_reason'];
+            'prior_paid_on', 'prior_payment_method', 'prior_payment_reference', 'prior_payment_reason',
+            'record_award', 'award_type', 'award_amount', 'award_reference', 'award_reason',
+            'record_study_waiver', 'study_waiver_reason'];
+        $priorMinor = 0;
+        $awardMinor = 0;
         if ($recordFees) {
             abort_unless($canRecordExistingStudentFees, 403);
             $request->validate([
@@ -2014,6 +2021,32 @@ class AdminController extends Controller
                     'prior_payment_reference' => ['required', 'string', 'max:150'],
                     'prior_payment_reason' => ['required', 'string', 'min:10', 'max:500'],
                 ]);
+            }
+
+            if ($request->boolean('record_award')) {
+                $request->validate([
+                    'award_type' => ['required', 'in:bursary,scholarship'],
+                    'award_amount' => ['required', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
+                    'award_reference' => ['required', 'string', 'max:150'],
+                    'award_reason' => ['required', 'string', 'min:10', 'max:500'],
+                ]);
+                $awardMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('award_amount')) ?? 0;
+                if ($awardMinor <= 0 || $priorMinor + $awardMinor > $amountMinor) {
+                    throw ValidationException::withMessages(['award_amount' => 'The award must be positive and fit within the fee after prior payments.']);
+                }
+            } elseif (collect(['award_type', 'award_amount', 'award_reference', 'award_reason'])->contains(fn ($field) => $request->filled($field))) {
+                throw ValidationException::withMessages(['record_award' => 'Select the approved award option before submitting award details.']);
+            }
+
+            if ($request->boolean('record_study_waiver')) {
+                abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'academic.course_registration.fee_waiver'), 403);
+                $request->validate(['study_waiver_reason' => ['required', 'string', 'min:10', 'max:500']]);
+                $runningSessionId = get_school_settings((int) $request->user()->school_id)->value('running_session');
+                if (! $runningSessionId || (int) $request->input('fee_session_id') !== (int) $runningSessionId) {
+                    throw ValidationException::withMessages(['record_study_waiver' => 'The 20% study-requirement waiver can only be requested for the current fee session.']);
+                }
+            } elseif ($request->filled('study_waiver_reason')) {
+                throw ValidationException::withMessages(['record_study_waiver' => 'Select the 20% study-requirement waiver before submitting its reason.']);
             }
         } elseif (collect($financialFields)->contains(fn ($field) => $request->filled($field))) {
             throw ValidationException::withMessages(['record_fees' => 'Select the authorized finance setup option to submit fee or prior-payment details.']);
@@ -2081,7 +2114,7 @@ class AdminController extends Controller
         // Portal provisioning (user and profile only) is shared with
         // the CSV bulk import so a student added by hand and one added from a
         // spreadsheet end up with identical records.
-        $afterProvision = $recordFees ? function (User $student) use ($request, $data): void {
+        $afterProvision = $recordFees ? function (User $student) use ($request, $data, $priorMinor, $awardMinor): void {
             $schoolId = (int) auth()->user()->school_id;
             $session = Session::where('school_id', $schoolId)->whereKey((int) $request->input('fee_session_id'))->firstOrFail();
             $structure = FeeStructure::where('school_id', $schoolId)->whereKey((int) $request->input('fee_structure_id'))
@@ -2104,12 +2137,38 @@ class AdminController extends Controller
                 'timestamp' => strtotime(date('d-M-Y')),
             ]);
 
-            $priorMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('prior_paid_amount', '0'));
-            if ($priorMinor > 0) {
-                app(\App\Support\Payments\StudentOpeningPayments::class)->change(auth()->user(), (int) $invoice->id, [
-                    'action' => 'record', 'amount' => \App\Support\Payments\DecimalAmount::decimal($priorMinor),
-                    'paid_on' => $request->input('prior_paid_on'), 'method' => $request->input('prior_payment_method'),
-                    'reference' => $request->input('prior_payment_reference'), 'reason' => $request->input('prior_payment_reason'),
+            $priorPayment = $priorMinor > 0 ? [
+                'amount' => \App\Support\Payments\DecimalAmount::decimal($priorMinor),
+                'paid_on' => $request->input('prior_paid_on'), 'method' => $request->input('prior_payment_method'),
+                'reference' => $request->input('prior_payment_reference'), 'reason' => $request->input('prior_payment_reason'),
+            ] : null;
+            $award = $awardMinor > 0 ? [
+                'type' => $request->input('award_type'), 'amount' => \App\Support\Payments\DecimalAmount::decimal($awardMinor),
+                'reference' => $request->input('award_reference'), 'reason' => $request->input('award_reason'),
+            ] : null;
+            $studyWaiver = $request->boolean('record_study_waiver')
+                ? ['reason' => $request->input('study_waiver_reason')]
+                : null;
+
+            if ($priorPayment || $award || $studyWaiver) {
+                $review = \App\Models\StudentFinancialSetupReview::create([
+                    'school_id' => $schoolId, 'student_id' => $student->id, 'fee_id' => $invoice->id,
+                    'session_id' => $session->id, 'captured_by' => auth()->id(),
+                    'prior_payment' => $priorPayment, 'prior_payment_status' => $priorPayment ? 'pending' : 'not_requested',
+                    'award' => $award, 'award_status' => $award ? 'pending' : 'not_requested',
+                    'study_waiver' => $studyWaiver, 'study_waiver_status' => $studyWaiver ? 'pending' : 'not_requested',
+                ]);
+
+                \App\Models\AuditLog::record('create', 'Student Financial Setup', "Captured pending financial setup for invoice #{$invoice->id}.", [
+                    'school_id' => $schoolId, 'record_type' => \App\Models\StudentFinancialSetupReview::class,
+                    'record_id' => $review->id,
+                    'new_values' => [
+                        'session_id' => $session->id,
+                        'prior_payment_amount' => $priorPayment['amount'] ?? null,
+                        'award_type' => $award['type'] ?? null,
+                        'award_amount' => $award['amount'] ?? null,
+                        'study_waiver_requested' => (bool) $studyWaiver,
+                    ],
                 ]);
             }
         } : null;

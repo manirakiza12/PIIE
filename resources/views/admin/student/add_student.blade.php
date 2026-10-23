@@ -5,7 +5,7 @@
     </div>
     <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.student.create') }}">
         <div class="alert alert-info">Add an existing student using their current registration number. The student receives only a password setup email for the student portal. After saving, upload the documents held by the administration on the Documents page. No applicant account, application fee or new enrolment is created.</div>
-        <div class="alert alert-secondary">Finance must issue the correct invoice for this student's study period. Record verified past payments separately from scholarships or bursaries; the remaining balance is calculated from the invoice.</div>
+        <div class="alert alert-secondary">Finance can set up this student's fee once below. Captured prior payments, approved awards, and study-waiver requests are held for review in Fees Management; they do not change the payable balance or study eligibility until separately confirmed by an authorized reviewer.</div>
         <div class="fpb-7">
             <label for="registration_number" class="eForm-label">Existing registration number</label>
             <input type="text" class="form-control eForm-control" id="registration_number" name="registration_number" maxlength="255" required>
@@ -46,11 +46,13 @@
 
             @if($canRecordExistingStudentFees ?? false)
                 <div class="fpb-7 border rounded p-3">
+                    <h5>Financial Setup</h5>
+                    <p class="small text-muted">Step 1: enter the agreed fee and study period. Optional prior cash, scholarship/bursary, and study-waiver details are saved once and reviewed from this invoice in Fees Management.</p>
                     <label class="eForm-label" for="record_fees">
                         <input type="checkbox" id="record_fees" name="record_fees" value="1" {{ old('record_fees') ? 'checked' : '' }}>
                         Set up this student's fee invoice now
                     </label>
-                    <p class="small text-muted mb-2">Choose the mandatory fee type and study period, then enter this student's actual amount. Any amount already paid is saved to the audited prior-payment ledger, separately from scholarships and bursaries.</p>
+                    <p class="small text-muted mb-2">The full agreed fee remains on the invoice. Review items below are not cash receipts and do not reduce the balance until confirmed.</p>
                     <div id="existing_student_fee_fields" {{ old('record_fees') ? '' : 'hidden' }}>
                         <div class="fpb-7">
                             <label for="fee_session_id" class="eForm-label">Study period</label>
@@ -102,6 +104,50 @@
                                 <textarea id="prior_payment_reason" name="prior_payment_reason" minlength="10" maxlength="500" class="form-control eForm-control" {{ old('record_fees') && (float) old('prior_paid_amount', 0) > 0 ? 'required' : 'disabled' }}>{{ old('prior_payment_reason') }}</textarea>
                             </div>
                         </div>
+                        <div class="border-top mt-3 pt-3">
+                            <label class="eForm-label" for="record_award">
+                                <input type="checkbox" id="record_award" name="record_award" value="1" {{ old('record_award') ? 'checked' : '' }}>
+                                Capture an approved scholarship or bursary for review
+                            </label>
+                            <p class="small text-muted">An award is fee coverage, never cash received. It reduces the payable invoice only after Finance confirms it.</p>
+                            <div id="award_details" {{ old('record_fees') && old('record_award') ? '' : 'hidden' }}>
+                                <div class="row">
+                                    <div class="fpb-7 col-md-4">
+                                        <label for="award_type" class="eForm-label">Award type</label>
+                                        <select id="award_type" name="award_type" class="form-select eForm-select" {{ old('record_fees') && old('record_award') ? 'required' : 'disabled' }}>
+                                            <option value="">Select type</option>
+                                            <option value="scholarship" {{ old('award_type') === 'scholarship' ? 'selected' : '' }}>Scholarship</option>
+                                            <option value="bursary" {{ old('award_type') === 'bursary' ? 'selected' : '' }}>Bursary</option>
+                                        </select>
+                                    </div>
+                                    <div class="fpb-7 col-md-4">
+                                        <label for="award_amount" class="eForm-label">Amount covered ({{ school_currency() }})</label>
+                                        <input id="award_amount" name="award_amount" type="number" min="0.01" step="0.01" class="form-control eForm-control" value="{{ old('award_amount') }}" {{ old('record_fees') && old('record_award') ? 'required' : 'disabled' }}>
+                                    </div>
+                                    <div class="fpb-7 col-md-4">
+                                        <label for="award_reference" class="eForm-label">Approval reference</label>
+                                        <input id="award_reference" name="award_reference" maxlength="150" class="form-control eForm-control" value="{{ old('award_reference') }}" {{ old('record_fees') && old('record_award') ? 'required' : 'disabled' }}>
+                                    </div>
+                                    <div class="fpb-7 col-12">
+                                        <label for="award_reason" class="eForm-label">Approval reason</label>
+                                        <textarea id="award_reason" name="award_reason" minlength="10" maxlength="500" class="form-control eForm-control" {{ old('record_fees') && old('record_award') ? 'required' : 'disabled' }}>{{ old('award_reason') }}</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @if($canRequestStudyWaiver ?? false)
+                            <div class="border-top mt-3 pt-3">
+                                <label class="eForm-label" for="record_study_waiver">
+                                    <input type="checkbox" id="record_study_waiver" name="record_study_waiver" value="1" {{ old('record_study_waiver') ? 'checked' : '' }}>
+                                    Request the 20% study-requirement waiver for review
+                                </label>
+                                <p class="small text-muted">For the institution's current fee session only. This waives the 20% fee threshold for study registration, not the fee itself or academic requirements.</p>
+                                <div id="study_waiver_details" {{ old('record_fees') && old('record_study_waiver') ? '' : 'hidden' }}>
+                                    <label for="study_waiver_reason" class="eForm-label">Required reason</label>
+                                    <textarea id="study_waiver_reason" name="study_waiver_reason" minlength="10" maxlength="500" class="form-control eForm-control" {{ old('record_fees') && old('record_study_waiver') ? 'required' : 'disabled' }}>{{ old('study_waiver_reason') }}</textarea>
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 </div>
             @endif
@@ -233,7 +279,19 @@
         const fields = document.getElementById('existing_student_fee_fields');
         const priorAmount = document.getElementById('prior_paid_amount');
         const priorDetails = document.getElementById('prior_payment_details');
+        const awardToggle = document.getElementById('record_award');
+        const awardDetails = document.getElementById('award_details');
+        const waiverToggle = document.getElementById('record_study_waiver');
+        const waiverDetails = document.getElementById('study_waiver_details');
         if (!setup || !fields || !priorAmount || !priorDetails) return;
+        function syncDetails(toggle, details) {
+            if (!toggle || !details) return;
+            details.hidden = !setup.checked || !toggle.checked;
+            details.querySelectorAll('input, select, textarea').forEach(function (field) {
+                field.disabled = details.hidden;
+                field.required = !details.hidden;
+            });
+        }
         function syncFinanceFields() {
             fields.hidden = !setup.checked;
             fields.querySelectorAll('input, select, textarea').forEach(function (field) {
@@ -244,9 +302,13 @@
                 field.disabled = priorDetails.hidden;
                 field.required = !priorDetails.hidden;
             });
+            syncDetails(awardToggle, awardDetails);
+            syncDetails(waiverToggle, waiverDetails);
         }
         setup.addEventListener('change', syncFinanceFields);
         priorAmount.addEventListener('input', syncFinanceFields);
+        if (awardToggle) awardToggle.addEventListener('change', syncFinanceFields);
+        if (waiverToggle) waiverToggle.addEventListener('change', syncFinanceFields);
         syncFinanceFields();
     })();
 

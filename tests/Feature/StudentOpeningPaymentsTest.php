@@ -158,7 +158,7 @@ class StudentOpeningPaymentsTest extends TestCase
     public function test_invoice_lists_link_once_to_their_own_payment_screen(): void
     {
         $this->actingAs($this->admin)->get(route('admin.fee_manager.list'))
-            ->assertOk()->assertSee('Invoice payments and fee awards')
+            ->assertOk()->assertSee('Review invoice and financial setup')
             ->assertSee(route('admin.tuition_payments.show', $this->fee->id))
             ->assertDontSee('Payments / prior payments / awards');
         $adminHtml = $this->get(route('admin.fee_manager.list'))->getContent();
@@ -167,7 +167,7 @@ class StudentOpeningPaymentsTest extends TestCase
         $accountant = User::create(['school_id' => $this->fee->school_id, 'role_id' => 4, 'name' => 'Finance',
             'email' => 'finance-list@example.test', 'account_status' => 'active']);
         $accountantHtml = $this->actingAs($accountant)->get(route('accountant.fee_manager.list'))
-            ->assertOk()->assertSee('Invoice payments and fee awards')
+            ->assertOk()->assertSee('Review invoice and financial setup')
             ->assertSee(route('accountant.tuition_payments.show', $this->fee->id))
             ->getContent();
         $this->assertSame(1, substr_count($accountantHtml, route('accountant.tuition_payments.show', $this->fee->id)));

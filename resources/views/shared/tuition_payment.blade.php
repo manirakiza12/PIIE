@@ -14,6 +14,9 @@
     $eligibility = $eligibility ?? app(\App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility::class)->summary(\App\Models\User::where('school_id', $fee->school_id)->findOrFail($fee->student_id));
     $canManageWaiver = $canManageWaiver ?? false;
 @endphp
+@if(in_array($area, ['admin', 'accountant'], true))
+    @include('shared.existing_student_financial_setup_review')
+@endif
 <section class="alert alert-{{ $eligibility['eligible'] ? 'success' : 'warning' }}" aria-label="Study eligibility">
 <h2 class="h5">Study eligibility: {{ $eligibility['eligible'] ? 'Eligible' : 'Payment required' }}</h2>
 <p class="mb-1">The requirement is 20% of all school fees billed for your current academic session.</p>
