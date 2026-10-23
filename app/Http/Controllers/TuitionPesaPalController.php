@@ -42,7 +42,11 @@ final class TuitionPesaPalController extends Controller
                 ->where('student_id', $student->id)->where('session_id', $fee->session_id)->first()
             : null;
         $financialSetup = app(\App\Support\Billing\ExistingStudentFinancialSetup::class);
+        $sessionLabels = \App\Models\Session::where('school_id', $fee->school_id)
+            ->whereIn('id', array_filter([$fee->session_id, $eligibility['session_id']]))->pluck('session_title', 'id');
+        $school = \App\Models\School::find($fee->school_id);
         return response()->view('shared.tuition_payment', ['fee' => $fee, 'eligibility' => $eligibility, 'canManageWaiver' => $canManageWaiver,
+            'student' => $student, 'sessionLabels' => $sessionLabels, 'currencyLabel' => $school->school_currency ?? '',
             'openingPayments' => $isAdminAddedExisting && \Illuminate\Support\Facades\Schema::hasTable('student_opening_payments') ? $fee->openingPayments()->latest('id')->get() : collect(),
             'isAdminAddedExisting' => $isAdminAddedExisting,
             'canManageOpeningPayments' => $isAdminAddedExisting && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'),

@@ -7,7 +7,7 @@
         'study_waiver' => ['label' => '20% study-requirement waiver', 'payload' => $review->study_waiver, 'status' => $review->study_waiver_status],
     ];
 @endphp
-<section class="border border-primary rounded p-3 my-3" aria-label="Existing student financial setup review">
+<section class="fee-panel mb-4" aria-label="Existing student financial setup review">
     <h2 class="h5">Financial setup review</h2>
     <p>Captured {{ $review->created_at }} by staff account #{{ $review->captured_by }} for this invoice and study session. Review and confirm each item here; staff do not need to re-enter the captured details.</p>
     <p><strong>Current balance:</strong> {{ number_format(max(0, $fee->total_amount - $fee->paid_amount), 2) }}<br>
