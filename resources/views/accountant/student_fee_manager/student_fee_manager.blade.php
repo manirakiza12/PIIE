@@ -2,6 +2,7 @@
    
 @section('content')
 @include('shared.invoice_email_settings')
+@include('shared.student_fee_overview', ['feeArea' => 'accountant'])
 <div class="mainSection-title">
     <div class="row">
 	    <div class="col-12">
@@ -31,6 +32,10 @@
     <div class="col-12">
         <div class="eSection-wrap">
             <form method="GET" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('accountant.fee_manager.list') }}">
+                <h5>Invoice report by creation date</h5>
+                <p>This report counts invoices, not students. Date, class and status filters apply only to this report. Paid Amount includes verified prior payments; see the student summary above for separate prior cash, new collections and awards.</p>
+                @if($feeSessions->contains('id', $feeSessionId))<input type="hidden" name="fee_session_id" value="{{ $feeSessionId }}">@endif
+                <input type="hidden" name="fee_search" value="{{ request('fee_search') }}">
             	<div class="row">
                     <div class="row justify-content-md-center">
                     	@if($date_from != "" && $date_to !="")
@@ -129,7 +134,7 @@
 		                            <a class="dropdown-item" id="pdf" href="javascript:;" onclick="generatePDF()">{{ get_phrase('PDF') }}</a>
 		                        </li>
 		                        <li>
-		                            <a class="dropdown-item" id="download-button" href="{{ route('accountant.fee_manager.export', ['date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $sel_class, 'selected_status' => $sel_status]) }}">{{ get_phrase('CSV') }}</a>
+		                            <a class="dropdown-item" id="download-button" href="{{ route('accountant.fee_manager.export', ['date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $sel_class, 'selected_status' => $sel_status, 'fee_session_id' => $feeSessionId]) }}">{{ get_phrase('CSV') }}</a>
 		                        </li>
 		                        <li>
 		                            <a class="dropdown-item" id="print" href="javascript:;" onclick="printableDiv('student_fee_report_export')">{{ get_phrase('Print') }}</a>

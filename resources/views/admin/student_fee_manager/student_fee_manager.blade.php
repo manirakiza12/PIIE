@@ -2,6 +2,7 @@
    
 @section('content')
 @include('shared.invoice_email_settings')
+@include('shared.student_fee_overview', ['feeArea' => 'admin'])
 <div class="mainSection-title">
     <div class="row">
 	    <div class="col-12">
@@ -30,6 +31,10 @@
     <div class="col-12">
         <div class="eSection-wrap-2">
             <form method="GET" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.fee_manager.list') }}">
+                <h5>Invoice report by creation date</h5>
+                <p>This report counts invoices, not students. Date, class, programme and status filters apply only to this report. Paid Amount includes verified prior payments; see the student summary above for separate prior cash, new collections and awards.</p>
+                @if($feeSessions->contains('id', $feeSessionId))<input type="hidden" name="fee_session_id" value="{{ $feeSessionId }}">@endif
+                <input type="hidden" name="fee_search" value="{{ request('fee_search') }}">
             	<div class="row">
                     <div class="row justify-content-md-center">
                     	@if($date_from != "" && $date_to !="")
@@ -126,7 +131,7 @@
 		            	?>
 				        @if(count($invoices) > 0)
 				        <div class="col-md-2 ">
-		                    <a class="eBtn-3 float-end" id="download-button" href="{{ route('admin.fee_manager.export', ['date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $sel_class, 'selected_status' => $sel_status]) }}">
+		                    <a class="eBtn-3 float-end" id="download-button" href="{{ route('admin.fee_manager.export', ['date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $sel_class, 'selected_status' => $sel_status, 'fee_session_id' => $feeSessionId]) }}">
 		                        <span class="pr-10">
 		                          <svg xmlns="http://www.w3.org/2000/svg" width="12.31" height="10.77" viewBox="0 0 10.771 12.31">
 		                            <path id="arrow-right-from-bracket-solid" d="M3.847,1.539H2.308a.769.769,0,0,0-.769.769V8.463a.769.769,0,0,0,.769.769H3.847a.769.769,0,0,1,0,1.539H2.308A2.308,2.308,0,0,1,0,8.463V2.308A2.308,2.308,0,0,1,2.308,0H3.847a.769.769,0,1,1,0,1.539Zm8.237,4.39L9.007,9.007A.769.769,0,0,1,7.919,7.919L9.685,6.155H4.616a.769.769,0,0,1,0-1.539H9.685L7.92,2.852A.769.769,0,0,1,9.008,1.764l3.078,3.078A.77.77,0,0,1,12.084,5.929Z" transform="translate(0 12.31) rotate(-90)" fill="#F15F23"></path>
