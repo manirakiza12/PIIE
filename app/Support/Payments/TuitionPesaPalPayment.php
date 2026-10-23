@@ -49,13 +49,21 @@ final class TuitionPesaPalPayment
             if (! preg_match('/\A[A-Z]{3}\z/', $currency)) { self::reject('Finance must configure the school currency before accepting payments.'); }
             $payment = TuitionPayment::create(['school_id' => $locked->school_id, 'fee_id' => $locked->id,
                 'amount' => DecimalAmount::decimal($amount), 'currency' => $currency, 'method' => 'pesapal',
-                'status' => 'pending', 'reference' => 'TUITION-' . $locked->id . '-' . Str::uuid(),
+                'status' => 'pending', 'reference' => 'TUITION-' . Str::uuid(),
                 'gateway_payload' => ['environment' => $configuration->environment, 'configuration_id' => $configuration->configurationId, 'initiation' => 'reserved']]);
-            $locked->update(['status' => 'processing', 'payment_method' => 'pesapal']);
+            // The pending attempt reserves checkout; only verified settlement changes the invoice.
             return [$payment, true];
         });
         if (! $created) {
-            if ($payment->gateway_txn_id) { self::reconcile($payment); }
+            if ($payment->gateway_txn_id) {
+                $service = new PesaPalService(PesaPalConfiguration::forPayment($payment));
+                $service->checkoutUrl($payment->gateway_payload['checkout_url'] ?? null);
+                try { self::reconcile($payment); }
+                catch (PesaPalException $exception) {
+                    // A status outage must not strand the already submitted order.
+                    // Resume that order only; no replacement request or credit is made.
+                }
+            }
             if ($payment->fresh()->status !== 'pending') { self::reject('Payment status changed. Reload the invoice.'); }
             return $payment->fresh();
         }
@@ -65,7 +73,7 @@ final class TuitionPesaPalPayment
                 'amount' => (string) $payment->amount, 'currency' => $payment->currency,
                 'description' => 'School fees PRN ' . $payment->reference,
                 'callback_url' => route('tuition.pesapal.callback'), 'notification_id' => $configuration->notificationId,
-                'billing_address' => ['email_address' => (string) $student->email, 'phone_number' => $phone ?: (string) $student->phone,
+                'billing_address' => ['email_address' => (string) $student->email, 'phone_number' => preg_replace('/[()\s-]/', '', $phone ?: (string) $student->phone),
                     'first_name' => (string) $student->name]]);
             DB::transaction(function () use ($payment, $order) {
                 $locked = TuitionPayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();

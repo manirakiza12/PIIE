@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\{StudentFeeManager, TuitionPayment};
-use App\Support\Payments\{PesaPalException, TuitionPesaPalPayment};
+use App\Support\Payments\{PesaPalConfiguration, PesaPalException, PesaPalService, TuitionPesaPalPayment};
 use Illuminate\Http\Request;
 
 final class TuitionPesaPalController extends Controller
@@ -80,7 +80,10 @@ final class TuitionPesaPalController extends Controller
         try {
             $payment = TuitionPesaPalPayment::start($fee, $data['payer_phone'] ?? null, $data['payment_option'] ?? 'balance', $data['payment_amount'] ?? null);
             $url = $payment->gateway_payload['checkout_url'] ?? null;
-            return $url ? redirect()->away($url) : back()->with('error', 'An order is awaiting verification. Do not pay again; contact finance with your PRN.');
+            if ($url !== null) {
+                return redirect()->away((new PesaPalService(PesaPalConfiguration::forPayment($payment)))->checkoutUrl($url));
+            }
+            return back()->with('error', 'An order is awaiting verification. Do not pay again; contact finance with your PRN.');
         } catch (PesaPalException $exception) { return back()->with('error', 'PesaPal is temporarily unavailable. Check payment status before retrying.'); }
     }
 

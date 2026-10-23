@@ -93,7 +93,8 @@
 <section class="fee-panel mb-4" aria-label="Make a payment"><h2>Make a payment</h2>
     <p class="fee-caption">Pay securely through PesaPal. Your invoice updates after PesaPal confirms payment. If a payment is pending, check its status before trying again.</p>
     <form method="post" action="{{ route($area . '.payment.pesapal.start', $fee->id) }}">@csrf
-        <label class="form-label" for="payment_option">Payment option</label><select class="form-select mb-2" id="payment_option" name="payment_option">
+        <p class="fee-caption">Choose how much to pay here. On PesaPal, choose an available payment method, such as MTN Mobile Money, Airtel Money, or Visa. Availability depends on the configured PesaPal checkout. The phone number is contact information and does not select a payment method.</p>
+        <label class="form-label" for="payment_option">Amount to pay</label><select class="form-select mb-2" id="payment_option" name="payment_option">
         @if(!$eligibility['eligible'] && $eligibility['shortfall_minor'] > 0 && (int)$fee->session_id === $eligibility['session_id'])<option value="minimum">Pay toward the 20% study minimum ({{ number_format(min($eligibility['shortfall_minor'] / 100, $balance), 2) }})</option>@endif
         <option value="balance">Pay full invoice balance</option><option value="custom">Pay a custom amount</option></select>
         <label class="form-label" for="payment_amount">Amount (only for custom payment)</label><input class="form-control mb-2" id="payment_amount" name="payment_amount" type="number" min="0.01" step="0.01" max="{{ $balance }}" value="{{ old('payment_amount') }}">
