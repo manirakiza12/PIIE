@@ -74,6 +74,32 @@ class TuitionPesaPalJourneyTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest')
             && $request['amount'] === '500.00' && $request['billing_address']['phone_number'] === '+256771234567'
             && ! isset($request['payment_method']) && ! isset($request['payment_option']));
+        $orders = Http::recorded(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest'));
+        $request = $orders->sole()[0];
+        $this->assertSame(\App\Support\Payments\PesaPalService::SANDBOX_URL . '/api/Transactions/SubmitOrderRequest', $request->url());
+        $this->assertSame('UGX', $request['currency']);
+        $this->assertSame(route('tuition.pesapal.callback'), $request['callback_url']);
+        $this->assertSame(self::GUID, $request['notification_id']);
+        $this->assertEqualsCanonicalizing(['id', 'amount', 'currency', 'description', 'callback_url', 'notification_id', 'billing_address'], array_keys($request->data()));
+        $this->assertSame(['email_address' => 'student@example.test', 'phone_number' => '+256771234567', 'first_name' => 'Student'], $request['billing_address']);
+        $this->assertSame('unpaid', $fee->fresh()->status);
+        $this->assertSame(0, (int) $fee->fresh()->paid_amount);
+    }
+
+    public function test_student_checkout_uses_school_currency_and_email_without_forcing_phone_country_or_method(): void
+    {
+        DB::table('schools')->where('id', $this->school)->update(['school_currency' => 'usd']);
+        $fee = $this->fee();
+        $this->actingAs($this->student)->post(route('student.payment.pesapal.start', $fee->id), ['payment_option' => 'balance'])
+            ->assertRedirect('https://cybqa.pesapal.com/pay?OrderTrackingId=' . self::GUID);
+        $orders = Http::recorded(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest'));
+        $request = $orders->sole()[0];
+        $this->assertSame('USD', $request['currency']);
+        $this->assertSame('5000.00', $request['amount']);
+        $this->assertSame(['email_address' => 'student@example.test', 'phone_number' => '', 'first_name' => 'Student'], $request['billing_address']);
+        $this->assertArrayNotHasKey('payment_method', $request->data());
+        $this->assertArrayNotHasKey('country_code', $request['billing_address']);
+        $this->assertSame('unpaid', $fee->fresh()->status);
         $this->assertSame(0, (int) $fee->fresh()->paid_amount);
     }
 
