@@ -132,7 +132,7 @@
 		                            <a class="dropdown-item" id="download-button" href="{{ route('accountant.fee_manager.export', ['date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $sel_class, 'selected_status' => $sel_status]) }}">{{ get_phrase('CSV') }}</a>
 		                        </li>
 		                        <li>
-		                            <a class="dropdown-item" id="print" href="javascript:;" onclick="printableDiv('student_fee_report')">{{ get_phrase('Print') }}</a>
+		                            <a class="dropdown-item" id="print" href="javascript:;" onclick="printableDiv('student_fee_report_export')">{{ get_phrase('Print') }}</a>
 		                        </li>
 		                      </ul>
 		                    </div>
@@ -155,10 +155,12 @@
 	function generatePDF() {
 
     	// Choose the element that our invoice is rendered in.
-	    const element = document.getElementById("student_fee_report");
+	    const element = document.getElementById("student_fee_report_export");
 
 	    // clone the element
 	    var clonedElement = element.cloneNode(true);
+	    clonedElement.removeAttribute('hidden');
+	    clonedElement.removeAttribute('aria-hidden');
 
 	    // change display of cloned element 
 	    $(clonedElement).css("display", "block");

@@ -5,7 +5,7 @@
     </div>
     <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.student.create') }}">
         <div class="alert alert-info">Add an existing student using their current registration number. The student receives only a password setup email for the student portal. After saving, upload the documents held by the administration on the Documents page. No applicant account, application fee or new enrolment is created.</div>
-        <div class="alert alert-secondary">Already paid fees? After saving, Finance must issue or sync the correct fee invoices, then open Student fees → Payments / prior payments to verify the original receipts. Only the remaining balance will be payable online.</div>
+        <div class="alert alert-secondary">Finance must issue the correct invoice for this student's study period. Record verified past payments separately from scholarships or bursaries; the remaining balance is calculated from the invoice.</div>
         <div class="fpb-7">
             <label for="registration_number" class="eForm-label">Existing registration number</label>
             <input type="text" class="form-control eForm-control" id="registration_number" name="registration_number" maxlength="255" required>
@@ -43,6 +43,68 @@
                     @endforeach
                 </select>
             </div>
+
+            @if($canRecordExistingStudentFees ?? false)
+                <div class="fpb-7 border rounded p-3">
+                    <label class="eForm-label" for="record_fees">
+                        <input type="checkbox" id="record_fees" name="record_fees" value="1" {{ old('record_fees') ? 'checked' : '' }}>
+                        Set up this student's fee invoice now
+                    </label>
+                    <p class="small text-muted mb-2">Choose the mandatory fee type and study period, then enter this student's actual amount. Any amount already paid is saved to the audited prior-payment ledger, separately from scholarships and bursaries.</p>
+                    <div id="existing_student_fee_fields" {{ old('record_fees') ? '' : 'hidden' }}>
+                        <div class="fpb-7">
+                            <label for="fee_session_id" class="eForm-label">Study period</label>
+                            <select id="fee_session_id" name="fee_session_id" class="form-select eForm-select" {{ old('record_fees') ? '' : 'disabled' }}>
+                                <option value="">Select a study period</option>
+                                @foreach($sessions as $session)
+                                    <option value="{{ $session->id }}" {{ (string) old('fee_session_id', $runningSessionId) === (string) $session->id ? 'selected' : '' }}>{{ $session->session_title }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="fpb-7">
+                            <label for="fee_structure_id" class="eForm-label">Fee type</label>
+                            <select id="fee_structure_id" name="fee_structure_id" class="form-select eForm-select" {{ old('record_fees') ? '' : 'disabled' }}>
+                                <option value="">Select a mandatory fee type</option>
+                                @foreach($feeStructures as $structure)
+                                    <option value="{{ $structure->id }}" {{ (string) old('fee_structure_id') === (string) $structure->id ? 'selected' : '' }}>{{ $structure->name }} (standard {{ school_currency($structure->amount) }})</option>
+                                @endforeach
+                            </select>
+                            @if($feeStructures->isEmpty())<small class="text-danger">No mandatory institution or programme fee structures are configured. Finance must configure the correct fee before using this option.</small>@endif
+                        </div>
+                        <div class="fpb-7">
+                            <label for="actual_fee_amount" class="eForm-label">Student's actual fee for this period ({{ school_currency() }})</label>
+                            <input id="actual_fee_amount" name="actual_fee_amount" type="number" min="0.01" step="0.01" class="form-control eForm-control" value="{{ old('actual_fee_amount') }}" {{ old('record_fees') ? 'required' : 'disabled' }}>
+                        </div>
+                        <div class="fpb-7">
+                            <label for="prior_paid_amount" class="eForm-label">Verified amount already paid ({{ school_currency() }})</label>
+                            <input id="prior_paid_amount" name="prior_paid_amount" type="number" min="0" step="0.01" class="form-control eForm-control" value="{{ old('prior_paid_amount', '0') }}" {{ old('record_fees') ? '' : 'disabled' }}>
+                        </div>
+                        <div class="row" id="prior_payment_details" {{ old('record_fees') && (float) old('prior_paid_amount', 0) > 0 ? '' : 'hidden' }}>
+                            <div class="fpb-7 col-md-6">
+                                <label for="prior_paid_on" class="eForm-label">Original payment date</label>
+                                <input id="prior_paid_on" name="prior_paid_on" type="date" max="{{ date('Y-m-d') }}" class="form-control eForm-control" value="{{ old('prior_paid_on') }}" {{ old('record_fees') && (float) old('prior_paid_amount', 0) > 0 ? 'required' : 'disabled' }}>
+                            </div>
+                            <div class="fpb-7 col-md-6">
+                                <label for="prior_payment_method" class="eForm-label">Original payment method</label>
+                                <select id="prior_payment_method" name="prior_payment_method" class="form-select eForm-select" {{ old('record_fees') && (float) old('prior_paid_amount', 0) > 0 ? 'required' : 'disabled' }}>
+                                    <option value="">Select method</option>
+                                    @foreach(['cash' => 'Cash', 'bank_transfer' => 'Bank transfer', 'mobile_money' => 'Mobile money', 'card' => 'Card', 'cheque' => 'Cheque', 'other' => 'Other'] as $value => $label)
+                                        <option value="{{ $value }}" {{ old('prior_payment_method') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="fpb-7 col-md-6">
+                                <label for="prior_payment_reference" class="eForm-label">Receipt or reference</label>
+                                <input id="prior_payment_reference" name="prior_payment_reference" maxlength="150" class="form-control eForm-control" value="{{ old('prior_payment_reference') }}" {{ old('record_fees') && (float) old('prior_paid_amount', 0) > 0 ? 'required' : 'disabled' }}>
+                            </div>
+                            <div class="fpb-7 col-md-6">
+                                <label for="prior_payment_reason" class="eForm-label">Verification note</label>
+                                <textarea id="prior_payment_reason" name="prior_payment_reason" minlength="10" maxlength="500" class="form-control eForm-control" {{ old('record_fees') && (float) old('prior_paid_amount', 0) > 0 ? 'required' : 'disabled' }}>{{ old('prior_payment_reason') }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
 
             <div class="fpb-7">
                 <label for="intake_session_id" class="eForm-label">{{ get_phrase('Intake') }}</label>
@@ -165,6 +227,28 @@
     $(document).ready(function () {
       $(".eChoice-multiple-with-remove").select2();
     });
+
+    (function () {
+        const setup = document.getElementById('record_fees');
+        const fields = document.getElementById('existing_student_fee_fields');
+        const priorAmount = document.getElementById('prior_paid_amount');
+        const priorDetails = document.getElementById('prior_payment_details');
+        if (!setup || !fields || !priorAmount || !priorDetails) return;
+        function syncFinanceFields() {
+            fields.hidden = !setup.checked;
+            fields.querySelectorAll('input, select, textarea').forEach(function (field) {
+                field.disabled = !setup.checked;
+            });
+            priorDetails.hidden = !setup.checked || Number(priorAmount.value || 0) <= 0;
+            priorDetails.querySelectorAll('input, select, textarea').forEach(function (field) {
+                field.disabled = priorDetails.hidden;
+                field.required = !priorDetails.hidden;
+            });
+        }
+        setup.addEventListener('change', syncFinanceFields);
+        priorAmount.addEventListener('input', syncFinanceFields);
+        syncFinanceFields();
+    })();
 
     function classWiseSection(classId) {
         let url = "{{ route('class_wise_sections', ['id' => ":classId"]) }}";
