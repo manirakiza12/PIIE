@@ -136,7 +136,7 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $this->assertEquals(1200000, $fee->total_amount, 'The agreed invoice remains intact before review.');
         $this->assertEquals(900000, app(\App\Support\Billing\ExistingStudentFinancialSetup::class)->projectedBalance($fee, $review) / 100);
         $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $fee->id))->assertOk()
-            ->assertSee('Captured financial setup awaiting confirmation')->assertSee('Projected balance')
+            ->assertSee('Financial setup review')->assertSee('Projected balance')
             ->assertSee('SCH-026')->assertSee('MM-PRIOR-026');
         $this->assertSame(0, StudentOpeningPayment::count());
         $this->assertSame(0, StudentFeeAward::count());
@@ -186,8 +186,10 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
     public function test_existing_legacy_invoice_without_setup_packet_keeps_existing_payment_and_award_workflows(): void
     {
         $student = User::create(['school_id' => $this->schoolId, 'role_id' => 7, 'name' => 'Legacy Student', 'email' => 'legacy@example.test']);
-        StudentProfile::create(['school_id' => $this->schoolId, 'user_id' => $student->id,
-            'created_at' => '2020-01-01 00:00:00', 'updated_at' => '2020-01-01 00:00:00']);
+        $profile = StudentProfile::create(['school_id' => $this->schoolId, 'user_id' => $student->id]);
+        DB::table('student_profiles')->where('id', $profile->id)->update([
+            'created_at' => '2020-01-01 00:00:00', 'updated_at' => '2020-01-01 00:00:00',
+        ]);
         $fee = StudentFeeManager::create(['school_id' => $this->schoolId, 'student_id' => $student->id, 'title' => 'Legacy tuition',
             'amount' => 1200000, 'total_amount' => 1200000, 'paid_amount' => 0, 'class_id' => 0, 'session_id' => $this->period->id,
             'payment_method' => '', 'status' => 'unpaid', 'timestamp' => time()]);
