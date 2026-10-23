@@ -26,6 +26,33 @@
         pairToggles('emergency_contact_relationship', 'nok-other-wrap', 'Other', null);
         pairToggles('qualification_level', 'qual-level-other-wrap', 'Other', null);
 
+        var uploadForm = document.getElementById('staff-create-form');
+        if (uploadForm) {
+            var uploadError = document.getElementById('staff-upload-error');
+            var checkUploads = function () {
+                var total = 0, message = '';
+                uploadForm.querySelectorAll('input[type=file]').forEach(function (input) {
+                    Array.from(input.files || []).forEach(function (file) {
+                        total += file.size;
+                        var limit = input.name === 'photo' ? 4194304 : {{ (int) $maxKb * 1024 }};
+                        if (file.size > limit) {
+                            message = (input.name === 'photo' ? 'Profile photo' : 'Supporting document') + ' exceeds ' + (limit / 1048576) + ' MiB. Choose a smaller file.';
+                        }
+                    });
+                });
+                if (total > {{ \App\Support\Staff\StaffUploadLimits::TOTAL_BYTES }}) {
+                    message = @json(\App\Support\Staff\StaffUploadLimits::MESSAGE);
+                }
+                uploadError.textContent = message;
+                uploadError.hidden = !message;
+                return !message;
+            };
+            uploadForm.addEventListener('change', checkUploads);
+            uploadForm.addEventListener('submit', function (event) {
+                if (!checkUploads()) { event.preventDefault(); uploadError.focus(); }
+            });
+        }
+
         // ---------------------------------------------------- file pickers
         // The native input stays in the form; this only shows the chosen file
         // name next to the button, and previews an image when one is chosen.

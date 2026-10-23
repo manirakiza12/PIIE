@@ -61,6 +61,8 @@
     @endif
 
     <form method="POST" action="{{ route('admin.staff.create.store', $type) }}" enctype="multipart/form-data" id="staff-create-form">
+        <p role="note">Photos: up to 4 MiB. Each document: up to {{ round($maxKb / 1024, 1) }} MiB. Combined uploads: up to 20 MiB. Additional documents can be added from the staff profile after creation.</p>
+        <p id="staff-upload-error" role="alert" tabindex="-1" hidden></p>
         @csrf
         <input type="hidden" name="role_key" value="{{ $type }}">
 
