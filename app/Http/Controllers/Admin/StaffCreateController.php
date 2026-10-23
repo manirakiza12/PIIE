@@ -108,6 +108,8 @@ class StaffCreateController extends Controller
         $config = $this->type($type, $request->user());
         $schoolId = (int) $request->user()->school_id;
 
+        \App\Support\Staff\StaffUploadLimits::validate($request);
+
         $data = $request->validate([
             // Personal
             'first_name' => ['required', 'string', 'max:100'],

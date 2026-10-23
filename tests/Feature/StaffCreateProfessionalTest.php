@@ -93,6 +93,79 @@ class StaffCreateProfessionalTest extends TestCase
 
     // ====================================================== title dropdown
 
+    public function test_individually_valid_documents_cannot_exceed_the_combined_budget(): void
+    {
+        $before = User::count();
+        $documents = [];
+        for ($i = 0; $i < 5; $i++) {
+            $documents[] = ['category' => 'cv', 'file' => UploadedFile::fake()->create('cv.pdf', 5120, 'application/pdf')];
+        }
+        $this->actingAs($this->admin)->post(route('admin.staff.create.store', 'lecturer'),
+            $this->lecturerPayload(['documents' => $documents]))
+            ->assertSessionHasErrors(['uploads' => \App\Support\Staff\StaffUploadLimits::MESSAGE]);
+        $this->assertSame($before, User::count());
+        $this->assertSame([], $this->privateFiles());
+    }
+
+    public function test_every_staff_type_displays_upload_limits_and_blocks_oversized_photos(): void
+    {
+        foreach (array_keys(\App\Http\Controllers\Admin\StaffCreateController::TYPES) as $type) {
+            $this->actingAs($this->admin)->get(route('admin.staff.create', $type))
+                ->assertOk()->assertSee('Combined uploads: up to 20 MiB')->assertSee('staff-upload-error');
+            $this->post(route('admin.staff.create.store', $type), $this->payload([
+                'photo' => UploadedFile::fake()->image('photo.jpg')->size(4097),
+            ]))->assertSessionHasErrors('photo');
+        }
+    }
+
+    public function test_aggregate_upload_boundary_includes_the_photo(): void
+    {
+        $files = [];
+        for ($i = 0; $i < 4; $i++) {
+            $files[] = ['file' => UploadedFile::fake()->create('cv.pdf', 5120)];
+        }
+        $request = \Illuminate\Http\Request::create('/');
+        $request->files->set('documents', $files);
+        \App\Support\Staff\StaffUploadLimits::validate($request);
+        $request = \Illuminate\Http\Request::create('/');
+        $request->files->set('documents', $files);
+        $request->files->set('photo', UploadedFile::fake()->create('photo.jpg', 1));
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        \App\Support\Staff\StaffUploadLimits::validate($request);
+    }
+
+    public function test_lecturer_and_teacher_accept_twenty_mib_of_valid_private_documents(): void
+    {
+        Mail::fake();
+        foreach (['lecturer', 'teacher'] as $type) {
+            $documents = [];
+            for ($i = 0; $i < 4; $i++) {
+                $documents[] = ['category' => 'cv', 'file' => $this->pdf('cv.pdf', 5 * 1024 * 1024 - 9)];
+            }
+            $this->actingAs($this->admin)->post(route('admin.staff.create.store', $type),
+                $this->lecturerPayload(['email' => $type.'-boundary@example.com', 'documents' => $documents]))
+                ->assertRedirect()->assertSessionHasNoErrors();
+            $user = User::where('email', $type.'-boundary@example.com')->firstOrFail();
+            $this->assertSame(4, StaffDocument::where('user_id', $user->id)->count());
+            $this->assertEquals(20 * 1024 * 1024, StaffDocument::where('user_id', $user->id)->sum('size_bytes'));
+        }
+    }
+
+    public function test_server_rejected_post_has_a_clear_413_instead_of_a_csrf_error(): void
+    {
+        $middleware = new class extends \App\Http\Middleware\ValidatePostSize {
+            protected function getPostMaxSize() { return 25165824; }
+        };
+        $request = \Illuminate\Http\Request::create('/admin/staff/create/lecturer', 'POST', [], [], [], ['CONTENT_LENGTH' => 43057596]);
+        $response = $middleware->handle($request, function () { $this->fail('Oversized request reached the controller'); });
+        $this->assertSame(413, $response->getStatusCode());
+        $this->assertStringContainsString('Combined staff uploads must not exceed 20 MiB', $response->getContent());
+        $request->headers->set('Accept', 'application/json');
+        $json = $middleware->handle($request, fn () => null);
+        $this->assertSame(413, $json->getStatusCode());
+        $this->assertStringContainsString('20 MiB', $json->getData()->message);
+    }
+
     public function test_the_title_is_a_controlled_dropdown_with_the_expected_options(): void
     {
         $html = $this->actingAs($this->admin)->get(route('admin.staff.create', 'lecturer'))->assertOk()->getContent();
