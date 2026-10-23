@@ -389,10 +389,8 @@ class StudentOpeningPaymentsTest extends TestCase
         @$dom->loadHTML($html);
         $xpath = new \DOMXPath($dom);
         $visibleTables = $xpath->query('//*[@id="student_fee_manager"]//table[not(ancestor-or-self::*[@hidden])]');
-        $hiddenReport = $xpath->query('//*[@id="student_fee_report_export"][@hidden]');
         $this->assertSame(1, $visibleTables->length, 'Only the live invoice table should be visible on screen.');
-        $this->assertSame(1, $hiddenReport->length, 'The print/export copy must remain hidden until invoked.');
-        $this->assertSame(1, $xpath->query('//*[@id="student_fee_report_table"]')->length, 'The export table must have a unique ID.');
+        $this->assertSame(0, $xpath->query('//*[@id="student_fee_report_export"]')->length, 'Admin has no print/export action for a duplicate report table.');
 
         $accountant = User::create(['school_id' => $this->fee->school_id, 'role_id' => 4, 'name' => 'Finance',
             'email' => 'duplicate-table-finance@example.test', 'account_status' => 'active']);
@@ -403,6 +401,7 @@ class StudentOpeningPaymentsTest extends TestCase
         $accountantXpath = new \DOMXPath($accountantDom);
         $this->assertSame(1, $accountantXpath->query('//*[@id="student_fee_manager"]//table[not(ancestor-or-self::*[@hidden])]')->length);
         $this->assertSame(1, $accountantXpath->query('//*[@id="student_fee_report_export"][@hidden]')->length);
+        $this->assertSame(1, $accountantXpath->query('//*[@id="student_fee_report_table"]')->length, 'The accountant print/export table must have a unique ID.');
     }
 
     public function test_printable_invoice_keeps_the_existing_summary_columns_and_layout_contract(): void

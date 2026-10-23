@@ -48,7 +48,10 @@ class StudentFeeManager extends Model
             ? '(paid_amount - opening_paid_amount)' : 'paid_amount';
     }
 
-    public function awards() { return $this->hasMany(StudentFeeAward::class, 'fee_id')->where('school_id', $this->school_id); }
+    // fee_id is the invoice primary key and is globally unique. Avoid capturing
+    // this model's school_id in the relation: eager loads have no single parent
+    // school value, so that constraint incorrectly becomes school_id IS NULL.
+    public function awards() { return $this->hasMany(StudentFeeAward::class, 'fee_id'); }
 
     public function hasAwardHistory(): bool
     {
