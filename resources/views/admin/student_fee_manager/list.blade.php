@@ -118,7 +118,7 @@ if($selected_status == ""){
                             >
                               <li>
                                 <a class="dropdown-item" href="{{ route('admin.studentFeeinvoice', ['id'=>$invoice['id']]) }}" target="_blank">{{ get_phrase('Print invoice') }}</a>
-                                <a class="dropdown-item" href="{{ route('admin.tuition_payments.show', ['id' => $invoice['id']]) }}">Invoice payments and fee awards</a>
+                                <a class="dropdown-item" href="{{ route('admin.tuition_payments.show', ['id' => $invoice['id']]) }}">Review invoice and financial setup</a>
                               </li>
                               <li>
                                 <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.edit.fee_manager', ['id' => $invoice->id]) }}', '{{ get_phrase('Edit Invoice') }}')">{{ get_phrase('Edit') }}</a>

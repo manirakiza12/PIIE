@@ -35,15 +35,37 @@ final class TuitionPesaPalController extends Controller
         $isAdminAddedExisting = app(\App\Support\Payments\ExistingStudentPriorPaymentEligibility::class)
             ->allows($student, (int) $fee->school_id);
         $canManageWaiver = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'academic.course_registration.fee_waiver');
+        $area = $request->routeIs('parent.*') ? 'parent' : ($request->routeIs('student.*') ? 'student' : ($request->routeIs('accountant.*') ? 'accountant' : 'admin'));
+        $setupReview = in_array($area, ['admin', 'accountant'], true)
+            && \Illuminate\Support\Facades\Schema::hasTable('student_financial_setup_reviews')
+            ? \App\Models\StudentFinancialSetupReview::where('school_id', $fee->school_id)->where('fee_id', $fee->id)
+                ->where('student_id', $student->id)->where('session_id', $fee->session_id)->first()
+            : null;
+        $financialSetup = app(\App\Support\Billing\ExistingStudentFinancialSetup::class);
         return response()->view('shared.tuition_payment', ['fee' => $fee, 'eligibility' => $eligibility, 'canManageWaiver' => $canManageWaiver,
             'openingPayments' => $isAdminAddedExisting && \Illuminate\Support\Facades\Schema::hasTable('student_opening_payments') ? $fee->openingPayments()->latest('id')->get() : collect(),
             'isAdminAddedExisting' => $isAdminAddedExisting,
             'canManageOpeningPayments' => $isAdminAddedExisting && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'),
             'awards' => \Illuminate\Support\Facades\Schema::hasTable('student_fee_awards') ? $fee->awards()->latest('id')->get() : collect(),
             'canManageAwards' => app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices'),
-            'area' => $request->routeIs('parent.*') ? 'parent' : ($request->routeIs('student.*') ? 'student' : ($request->routeIs('accountant.*') ? 'accountant' : 'admin')),
+            'area' => $area,
+            'financialSetupReview' => $setupReview,
+            'projectedBalance' => $financialSetup->projectedBalance($fee, $setupReview) / 100,
+            'canConfirmFinancialSetup' => [
+                'prior_payment' => $financialSetup->mayConfirm($request->user(), 'prior_payment'),
+                'award' => $financialSetup->mayConfirm($request->user(), 'award'),
+                'study_waiver' => $financialSetup->mayConfirm($request->user(), 'study_waiver'),
+            ],
             'payments' => TuitionPayment::where('fee_id', $fee->id)->where('school_id', $fee->school_id)->latest('id')->get()])
             ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function confirmFinancialSetup(Request $request, int $id, string $item)
+    {
+        abort_unless(in_array($item, ['prior_payment', 'award', 'study_waiver'], true), 404);
+        app(\App\Support\Billing\ExistingStudentFinancialSetup::class)->confirm($request->user(), $id, $item);
+
+        return back()->with('success', ucfirst(str_replace('_', ' ', $item)) . ' confirmed and applied using its existing audited workflow.');
     }
 
     public function start(Request $request, int $id)
