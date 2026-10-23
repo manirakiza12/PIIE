@@ -7,6 +7,7 @@ use App\Models\Curriculum;
 use App\Models\CurriculumStage;
 use App\Models\StudentCurriculumAssignment;
 use App\Models\User;
+use App\Support\Academic\StudentPlacementDirectory;
 use App\Support\Curriculum\StudentCurriculumAssignmentService;
 use DomainException;
 use Illuminate\Http\Request;
@@ -25,8 +26,10 @@ class DirectAcademicPlacementController extends Controller
             ->join('academic_years as ay', fn ($q) => $q->on('ay.id', '=', 'p.entry_academic_year_id')->where('ay.school_id', $schoolId))
             ->where('p.school_id', $schoolId)->select('p.*', 'u.name as student_name', 'u.code as student_code', 'pr.name as programme_name', 'c.version', 'y.label as year_label', 'ay.label as academic_year')
             ->selectSub(fn ($q) => $q->from('course_registrations as cr')->selectRaw('COUNT(*)')->where('cr.school_id', $schoolId)->whereColumn('cr.student_id', 'p.student_id'), 'has_registrations')
-            ->orderByDesc('p.id')->paginate(25);
-        return view('admin.academic.placements', compact('placements'));
+            ->when($request->integer('student_id'), fn ($q, $id) => $q->where('p.student_id', $id))
+            ->orderByDesc('p.id')->paginate(25, ['*'], 'history_page')->withQueryString();
+        $studentStatuses = $this->studentStatuses($request);
+        return view('admin.academic.placements', compact('placements', 'studentStatuses'));
     }
 
     public function update(Request $request, int $id, StudentCurriculumAssignmentService $assignments)
@@ -52,9 +55,11 @@ class DirectAcademicPlacementController extends Controller
         $studentId = $placement ? (int)$placement->student_id : $request->integer('student_id');
         $student = $studentId ? User::where('school_id', $schoolId)->where('role_id', 7)->findOrFail($studentId) : null;
         $students = User::where('school_id', $schoolId)->where('role_id', 7)
+            ->where(fn ($q) => $q->whereNull('account_status')->orWhere('account_status', '!=', 'disable'))
+            ->whereHas('studentProfile', fn ($q) => $q->where('school_id', $schoolId))
             ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('student_curriculum_assignments as active_placement')
                 ->whereColumn('active_placement.student_id', 'users.id')->where('active_placement.school_id', $schoolId)->whereNull('active_placement.ended_at'))
-            ->orderBy('name')->get(['id', 'name', 'email']);
+            ->orderBy('name')->get(['id', 'name', 'email', 'code']);
         $years = AcademicYear::where('school_id', $schoolId)->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")->orderByDesc('start_date')->get(['id', 'label', 'status', 'start_date', 'end_date']);
         $curricula = Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with('programme')->orderByDesc('created_at')->get(['id', 'programme_id', 'version']);
         $stages = CurriculumStage::where('curriculum_stages.school_id', $schoolId)
@@ -63,7 +68,25 @@ class DirectAcademicPlacementController extends Controller
             })->orderBy('curriculum_stages.sequence')->get(['curriculum_stages.id', 'curriculum_stages.curriculum_id', 'curriculum_stages.label', 'curriculum_stages.sequence']);
         $existing = $student ? StudentCurriculumAssignment::where('school_id', $schoolId)->where('student_id', $student->id)->whereNull('ended_at')->exists() : false;
         if ($placement) $existing = $placement->ended_at !== null || $placement->programme_cohort_membership_id !== null || \Illuminate\Support\Facades\DB::table('course_registrations')->where('school_id', $schoolId)->where('student_id', $studentId)->exists();
-        return view('admin.academic.direct_placement', compact('student', 'students', 'years', 'curricula', 'stages', 'existing', 'placement'));
+        $studentStatuses = $this->studentStatuses($request);
+        $selectedStatus = $student ? app(StudentPlacementDirectory::class)->query($schoolId)->where('u.id', $student->id)->first() : null;
+        return view('admin.academic.direct_placement', compact('student', 'students', 'years', 'curricula', 'stages', 'existing', 'placement', 'studentStatuses', 'selectedStatus'));
+    }
+
+    private function studentStatuses(Request $request)
+    {
+        $query = app(StudentPlacementDirectory::class)->query((int) $request->user()->school_id);
+        $search = trim((string) $request->input('search', ''));
+        if ($search !== '') {
+            $query->where(fn ($q) => $q->where('u.name', 'like', "%{$search}%")
+                ->orWhere('u.email', 'like', "%{$search}%")->orWhere('u.code', 'like', "%{$search}%")
+                ->orWhere('u.id', $search));
+        }
+        if ($request->input('source') === 'existing') $query->where('sp.was_existing_at_portal_creation', true);
+        if ($request->input('placement_status') === 'unplaced') $query->whereNull('p.id');
+        if ($request->input('placement_status') === 'assigned') $query->whereNotNull('p.id');
+        if ($request->integer('student_id')) $query->where('u.id', $request->integer('student_id'));
+        return $query->orderBy('u.name')->orderBy('u.id')->paginate(25, ['*'], 'students_page')->withQueryString();
     }
 
     public function store(Request $request, StudentCurriculumAssignmentService $assignments)
@@ -81,6 +104,11 @@ class DirectAcademicPlacementController extends Controller
         } catch (DomainException $exception) {
             return back()->withInput()->withErrors(['placement' => $exception->getMessage()]);
         }
-        return redirect()->route('admin.academic.placements.index')->with('success', 'Student academic placement saved. The student is now reviewed automatically under Not Registered for matching course allocations; registration is a separate action.');
+        $student = User::where('school_id', $schoolId)->findOrFail($data['student_id']);
+        $stage = CurriculumStage::where('school_id', $schoolId)->findOrFail($data['entry_curriculum_stage_id']);
+        $year = AcademicYear::where('school_id', $schoolId)->findOrFail($data['academic_year_id']);
+        $programme = $curriculum->programme;
+        return redirect()->route('admin.academic.placements.index', ['student_id' => $student->id])->with('success',
+            "Placement saved for {$student->name} ({$student->code}): {$programme->name}, curriculum {$curriculum->version}, {$stage->label}, Academic Year {$year->label}. Find this student under Not Registered in matching Course Allocations, then register and confirm. No class/section or course registration was created.");
     }
 }

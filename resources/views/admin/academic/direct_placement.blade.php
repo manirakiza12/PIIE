@@ -4,6 +4,7 @@
 <div class="row"><div class="col-lg-8"><div class="eSection-wrap">
     @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     @if($existing)<div class="alert alert-warning">{{ $placement ? 'This placement has academic history and is protected from correction here.' : 'This student already has an active academic placement.' }}</div>@endif
+    @if($selectedStatus)<div class="alert alert-info"><strong>{{ $selectedStatus->name }} · {{ $selectedStatus->code }} · ID {{ $selectedStatus->id }}</strong><br>Profile programme: {{ $selectedStatus->profile_programme ?: 'Not recorded' }}; profile year: {{ $selectedStatus->profile_year ?: 'Not recorded' }}; intake: {{ $selectedStatus->intake_name ?: 'Not recorded' }}.<br>{{ app(\App\Support\Academic\StudentPlacementDirectory::class)->reason($selectedStatus) }}<br>Saving places this account in the selected curriculum, Programme Year and entry Academic Year. It does not create a class/section enrollment or course registrations.</div>@endif
     <form method="POST" action="{{ $placement ? route('admin.academic.placements.update', $placement->id) : route('admin.academic.direct_placement.store') }}">@csrf @if($placement) @method('PUT') @endif
         @if($placement)<p><strong>Student:</strong> {{ $student->name }}</p><input type="hidden" name="student_id" value="{{ $student->id }}">@else
         <div class="mb-3"><label class="form-label" for="student_id">Student</label><select id="student_id" name="student_id" class="form-select" required @disabled($existing)><option value="">Choose student</option>@if($student && $existing)<option value="{{ $student->id }}" selected>{{ $student->name }} · {{ $student->email }}</option>@endif @foreach($students as $item)<option value="{{ $item->id }}" @selected(old('student_id', $student?->id)==$item->id)>{{ $item->name }} · {{ $item->email }}</option>@endforeach</select>@if($existing)<input type="hidden" name="student_id" value="{{ $student->id }}">@endif</div>
@@ -15,6 +16,7 @@
         <button class="btn btn-primary" @disabled($existing)>{{ $placement ? 'Update Placement' : 'Save Placement' }}</button>
     </form>
 </div></div></div>
+@include('admin.academic._student_placement_statuses')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const curriculum = document.getElementById('curriculum_id');

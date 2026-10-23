@@ -278,6 +278,9 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                               </li>
                               <li>
                                 <a class="dropdown-item" href="{{ route('admin.student.documents', ['id' => $student->id]) }}">{{ get_phrase('Documents') }}</a>
+                                @if(auth()->user()->hasPermission('academic.programme_cohort.membership'))
+                                    <a class="dropdown-item" href="{{ route('admin.academic.placements.index', ['student_id' => $student->id]) }}">Placement Status</a>
+                                @endif
                               </li>
                               <li>
                                 <a class="dropdown-item" href="{{ route('admin.transcripts.show', ['id' => $student->id]) }}" target="_blank">{{ get_phrase('Generate Transcript') }}</a>
