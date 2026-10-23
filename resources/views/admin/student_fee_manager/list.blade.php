@@ -36,9 +36,10 @@ if($selected_status == ""){
                 <th>{{ get_phrase('Invoice No') }}</th>
                 <th>{{ get_phrase('Student') }}</th>
                 <th>{{ get_phrase('Invoice Title') }}</th>
-                <th>{{ get_phrase('Amount') }}</th>
-                <th>{{ get_phrase('Total Amount') }}</th>
+                <th>Base amount</th>
+                <th>Invoice total</th>
                 <th>{{ get_phrase('Paid Amount') }}</th>
+                <th>Balance due</th>
                 <th>{{ get_phrase('Status') }}</th>
                 <th>{{ get_phrase('Option') }}</th>
             </tr>
@@ -60,13 +61,21 @@ if($selected_status == ""){
                         {{ $invoice['title'] }}
                     </td>
                     <td>
-                        {{ school_currency($invoice['amount']) }}
-                        @if(!empty($invoice['discounted_price']))<br>
-                        <small> <strong> {{ get_phrase('Discount:') }}</strong> {{ school_currency($invoice['discounted_price']) }}</small>
-                        @endif
+                        {{ school_currency($invoice['amount'] ?? $invoice['total_amount']) }}
+                        <br><small><strong>Discount:</strong> {{ school_currency($invoice['discounted_price'] ?? 0) }}</small>
+                        @foreach($invoice->awards ?? collect() as $award)
+                            <br><small><strong>{{ ucfirst($award->type) }}:</strong> {{ school_currency($award->amount) }}</small>
+                        @endforeach
                     </td>
                     <td>
                         {{ school_currency($invoice['total_amount']) }} <br>
+                        @php
+                            $activeAwards = (float) ($invoice->awards ?? collect())->sum('amount');
+                            $expectedTotal = (float) ($invoice['amount'] ?? $invoice['total_amount']) - (float) ($invoice['discounted_price'] ?? 0) - $activeAwards;
+                        @endphp
+                        @if(abs($expectedTotal - (float) $invoice['total_amount']) > 0.01)
+                            <small class="text-warning">Amount fields need reconciliation; balance uses invoice total.</small><br>
+                        @endif
                         <small> <strong> {{ get_phrase('Created at') }} : </strong> {{ date('d-M-Y', $invoice['timestamp']) }} </small>
                     </td>
                     <td>
@@ -84,6 +93,7 @@ if($selected_status == ""){
 
                         </small>
                     </td>
+                    <td>{{ school_currency(max(0, (float) $invoice['total_amount'] - (float) $invoice['paid_amount'])) }}</td>
                     <td>
                         <?php if (strtolower($invoice['status']) == 'unpaid'): ?>
                             <span class="eBadge ebg-danger">{{ ucfirst($invoice['status']) }}</span>
@@ -133,64 +143,3 @@ if($selected_status == ""){
     </div>
 </div>
 @endif
-
-
-<div class="table-responsive display-none-view" id="student_fee_report ">
-    <table id="student_fee_report" class="table eTable eTable-2">
-        <thead>
-            <tr>
-                <th>{{ get_phrase('Invoice No') }}</th>
-                <th>{{ get_phrase('Student') }}</th>
-                <th>{{ get_phrase('Class & Section') }}</th>
-                <th>{{ get_phrase('Invoice Title') }}</th>
-                <th>{{ get_phrase('Amount') }}</th>
-                <th>{{ get_phrase('Total Amount') }}</th>
-                <th>{{ get_phrase('Created at') }}</th>
-                <th>{{ get_phrase('Paid Amount') }}</th>
-                <th>{{ get_phrase('Status') }}</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($invoices as $invoice)
-                <?php $student_details = (new CommonController)->get_student_details_by_id($invoice['student_id']); ?>
-                <tr>
-                    <td>
-                        {{ sprintf('%08d', $invoice['id']) }}
-                    </td>
-                    <td>
-                        {{ $student_details['name'] }}
-                    </td>
-                    <td>
-                        <small>{{ $student_details['class_name'] }}</small> <br>
-                        <small>{{ $student_details['section_name'] }}</small>
-                    </td>
-                    <td>
-                        {{ $invoice['title'] }}
-                    </td>
-                    <td>
-                        {{ school_currency($invoice['amount']) }}
-                        @if(!empty($invoice['discounted_price']))<br>
-                        <small> <strong> {{ get_phrase('Discount:') }}</strong> {{ school_currency($invoice['discounted_price']) }}</small>
-                        @endif
-                    </td>
-                    <td>
-                        {{ school_currency($invoice['total_amount']) }}
-                    </td>
-                    <td>
-                        <small>{{ date('d-M-Y', $invoice['timestamp']) }} </small>
-                    </td>
-                    <td>
-                        {{ school_currency($invoice['paid_amount']) }}
-                    </td>
-                    <td>
-                        <?php if (strtolower($invoice['status']) == 'unpaid'): ?>
-                            <span class="eBadge ebg-danger">{{ ucfirst($invoice['status']) }}</span>
-                        <?php else: ?>
-                            <span class="eBadge ebg-success">{{ ucfirst($invoice['status']) }}</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
-</div>

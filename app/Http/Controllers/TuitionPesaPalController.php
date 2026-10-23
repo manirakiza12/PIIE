@@ -32,8 +32,8 @@ final class TuitionPesaPalController extends Controller
         $fee = $this->fee($request, $id);
         $student = \App\Models\User::whereKey($fee->student_id)->where('school_id', $fee->school_id)->firstOrFail();
         $eligibility = app(\App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility::class)->summary($student);
-        $isAdminAddedExisting = \App\Models\StudentProfile::where('user_id', $student->id)->where('school_id', $fee->school_id)
-            ->where('was_existing_at_portal_creation', true)->exists();
+        $isAdminAddedExisting = app(\App\Support\Payments\ExistingStudentPriorPaymentEligibility::class)
+            ->allows($student, (int) $fee->school_id);
         $canManageWaiver = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'academic.course_registration.fee_waiver');
         return response()->view('shared.tuition_payment', ['fee' => $fee, 'eligibility' => $eligibility, 'canManageWaiver' => $canManageWaiver,
             'openingPayments' => $isAdminAddedExisting && \Illuminate\Support\Facades\Schema::hasTable('student_opening_payments') ? $fee->openingPayments()->latest('id')->get() : collect(),

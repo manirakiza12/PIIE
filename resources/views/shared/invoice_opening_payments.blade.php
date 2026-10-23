@@ -1,7 +1,7 @@
 @php
-    $wasExisting = \Illuminate\Support\Facades\Schema::hasColumn('student_profiles', 'was_existing_at_portal_creation')
-        && \App\Models\StudentProfile::where('user_id', $invoice_details['student_id'])->where('school_id', $invoice_details['school_id'])
-            ->where('was_existing_at_portal_creation', true)->exists();
+    $invoiceStudent = \App\Models\User::whereKey($invoice_details['student_id'])->where('school_id', $invoice_details['school_id'])->first();
+    $wasExisting = $invoiceStudent
+        && app(\App\Support\Payments\ExistingStudentPriorPaymentEligibility::class)->allows($invoiceStudent, (int) $invoice_details['school_id']);
     $priorPayments = \Illuminate\Support\Facades\Schema::hasTable('student_opening_payments')
         && $wasExisting
         ? \App\Models\StudentOpeningPayment::where('school_id', $invoice_details['school_id'])->where('fee_id', $invoice_details['id'])

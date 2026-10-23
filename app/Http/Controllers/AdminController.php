@@ -33,6 +33,7 @@ use App\Models\Exam;
 use App\Models\ExamCategory;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
+use App\Models\FeeStructure;
 use App\Models\Feedback;
 use App\Models\FrontendEvent;
 use App\Models\Grade;
@@ -1965,7 +1966,15 @@ class AdminController extends Controller
         $departments = Department::where('school_id', $school_id)->orderBy('name')->get();
         $programmes = Programme::where('school_id', $school_id)->where('is_active', 1)->orderBy('name')->get();
         $intakeSessions = IntakeSession::where('school_id', $school_id)->orderByDesc('id')->get();
-        $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'departments' => $departments, 'programmes' => $programmes, 'intakeSessions' => $intakeSessions];
+        $canRecordExistingStudentFees = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices')
+            && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments');
+        $feeStructures = $canRecordExistingStudentFees
+            ? FeeStructure::where('school_id', $school_id)->where('is_mandatory', 1)->whereNull('class_id')->orderBy('name')->get()
+            : collect();
+        $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'departments' => $departments, 'programmes' => $programmes,
+            'intakeSessions' => $intakeSessions, 'feeStructures' => $feeStructures,
+            'canRecordExistingStudentFees' => $canRecordExistingStudentFees,
+            'runningSessionId' => get_school_settings($school_id)->value('running_session')];
         if (! $request->ajax()) {
             return view('admin.common.modal_standalone_wrapper', [
                 'page_title' => get_phrase('Add Existing Student'),
@@ -1979,6 +1988,36 @@ class AdminController extends Controller
     public function studentCreate(Request $request)
     {
         $data = $request->all();
+
+        $canRecordExistingStudentFees = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices')
+            && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments');
+        $recordFees = $request->boolean('record_fees');
+        $financialFields = ['fee_session_id', 'fee_structure_id', 'actual_fee_amount', 'prior_paid_amount',
+            'prior_paid_on', 'prior_payment_method', 'prior_payment_reference', 'prior_payment_reason'];
+        if ($recordFees) {
+            abort_unless($canRecordExistingStudentFees, 403);
+            $request->validate([
+                'fee_session_id' => ['required', 'integer', 'exists:sessions,id,school_id,' . auth()->user()->school_id],
+                'fee_structure_id' => ['required', 'integer', 'exists:fee_structures,id,school_id,' . auth()->user()->school_id],
+                'actual_fee_amount' => ['required', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/', 'gt:0'],
+                'prior_paid_amount' => ['nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
+            ]);
+            $amountMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('actual_fee_amount'));
+            $priorMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('prior_paid_amount', '0'));
+            if ($amountMinor === null || $amountMinor <= 0 || $priorMinor === null || $priorMinor < 0 || $priorMinor > $amountMinor) {
+                throw ValidationException::withMessages(['prior_paid_amount' => 'Prior payments must be zero or less than or equal to the actual fee for this period.']);
+            }
+            if ($priorMinor > 0) {
+                $request->validate([
+                    'prior_paid_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+                    'prior_payment_method' => ['required', 'in:cash,bank_transfer,mobile_money,card,cheque,other'],
+                    'prior_payment_reference' => ['required', 'string', 'max:150'],
+                    'prior_payment_reason' => ['required', 'string', 'min:10', 'max:500'],
+                ]);
+            }
+        } elseif (collect($financialFields)->contains(fn ($field) => $request->filled($field))) {
+            throw ValidationException::withMessages(['record_fees' => 'Select the authorized finance setup option to submit fee or prior-payment details.']);
+        }
 
         $request->validate([
             'name'             => 'required|max:255',
@@ -2042,7 +2081,40 @@ class AdminController extends Controller
         // Portal provisioning (user and profile only) is shared with
         // the CSV bulk import so a student added by hand and one added from a
         // spreadsheet end up with identical records.
-        $result = \App\Support\Students\StudentProvisioner::provision($data, auth()->user()->school_id, false);
+        $afterProvision = $recordFees ? function (User $student) use ($request, $data): void {
+            $schoolId = (int) auth()->user()->school_id;
+            $session = Session::where('school_id', $schoolId)->whereKey((int) $request->input('fee_session_id'))->firstOrFail();
+            $structure = FeeStructure::where('school_id', $schoolId)->whereKey((int) $request->input('fee_structure_id'))
+                ->where('is_mandatory', 1)->whereNull('class_id')
+                ->where(fn ($query) => $query->whereNull('session_id')->orWhere('session_id', $session->id))
+                ->where(fn ($query) => $query->whereNull('programme_id')->orWhere('programme_id', $data['programme_id'] ?? null))
+                ->firstOrFail();
+            if (StudentFeeManager::where('school_id', $schoolId)->where('student_id', $student->id)
+                ->where('fee_structure_id', $structure->id)->where('session_id', $session->id)->exists()) {
+                throw ValidationException::withMessages(['fee_structure_id' => 'An invoice already exists for this student, fee and study period. Open that invoice to record the prior payment.']);
+            }
+
+            $actualFeeMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('actual_fee_amount'));
+            $actualFee = \App\Support\Payments\DecimalAmount::decimal($actualFeeMinor);
+            $invoice = StudentFeeManager::create([
+                'title' => $structure->name, 'amount' => $actualFee, 'discounted_price' => 0, 'total_amount' => $actualFee,
+                'class_id' => 0, 'programme_id' => $data['programme_id'] ?? null, 'student_id' => $student->id,
+                'fee_structure_id' => $structure->id, 'parent_id' => $student->parent_id, 'payment_method' => 'unpaid',
+                'paid_amount' => 0, 'status' => 'unpaid', 'school_id' => $schoolId, 'session_id' => $session->id,
+                'timestamp' => strtotime(date('d-M-Y')),
+            ]);
+
+            $priorMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('prior_paid_amount', '0'));
+            if ($priorMinor > 0) {
+                app(\App\Support\Payments\StudentOpeningPayments::class)->change(auth()->user(), (int) $invoice->id, [
+                    'action' => 'record', 'amount' => \App\Support\Payments\DecimalAmount::decimal($priorMinor),
+                    'paid_on' => $request->input('prior_paid_on'), 'method' => $request->input('prior_payment_method'),
+                    'reference' => $request->input('prior_payment_reference'), 'reason' => $request->input('prior_payment_reason'),
+                ]);
+            }
+        } : null;
+
+        $result = \App\Support\Students\StudentProvisioner::provision($data, auth()->user()->school_id, false, $afterProvision);
         $sent = \App\Support\Students\StudentProvisioner::sendWelcomeEmail($result['user'], $result['password']);
 
         $destination = auth()->user()->hasPermission('students.edit')
@@ -4326,7 +4398,7 @@ class AdminController extends Controller
                 ->when($selected_class != "all", fn($q) => $q->where('class_id', $selected_class))
                 ->when($selected_status != "all", fn($q) => $q->where('status', $selected_status))
                 ->when($selected_programme != "all", fn($q) => $q->where('programme_id', $selected_programme))
-                ->get();
+                ->with(['awards' => fn ($q) => $q->whereNull('revoked_at')])->get();
 
             $classes = Classes::where('school_id', auth()->user()->school_id)->get();
 
@@ -4338,7 +4410,7 @@ class AdminController extends Controller
             $selected_class  = "";
             $selected_status = "";
             $selected_programme = "";
-            $invoices        = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();
+            $invoices        = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->with(['awards' => fn ($q) => $q->whereNull('revoked_at')])->get();
             return view('admin.student_fee_manager.student_fee_manager', ['classes' => $classes, 'programmes' => $programmes, 'invoices' => $invoices, 'date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $selected_class, 'selected_status' => $selected_status, 'selected_programme' => $selected_programme]);
         }
     }

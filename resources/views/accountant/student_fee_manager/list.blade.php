@@ -11,8 +11,10 @@ use App\Http\Controllers\CommonController;
                 <th>{{ get_phrase('Invoice No') }}</th>
                 <th>{{ get_phrase('Student') }}</th>
                 <th>{{ get_phrase('Invoice Title') }}</th>
-                <th>{{ get_phrase('Total Amount') }}</th>
+                <th>Base amount</th>
+                <th>Invoice total</th>
                 <th>{{ get_phrase('Paid Amount') }}</th>
+                <th>Balance due</th>
                 <th>{{ get_phrase('Status') }}</th>
                 <th>{{ get_phrase('Option') }}</th>
             </tr>
@@ -33,7 +35,21 @@ use App\Http\Controllers\CommonController;
                         {{ $invoice['title'] }}
                     </td>
                     <td>
+                        {{ school_currency($invoice['amount'] ?? $invoice['total_amount']) }}
+                        <br><small><strong>Discount:</strong> {{ school_currency($invoice['discounted_price'] ?? 0) }}</small>
+                        @foreach($invoice->awards ?? collect() as $award)
+                            <br><small><strong>{{ ucfirst($award->type) }}:</strong> {{ school_currency($award->amount) }}</small>
+                        @endforeach
+                    </td>
+                    <td>
                         {{ school_currency($invoice['total_amount']) }} <br>
+                        @php
+                            $activeAwards = (float) ($invoice->awards ?? collect())->sum('amount');
+                            $expectedTotal = (float) ($invoice['amount'] ?? $invoice['total_amount']) - (float) ($invoice['discounted_price'] ?? 0) - $activeAwards;
+                        @endphp
+                        @if(abs($expectedTotal - (float) $invoice['total_amount']) > 0.01)
+                            <small class="text-warning">Amount fields need reconciliation; balance uses invoice total.</small><br>
+                        @endif
                         <small> <strong> {{ get_phrase('Created at') }} : </strong> {{ date('d-M-Y', $invoice['timestamp']) }} </small>
                     </td>
                     <td>
@@ -51,6 +67,7 @@ use App\Http\Controllers\CommonController;
 
                         </small>
                     </td>
+                    <td>{{ school_currency(max(0, (float) $invoice['total_amount'] - (float) $invoice['paid_amount'])) }}</td>
                     <td>
                         <?php if (strtolower($invoice['status']) == 'unpaid'): ?>
                             <span class="eBadge ebg-danger">{{ ucfirst($invoice['status']) }}</span>
@@ -100,8 +117,8 @@ use App\Http\Controllers\CommonController;
 @endif
 
 
-<div class="display-none-view" id="student_fee_report">
-    <table id="student_fee_report" class="table eTable">
+<div class="display-none-view" id="student_fee_report_export" hidden aria-hidden="true">
+    <table id="student_fee_report_table" class="table eTable">
         <thead>
             <tr>
                 <th>{{ get_phrase('Invoice No') }}</th>

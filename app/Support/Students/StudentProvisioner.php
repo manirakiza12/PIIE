@@ -20,7 +20,7 @@ final class StudentProvisioner
      *
      * @throws ValidationException when the email is already taken
      */
-    public static function provision(array $data, int $schoolId, bool $sendWelcomeEmail = true): array
+    public static function provision(array $data, int $schoolId, bool $sendWelcomeEmail = true, ?callable $afterProvision = null): array
     {
         $email = trim((string) $data['email']);
 
@@ -28,7 +28,7 @@ final class StudentProvisioner
             throw ValidationException::withMessages(['email' => 'Email was already taken.']);
         }
 
-        return DB::transaction(function () use ($data, $schoolId, $email) {
+        return DB::transaction(function () use ($data, $schoolId, $email, $afterProvision) {
             // Serialize registration checks for concurrent onboarding in this school.
             \App\Models\School::whereKey($schoolId)->lockForUpdate()->firstOrFail();
             self::assertAcademicScope($data, $schoolId);
@@ -77,6 +77,10 @@ final class StudentProvisioner
                     ...StudentProfile::affiliationAttributes($data),
                 ]
             );
+
+            if ($afterProvision) {
+                $afterProvision($student);
+            }
 
             return ['user' => $student, 'password' => $plainPassword];
         });

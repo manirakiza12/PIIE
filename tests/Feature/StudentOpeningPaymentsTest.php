@@ -340,4 +340,96 @@ class StudentOpeningPaymentsTest extends TestCase
         }
         $this->assertSame(0, StudentOpeningPayment::count());
     }
+
+    public function test_legacy_student_without_the_new_marker_can_record_prior_payment_after_finance_verification(): void
+    {
+        $legacy = User::create(['school_id' => $this->fee->school_id, 'role_id' => 7, 'name' => 'Legacy Student', 'email' => 'legacy-prior@example.test']);
+        $profile = StudentProfile::create(['school_id' => $this->fee->school_id, 'user_id' => $legacy->id, 'was_existing_at_portal_creation' => false]);
+        DB::table('student_profiles')->where('id', $profile->id)->update(['created_at' => '2026-10-20 12:00:00']);
+        $legacyFee = $this->fee->replicate();
+        $legacyFee->forceFill(['student_id' => $legacy->id, 'paid_amount' => 0, 'opening_paid_amount' => 0])->save();
+
+        $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $legacyFee->id))
+            ->assertOk()->assertSee('Record prior payment already received');
+        app(StudentOpeningPayments::class)->change($this->admin, $legacyFee->id, [
+            'action' => 'record', 'amount' => '125.00', 'paid_on' => now()->subDay()->toDateString(),
+            'method' => 'cash', 'reference' => 'LEGACY-VERIFIED-125', 'reason' => 'Legacy receipt inspected and verified by finance.',
+        ]);
+
+        $this->assertEquals(125, $legacyFee->fresh()->paid_amount);
+        $this->assertSame('LEGACY-VERIFIED-125', StudentOpeningPayment::first()->reference);
+    }
+
+    public function test_legacy_profiles_linked_to_converted_applicants_are_not_prior_payment_candidates(): void
+    {
+        $converted = User::create(['school_id' => $this->fee->school_id, 'role_id' => 7, 'name' => 'Converted Student', 'email' => 'converted-prior@example.test']);
+        $profile = StudentProfile::create(['school_id' => $this->fee->school_id, 'user_id' => $converted->id, 'was_existing_at_portal_creation' => false]);
+        DB::table('student_profiles')->where('id', $profile->id)->update(['created_at' => '2026-10-20 12:00:00']);
+        DB::table('applicants')->insert(['school_id' => $this->fee->school_id, 'first_name' => 'Converted', 'last_name' => 'Student',
+            'email' => 'converted-applicant@example.test', 'password' => 'x', 'converted_user_id' => $converted->id,
+            'created_at' => now(), 'updated_at' => now()]);
+        $convertedFee = $this->fee->replicate();
+        $convertedFee->forceFill(['student_id' => $converted->id, 'paid_amount' => 0, 'opening_paid_amount' => 0])->save();
+
+        $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $convertedFee->id))
+            ->assertOk()->assertSee('Prior payment entry unavailable')->assertDontSee('Record prior payment already received');
+        $this->assertFalse(app(\App\Support\Payments\ExistingStudentPriorPaymentEligibility::class)->allows($converted, (int) $converted->school_id));
+    }
+
+    public function test_fee_manager_has_one_visible_invoice_table_and_reports_award_and_balance_meanings(): void
+    {
+        $this->fee->update(['amount' => 1200000, 'total_amount' => 900000, 'discounted_price' => 0]);
+        $html = $this->actingAs($this->admin)->get(route('admin.fee_manager.list'))
+            ->assertOk()->assertViewHas('invoices', fn ($rows) => $rows->count() === 1)
+            ->assertSee('Base amount')->assertSee('Invoice total')->assertSee('Balance due')
+            ->assertSee('Amount fields need reconciliation; balance uses invoice total.')
+            ->getContent();
+
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($html);
+        $xpath = new \DOMXPath($dom);
+        $visibleTables = $xpath->query('//*[@id="student_fee_manager"]//table[not(ancestor-or-self::*[@hidden])]');
+        $this->assertSame(1, $visibleTables->length, 'Only the live invoice table should be visible on screen.');
+        $this->assertSame(0, $xpath->query('//*[@id="student_fee_report_export"]')->length, 'Admin has no print/export action for a duplicate report table.');
+
+        $accountant = User::create(['school_id' => $this->fee->school_id, 'role_id' => 4, 'name' => 'Finance',
+            'email' => 'duplicate-table-finance@example.test', 'account_status' => 'active']);
+        $accountantHtml = $this->actingAs($accountant)->get(route('accountant.fee_manager.list'))
+            ->assertOk()->assertViewHas('invoices', fn ($rows) => $rows->count() === 1)->getContent();
+        $accountantDom = new \DOMDocument();
+        @$accountantDom->loadHTML($accountantHtml);
+        $accountantXpath = new \DOMXPath($accountantDom);
+        $this->assertSame(1, $accountantXpath->query('//*[@id="student_fee_manager"]//table[not(ancestor-or-self::*[@hidden])]')->length);
+        $this->assertSame(1, $accountantXpath->query('//*[@id="student_fee_report_export"][@hidden]')->length);
+        $this->assertSame(1, $accountantXpath->query('//*[@id="student_fee_report_table"]')->length, 'The accountant print/export table must have a unique ID.');
+    }
+
+    public function test_printable_invoice_keeps_the_existing_summary_columns_and_layout_contract(): void
+    {
+        $this->record(['amount' => '100.00']);
+        $html = $this->actingAs($this->admin)->get(route('admin.studentFeeinvoice', $this->fee->id))
+            ->assertOk()->assertSee('INVOICE')->assertSee('Invoice no')->assertSee('printableDiv')
+            ->assertSee('OLD-RECEIPT-001')->getContent();
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($html);
+        $xpath = new \DOMXPath($dom);
+        $headers = $xpath->query('//*[@id="printableDiv"]//table[1]/thead/tr/th');
+        $labels = array_map(fn ($node) => trim($node->textContent), iterator_to_array($headers));
+        $this->assertSame(['ID', 'Invoice Title', 'Total Amount', 'Paid Amount', 'Due Amount'], $labels);
+        $this->assertSame(1, $xpath->query('//*[@id="printableDiv"]')->length);
+    }
+
+    public function test_fee_manager_explains_an_award_that_reduced_invoice_total(): void
+    {
+        $this->fee->update(['amount' => 1200000, 'total_amount' => 1200000, 'discounted_price' => 0]);
+        app(StudentFeeAwards::class)->change($this->admin, $this->fee->id, [
+            'action' => 'grant', 'type' => 'scholarship', 'amount' => '300000',
+            'reference' => 'SCH-300', 'reason' => 'Approved scholarship for the current study period.',
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('admin.fee_manager.list'))->assertOk()
+            ->assertSee('Base amount')->assertSee('Invoice total')->assertSee('Balance due')
+            ->assertSee('Scholarship:')->assertDontSee('Amount fields need reconciliation; balance uses invoice total.');
+        $this->assertEquals(0, $this->fee->fresh()->total_amount - $this->fee->fresh()->paid_amount - 900000);
+    }
 }
