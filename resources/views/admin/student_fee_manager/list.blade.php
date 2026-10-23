@@ -81,7 +81,7 @@ if($selected_status == ""){
                     <td>
                         {{ school_currency($invoice['paid_amount']) }} <br>
                         <small>
-                            <strong> {{ get_phrase('Payment date') }} : </strong>
+                            <strong> {{ get_phrase('Last invoice update') }} : </strong>
                             <?php
                             $updated_time = strtotime($invoice['updated_at']);
                             ?>
