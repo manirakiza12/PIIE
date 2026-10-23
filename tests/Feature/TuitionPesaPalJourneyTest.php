@@ -25,6 +25,8 @@ class TuitionPesaPalJourneyTest extends TestCase
     private string $channel = 'Card';
     private string $trackingId = self::GUID;
     private bool $timeout = false;
+    private bool $statusUnavailable = false;
+    private string $checkoutHost = 'cybqa.pesapal.com';
 
     protected function setUp(): void
     {
@@ -44,9 +46,9 @@ class TuitionPesaPalJourneyTest extends TestCase
                 $this->orders++; $this->reference = $request['id'];
                 if ($this->timeout) { throw new \Illuminate\Http\Client\ConnectionException('timeout'); }
                 return Http::response(['order_tracking_id' => $this->trackingId, 'merchant_reference' => $this->reference,
-                    'redirect_url' => 'https://cybqa.pesapal.com/pay?OrderTrackingId=' . $this->trackingId, 'status' => '200', 'error' => null]);
+                    'redirect_url' => 'https://' . $this->checkoutHost . '/pay?OrderTrackingId=' . $this->trackingId, 'status' => '200', 'error' => null]);
             }
-            if (str_contains($request->url(), 'GetTransactionStatus')) { return Http::response(['merchant_reference' => $this->reference,
+            if (str_contains($request->url(), 'GetTransactionStatus')) { if ($this->statusUnavailable) { return Http::response([], 503); } return Http::response(['merchant_reference' => $this->reference,
                 'amount' => $this->amount, 'currency' => 'UGX', 'status_code' => $this->code, 'payment_status_description' => $this->description,
                 'payment_method' => $this->channel, 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]); }
             throw new \RuntimeException('Unexpected request');
@@ -58,6 +60,143 @@ class TuitionPesaPalJourneyTest extends TestCase
         return StudentFeeManager::create(array_merge(['school_id' => $this->school, 'student_id' => $this->student->id,
             'title' => 'School fees', 'total_amount' => 5000, 'amount' => 5000, 'paid_amount' => 0, 'class_id' => 0,
             'payment_method' => '', 'status' => 'unpaid'], $extra));
+    }
+
+    public function test_fee_manager_pay_now_and_invoice_form_reach_hosted_checkout(): void
+    {
+        $fee = $this->fee(['session_id' => 1, 'timestamp' => time()]);
+        $page = route('student.FeePayment', $fee->id);
+        $this->actingAs($this->student)->get(route('student.fee_manager.list'))->assertOk()->assertSee($page, false)->assertSee('Pay Now');
+        $this->get($page)->assertOk()->assertSee(route('student.payment.pesapal.start', $fee->id), false)->assertSee('name="payer_phone"', false)->assertDontSee('target="_blank"', false);
+        Http::assertNothingSent();
+        $this->from($page)->post(route('student.payment.pesapal.start', $fee->id), ['payment_option' => 'custom', 'payment_amount' => '500.00', 'payer_phone' => '+256 (771) 234-567'])
+            ->assertRedirect('https://cybqa.pesapal.com/pay?OrderTrackingId=' . self::GUID);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest')
+            && $request['amount'] === '500.00' && $request['billing_address']['phone_number'] === '+256771234567'
+            && ! isset($request['payment_method']) && ! isset($request['payment_option']));
+        $this->assertSame(0, (int) $fee->fresh()->paid_amount);
+    }
+
+    public function test_resume_reuses_valid_checkout_when_status_endpoint_is_unavailable(): void
+    {
+        $fee = $this->fee(); TuitionPesaPalPayment::start($fee);
+        $this->statusUnavailable = true;
+        $this->actingAs($this->student)->from(route('student.FeePayment', $fee->id))
+            ->post(route('student.payment.pesapal.start', $fee->id))
+            ->assertRedirect('https://cybqa.pesapal.com/pay?OrderTrackingId=' . self::GUID);
+        $this->assertSame(1, $this->orders);
+        $this->assertSame('pending', TuitionPayment::sole()->status);
+        $this->assertSame(0, (int) $fee->fresh()->paid_amount);
+    }
+
+    public function test_large_invoice_id_still_has_a_provider_valid_reference(): void
+    {
+        $fee = $this->fee(); $fee->id = 123456; $fee->save();
+        $payment = TuitionPesaPalPayment::start($fee);
+        $this->assertLessThanOrEqual(50, strlen($payment->reference));
+        $this->assertSame(1, $this->orders);
+    }
+
+    public function test_invalid_provider_checkout_url_does_not_redirect_or_credit(): void
+    {
+        $this->checkoutHost = 'untrusted.example.test'; $fee = $this->fee();
+        $page = route('student.FeePayment', $fee->id);
+        $this->actingAs($this->student)->from($page)->post(route('student.payment.pesapal.start', $fee->id))
+            ->assertRedirect($page)->assertSessionHasErrors('payment');
+        $this->assertSame(0, (int) $fee->fresh()->paid_amount);
+        $this->assertArrayNotHasKey('checkout_url', TuitionPayment::sole()->gateway_payload);
+    }
+
+    public static function environments(): array
+    {
+        return [['sandbox', 'cybqa.pesapal.com'], ['live', 'pay.pesapal.com']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('environments')]
+    public function test_saved_settings_control_student_parent_and_applicant_requests(string $environment, string $host): void
+    {
+        // Prime the old token cache, then save distinct synthetic credentials.
+        \App\Support\Payments\PesaPalService::forSchool($this->school)->authenticate();
+        $this->actingAs($this->makeAdminUser($this->school))->post(route('admin.hei_admissions.payment.pesapal.settings.save'),
+            ['environment' => $environment, 'consumer_key' => 'saved-' . $environment, 'consumer_secret' => 'synthetic-secret'])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $configuration = \App\Support\Payments\PesaPalConfiguration::forSchool($this->school);
+        $this->assertSame($environment, $configuration->environment);
+        $this->assertSame('saved-' . $environment, $configuration->credentials()['consumer_key']);
+        $this->assertNull($configuration->notificationId);
+        (new \App\Support\Payments\PesaPalIpnRegistration)->persist($configuration,
+            ['ipn_id' => self::GUID, 'url' => route('applicant.pesapal.ipn'), 'method' => 'GET', 'active' => true, 'status' => 200],
+            route('applicant.pesapal.ipn'), true);
+        $this->get(route('admin.hei_admissions.payment.pesapal.settings'))->assertOk()->assertSee('IPN registered')->assertDontSee('IPN not registered')
+            ->assertDontSee('synthetic-secret')->assertDontSee('saved-' . $environment);
+        $this->checkoutHost = $host;
+        $fee = $this->fee();
+        $this->actingAs($this->student)->post(route('student.payment.pesapal.start', $fee->id))
+            ->assertRedirect('https://' . $host . '/pay?OrderTrackingId=' . self::GUID);
+        $parent = User::create(['school_id' => $this->school, 'role_id' => 6, 'name' => 'Parent', 'email' => 'saved-parent@example.test']);
+        $this->trackingId = self::SECOND_GUID;
+        $parentFee = $this->fee(['parent_id' => $parent->id]);
+        $this->actingAs($parent)->post(route('parent.payment.pesapal.start', $parentFee->id))
+            ->assertRedirect('https://' . $host . '/pay?OrderTrackingId=' . self::SECOND_GUID);
+        $admission = \App\Models\Admission::findOrFail($this->makeAdmission($this->school,
+            ['status' => \App\Models\Admission::STATUS_SUBMITTED, 'submitted_at' => now(),
+                'intake_session_id' => $this->makeIntakeSession($this->school, ['application_fee' => 5000, 'is_open' => 1])]));
+        $this->trackingId = '9e6b62d9-883e-440f-a63e-e1105bbfadc5';
+        \App\Support\Payments\ApplicantPesaPalPayment::start($admission);
+        $base = $environment === 'live' ? \App\Support\Payments\PesaPalService::LIVE_URL : \App\Support\Payments\PesaPalService::SANDBOX_URL;
+        Http::assertSent(fn ($request) => $request->url() === $base . '/api/Auth/RequestToken'
+            && $request['consumer_key'] === 'saved-' . $environment && $request['consumer_secret'] === 'synthetic-secret');
+        $orders = Http::recorded(fn ($request) => str_contains($request->url(), 'SubmitOrderRequest'));
+        $this->assertCount(3, $orders);
+        foreach ($orders as [$request]) {
+            $this->assertSame($base . '/api/Transactions/SubmitOrderRequest', $request->url());
+            $this->assertSame(self::GUID, $request['notification_id']);
+            $this->assertFalse(isset($request['consumer_secret']));
+        }
+    }
+
+    public function test_persisted_checkout_url_is_revalidated_before_resume(): void
+    {
+        $fee = $this->fee(); $payment = TuitionPesaPalPayment::start($fee);
+        $payment->update(['gateway_payload' => array_merge($payment->gateway_payload, ['checkout_url' => 'https://untrusted.example.test/pay'])]);
+        $page = route('student.FeePayment', $fee->id);
+        $this->actingAs($this->student)->from($page)->post(route('student.payment.pesapal.start', $fee->id))
+            ->assertRedirect($page)->assertSessionHas('error');
+        $this->assertSame(1, $this->orders);
+        $this->assertSame(0, (int) $fee->fresh()->paid_amount);
+    }
+
+    public function test_ambiguous_submission_returns_to_invoice_without_redirecting_or_retrying(): void
+    {
+        $fee = $this->fee(); $this->timeout = true;
+        $page = route('student.FeePayment', $fee->id);
+        $this->actingAs($this->student)->from($page)->post(route('student.payment.pesapal.start', $fee->id))
+            ->assertRedirect($page)->assertSessionHasErrors('payment');
+        $this->post(route('student.payment.pesapal.start', $fee->id))->assertRedirect($page)->assertSessionHas('error');
+        $this->assertSame(1, $this->orders);
+        $this->assertSame('unpaid', $fee->fresh()->status);
+        $this->assertSame(0, (int) $fee->fresh()->paid_amount);
+    }
+
+    public static function providerMethods(): array
+    {
+        return [['MTN Mobile Money'], ['Airtel Money'], ['Visa']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('providerMethods')]
+    public function test_provider_selected_method_is_recorded_only_after_verified_ipn(string $method): void
+    {
+        $fee = $this->fee(); $payment = TuitionPesaPalPayment::start($fee);
+        $url = route('applicant.pesapal.ipn', ['OrderTrackingId' => self::GUID,
+            'OrderMerchantReference' => $payment->reference, 'status' => 'paid']);
+        $this->get($url)->assertOk();
+        $this->assertSame('unpaid', $fee->fresh()->status);
+        $this->assertSame(0, (int) $fee->fresh()->paid_amount);
+        $this->channel = $method; $this->code = 1; $this->description = 'COMPLETED';
+        $this->get($url)->assertOk(); $this->get($url)->assertOk();
+        $this->assertSame('paid', $fee->fresh()->status);
+        $this->assertSame(5000, (int) $fee->fresh()->paid_amount);
+        $this->assertSame($method, $payment->fresh()->gateway_payload['payment_channel']);
     }
 
     public function test_prior_payment_leaves_only_remaining_balance_for_online_payment(): void
@@ -124,7 +263,7 @@ class TuitionPesaPalJourneyTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee, '+256771234567');
-        $this->assertSame('processing', $fee->fresh()->status);
+        $this->assertSame('unpaid', $fee->fresh()->status);
         $this->assertSame(0, (int) $fee->fresh()->paid_amount);
         $this->assertSame($payment->id, TuitionPesaPalPayment::start($fee)->id);
         $this->assertSame(1, $this->orders);

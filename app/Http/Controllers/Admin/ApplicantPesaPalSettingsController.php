@@ -16,7 +16,8 @@ final class ApplicantPesaPalSettingsController extends Controller
     {
         $rows = PaymentMethods::where('school_id', $request->user()->school_id)->where('name', 'pesapal')->where('status', 1)->get();
         abort_if($rows->count() > 1, 422, 'Resolve duplicate PesaPal configurations before proceeding.');
-        $keys = json_decode((string) $rows->first()?->payment_keys, true) ?? [];
+        $keys = $rows->isEmpty() ? [] : \App\Support\Payments\PesaPalCredentialStorage::read(
+            (string) $rows->first()->payment_keys, (int) $request->user()->school_id);
         $notificationStorageReady = \Illuminate\Support\Facades\Schema::hasTable('applicant_notification_deliveries');
         $deliveries = $notificationStorageReady
             ? DB::table('applicant_notification_deliveries')->where('school_id', $request->user()->school_id)
