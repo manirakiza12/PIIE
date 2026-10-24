@@ -5,10 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
 use App\Support\AcademicContextManager;
+use App\Support\Academic\AcademicRecordDeletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -101,10 +102,10 @@ class AcademicStructureController extends Controller
         return view('admin.academic_structure.record', compact('record', 'kind', 'school', 'years', 'editing'));
     }
 
-    public function update(Request $request, string $kind, int $recordId)
+    public function update(Request $request, string $kind, int $recordId, ?\App\Support\CourseOffering\CourseOfferingService $offerings = null)
     {
         \App\Support\Academic\AcademicDate::normalize($request);
-        DB::transaction(function () use ($request, $kind, $recordId) {
+        DB::transaction(function () use ($request, $kind, $recordId, $offerings) {
             $school = \App\Models\School::whereKey($this->schoolId)->lockForUpdate()->firstOrFail();
             $record = $this->calendarRecord($kind, $recordId, true);
             $rules = [
@@ -112,6 +113,7 @@ class AcademicStructureController extends Controller
                 'start_date' => ['required', 'date'],
                 'end_date' => ['required', 'date', 'after_or_equal:start_date'],
                 'status' => ['prohibited'],
+                'reason' => ['nullable', 'string', 'max:500'],
             ];
             if ($kind === 'periods') {
                 $rules += [
@@ -122,6 +124,8 @@ class AcademicStructureController extends Controller
             }
             $data = $request->validate($rules);
             $record->fill($data);
+            $wasCurrentPeriod = false;
+            $membershipPlacementUpdates = collect();
             if ($kind === 'years' && $record->periods()->where(function ($query) use ($data) {
                 $query->whereDate('start_date', '<', $data['start_date'])->orWhereDate('end_date', '>', $data['end_date']);
             })->exists()) {
@@ -135,44 +139,67 @@ class AcademicStructureController extends Controller
                 if (! AcademicPeriod::matchesCalendarPattern($data['type'], $school->academic_calendar_pattern)) {
                     throw ValidationException::withMessages(['type' => 'Choose the period type configured for this school.']);
                 }
-                if ($record->isDirty('academic_year_id') && (int) $school->current_academic_period_id === $record->id) {
-                    throw ValidationException::withMessages(['academic_year_id' => 'Clear the current semester selection before moving it to another year.']);
+                if ($record->isDirty(['type', 'sequence']) && trim((string) ($data['reason'] ?? '')) === '') {
+                    throw ValidationException::withMessages(['reason' => 'Explain why the semester or term identity is being changed.']);
+                }
+                $wasCurrentPeriod = $record->isDirty('academic_year_id') && (int) $school->current_academic_period_id === $record->id;
+                if ($record->isDirty('academic_year_id') && $record->courseOfferings()->exists()) {
+                    throw ValidationException::withMessages(['academic_year_id' => 'Move or remove the linked Course Allocations first. Their generated references and registrations must remain tied to the semester identity. Other semester details can still be edited in every status.']);
+                }
+                if ($record->isDirty(['type', 'sequence']) && $record->courseOfferings()->exists()) {
+                    $offeringIds = $record->courseOfferings()->pluck('course_offerings.id');
+                    $hasCurriculumLinks = Schema::hasTable('course_offering_curriculum_memberships')
+                        && DB::table('course_offering_curriculum_memberships')->where('school_id', $this->schoolId)->whereIn('course_offering_id', $offeringIds)->exists();
+                    if ($hasCurriculumLinks) {
+                        $membershipPlacementUpdates = DB::table('course_offering_curriculum_memberships')->where('school_id', $this->schoolId)
+                            ->whereIn('course_offering_id', $offeringIds)->pluck('curriculum_membership_id')->unique()->values();
+                        $conflictingReuse = DB::table('course_offering_curriculum_memberships as link')
+                            ->join('course_offerings as offering', function ($join) { $join->on('offering.id', '=', 'link.course_offering_id')->on('offering.school_id', '=', 'link.school_id'); })
+                            ->join('academic_periods as period', function ($join) { $join->on('period.id', '=', 'offering.academic_period_id')->on('period.school_id', '=', 'offering.school_id')->on('period.academic_year_id', '=', 'offering.academic_year_id'); })
+                            ->where('link.school_id', $this->schoolId)->whereIn('link.curriculum_membership_id', $membershipPlacementUpdates)
+                            ->whereNotIn('link.course_offering_id', $offeringIds)
+                            ->where(fn ($query) => $query->where('period.type', '<>', $data['type'])->orWhere('period.sequence', '<>', $data['sequence']))
+                            ->exists();
+                        if ($conflictingReuse) {
+                            throw ValidationException::withMessages(['sequence' => 'At least one linked Curriculum Course Unit is also used in another period. Its placement cannot be changed without making that allocation inconsistent.']);
+                        }
+                    }
                 }
             }
-            $structuralFields = $kind === 'years' ? ['start_date', 'end_date'] : ['academic_year_id', 'type', 'sequence', 'start_date', 'end_date'];
-            if ($record->isDirty($structuralFields) && $record->courseOfferings()->exists()) {
-                throw ValidationException::withMessages(['start_date' => 'This record has Course Registrations. You can edit its label; its calendar details must be preserved.']);
+            $refreshReferenceIds = collect();
+            if ($kind === 'years' && $record->isDirty('start_date')) {
+                $refreshReferenceIds = DB::table('course_offerings')->where('school_id', $this->schoolId)->where('academic_year_id', $record->id)->pluck('id');
+            } elseif ($kind === 'periods' && $record->isDirty(['type', 'sequence'])) {
+                $refreshReferenceIds = DB::table('course_offerings')->where('school_id', $this->schoolId)->where('academic_period_id', $record->id)->pluck('id');
             }
+            if ($wasCurrentPeriod) DB::table('schools')->where('id', $this->schoolId)->update(['current_academic_period_id' => null]);
             $record->save();
+            if ($membershipPlacementUpdates->isNotEmpty()) {
+                DB::table('curriculum_memberships')->where('school_id', $this->schoolId)->whereIn('id', $membershipPlacementUpdates)->update([
+                    'period_type' => $record->type, 'period_sequence' => $record->sequence, 'updated_at' => now(),
+                ]);
+            }
+            if ($refreshReferenceIds->isNotEmpty()) {
+                $offerings ??= app(\App\Support\CourseOffering\CourseOfferingService::class);
+                foreach ($refreshReferenceIds as $offeringId) {
+                    $offerings->updateAllocation($this->schoolId, (int) $offeringId, [], (int) $request->user()->id);
+                }
+            }
+            if ($wasCurrentPeriod) DB::table('schools')->where('id', $this->schoolId)->update([
+                'current_academic_year_id' => $record->academic_year_id,
+                'current_academic_period_id' => $record->id,
+            ]);
+            if ($record->wasChanged()) $this->recordAcademicEdit($request, $kind, $recordId, $data['reason'] ?? null);
         });
         return redirect()->route('admin.academic_structure.show', [$kind, $recordId])->with('success', 'Academic record updated.');
     }
 
-    public function destroy(Request $request, string $kind, int $recordId)
+    public function destroy(Request $request, string $kind, int $recordId, AcademicRecordDeletionService $deletion)
     {
-        $request->validate(['confirm_deletion' => ['required', 'accepted']]);
-        try {
-            DB::transaction(function () use ($kind, $recordId) {
-                $school = \App\Models\School::whereKey($this->schoolId)->lockForUpdate()->firstOrFail();
-                $record = $this->calendarRecord($kind, $recordId, true);
-                $current = $kind === 'years' ? $school->current_academic_year_id : $school->current_academic_period_id;
-                $relationships = $kind === 'years'
-                    ? ['periods', 'legacySessions', 'curricula', 'entryProgrammeCohorts', 'studentEntryAssignments', 'studentEffectiveAssignments', 'courseOfferings']
-                    : ['courseOfferings'];
-                if ((int) $current === $record->id) {
-                    throw ValidationException::withMessages(['delete' => 'Clear or replace the current selection before deleting this record.']);
-                }
-                foreach ($relationships as $relationship) {
-                    if ($record->{$relationship}()->exists()) {
-                        throw ValidationException::withMessages(['delete' => 'This record is used by other academic records. Remove those links first, or use Cancel or Complete to preserve its history.']);
-                    }
-                }
-                $record->delete();
-            });
-        } catch (QueryException $exception) {
-            if (! in_array((string) $exception->getCode(), ['23000', '23503'], true)) throw $exception;
-            throw ValidationException::withMessages(['delete' => 'This record is linked to other records and cannot be deleted.']);
-        }
+        abort_unless(Auth::user()?->hasPermission('academic.structure.manage'), 403);
+        $data = $request->validate(['confirm_deletion' => ['required', 'string', 'max:150']]);
+        if ($kind === 'years') $deletion->deleteYear($this->schoolId, $recordId, (int) $request->user()->id, $data['confirm_deletion']);
+        else $deletion->deletePeriod($this->schoolId, $recordId, (int) $request->user()->id, $data['confirm_deletion']);
         return redirect()->route('admin.academic_structure.index', $kind === 'periods' ? ['section' => 'semesters'] : [])->with('success', 'Academic record deleted.');
     }
 
@@ -182,6 +209,19 @@ class AcademicStructureController extends Controller
         $query = ($kind === 'years' ? AcademicYear::query() : AcademicPeriod::query())->where('school_id', $this->schoolId);
         if ($lock) $query->lockForUpdate();
         return $query->findOrFail($recordId);
+    }
+
+    private function recordAcademicEdit(Request $request, string $kind, int $recordId, ?string $reason = null): void
+    {
+        $actorId = (int) ($request->user()?->id ?? 0);
+        $actor = Schema::hasTable('users') ? \App\Models\User::find($actorId) : null;
+        \App\Models\AuditLog::create([
+            'school_id' => $this->schoolId, 'user_id' => $actorId, 'user_name' => $actor?->name,
+            'role_id' => $actor?->role_id, 'role_name' => \App\Models\AuditLog::roleName($actor?->role_id),
+            'action' => 'ACADEMIC_RECORD_UPDATED', 'event_type' => 'DATA', 'module' => 'Academic Setup',
+            'description' => 'Academic record updated.', 'record_type' => $kind === 'years' ? AcademicYear::class : AcademicPeriod::class,
+            'record_id' => $recordId, 'new_values' => $reason ? ['reason' => trim($reason)] : null, 'created_at' => now(),
+        ]);
     }
 
     private function validatedTransition(Request $request): array

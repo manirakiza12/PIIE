@@ -137,12 +137,14 @@ class CourseOfferingAdministrationTest extends TestCase
         $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'draft']);
     }
 
-    public function test_non_owner_cannot_change_official_programme_years(): void
+    public function test_curriculum_manager_can_change_official_programme_years(): void
     {
         $tenant = $this->tenants[1];
         $this->actingAs($this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage']));
-        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Forbidden', 'sequence' => 1, 'reason' => 'No owner access'])->assertSessionHasErrors('curriculum');
-        $this->post(route('admin.programme_years.store'), ['curriculum_id' => $tenant['curriculum'], 'label' => 'Year Two', 'sequence' => 2, 'reason' => 'No owner access'])->assertSessionHasErrors('curriculum');
+        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Manager corrected year', 'sequence' => 1, 'reason' => 'Correcting the official year label'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $tenant['stage'], 'label' => 'Manager corrected year']);
+        $this->post(route('admin.programme_years.store'), ['curriculum_id' => $tenant['curriculum'], 'label' => 'Year Two', 'sequence' => 2, 'reason' => 'Adding a programme year'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('curriculum_stages', ['curriculum_id' => $tenant['curriculum'], 'label' => 'Year Two', 'sequence' => 2]);
         $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'status' => 'approved']);
     }
 
@@ -203,7 +205,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $this->get(route('admin.lecturer_assignments.index'))->assertForbidden();
     }
 
-    public function test_unused_drafts_can_be_deleted_but_official_history_is_protected(): void
+    public function test_draft_and_official_curriculum_versions_can_be_deleted_after_confirmation(): void
     {
         $tenant = $this->tenants[1];
         $allocation = $this->createOffering($tenant, 'DELETE-DRAFT');
@@ -213,10 +215,43 @@ class CourseOfferingAdministrationTest extends TestCase
         $this->assertDatabaseMissing('course_offerings', ['id' => $allocation->id]);
         $this->assertDatabaseMissing('course_offering_curriculum_memberships', ['course_offering_id' => $allocation->id]);
         $draft = $this->curriculumFor($tenant, 'draft', 'delete-draft');
-        $this->delete(route('admin.curricula.destroy', $draft))->assertRedirect(route('admin.curricula.index'));
+        $this->delete(route('admin.curricula.destroy', $draft), ['confirm_deletion' => 'DELETE'])->assertRedirect(route('admin.curricula.index'));
         $this->assertDatabaseMissing('curricula', ['id' => $draft]);
-        $this->delete(route('admin.curricula.destroy', $tenant['curriculum']))->assertSessionHasErrors('curriculum');
-        $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'status' => 'approved']);
+        $officialReference = DB::table('programmes')->where('id', $tenant['programme'])->value('code').' '.DB::table('curricula')->where('id', $tenant['curriculum'])->value('version');
+        $this->delete(route('admin.curricula.destroy', $tenant['curriculum']), ['confirm_deletion' => $officialReference])->assertRedirect(route('admin.curricula.index'));
+        $this->assertDatabaseMissing('curricula', ['id' => $tenant['curriculum']]);
+    }
+
+    public function test_curriculum_delete_removes_exclusive_course_allocation_but_only_detaches_a_shared_allocation(): void
+    {
+        $tenant = $this->tenants[1];
+        $sharedCurriculum = $this->curriculumFor($tenant, 'approved', 'shared-allocation-v2');
+        $sharedStage = (int) DB::table('curriculum_stages')->insertGetId([
+            'school_id' => $tenant['school'], 'curriculum_id' => $sharedCurriculum, 'label' => 'Year 1', 'sequence' => 1,
+        ]);
+        $sharedMembership = $this->createMembership($tenant, $sharedCurriculum, $tenant['subject'], 'semester', 1, $sharedStage);
+
+        $exclusive = $this->createOffering($tenant, 'VERSION-EXCLUSIVE');
+        $this->attach($tenant, $exclusive, $tenant['member']);
+        $shared = $this->createOffering($tenant, 'VERSION-SHARED');
+        $this->attach($tenant, $shared, $tenant['member']);
+        $this->attach($tenant, $shared, $sharedMembership);
+
+        $manager = $this->staff(1, ['academic.curriculum.manage']);
+        $this->actingAs($manager)->delete(route('admin.curricula.destroy', $tenant['curriculum']), ['confirm_deletion' => 'DELETE'])
+            ->assertRedirect(route('admin.curricula.index'))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('curricula', ['id' => $tenant['curriculum']]);
+        $this->assertDatabaseMissing('course_offerings', ['id' => $exclusive->id]);
+        $this->assertDatabaseMissing('course_offering_curriculum_memberships', ['course_offering_id' => $exclusive->id]);
+        $this->assertDatabaseHas('course_offerings', ['id' => $shared->id]);
+        $this->assertDatabaseMissing('course_offering_curriculum_memberships', [
+            'course_offering_id' => $shared->id, 'curriculum_id' => $tenant['curriculum'],
+        ]);
+        $this->assertDatabaseHas('course_offering_curriculum_memberships', [
+            'course_offering_id' => $shared->id, 'curriculum_id' => $sharedCurriculum,
+        ]);
+        $this->assertDatabaseHas('subjects', ['id' => $tenant['subject']]);
     }
 
     public function test_approved_curriculum_is_reusable_in_later_academic_years_without_copying(): void
@@ -418,6 +453,32 @@ class CourseOfferingAdministrationTest extends TestCase
         $this->assertDatabaseHas('live_classes', ['id' => $liveClass]);
         $this->assertDatabaseHas('live_class_materials', ['live_class_id' => $liveClass]);
         $this->assertDatabaseMissing('audit_logs', ['action' => 'COURSE_OFFERING_DELETED', 'record_id' => $offering->id]);
+    }
+
+    public function test_allocation_delete_removes_nested_composite_key_workflow_links(): void
+    {
+        DB::statement('PRAGMA foreign_keys = ON');
+        $tenant = $this->tenants[1];
+        $offering = $this->createOffering($tenant, 'KEYLESS-ALLOCATION');
+        $lessonId = DB::table('live_classes')->insertGetId([
+            'school_id' => $tenant['school'], 'subject_id' => $tenant['subject'], 'course_offering_id' => $offering->id,
+            'title' => 'Keyless workflow lesson', 'status' => 'draft', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        Schema::create('live_class_keyless_workflow_links', function (Blueprint $table): void {
+            $table->unsignedBigInteger('live_class_id');
+            $table->string('workflow_key');
+            $table->foreign('live_class_id')->references('id')->on('live_classes')->onDelete('restrict');
+            $table->primary(['live_class_id', 'workflow_key']);
+        });
+        DB::table('live_class_keyless_workflow_links')->insert(['live_class_id' => $lessonId, 'workflow_key' => 'owned']);
+
+        $manager = $this->staff(1, [], ['role_id' => 2]);
+        $this->actingAs($manager)->delete(route('admin.course_offerings.destroy', $offering->id), ['confirmation' => 'DELETE'])
+            ->assertRedirect(route('admin.course_offerings.index'))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('course_offerings', ['id' => $offering->id]);
+        $this->assertDatabaseMissing('live_classes', ['id' => $lessonId]);
+        $this->assertDatabaseMissing('live_class_keyless_workflow_links', ['live_class_id' => $lessonId]);
     }
 
     protected function setUp(): void
@@ -1827,21 +1888,24 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         $this->assertDatabaseHas('academic_periods', ['id' => $period, 'label' => 'Revised semester', 'status' => 'planned']);
         $this->assertSame('2030-05-31', \App\Models\AcademicPeriod::findOrFail($period)->end_date->toDateString());
         $this->delete(route('admin.academic_structure.destroy', ['periods', $period]))->assertSessionHasErrors('confirm_deletion');
-        $this->delete(route('admin.academic_structure.destroy', ['years', $year]), ['confirm_deletion' => 1])->assertSessionHasErrors('delete');
-        $this->delete(route('admin.academic_structure.destroy', ['periods', $period]), ['confirm_deletion' => 1])->assertRedirect(route('admin.academic_structure.index', ['section' => 'semesters']));
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $period]), ['confirm_deletion' => 'DELETE'])->assertRedirect(route('admin.academic_structure.index', ['section' => 'semesters']));
         $this->assertDatabaseMissing('academic_periods', ['id' => $period]);
 
         // These reference tables are omitted from this test class's minimal schema.
         Schema::table('sessions', fn (Blueprint $t) => $t->unsignedBigInteger('academic_year_id')->nullable());
         Schema::create('programme_cohorts', function (Blueprint $t) { $t->id(); $t->unsignedBigInteger('entry_academic_year_id'); });
         Schema::create('student_curriculum_assignments', function (Blueprint $t) { $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('entry_academic_year_id'); $t->unsignedBigInteger('effective_from_academic_year_id'); });
-        $this->delete(route('admin.academic_structure.destroy', ['years', $year]), ['confirm_deletion' => 1])->assertSessionHasNoErrors()->assertRedirect(route('admin.academic_structure.index'));
+        $cohortId = DB::table('programme_cohorts')->insertGetId(['entry_academic_year_id' => $year]);
+        $assignmentId = DB::table('student_curriculum_assignments')->insertGetId(['school_id' => $a['school'], 'entry_academic_year_id' => $year, 'effective_from_academic_year_id' => $year]);
+        $this->delete(route('admin.academic_structure.destroy', ['years', $year]), ['confirm_deletion' => 'DELETE'])->assertSessionHasNoErrors()->assertRedirect(route('admin.academic_structure.index'));
         $this->assertDatabaseMissing('academic_years', ['id' => $year]);
+        $this->assertDatabaseMissing('programme_cohorts', ['id' => $cohortId]);
+        $this->assertDatabaseMissing('student_curriculum_assignments', ['id' => $assignmentId]);
         $this->put(route('admin.academic_structure.update', ['years', $this->tenants[2]['year']]), $yearData)->assertNotFound();
-        $this->delete(route('admin.academic_structure.destroy', ['periods', $this->tenants[2]['period']]), ['confirm_deletion' => 1])->assertNotFound();
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $this->tenants[2]['period']]), ['confirm_deletion' => 'DELETE'])->assertNotFound();
         $this->actingAs($this->staff(1, []))->get(route('admin.academic_structure.edit', ['years', $a['year']]))->assertForbidden();
         $this->put(route('admin.academic_structure.update', ['years', $a['year']]), $yearData)->assertForbidden();
-        $this->delete(route('admin.academic_structure.destroy', ['periods', $a['period']]), ['confirm_deletion' => 1])->assertForbidden();
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $a['period']]), ['confirm_deletion' => 'DELETE'])->assertForbidden();
     }
 
     public function test_calendar_edits_validate_dates_sequence_current_context_and_linked_history(): void
@@ -1860,14 +1924,20 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         $this->post(route('admin.academic_structure.periods.store'), $data)->assertSessionHasErrors('sequence');
         $this->put(route('admin.academic_structure.update', ['periods', $period->id]), $data + ['status' => 'completed'])->assertSessionHasErrors('status');
         $this->createOffering($a, 'PRESERVE-CALENDAR');
-        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['sequence' => 3]))->assertSessionHasErrors('start_date');
-        $this->put(route('admin.academic_structure.update', ['years', $year->id]), array_replace($yearData, ['end_date' => '2027-12-31']))->assertSessionHasErrors('start_date');
+        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['sequence' => 3, 'reason' => 'Correcting the semester sequence']))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('academic_periods', ['id' => $period->id, 'sequence' => 3]);
+        $data['sequence'] = 3;
+        $data['reason'] = 'Correcting the semester label';
+        $this->put(route('admin.academic_structure.update', ['years', $year->id]), array_replace($yearData, ['end_date' => '2027-12-31']))->assertSessionHasNoErrors();
         $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['label' => 'Corrected label']))->assertSessionHasNoErrors();
-        $this->delete(route('admin.academic_structure.destroy', ['periods', $period->id]), ['confirm_deletion' => 1])->assertSessionHasErrors('delete');
+        $offeringId = (int) DB::table('course_offerings')->where('reference', 'PRESERVE-CALENDAR')->value('id');
         DB::table('schools')->where('id', $a['school'])->update(['current_academic_year_id' => $year->id, 'current_academic_period_id' => $period->id]);
-        $this->delete(route('admin.academic_structure.destroy', ['years', $year->id]), ['confirm_deletion' => 1])->assertSessionHasErrors('delete');
-        $this->assertDatabaseHas('academic_periods', ['id' => $period->id, 'sequence' => $data['sequence'], 'label' => 'Corrected label']);
-        $this->assertDatabaseHas('course_offerings', ['reference' => 'PRESERVE-CALENDAR']);
+        $this->delete(route('admin.academic_structure.destroy', ['periods', $period->id]), ['confirm_deletion' => 'DELETE'])->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('academic_periods', ['id' => $period->id]);
+        $this->assertDatabaseMissing('course_offerings', ['id' => $offeringId]);
+        $this->assertDatabaseHas('schools', ['id' => $a['school'], 'current_academic_year_id' => $year->id, 'current_academic_period_id' => null]);
+        $this->delete(route('admin.academic_structure.destroy', ['years', $year->id]), ['confirm_deletion' => $year->label])->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('academic_years', ['id' => $year->id]);
     }
 
     private function createAcademicTables(): void

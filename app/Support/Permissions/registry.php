@@ -95,7 +95,7 @@ return [
         'academic.sessions' => $p('academic', 'Academic sessions', 'Create sessions and change the running session.', true),
         'academic.programmes' => $p('academic', 'Programmes', 'Manage HEI programmes.'),
         'academic.curriculum.view' => $p('academic', 'View Curricula', 'View Programme Curriculum versions and review summaries.'),
-        'academic.curriculum.manage' => $p('academic', 'Manage Curriculum drafts', 'Create successor versions and edit draft stages, Course Units and prerequisites.'),
+        'academic.curriculum.manage' => $p('academic', 'Manage Programme Curricula', 'Create versions, edit all lifecycle states, and delete a version with its owned academic records.'),
         'academic.curriculum.approve' => $p('academic', 'Approve and retire Curricula', 'Approve official Curricula and retire approved versions.', true),
         'academic.programme_cohort.view' => $p('academic', 'View Programme Cohorts', 'View institution Programme Cohorts and their membership history.'),
         'academic.programme_cohort.manage' => $p('academic', 'Manage Programme Cohorts', 'Create and edit draft Programme Cohorts.'),

@@ -787,7 +787,7 @@ class CourseOfferingService
                 }
                 foreach ($relations as [$parent, $localColumns, $foreignColumns]) {
                     if (! $parent || ! isset($rowsByTable[$parent])) continue;
-                    if (! $localColumns || count($localColumns) !== count($foreignColumns) || ! Schema::hasColumn($childTable, 'id')) continue;
+                    if (! $localColumns || count($localColumns) !== count($foreignColumns)) continue;
                     $query = DB::table($childTable)->where(function ($where) use ($rowsByTable, $parent, $localColumns, $foreignColumns): void {
                         foreach ($rowsByTable[$parent] as $parentRow) {
                             $values = [];
@@ -801,15 +801,16 @@ class CourseOfferingService
                     $rows = $query->get();
                     if ($rows->isNotEmpty()) {
                         $dependencies[$parent][] = $childTable;
-                        $knownRows = collect($rowsByTable[$childTable] ?? [])->keyBy('id');
+                        $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', serialize($row));
+                        $knownRows = collect($rowsByTable[$childTable] ?? [])->keyBy($fingerprint);
                         foreach ($rows as $row) {
-                            if (! $knownRows->has($row->id)) {
-                                $knownRows->put($row->id, $row);
+                            $key = $fingerprint($row);
+                            if (! $knownRows->has($key)) {
+                                $knownRows->put($key, $row);
                                 $changed = true;
                             }
                         }
                         $rowsByTable[$childTable] = $knownRows->values()->all();
-                        break;
                     }
                 }
             }
@@ -832,11 +833,19 @@ class CourseOfferingService
 
         foreach ($orderedTables as $table) {
             if (! Schema::hasColumn($table, 'id')) {
-                if ($table === 'course_offering_curriculum_memberships') {
-                    DB::table($table)->where('school_id', $schoolId)->where('course_offering_id', $offeringId)->delete();
-                    continue;
-                }
-                throw new DomainException("Cannot safely delete allocation workflow rows from {$table}; cleanup was rolled back.");
+                $columns = Schema::getColumnListing($table);
+                $query = DB::table($table);
+                if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+                $query->where(function ($or) use ($rowsByTable, $table, $columns): void {
+                    foreach ($rowsByTable[$table] as $row) $or->orWhere(function ($and) use ($row, $columns): void {
+                        foreach ($columns as $column) {
+                            $value = $row->{$column} ?? null;
+                            $value === null ? $and->whereNull($column) : $and->where($column, $value);
+                        }
+                    });
+                });
+                $query->delete();
+                continue;
             }
             $ids = array_values(array_unique(array_map(fn ($row) => $row->id, $rowsByTable[$table])));
             $query = DB::table($table)->whereIn('id', $ids);
