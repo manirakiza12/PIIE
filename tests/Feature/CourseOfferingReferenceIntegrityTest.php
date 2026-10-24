@@ -181,8 +181,8 @@ class CourseOfferingReferenceIntegrityTest extends TestCase
         $this->assertNotSame($first->reference, $second->fresh()->reference, 'references stay distinct');
     }
 
-    // I, J, K: the lifecycle freeze is unchanged and still rejects identity edits.
-    public function test_open_in_progress_and_completed_offerings_keep_identity_frozen(): void
+    // An edit is no longer blocked by status, but must not contradict a linked Study Plan.
+    public function test_non_draft_identity_edits_still_respect_linked_study_plan_compatibility(): void
     {
         $subject = $this->subject(1, ['code' => 'BBIT1101']);
         $other = $this->subject(1, ['code' => 'BBIT1102']);
@@ -194,7 +194,7 @@ class CourseOfferingReferenceIntegrityTest extends TestCase
         $this->service->addApplicability(1, $open->id, $membership);
         $this->service->open(1, $open->id);
         $this->assertDomainFailure(fn () => $this->service->updateDraft(1, $open->id, ['subject_id' => $other]));
-        $this->assertSame('BBIT1101-2026-S1', $open->fresh()->reference, 'a frozen Allocation cannot be re-identified');
+        $this->assertSame('BBIT1101-2026-S1', $open->fresh()->reference, 'an incompatible edit leaves the identity untouched');
 
         $inProgress = $this->service->createDraft(1, $subject, 11, 101);
         $this->service->addApplicability(1, $inProgress->id, $membership);
