@@ -238,6 +238,37 @@ class ProgrammeManagementTest extends TestCase
         $this->assertDatabaseMissing('admissions', ['programme_id' => $programmeId]);
     }
 
+    public function test_programme_delete_removes_keyless_workflows_across_all_owned_parent_paths(): void
+    {
+        \Illuminate\Support\Facades\DB::statement('PRAGMA foreign_keys = ON');
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $selectedProgramme = $this->makeProgramme($schoolId, ['code' => 'DELETE-ME']);
+        $otherProgramme = $this->makeProgramme($schoolId, ['code' => 'KEEP-ME']);
+        $selectedAdmission = $this->makeAdmission($schoolId, ['programme_id' => $selectedProgramme]);
+        $otherAdmission = $this->makeAdmission($schoolId, ['programme_id' => $otherProgramme]);
+        Schema::create('programme_joint_workflows', function (Blueprint $table): void {
+            $table->unsignedBigInteger('programme_id');
+            $table->unsignedBigInteger('admission_id');
+            $table->string('workflow_key');
+            $table->foreign('programme_id')->references('id')->on('programmes')->onDelete('restrict');
+            $table->foreign('admission_id')->references('id')->on('admissions')->onDelete('restrict');
+            $table->primary(['programme_id', 'admission_id', 'workflow_key']);
+        });
+        \Illuminate\Support\Facades\DB::table('programme_joint_workflows')->insert([
+            ['programme_id' => $selectedProgramme, 'admission_id' => $otherAdmission, 'workflow_key' => 'programme-owned'],
+            ['programme_id' => $otherProgramme, 'admission_id' => $selectedAdmission, 'workflow_key' => 'admission-owned'],
+        ]);
+
+        $this->actingAs($admin)->delete(route('admin.programmes.destroy', $selectedProgramme), ['confirm_deletion' => 'DELETE'])->assertSessionHas('success');
+
+        $this->assertDatabaseCount('programme_joint_workflows', 0);
+        $this->assertDatabaseMissing('programmes', ['id' => $selectedProgramme]);
+        $this->assertDatabaseMissing('admissions', ['id' => $selectedAdmission]);
+        $this->assertDatabaseHas('programmes', ['id' => $otherProgramme]);
+        $this->assertDatabaseHas('admissions', ['id' => $otherAdmission]);
+    }
+
     public function test_a_programme_deletion_preserves_student_and_clears_its_programme_link(): void
     {
         $schoolId = $this->makeSchool();
@@ -258,6 +289,49 @@ class ProgrammeManagementTest extends TestCase
         $response->assertSessionHas('success');
         $this->assertDatabaseMissing('programmes', ['id' => $programmeId]);
         $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id, 'programme_id' => null]);
+    }
+
+    public function test_programme_deletion_detaches_but_preserves_its_cms_projection(): void
+    {
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $programmeId = $this->makeProgramme($schoolId, ['code' => 'P-CMS', 'name' => 'CMS projection']);
+        Schema::create('website_items', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('school_id')->nullable(); $table->string('section_key');
+            $table->string('item_type'); $table->string('title')->nullable(); $table->string('subtitle')->nullable();
+            $table->text('description')->nullable(); $table->longText('content')->nullable(); $table->string('image')->nullable();
+            $table->string('link')->nullable(); $table->string('button_text')->nullable(); $table->integer('status')->default(1);
+            $table->integer('sort_order')->default(0); $table->longText('meta_json')->nullable(); $table->timestamps();
+        });
+        $itemId = \Illuminate\Support\Facades\DB::table('website_items')->insertGetId([
+            'school_id' => $schoolId, 'section_key' => 'programme_catalog_business_management', 'item_type' => 'programme',
+            'title' => 'CMS projection', 'description' => 'Keep this CMS content', 'meta_json' => json_encode([
+                'programme_id' => $programmeId, 'programme_code' => 'P-CMS', 'origin' => 'academic_programme', 'editor_note' => 'preserve',
+            ]), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $orphanedMarkerId = \Illuminate\Support\Facades\DB::table('website_items')->insertGetId([
+            'school_id' => $schoolId, 'section_key' => 'programme_catalog_business_management', 'item_type' => 'programme',
+            'title' => 'Orphaned CMS projection', 'description' => 'Keep this too', 'meta_json' => json_encode([
+                'programme_id' => $programmeId, 'programme_code' => 'P-CMS', 'origin' => 'academic_programme',
+            ]), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        // Exercise the reverse marker path: the forward website_item_id may be stale or cleared.
+        \Illuminate\Support\Facades\DB::table('programmes')->where('id', $programmeId)->update(['website_item_id' => null, 'is_published' => 1]);
+
+        $this->actingAs($admin)->delete(route('admin.programmes.destroy', $programmeId), ['confirm_deletion' => 'P-CMS'])->assertSessionHas('success');
+
+        $item = \Illuminate\Support\Facades\DB::table('website_items')->where('id', $itemId)->first();
+        $this->assertNotNull($item);
+        $meta = json_decode($item->meta_json, true);
+        $this->assertSame('CMS projection', $item->title);
+        $this->assertSame('Keep this CMS content', $item->description);
+        $this->assertArrayNotHasKey('programme_id', $meta);
+        $this->assertArrayNotHasKey('programme_code', $meta);
+        $this->assertArrayNotHasKey('origin', $meta);
+        $this->assertSame('preserve', $meta['editor_note']);
+        $orphan = \Illuminate\Support\Facades\DB::table('website_items')->where('id', $orphanedMarkerId)->first();
+        $this->assertNotNull($orphan);
+        $this->assertArrayNotHasKey('programme_id', json_decode($orphan->meta_json, true));
     }
 
     public function test_an_untouched_programme_can_still_be_deleted(): void

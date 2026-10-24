@@ -6,14 +6,16 @@ use App\Models\AuditLog;
 use App\Models\Curriculum;
 use App\Models\Programme;
 use App\Support\Curriculum\CurriculumFoundationService;
-use DomainException;
+use App\Support\ProgrammeCatalogue\ProgrammeCoverImage;
+use App\Support\ProgrammeCatalogue\ProgrammeGalleryImageService;
+use App\Support\ProgrammeCatalogue\ProgrammePublisher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 final class ProgrammeDeletionService
 {
-    public function __construct(private CurriculumFoundationService $curricula) {}
+    public function __construct(private CurriculumFoundationService $curricula, private ProgrammePublisher $publisher) {}
 
     public function delete(int $schoolId, int $programmeId, int $actorId, string $confirmation): void
     {
@@ -23,6 +25,14 @@ final class ProgrammeDeletionService
             if (! in_array(trim($confirmation), ['DELETE', $reference], true)) {
                 throw ValidationException::withMessages(['confirm_deletion' => 'Type DELETE or the exact Programme name or code to confirm.']);
             }
+            $coverPath = Schema::hasColumn('programmes', 'cover_image_path') ? $programme->cover_image_path : null;
+            $gallery = app(ProgrammeGalleryImageService::class);
+            $galleryPaths = $gallery->records($programme)->pluck('path')->all();
+            DB::afterCommit(function () use ($coverPath, $galleryPaths): void {
+                app(ProgrammeCoverImage::class)->deleteFile($coverPath);
+                $gallery = app(ProgrammeGalleryImageService::class);
+                foreach ($galleryPaths as $path) $gallery->deleteFile($path);
+            });
             // A Curriculum version is owned by this Programme; delete its
             // registrations and other version-specific workflow rows first.
             if (Schema::hasTable('curricula')) {
@@ -30,6 +40,7 @@ final class ProgrammeDeletionService
                     $this->curricula->deleteDraft($curriculum, 'DELETE', $actorId);
                 }
             }
+            $this->publisher->detachDeletedProgramme($programme);
 
             $protected = ['programmes','curricula','subjects','student_profiles','users','schools','departments','academic_units'];
             if (Schema::hasTable('subjects') && Schema::hasColumn('subjects', 'programme_id')) {
@@ -63,13 +74,13 @@ final class ProgrammeDeletionService
             if (in_array($table, $protected, true) || ! Schema::hasColumn($table, 'programme_id')) continue;
             $query = DB::table($table)->where('programme_id', $programmeId);
             if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-            $found = $query->get(); if ($found->isNotEmpty()) $rows[$table] = $found->all();
+            $found = $query->lockForUpdate()->get(); if ($found->isNotEmpty()) { $rows[$table] = $found->all(); $edges['programmes'][] = $table; }
         }
         $changed = true;
         while ($changed) {
             $changed = false;
             foreach ($tables as $child) {
-                if (in_array($child, $protected, true) || ! Schema::hasColumn($child, 'id')) continue;
+                if (in_array($child, $protected, true)) continue;
                 foreach (Schema::getForeignKeys($child) as $fk) {
                     $parent = $fk['foreign_table'] ?? null; $local = $fk['columns'] ?? []; $foreign = $fk['foreign_columns'] ?? [];
                     if (! $parent || ! isset($rows[$parent]) || ! $local || count($local) !== count($foreign)) continue;
@@ -77,12 +88,12 @@ final class ProgrammeDeletionService
                         foreach ($rows[$parent] as $parentRow) $or->orWhere(function ($and) use ($parentRow, $local, $foreign): void { foreach ($local as $i => $column) $and->where($column, $parentRow->{$foreign[$i]}); });
                     });
                     if (Schema::hasColumn($child, 'school_id')) $query->where('school_id', $schoolId);
-                    $found = $query->get(); if ($found->isEmpty()) continue;
+                    $found = $query->lockForUpdate()->get(); if ($found->isEmpty()) continue;
                     $edges[$parent][] = $child;
-                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', json_encode($row));
+                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', serialize($row));
                     $known = collect($rows[$child] ?? [])->keyBy($fingerprint);
                     foreach ($found as $row) { $key = $fingerprint($row); if (! $known->has($key)) { $known->put($key, $row); $changed = true; } }
-                    $rows[$child] = $known->values()->all(); break;
+                    $rows[$child] = $known->values()->all();
                 }
             }
         }
@@ -95,13 +106,28 @@ final class ProgrammeDeletionService
         foreach (array_keys($rows) as $table) $visit($table);
         foreach ($order as $table) {
             if ($table === 'programmes') continue;
-            if (! Schema::hasColumn($table, 'id')) {
-                if (Schema::hasColumn($table, 'programme_id')) { $query = DB::table($table)->where('programme_id', $programmeId); if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId); $query->delete(); continue; }
-                throw new DomainException("Cannot safely delete Programme dependency {$table}; transaction rolled back.");
-            }
-            $query = DB::table($table)->whereIn('id', collect($rows[$table])->pluck('id'));
-            if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-            $query->delete();
+            $this->deleteCollectedRows($table, $rows[$table], $schoolId);
         }
+    }
+
+    /** Delete only collected rows; pivot tables may have only a composite key. */
+    private function deleteCollectedRows(string $table, array $rows, int $schoolId): void
+    {
+        $query = DB::table($table);
+        if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+        if (Schema::hasColumn($table, 'id')) {
+            $query->whereIn('id', collect($rows)->pluck('id')->filter()->unique()->values());
+        } else {
+            $columns = Schema::getColumnListing($table);
+            $query->where(function ($or) use ($rows, $columns): void {
+                foreach ($rows as $row) $or->orWhere(function ($and) use ($row, $columns): void {
+                    foreach ($columns as $column) {
+                        $value = $row->{$column} ?? null;
+                        $value === null ? $and->whereNull($column) : $and->where($column, $value);
+                    }
+                });
+            });
+        }
+        $query->delete();
     }
 }

@@ -380,9 +380,7 @@ class ProgrammeController extends Controller
         abort_unless($request->user()->hasPermission('academic.programmes'), 403);
         $owned = $this->findOwned($id);
         $confirmation = $request->validate(['confirm_deletion' => ['required', 'string', 'max:255']]);
-        $images = $this->gallery->records($owned);
         $deletion->delete((int) $this->school_id, (int) $owned->id, (int) $request->user()->id, $confirmation['confirm_deletion']);
-        foreach ($images as $image) $this->gallery->deleteFile($image->path);
         return redirect()->back()->with('success', get_phrase('Programme and its owned academic records deleted'));
     }
 

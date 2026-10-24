@@ -176,6 +176,37 @@ class CurriculumFoundationTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_DELETED', 'user_id' => 7, 'record_id' => $first->id]);
     }
 
+    public function test_version_delete_removes_keyless_workflows_linked_through_each_owned_parent(): void
+    {
+        DB::statement('PRAGMA foreign_keys = ON');
+        $subject = $this->subject(1);
+        $selected = $this->curriculum(1, 'workflow-v1');
+        $other = $this->curriculum(1, 'workflow-v2');
+        $selectedStage = $this->stage($selected);
+        $otherStage = $this->stage($other);
+        $selectedMembership = $this->membership($selected, $subject, $selectedStage);
+        $otherMembership = $this->membership($other, $subject, $otherStage);
+        Schema::create('curriculum_joint_workflows', function (Blueprint $table): void {
+            $table->unsignedBigInteger('stage_id');
+            $table->unsignedBigInteger('membership_id');
+            $table->foreign('stage_id')->references('id')->on('curriculum_stages')->onDelete('restrict');
+            $table->foreign('membership_id')->references('id')->on('curriculum_memberships')->onDelete('restrict');
+            $table->primary(['stage_id', 'membership_id']);
+        });
+        DB::table('curriculum_joint_workflows')->insert([
+            ['stage_id' => $selectedStage->id, 'membership_id' => $otherMembership->id],
+            ['stage_id' => $otherStage->id, 'membership_id' => $selectedMembership->id],
+        ]);
+
+        $this->service->deleteDraft($selected, 'DELETE', 7);
+
+        $this->assertDatabaseCount('curriculum_joint_workflows', 0);
+        $this->assertDatabaseHas('curricula', ['id' => $other->id]);
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $otherStage->id]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $otherMembership->id]);
+        $this->assertDatabaseHas('subjects', ['id' => $subject]);
+    }
+
     public function test_unmapped_restrictive_curriculum_dependency_rolls_back_cleanup_and_audit(): void
     {
         DB::statement('PRAGMA foreign_keys = ON');

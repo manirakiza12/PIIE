@@ -49,6 +49,7 @@ class CurriculumFoundationService
             $locked = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
             $reference = trim(($locked->programme?->code ?? '').' '.$locked->version);
             if (! in_array(trim($confirmation), ['DELETE', $reference], true)) $this->fail('confirm_deletion', 'Type DELETE or '.$reference.' to confirm deletion.');
+            $this->deleteExclusiveCourseOfferings($locked, $actorId ?? (int) (auth()->id() ?? 0));
             $this->deleteOwnedCurriculumRows($locked);
             $actor = Schema::hasTable('users') && $actorId ? \App\Models\User::find($actorId) : auth()->user();
             AuditLog::create([
@@ -60,6 +61,27 @@ class CurriculumFoundationService
             ]);
             DB::table('curricula')->where('school_id', $locked->school_id)->where('id', $locked->id)->delete();
         });
+    }
+
+    /**
+     * A Course Allocation is version-owned only when this is its last
+     * Curriculum applicability. Shared allocations survive while this
+     * version's link is removed by deleteOwnedCurriculumRows().
+     */
+    private function deleteExclusiveCourseOfferings(Curriculum $curriculum, int $actorId): void
+    {
+        if (! Schema::hasTable('course_offering_curriculum_memberships') || ! Schema::hasTable('course_offerings')) return;
+        $offeringIds = DB::table('course_offering_curriculum_memberships')->where('school_id', $curriculum->school_id)
+            ->where('curriculum_id', $curriculum->id)->distinct()->pluck('course_offering_id');
+        if ($offeringIds->isEmpty()) return;
+        if ($actorId < 1) throw new \DomainException('A signed-in administrator is required to audit deletion of a Curriculum-owned Course Allocation.');
+
+        $offerings = app(\App\Support\CourseOffering\CourseOfferingService::class);
+        foreach ($offeringIds as $offeringId) {
+            $shared = DB::table('course_offering_curriculum_memberships')->where('school_id', $curriculum->school_id)
+                ->where('course_offering_id', $offeringId)->where('curriculum_id', '<>', $curriculum->id)->exists();
+            if (! $shared) $offerings->deleteAllocation((int) $curriculum->school_id, (int) $offeringId, $actorId, 'DELETE');
+        }
     }
 
     /** Delete curriculum-owned descendants child-first without traversing shared masters. */
@@ -74,13 +96,13 @@ class CurriculumFoundationService
             if (in_array($table, $protected, true) || ! Schema::hasColumn($table, 'curriculum_id')) continue;
             $query = DB::table($table)->where('curriculum_id', $curriculum->id);
             if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-            $found = $query->get(); if ($found->isNotEmpty()) $rows[$table] = $found->all();
+            $found = $query->lockForUpdate()->get(); if ($found->isNotEmpty()) { $rows[$table] = $found->all(); $edges['curricula'][] = $table; }
         }
         $changed = true;
         while ($changed) {
             $changed = false;
             foreach ($tables as $child) {
-                if (in_array($child, $protected, true) || ! Schema::hasColumn($child, 'id')) continue;
+                if (in_array($child, $protected, true)) continue;
                 foreach (Schema::getForeignKeys($child) as $fk) {
                     $parent = $fk['foreign_table'] ?? null; $local = $fk['columns'] ?? []; $foreign = $fk['foreign_columns'] ?? [];
                     if (! $parent || ! isset($rows[$parent]) || ! $local || count($local) !== count($foreign)) continue;
@@ -88,12 +110,12 @@ class CurriculumFoundationService
                         foreach ($rows[$parent] as $parentRow) $or->orWhere(function ($and) use ($parentRow, $local, $foreign): void { foreach ($local as $i => $column) $and->where($column, $parentRow->{$foreign[$i]}); });
                     });
                     if (Schema::hasColumn($child, 'school_id')) $query->where('school_id', $schoolId);
-                    $found = $query->get(); if ($found->isEmpty()) continue;
+                    $found = $query->lockForUpdate()->get(); if ($found->isEmpty()) continue;
                     $edges[$parent][] = $child;
-                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', json_encode($row));
+                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', serialize($row));
                     $known = collect($rows[$child] ?? [])->keyBy($fingerprint);
                     foreach ($found as $row) { $key = $fingerprint($row); if (! $known->has($key)) { $known->put($key, $row); $changed = true; } }
-                    $rows[$child] = $known->values()->all(); break;
+                    $rows[$child] = $known->values()->all();
                 }
             }
         }
@@ -106,19 +128,29 @@ class CurriculumFoundationService
         foreach (array_keys($rows) as $table) $visit($table);
         foreach ($ordered as $table) {
             if ($table === 'curricula') continue;
-            if (! Schema::hasColumn($table, 'id')) {
-                if (Schema::hasColumn($table, 'curriculum_id')) {
-                    $query = DB::table($table)->where('curriculum_id', $curriculum->id);
-                    if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-                    $query->delete();
-                    continue;
-                }
-                throw new \DomainException("Cannot safely clean curriculum dependency {$table}; transaction rolled back.");
-            }
-            $query = DB::table($table)->whereIn('id', collect($rows[$table])->pluck('id'));
-            if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-            $query->delete();
+            $this->deleteCollectedRows($table, $rows[$table], $schoolId);
         }
+    }
+
+    /** Delete only the collected tenant rows, including composite-key pivots without an id. */
+    private function deleteCollectedRows(string $table, array $rows, int $schoolId): void
+    {
+        $query = DB::table($table);
+        if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+        if (Schema::hasColumn($table, 'id')) {
+            $query->whereIn('id', collect($rows)->pluck('id')->filter()->unique()->values());
+        } else {
+            $columns = Schema::getColumnListing($table);
+            $query->where(function ($or) use ($rows, $columns): void {
+                foreach ($rows as $row) $or->orWhere(function ($and) use ($row, $columns): void {
+                    foreach ($columns as $column) {
+                        $value = $row->{$column} ?? null;
+                        $value === null ? $and->whereNull($column) : $and->where($column, $value);
+                    }
+                });
+            });
+        }
+        $query->delete();
     }
 
     public function createDraft(int $schoolId, int $programmeId, string $version, ?int $effectiveAcademicYearId = null): Curriculum

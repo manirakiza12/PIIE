@@ -150,12 +150,26 @@ class AcademicStructureFoundationTest extends TestCase
     public function test_years_and_periods_in_all_lifecycle_states_can_be_deleted_with_owned_rows(): void
     {
         $deletion = new AcademicRecordDeletionService(new CourseOfferingService());
+        Schema::create('academic_year_keyless_workflows', function (Blueprint $table): void {
+            $table->unsignedBigInteger('academic_year_id');
+            $table->string('workflow_key');
+            $table->foreign('academic_year_id')->references('id')->on('academic_years')->onDelete('restrict');
+            $table->primary(['academic_year_id', 'workflow_key']);
+        });
+        Schema::create('academic_period_keyless_workflows', function (Blueprint $table): void {
+            $table->unsignedBigInteger('academic_period_id');
+            $table->string('workflow_key');
+            $table->foreign('academic_period_id')->references('id')->on('academic_periods')->onDelete('restrict');
+            $table->primary(['academic_period_id', 'workflow_key']);
+        });
         foreach (['planned', 'active', 'completed', 'cancelled'] as $status) {
             $school = $this->school('semester');
             $year = $this->year($school, 'Year '.$status);
             $year->status = $status; $year->save();
             $period = $this->period($year, 'semester', 'Semester '.$status);
             $period->status = $status; $period->save();
+            DB::table('academic_year_keyless_workflows')->insert(['academic_year_id' => $year->id, 'workflow_key' => 'workflow-'.$status]);
+            DB::table('academic_period_keyless_workflows')->insert(['academic_period_id' => $period->id, 'workflow_key' => 'workflow-'.$status]);
             DB::table('sessions')->insert(['session_title' => 'Legacy '.$status, 'status' => 1, 'school_id' => $school->id, 'academic_year_id' => $year->id]);
             DB::table('schools')->where('id', $school->id)->update(['current_academic_year_id' => $year->id, 'current_academic_period_id' => $period->id]);
 
@@ -163,8 +177,10 @@ class AcademicStructureFoundationTest extends TestCase
             catch (ValidationException $exception) { $this->assertArrayHasKey('confirm_deletion', $exception->errors()); }
             $deletion->deletePeriod((int) $school->id, (int) $period->id, 1, 'DELETE');
             $this->assertDatabaseMissing('academic_periods', ['id' => $period->id]);
+            $this->assertDatabaseMissing('academic_period_keyless_workflows', ['academic_period_id' => $period->id]);
             $deletion->deleteYear((int) $school->id, (int) $year->id, 1, 'DELETE');
             $this->assertDatabaseMissing('academic_years', ['id' => $year->id]);
+            $this->assertDatabaseMissing('academic_year_keyless_workflows', ['academic_year_id' => $year->id]);
             $this->assertDatabaseMissing('sessions', ['academic_year_id' => $year->id]);
             $this->assertNull(DB::table('schools')->where('id', $school->id)->value('current_academic_year_id'));
             $this->assertDatabaseHas('audit_logs', ['action' => 'ACADEMIC_YEAR_DELETED', 'user_id' => 1, 'record_id' => $year->id]);

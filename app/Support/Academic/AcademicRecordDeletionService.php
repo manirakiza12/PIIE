@@ -6,7 +6,6 @@ use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
 use App\Models\AuditLog;
 use App\Support\CourseOffering\CourseOfferingService;
-use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -27,7 +26,13 @@ final class AcademicRecordDeletionService
             if (Schema::hasTable('student_profiles') && Schema::hasColumn('student_profiles', 'academic_year_id')) {
                 DB::table('student_profiles')->where('school_id', $schoolId)->where('academic_year_id', $yearId)->update(['academic_year_id' => null]);
             }
-            DB::table('schools')->where('id', $schoolId)->where('current_academic_year_id', $yearId)->update(['current_academic_year_id' => null, 'current_academic_period_id' => null]);
+            $periodIds = DB::table('academic_periods')->where('school_id', $schoolId)->where('academic_year_id', $yearId)->pluck('id');
+            DB::table('schools')->where('id', $schoolId)->where('current_academic_year_id', $yearId)
+                ->update(['current_academic_year_id' => null, 'current_academic_period_id' => null]);
+            if ($periodIds->isNotEmpty()) {
+                DB::table('schools')->where('id', $schoolId)->whereIn('current_academic_period_id', $periodIds)
+                    ->update(['current_academic_period_id' => null]);
+            }
             $this->deleteOwnedGraph('academic_years', $yearId, $schoolId);
             $this->audit($schoolId, $actorId, 'ACADEMIC_YEAR_DELETED', AcademicYear::class, $yearId);
         });
@@ -73,9 +78,10 @@ final class AcademicRecordDeletionService
                 if (! Schema::hasColumn($table, $column)) continue;
                 $query = DB::table($table)->where($column, $id);
                 if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-                $found = $query->get();
+                $found = $query->lockForUpdate()->get();
                 if ($found->isNotEmpty()) {
-                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', json_encode($row));
+                    $edges[$root][] = $table;
+                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', serialize($row));
                     $rows[$table] = collect($rows[$table] ?? [])->merge($found)->unique($fingerprint)->values()->all();
                 }
             }
@@ -93,8 +99,9 @@ final class AcademicRecordDeletionService
                 if (in_array($table, array_merge($protected, ['sessions']), true) || ! Schema::hasColumn($table, 'session_id')) continue;
                 $query = DB::table($table)->whereIn('session_id', $sessionIds);
                 if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-                $found = $query->get(); if ($found->isEmpty()) continue;
-                $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', json_encode($row));
+                $found = $query->lockForUpdate()->get(); if ($found->isEmpty()) continue;
+                $edges['sessions'][] = $table;
+                $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', serialize($row));
                 $rows[$table] = collect($rows[$table] ?? [])->merge($found)->unique($fingerprint)->values()->all();
             }
         }
@@ -102,7 +109,7 @@ final class AcademicRecordDeletionService
         while ($changed) {
             $changed = false;
             foreach ($tables as $child) {
-                if (in_array($child, $protected, true) || ! Schema::hasColumn($child, 'id')) continue;
+                if (in_array($child, $protected, true)) continue;
                 foreach (Schema::getForeignKeys($child) as $fk) {
                     $parent = $fk['foreign_table'] ?? null; $local = $fk['columns'] ?? []; $foreign = $fk['foreign_columns'] ?? [];
                     if (! $parent || ! isset($rows[$parent]) || ! $local || count($local) !== count($foreign)) continue;
@@ -110,12 +117,12 @@ final class AcademicRecordDeletionService
                         foreach ($rows[$parent] as $parentRow) $or->orWhere(function ($and) use ($parentRow, $local, $foreign): void { foreach ($local as $i => $column) $and->where($column, $parentRow->{$foreign[$i]}); });
                     });
                     if (Schema::hasColumn($child, 'school_id')) $query->where('school_id', $schoolId);
-                    $found = $query->get(); if ($found->isEmpty()) continue;
+                    $found = $query->lockForUpdate()->get(); if ($found->isEmpty()) continue;
                     $edges[$parent][] = $child;
-                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', json_encode($row));
+                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', serialize($row));
                     $known = collect($rows[$child] ?? [])->keyBy($fingerprint);
                     foreach ($found as $row) { $key = $fingerprint($row); if (! $known->has($key)) { $known->put($key, $row); $changed = true; } }
-                    $rows[$child] = $known->values()->all(); break;
+                    $rows[$child] = $known->values()->all();
                 }
             }
         }
@@ -128,20 +135,30 @@ final class AcademicRecordDeletionService
         foreach (array_keys($rows) as $table) $visit($table);
         foreach ($order as $table) {
             if ($table === $root) continue;
-            if (! Schema::hasColumn($table, 'id')) {
-                $directColumn = collect($directColumns)->first(fn (string $column): bool => Schema::hasColumn($table, $column));
-                if ($directColumn !== null) {
-                    $query = DB::table($table)->where($directColumn, $id);
-                    if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-                    $query->delete(); continue;
-                }
-                throw new DomainException("Cannot safely delete dependent academic records from {$table}; all changes were rolled back.");
-            }
-            $query = DB::table($table)->whereIn('id', collect($rows[$table])->pluck('id'));
-            if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
-            $query->delete();
+            $this->deleteCollectedRows($table, $rows[$table], $schoolId);
         }
         DB::table($root)->where('school_id', $schoolId)->where('id', $id)->delete();
+    }
+
+    /** Delete only collected rows, including composite-key workflow links with no id column. */
+    private function deleteCollectedRows(string $table, array $rows, int $schoolId): void
+    {
+        $query = DB::table($table);
+        if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+        if (Schema::hasColumn($table, 'id')) {
+            $query->whereIn('id', collect($rows)->pluck('id')->filter()->unique()->values());
+        } else {
+            $columns = Schema::getColumnListing($table);
+            $query->where(function ($or) use ($rows, $columns): void {
+                foreach ($rows as $row) $or->orWhere(function ($and) use ($row, $columns): void {
+                    foreach ($columns as $column) {
+                        $value = $row->{$column} ?? null;
+                        $value === null ? $and->whereNull($column) : $and->where($column, $value);
+                    }
+                });
+            });
+        }
+        $query->delete();
     }
 
     private function audit(int $schoolId, int $actorId, string $action, string $type, int $id): void

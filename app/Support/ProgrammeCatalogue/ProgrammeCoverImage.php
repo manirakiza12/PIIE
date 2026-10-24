@@ -208,4 +208,10 @@ class ProgrammeCoverImage
             File::delete($absolute);
         }
     }
+
+    /** Remove one generated cover filename after its owning programme commits deletion. */
+    public function deleteFile(?string $name): void
+    {
+        $this->dispose($name, null);
+    }
 }
