@@ -1,3 +1,15 @@
+<div class="eoff-form">
+    <div class="alert alert-info">
+        {{ get_phrase('For a new student, complete an application with personal information, programme selection, education history and required documents. Submit and accept the application before enrolling the student.') }}
+        <a href="{{ route('admin.hei_admissions.wizard.create') }}" class="fw-bold">{{ get_phrase('Add Application') }}</a>
+    </div>
+    <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.student.create') }}">
+        <div class="alert alert-info">Add an existing student using their current registration number. The student receives only a password setup email for the student portal. After saving, upload the documents held by the administration on the Documents page. No applicant account, application fee or new enrolment is created.</div>
+        <div class="alert alert-secondary">Finance can set up this student's fee once below. Captured prior payments, approved awards, and study-waiver requests are held for review in Fees Management; they do not change the payable balance or study eligibility until separately confirmed by an authorized reviewer.</div>
+        <div class="alert alert-warning"><strong>Academic placement is a separate step.</strong> Programme, intake and year below are profile details only. After saving, you will open this student's Documents page. Use its Student Placement link to select the approved curriculum, Programme Year and Academic Year, then register and confirm the student in matching Course Allocations. This form creates no class/section enrollment or module registrations.</div>
+        <div class="fpb-7">
+            <label for="registration_number" class="eForm-label">Existing registration number</label>
+            <input type="text" class="form-control eForm-control" id="registration_number" name="registration_number" maxlength="255" required>
 <div class="existing-student-form eoff-form">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-4">
         <div>

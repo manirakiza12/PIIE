@@ -2211,9 +2211,9 @@ class AdminController extends Controller
 
         $destination = auth()->user()->hasPermission('students.edit')
             ? redirect()->route('admin.student.documents', $result['user']->id) : redirect()->back();
-        return $destination->with('message', $sent
+        return $destination->with('message', 'Student ID ' . $result['user']->id . ' (' . $result['user']->code . '). Academic placement is still required: open Student Placement for this account, choose its curriculum, Programme Year and Academic Year, then register and confirm matching Course Allocations. ' . ($sent
             ? 'Existing student account created. Password setup email sent. Upload the documents held by the administration here; the student does not complete an application.'
-            : 'Existing student account created. Upload the documents held by the administration here. Password setup email was not sent; check mail settings and resend student portal activation.');
+            : 'Existing student account created. Upload the documents held by the administration here. Password setup email was not sent; check mail settings and resend student portal activation.'));
     }
 
     public function studentIdCardGenerate($id)

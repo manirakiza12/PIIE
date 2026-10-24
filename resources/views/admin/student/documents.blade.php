@@ -26,6 +26,14 @@
         <strong>{{ $user_details->name }} — {{ $user_details->code }}</strong><br>
         {{ get_phrase('Administration manages these documents. Upload the records already held for this student, or open an uploaded file to retrieve it. The student does not need to complete an application or upload admission documents.') }}
     </div></div>
+    <div class="col-12 mb-3">
+        @if(session('message'))<div class="alert alert-success">{{ session('message') }}</div>@endif
+        @if(auth()->user()->hasPermission('academic.programme_cohort.membership'))
+            <p>Account saved as student ID {{ $user_details->id }}. Academic placement is separate from documents and billing. Check this account's placement before registering courses.</p>
+            <a class="btn btn-outline-primary mb-2" href="{{ route('admin.academic.direct_placement', ['student_id' => $user_details->id]) }}">Student Placement for {{ $user_details->name }}</a>
+            <a class="btn btn-outline-secondary mb-2" href="{{ route('admin.academic.placements.index', ['student_id' => $user_details->id]) }}">View this student's placement status</a>
+        @endif
+    </div>
     <div class="col-6">
         <div class="eSection-wrap">
             <div class="eMain">
