@@ -68,6 +68,7 @@ use App\Support\ProfilePhoto;
 use App\Support\Staff\StaffProvisioningException;
 use App\Support\Staff\StaffProvisioningService;
 use App\Support\StudentFeeInvoiceGenerator;
+use App\Support\StudentDeletionService;
 use App\Support\StudentPortalActivation;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -2387,54 +2388,34 @@ class AdminController extends Controller
         }
     }
 
-    public function studentDelete($id)
+    public function studentDelete(Request $request, $id, StudentDeletionService $deletion)
     {
+        $request->validate([
+            'confirmation' => ['required', 'in:DELETE'],
+        ], [
+            'confirmation.in' => 'Type DELETE to confirm permanent removal of this student and all associated academic and account records.',
+        ]);
+
         try {
-            DB::transaction(function () use ($id): void {
-                // Resolve the target in the transaction and before touching any
-                // related rows, preserving the existing role and tenant guard.
-                $student = $this->findStudentOrFail($id);
-
-                // Programme-based students may have a profile without a
-                // legacy Enrollment row; both records remain optional.
-                $enroll = Enrollment::where('user_id', $id)->first();
-                if ($enroll) {
-                    $enroll->delete();
-                }
-
-                $studentProfile = StudentProfile::where('user_id', $id)->first();
-                if ($studentProfile) {
-                    $studentProfile->delete();
-                }
-
-                StudentFeeManager::get()->where('student_id', $id)->map->delete();
-                DailyAttendances::get()->where('student_id', $id)->map->delete();
-                BookIssue::get()->where('student_id', $id)->map->delete();
-                Gradebook::get()->where('student_id', $id)->map->delete();
-                Payments::get()->where('user_id', $id)->map->delete();
-                PaymentHistory::get()->where('user_id', $id)->map->delete();
-
-                // Newer academic-history tables deliberately use RESTRICT
-                // foreign keys. If one references this student, the database
-                // refuses this delete; the transaction restores every child
-                // deleted above instead of leaving a partial student graph.
-                $student->delete();
-            });
+            $result = $deletion->delete((int) $id, $request->user());
         } catch (QueryException $exception) {
-            $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
-            if (! in_array($sqlState, ['23000', '23503'], true)) {
-                throw $exception;
-            }
-
             report($exception);
 
             return redirect()->back()->with(
                 'error',
-                'This student has linked academic records that prevent deletion. No records were changed.'
+                'Student deletion could not be completed. No records were changed.'
             );
         }
 
-        return redirect()->back()->with('message', 'Student removed successfully.');
+        $message = 'Student removed successfully.';
+        if ($result['retained_financial_invoices'] > 0) {
+            $message .= ' Financial invoices with recorded payment, award, or provider history were retained for reconciliation.';
+        }
+        if ($result['retained_applications'] > 0) {
+            $message .= ' Admission records linked to application payment history were retained for reconciliation.';
+        }
+
+        return redirect()->back()->with('message', $message);
     }
 
     /**

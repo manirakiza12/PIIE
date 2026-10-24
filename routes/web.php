@@ -675,7 +675,7 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::get('admin/student/id_card/{id}', 'studentIdCardGenerate')->name('admin.student.id_card');
     Route::get('admin/student/edit/{id}', 'studentEditModal')->name('admin.student_edit_modal');
     Route::post('admin/student/{id}', 'studentUpdate')->name('admin.student.update');
-    Route::get('admin/student/delete/{id}', 'studentDelete')->name('admin.student.delete');
+    Route::delete('admin/student/delete/{id}', 'studentDelete')->name('admin.student.delete');
     Route::get('admin/student/student_profile/{id}', 'studentProfile')->name('admin.student.student_profile');
     Route::get('admin/student/export-excel', 'studentListExportExcel')->name('admin.student.export_excel')->middleware('admin_permission');
     Route::get('admin/student/profile-pdf/{id}', 'studentProfilePdf')->name('admin.student.profile_pdf');

@@ -246,6 +246,7 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
     public function test_delete_cannot_touch_another_schools_student_or_a_non_student(): void
     {
         $teacher = $this->user(3, $this->schoolA);
+        $admin = $this->user(2, $this->schoolA);
         $foreignStudent = $this->user(7, $this->schoolB);
         $foreignAdmin = $this->user(2, $this->schoolB);
         $sameSchoolTeacher = $this->user(3, $this->schoolA);
@@ -255,7 +256,10 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
 
         foreach ([$foreignStudent, $foreignAdmin, $sameSchoolTeacher] as $victim) {
             $before = $this->graphCounts($victim);
-            $this->actingAs($teacher)->get(route('admin.student.delete', $victim->id))->assertNotFound();
+            $this->actingAs($teacher)->delete(route('admin.student.delete', $victim->id), ['confirmation' => 'DELETE'])->assertNotFound();
+            if ($victim->is($foreignStudent)) {
+                $this->actingAs($admin)->delete(route('admin.student.delete', $victim->id), ['confirmation' => 'DELETE'])->assertNotFound();
+            }
             $this->assertSame($before, $this->graphCounts($victim), "user #{$victim->id} and related records untouched");
         }
     }
@@ -269,16 +273,27 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
         $this->seedStudentGraph($bystander);
 
         $this->actingAs($admin)
-            ->get(route('admin.student.delete', $student->id))
+            ->delete(route('admin.student.delete', $student->id), ['confirmation' => 'DELETE'])
             ->assertRedirect()
-            ->assertSessionHas('message', 'Student removed successfully.');
+            ->assertSessionHas('message', 'Student removed successfully. Financial invoices with recorded payment, award, or provider history were retained for reconciliation.');
 
-        $this->assertSame(array_fill_keys(['enrollment', 'student_profiles', 'student_fee_managers', 'daily_attendances', 'book_issues', 'gradebooks', 'payments', 'payment_history', 'users'], 0), $this->graphCounts($student));
+        $expected = array_fill_keys(['enrollment', 'student_profiles', 'daily_attendances', 'book_issues', 'gradebooks', 'users'], 0);
+        $expected['student_fee_managers'] = 1; // financial invoice retained with its historical payment rows
+        $expected['payments'] = 1;
+        $expected['payment_history'] = 1;
+        $this->assertSame($expected, $this->graphCounts($student));
         $this->assertSame(1, $this->graphCounts($bystander)['users']);
         $this->assertSame(1, $this->graphCounts($bystander)['payments']);
+        $audit = DB::table('audit_logs')->where('action', 'student.delete')->first();
+        $this->assertNotNull($audit);
+        $this->assertSame($admin->id, (int) $audit->user_id);
+        $this->assertSame('Student account permanently deleted.', $audit->description);
+        $this->assertNull($audit->record_id);
+        $this->assertNull($audit->url);
+        $this->assertNull($audit->ip_address);
     }
 
-    public function test_restrictive_academic_history_prevents_delete_without_partially_removing_student_data(): void
+    public function test_restrictive_academic_history_is_deleted_before_student_and_does_not_block_delete(): void
     {
         $admin = $this->user(2, $this->schoolA);
         $student = $this->user(7, $this->schoolA);
@@ -298,12 +313,235 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
         $before = $this->graphCounts($student);
 
         $this->actingAs($admin)
-            ->get(route('admin.student.delete', $student->id))
+            ->delete(route('admin.student.delete', $student->id), ['confirmation' => 'DELETE'])
             ->assertRedirect()
-            ->assertSessionHas('error', 'This student has linked academic records that prevent deletion. No records were changed.');
+            ->assertSessionHas('message', 'Student removed successfully.');
+
+        $this->assertDatabaseMissing('users', ['id' => $student->id]);
+        $this->assertDatabaseMissing('student_curriculum_assignments', ['student_id' => $student->id]);
+        $this->assertSame(0, DB::table('enrollment')->where('user_id', $student->id)->count());
+        $this->assertGreaterThan(0, array_sum($before));
+    }
+
+    public function test_delete_requires_explicit_confirmation_and_makes_no_changes_without_it(): void
+    {
+        $admin = $this->user(2, $this->schoolA);
+        $student = $this->user(7, $this->schoolA);
+        $this->seedStudentGraph($student);
+        $before = $this->graphCounts($student);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.student.delete', $student->id), ['confirmation' => 'yes'])
+            ->assertSessionHasErrors('confirmation');
+
+        $this->assertSame($before, $this->graphCounts($student));
+        $this->assertSame(0, DB::table('audit_logs')->where('action', 'student.delete')->count());
+    }
+
+    public function test_staff_without_student_delete_permission_cannot_submit_the_action(): void
+    {
+        $viewer = $this->user(20, $this->schoolA);
+        $student = $this->user(7, $this->schoolA);
+        $this->seedStudentGraph($student);
+        $before = $this->graphCounts($student);
+
+        $this->actingAs($viewer)
+            ->delete(route('admin.student.delete', $student->id), ['confirmation' => 'DELETE'])
+            ->assertRedirect();
+
+        $this->assertSame($before, $this->graphCounts($student));
+        $this->assertSame(0, DB::table('audit_logs')->where('action', 'student.delete')->count());
+    }
+
+    public function test_cleanup_failure_rolls_back_every_delete_and_the_audit_entry(): void
+    {
+        $admin = $this->user(2, $this->schoolA);
+        $student = $this->user(7, $this->schoolA);
+        $this->seedStudentGraph($student);
+        Schema::create('student_curriculum_assignments', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('student_id');
+            $table->foreign('student_id', 'test_student_restrict_fk')->references('id')->on('users')->onDelete('restrict');
+        });
+        DB::table('student_curriculum_assignments')->insert(['student_id' => $student->id]);
+        Schema::create('student_cleanup_blocker', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('student_id');
+            $table->foreign('student_id', 'test_cleanup_blocker_fk')->references('id')->on('users')->onDelete('restrict');
+        });
+        DB::table('student_cleanup_blocker')->insert(['student_id' => $student->id]);
+        $before = $this->graphCounts($student);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.student.delete', $student->id), ['confirmation' => 'DELETE'])
+            ->assertRedirect()
+            ->assertSessionHas('error', 'Student deletion could not be completed. No records were changed.');
 
         $this->assertSame($before, $this->graphCounts($student));
         $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $student->id]);
+        $this->assertDatabaseHas('student_cleanup_blocker', ['student_id' => $student->id]);
+        $this->assertSame(0, DB::table('audit_logs')->where('action', 'student.delete')->count());
+    }
+
+    public function test_full_academic_workflow_graph_cascades_and_preserves_shared_and_other_student_rows(): void
+    {
+        $admin = $this->user(2, $this->schoolA);
+        $student = $this->user(7, $this->schoolA);
+        $peer = $this->user(7, $this->schoolA);
+        $this->createFullDeletionGraphSchema();
+        $ownedOnlyTables = [
+            'graduation_applications', 'hostel_room_allocations', 'hostel_applications', 'hostel_fees',
+            'club_members', 'appraisal_submits', 'feedback', 'student_requests',
+            'student_fee_registration_waivers', 'student_financial_setup_reviews',
+        ];
+        foreach ($ownedOnlyTables as $table) {
+            DB::table($table)->insert([['student_id' => $student->id], ['student_id' => $peer->id]]);
+        }
+
+        $targetRegistration = DB::table('course_registrations')->insertGetId(['student_id' => $student->id]);
+        $peerRegistration = DB::table('course_registrations')->insertGetId(['student_id' => $peer->id]);
+        DB::table('course_offering_attendance_records')->insert([
+            ['student_id' => $student->id, 'course_registration_id' => $targetRegistration],
+            ['student_id' => $peer->id, 'course_registration_id' => $peerRegistration],
+        ]);
+        DB::table('course_offering_lesson_progress')->insert([
+            ['student_id' => $student->id], ['student_id' => $peer->id],
+        ]);
+
+        $targetExam = DB::table('online_exam_submissions')->insertGetId(['student_id' => $student->id]);
+        $peerExam = DB::table('online_exam_submissions')->insertGetId(['student_id' => $peer->id]);
+        foreach (['online_exam_answers', 'online_exam_proctoring_events', 'online_exam_user_notifications'] as $table) {
+            DB::table($table)->insert([['submission_id' => $targetExam], ['submission_id' => $peerExam]]);
+        }
+
+        $targetAssignment = DB::table('assignment_submissions')->insertGetId(['student_id' => $student->id]);
+        $peerAssignment = DB::table('assignment_submissions')->insertGetId(['student_id' => $peer->id]);
+        foreach (['assignment_submission_items' => 'assignment_submission_id', 'assignment_question_responses' => 'assignment_submission_id', 'assignment_notifications' => 'submission_id'] as $table => $column) {
+            DB::table($table)->insert([[$column => $targetAssignment], [$column => $peerAssignment]]);
+        }
+
+        DB::table('student_curriculum_assignments')->insert([
+            ['student_id' => $student->id, 'assigned_by' => $admin->id],
+            ['student_id' => $peer->id, 'assigned_by' => $student->id],
+        ]);
+        DB::table('programme_cohort_memberships')->insert([
+            ['student_id' => $student->id, 'assigned_by' => $admin->id],
+            ['student_id' => $peer->id, 'assigned_by' => $student->id],
+        ]);
+        $candidate = DB::table('election_candidates')->insertGetId(['student_id' => $student->id, 'manifesto' => 'private manifesto']);
+        $peerCandidate = DB::table('election_candidates')->insertGetId(['student_id' => $peer->id, 'manifesto' => 'peer manifesto']);
+        DB::table('election_votes')->insert([
+            ['candidate_id' => $peerCandidate, 'voter_id' => $student->id],
+            ['candidate_id' => $candidate, 'voter_id' => $peer->id],
+        ]);
+        DB::table('programme_cohorts')->insert(['created_by' => $student->id, 'name' => 'shared cohort']);
+        DB::table('curricula')->insert(['name' => 'shared curriculum']);
+        DB::table('subjects')->insert(['name' => 'shared course', 'school_id' => $this->schoolA, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.student.delete', $student->id), ['confirmation' => 'DELETE'])
+            ->assertRedirect()
+            ->assertSessionHas('message', 'Student removed successfully.');
+
+        foreach ([
+            'course_registrations' => 'student_id', 'course_offering_attendance_records' => 'student_id',
+            'course_offering_lesson_progress' => 'student_id', 'online_exam_submissions' => 'student_id',
+            'assignment_submissions' => 'student_id', 'student_curriculum_assignments' => 'student_id',
+            'programme_cohort_memberships' => 'student_id',
+        ] as $table => $column) {
+            $this->assertDatabaseMissing($table, [$column => $student->id]);
+            $this->assertDatabaseHas($table, [$column => $peer->id]);
+        }
+        foreach ($ownedOnlyTables as $table) {
+            $this->assertDatabaseMissing($table, ['student_id' => $student->id]);
+            $this->assertDatabaseHas($table, ['student_id' => $peer->id]);
+        }
+        foreach (['online_exam_answers', 'online_exam_proctoring_events', 'online_exam_user_notifications'] as $table) {
+            $this->assertDatabaseMissing($table, ['submission_id' => $targetExam]);
+            $this->assertDatabaseHas($table, ['submission_id' => $peerExam]);
+        }
+        foreach (['assignment_submission_items', 'assignment_question_responses'] as $table) {
+            $this->assertDatabaseMissing($table, ['assignment_submission_id' => $targetAssignment]);
+            $this->assertDatabaseHas($table, ['assignment_submission_id' => $peerAssignment]);
+        }
+        $this->assertDatabaseMissing('assignment_notifications', ['submission_id' => $targetAssignment]);
+        $this->assertDatabaseHas('assignment_notifications', ['submission_id' => $peerAssignment]);
+        $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $peer->id, 'assigned_by' => null]);
+        $this->assertDatabaseHas('programme_cohort_memberships', ['student_id' => $peer->id, 'assigned_by' => null]);
+        $this->assertDatabaseHas('election_candidates', ['id' => $candidate, 'student_id' => null, 'manifesto' => null]);
+        $this->assertDatabaseHas('election_votes', ['candidate_id' => $candidate, 'voter_id' => $peer->id]);
+        $this->assertDatabaseMissing('election_votes', ['voter_id' => $student->id]);
+        $this->assertDatabaseHas('programme_cohorts', ['name' => 'shared cohort', 'created_by' => null]);
+        $this->assertDatabaseHas('curricula', ['name' => 'shared curriculum']);
+        $this->assertDatabaseHas('subjects', ['name' => 'shared course']);
+    }
+
+    private function createFullDeletionGraphSchema(): void
+    {
+        Schema::create('course_registrations', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('student_id');
+            $table->foreign('student_id')->references('id')->on('users')->onDelete('restrict');
+        });
+        foreach ([
+            'graduation_applications', 'hostel_room_allocations', 'hostel_applications', 'hostel_fees',
+            'club_members', 'appraisal_submits', 'feedback', 'student_requests',
+            'student_fee_registration_waivers', 'student_financial_setup_reviews',
+        ] as $name) {
+            Schema::create($name, function (Blueprint $table): void { $table->id(); $table->unsignedBigInteger('student_id'); });
+        }
+        Schema::create('course_offering_attendance_records', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('student_id'); $table->unsignedBigInteger('course_registration_id');
+            $table->foreign('student_id')->references('id')->on('users')->onDelete('restrict');
+            $table->foreign('course_registration_id')->references('id')->on('course_registrations')->onDelete('restrict');
+        });
+        Schema::create('course_offering_lesson_progress', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('student_id');
+            $table->foreign('student_id')->references('id')->on('users')->onDelete('restrict');
+        });
+        Schema::create('online_exam_submissions', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('student_id');
+            $table->foreign('student_id')->references('id')->on('users')->onDelete('restrict');
+        });
+        foreach (['online_exam_answers', 'online_exam_proctoring_events', 'online_exam_user_notifications'] as $name) {
+            Schema::create($name, function (Blueprint $table): void {
+                $table->id(); $table->unsignedBigInteger('submission_id');
+                $table->foreign('submission_id')->references('id')->on('online_exam_submissions')->onDelete('restrict');
+            });
+        }
+        Schema::create('assignment_submissions', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('student_id');
+            $table->foreign('student_id')->references('id')->on('users')->onDelete('restrict');
+        });
+        foreach (['assignment_submission_items', 'assignment_question_responses'] as $name) {
+            Schema::create($name, function (Blueprint $table): void {
+                $table->id(); $table->unsignedBigInteger('assignment_submission_id');
+                $table->foreign('assignment_submission_id')->references('id')->on('assignment_submissions')->onDelete('restrict');
+            });
+        }
+        Schema::create('assignment_notifications', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('submission_id');
+            $table->foreign('submission_id')->references('id')->on('assignment_submissions')->onDelete('restrict');
+        });
+        foreach (['student_curriculum_assignments', 'programme_cohort_memberships'] as $name) {
+            Schema::create($name, function (Blueprint $table): void {
+                $table->id(); $table->unsignedBigInteger('student_id'); $table->unsignedBigInteger('assigned_by')->nullable();
+                $table->foreign('student_id')->references('id')->on('users')->onDelete('restrict');
+                $table->foreign('assigned_by')->references('id')->on('users')->onDelete('restrict');
+            });
+        }
+        Schema::create('election_candidates', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('student_id')->nullable(); $table->text('manifesto')->nullable();
+        });
+        Schema::create('election_votes', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('candidate_id'); $table->unsignedBigInteger('voter_id');
+            $table->foreign('candidate_id')->references('id')->on('election_candidates')->onDelete('restrict');
+            $table->foreign('voter_id')->references('id')->on('users')->onDelete('restrict');
+        });
+        Schema::create('programme_cohorts', function (Blueprint $table): void {
+            $table->id(); $table->string('name'); $table->unsignedBigInteger('created_by')->nullable();
+            $table->foreign('created_by')->references('id')->on('users')->onDelete('restrict');
+        });
+        Schema::create('curricula', function (Blueprint $table): void { $table->id(); $table->string('name'); });
     }
 
     // ── A. Documents / password / status targeting (regression) ──────────────
