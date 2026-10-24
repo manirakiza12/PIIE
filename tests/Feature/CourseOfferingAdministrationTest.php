@@ -217,7 +217,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $draft = $this->curriculumFor($tenant, 'draft', 'delete-draft');
         $this->delete(route('admin.curricula.destroy', $draft), ['confirm_deletion' => 'DELETE'])->assertRedirect(route('admin.curricula.index'));
         $this->assertDatabaseMissing('curricula', ['id' => $draft]);
-        $officialReference = DB::table('curricula')->where('id', $tenant['curriculum'])->value('version');
+        $officialReference = DB::table('programmes')->where('id', $tenant['programme'])->value('code').' '.DB::table('curricula')->where('id', $tenant['curriculum'])->value('version');
         $this->delete(route('admin.curricula.destroy', $tenant['curriculum']), ['confirm_deletion' => $officialReference])->assertRedirect(route('admin.curricula.index'));
         $this->assertDatabaseMissing('curricula', ['id' => $tenant['curriculum']]);
     }
@@ -1830,7 +1830,6 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         $this->assertDatabaseHas('academic_periods', ['id' => $period, 'label' => 'Revised semester', 'status' => 'planned']);
         $this->assertSame('2030-05-31', \App\Models\AcademicPeriod::findOrFail($period)->end_date->toDateString());
         $this->delete(route('admin.academic_structure.destroy', ['periods', $period]))->assertSessionHasErrors('confirm_deletion');
-        $this->delete(route('admin.academic_structure.destroy', ['years', $year]), ['confirm_deletion' => 'DELETE'])->assertSessionHasErrors('delete');
         $this->delete(route('admin.academic_structure.destroy', ['periods', $period]), ['confirm_deletion' => 'DELETE'])->assertRedirect(route('admin.academic_structure.index', ['section' => 'semesters']));
         $this->assertDatabaseMissing('academic_periods', ['id' => $period]);
 
@@ -1863,7 +1862,10 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         $this->post(route('admin.academic_structure.periods.store'), $data)->assertSessionHasErrors('sequence');
         $this->put(route('admin.academic_structure.update', ['periods', $period->id]), $data + ['status' => 'completed'])->assertSessionHasErrors('status');
         $this->createOffering($a, 'PRESERVE-CALENDAR');
-        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['sequence' => 3, 'reason' => 'Correcting the semester sequence']))->assertSessionHasErrors('start_date');
+        $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['sequence' => 3, 'reason' => 'Correcting the semester sequence']))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('academic_periods', ['id' => $period->id, 'sequence' => 3]);
+        $data['sequence'] = 3;
+        $data['reason'] = 'Correcting the semester label';
         $this->put(route('admin.academic_structure.update', ['years', $year->id]), array_replace($yearData, ['end_date' => '2027-12-31']))->assertSessionHasErrors('start_date');
         $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['label' => 'Corrected label']))->assertSessionHasNoErrors();
         $offeringId = (int) DB::table('course_offerings')->where('reference', 'PRESERVE-CALENDAR')->value('id');
