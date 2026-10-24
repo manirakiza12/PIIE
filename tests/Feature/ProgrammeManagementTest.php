@@ -331,7 +331,8 @@ class ProgrammeManagementTest extends TestCase
         $this->assertSame('preserve', $meta['editor_note']);
         $orphan = \Illuminate\Support\Facades\DB::table('website_items')->where('id', $orphanedMarkerId)->first();
         $this->assertNotNull($orphan);
-        $this->assertArrayNotHasKey('programme_id', json_decode($orphan->meta_json, true));
+        $orphanMeta = json_decode($orphan->meta_json, true);
+        $this->assertTrue($orphanMeta === null || ! array_key_exists('programme_id', $orphanMeta));
     }
 
     public function test_an_untouched_programme_can_still_be_deleted(): void

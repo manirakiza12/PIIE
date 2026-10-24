@@ -218,7 +218,7 @@ class AcademicStructureFoundationTest extends TestCase
         }
     }
 
-    public function test_unmapped_restrictive_dependency_rolls_back_the_entire_year_deletion(): void
+    public function test_discovered_restrictive_dependency_is_deleted_before_its_year(): void
     {
         DB::statement('PRAGMA foreign_keys = ON');
         Schema::create('opaque_year_reference', function (Blueprint $table): void {
@@ -229,11 +229,37 @@ class AcademicStructureFoundationTest extends TestCase
         DB::table('schools')->where('id', $school->id)->update(['current_academic_year_id' => $year->id]);
         DB::table('opaque_year_reference')->insert(['owner_year_id' => $year->id]);
         $deletion = new AcademicRecordDeletionService(new CourseOfferingService());
-        try { $deletion->deleteYear((int) $school->id, (int) $year->id, 1, 'DELETE'); $this->fail('A restrictive unknown dependency did not block deletion.'); }
-        catch (\Illuminate\Database\QueryException) { }
-        $this->assertDatabaseHas('academic_years', ['id' => $year->id]);
-        $this->assertSame((int) $year->id, (int) DB::table('schools')->where('id', $school->id)->value('current_academic_year_id'));
-        $this->assertDatabaseHas('opaque_year_reference', ['owner_year_id' => $year->id]);
+        $deletion->deleteYear((int) $school->id, (int) $year->id, 1, 'DELETE');
+        $this->assertDatabaseMissing('academic_years', ['id' => $year->id]);
+        $this->assertDatabaseMissing('opaque_year_reference', ['owner_year_id' => $year->id]);
+    }
+
+    public function test_year_cleanup_rolls_back_when_the_final_audit_write_fails(): void
+    {
+        $school = $this->school('semester');
+        $year = $this->year($school, 'Rollback year');
+        DB::table('sessions')->insert([
+            'session_title' => 'Rollback session', 'status' => 1,
+            'school_id' => $school->id, 'academic_year_id' => $year->id,
+        ]);
+        $deletion = new AcademicRecordDeletionService(new CourseOfferingService());
+        if (DB::getDriverName() === 'sqlite') {
+            DB::unprepared("CREATE TRIGGER reject_year_audit BEFORE INSERT ON audit_logs BEGIN SELECT RAISE(ABORT, 'audit failure'); END");
+        } else {
+            DB::unprepared("CREATE TRIGGER reject_year_audit BEFORE INSERT ON audit_logs FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'audit failure'");
+        }
+        try {
+            try {
+                $deletion->deleteYear((int) $school->id, (int) $year->id, 1, 'DELETE');
+                $this->fail('A rejected audit write should roll back the deletion.');
+            } catch (\Illuminate\Database\QueryException) {
+                $this->assertDatabaseHas('academic_years', ['id' => $year->id]);
+                $this->assertDatabaseHas('sessions', ['academic_year_id' => $year->id]);
+                $this->assertDatabaseMissing('audit_logs', ['action' => 'ACADEMIC_YEAR_DELETED', 'record_id' => $year->id]);
+            }
+        } finally {
+            DB::unprepared('DROP TRIGGER reject_year_audit');
+        }
     }
 
     public function test_day_first_invalid_calendar_dates_are_rejected(): void
