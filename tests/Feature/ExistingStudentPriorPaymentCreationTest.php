@@ -25,6 +25,7 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
     use AdmissionsTestHelper;
 
     private int $schoolId;
+    private int $academicYearId;
     private User $admin;
     private Session $period;
     private FeeStructure $structure;
@@ -41,11 +42,30 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         (require database_path('migrations/2026_10_17_100000_create_student_fee_registration_waivers_table.php'))->up();
         (require database_path('migrations/2026_09_23_000003_create_rbac_tables.php'))->up();
         (require database_path('migrations/2026_10_23_100000_create_existing_student_financial_setup_reviews_table.php'))->up();
-        Schema::table('schools', fn (Blueprint $table) => $table->string('school_currency')->default('UGX'));
+        Schema::table('schools', function (Blueprint $table) {
+            $table->string('school_currency')->default('UGX');
+            $table->unsignedBigInteger('current_academic_year_id')->nullable();
+        });
+        Schema::create('academic_years', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('school_id');
+            $table->string('label', 100);
+            $table->date('start_date');
+            $table->date('end_date');
+            $table->string('status', 20)->default('active');
+            $table->timestamps();
+        });
+        Schema::table('sessions', fn (Blueprint $table) => $table->unsignedBigInteger('academic_year_id')->nullable());
 
         $this->schoolId = $this->makeSchool(['running_session' => 1]);
         $this->admin = $this->makeAdminUser($this->schoolId);
+        $this->academicYearId = DB::table('academic_years')->insertGetId([
+            'school_id' => $this->schoolId, 'label' => '2026/2027', 'start_date' => '2026-08-01', 'end_date' => '2027-07-31',
+            'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('schools')->where('id', $this->schoolId)->update(['current_academic_year_id' => $this->academicYearId]);
         $this->period = Session::create(['school_id' => $this->schoolId, 'session_title' => '2026 Semester 2', 'status' => 1]);
+        DB::table('sessions')->where('id', $this->period->id)->update(['academic_year_id' => $this->academicYearId]);
         $this->programme = Programme::create(['school_id' => $this->schoolId, 'name' => 'Diploma in Finance', 'code' => 'DF', 'is_active' => 1]);
         $this->structure = FeeStructure::create(['school_id' => $this->schoolId, 'name' => 'Tuition', 'fee_type' => 'tuition',
             'amount' => 1500000, 'is_mandatory' => 1, 'class_id' => null, 'programme_id' => $this->programme->id, 'session_id' => $this->period->id]);
@@ -58,6 +78,7 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
             'password_option' => 'auto', 'gender' => 'Female', 'blood_group' => '', 'birthday' => '01/01/2000',
             'phone' => '0700000000', 'address' => 'Kampala', 'record_fees' => '1',
             'programme_id' => $this->programme->id,
+            'fee_academic_year_id' => $this->academicYearId,
             'fee_session_id' => $this->period->id, 'fee_structure_id' => $this->structure->id,
             'actual_fee_amount' => '1200000.00', 'prior_paid_amount' => '200000.00',
             'prior_paid_on' => now()->subMonth()->toDateString(), 'prior_payment_method' => 'mobile_money',
@@ -90,9 +111,88 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $this->assertSame(0, StudentOpeningPayment::count(), 'Captured historical cash remains pending until authorized confirmation.');
         $this->assertSame(0, TuitionPayment::count(), 'A verified old receipt is not a new gateway collection.');
         $this->assertSame(0, DB::table('admissions')->count());
+        $this->assertSame(0, DB::table('application_payments')->count());
         $this->assertSame(0, DB::table('enrollment')->where('user_id', $student->id)->count());
         $this->assertSame([], StudentFeeInvoiceGenerator::generateForStudent($student, (int) $this->programme->id, $this->schoolId), 'The linked fee structure must not be invoiced again by a later sync.');
         $this->assertSame(1, StudentFeeManager::where('student_id', $student->id)->where('fee_structure_id', $this->structure->id)->where('session_id', $this->period->id)->count());
+    }
+
+    public function test_add_existing_student_form_is_one_page_and_finance_sessions_follow_the_selected_academic_year(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.student.open_modal'))
+            ->assertOk()
+            ->assertSee('Existing registration')
+            ->assertSee('Student account and portal access')
+            ->assertSee('Programme, intake, and academic details')
+            ->assertSee('Optional financial setup')
+            ->assertSee('Next of kin and other details')
+            ->assertSee('Create Student')
+            ->assertSee('2026/2027')
+            ->assertSee('2026 Semester 2')
+            ->assertDontSee('Step 1: enter the agreed fee')
+            ->assertDontSee('Next Step')
+            ->assertSee('fee_academic_year_id')
+            ->assertSee('data-academic-year-id="'.$this->academicYearId.'"', false);
+    }
+
+    public function test_finance_rejects_a_fee_session_outside_the_selected_academic_year(): void
+    {
+        $otherYearId = DB::table('academic_years')->insertGetId([
+            'school_id' => $this->schoolId, 'label' => '2027/2028', 'start_date' => '2027-08-01', 'end_date' => '2028-07-31',
+            'status' => 'planned', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $otherSession = Session::create(['school_id' => $this->schoolId, 'session_title' => '2027 Semester 1', 'status' => 1]);
+        DB::table('sessions')->where('id', $otherSession->id)->update(['academic_year_id' => $otherYearId]);
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'fee_session_id' => $otherSession->id,
+        ]))->assertSessionHasErrors('fee_session_id');
+
+        $this->assertSame(0, User::where('email', 'continuing@example.test')->count());
+        $this->assertSame(0, StudentFeeManager::count());
+    }
+
+    public function test_finance_remains_optional_and_context_selection_alone_creates_no_invoice(): void
+    {
+        $payload = $this->payload([
+            'record_fees' => null, 'fee_session_id' => null, 'fee_structure_id' => null,
+            'actual_fee_amount' => null, 'prior_paid_amount' => null, 'prior_paid_on' => null,
+            'prior_payment_method' => null, 'prior_payment_reference' => null, 'prior_payment_reason' => null,
+            'fee_academic_year_id' => $this->academicYearId,
+        ]);
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $payload)->assertSessionHasNoErrors()->assertRedirect();
+
+        $student = User::where('email', 'continuing@example.test')->firstOrFail();
+        $this->assertSame(0, StudentFeeManager::where('student_id', $student->id)->count());
+        $this->assertSame(0, DB::table('admissions')->count());
+        $this->assertSame(0, DB::table('application_payments')->count());
+        $this->assertSame(0, DB::table('enrollment')->where('user_id', $student->id)->count());
+        $this->assertSame(0, DB::table('applicants')->count());
+    }
+
+    public function test_finance_permissions_still_gate_optional_setup_and_validation_is_shown_inline(): void
+    {
+        $permissionService = \Mockery::mock(\App\Support\Permissions\PermissionService::class);
+        $permissionService->shouldReceive('routePermission')->andReturn(null);
+        $permissionService->shouldReceive('allows')->andReturn(false);
+        $permissionService->shouldReceive('allowsAny')->andReturn(true);
+        $this->app->instance(\App\Support\Permissions\PermissionService::class, $permissionService);
+
+        $this->actingAs($this->admin)->get(route('admin.student.open_modal'))
+            ->assertOk()->assertDontSee('Optional financial setup');
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload())->assertForbidden();
+
+        $this->app->instance(\App\Support\Permissions\PermissionService::class, new \App\Support\Permissions\PermissionService());
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'email' => 'not-an-email',
+        ]))->assertSessionHasErrors('email');
+
+        $this->get(route('admin.student.open_modal'))
+            ->assertOk()->assertSee('valid email address')
+            ->assertSee('name="email"', false)->assertSee('is-invalid', false);
+        $this->assertSame(0, User::where('email', 'continuing@example.test')->count());
     }
 
     public function test_invalid_prior_payment_rolls_back_student_invoice_and_ledger_together(): void

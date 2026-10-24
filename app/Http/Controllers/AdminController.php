@@ -12,6 +12,7 @@ use App\Models\AdmissionDocument;
 use App\Models\ApplicationPayment;
 use App\Models\AdmitCard;
 use App\Models\AcademicCalendar;
+use App\Models\AcademicYear;
 use App\Models\Appraisal;
 use App\Models\Appraisal_submit;
 use App\Models\AuditLog;
@@ -79,6 +80,7 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Mail;
 use PDF;
@@ -1955,10 +1957,30 @@ class AdminController extends Controller
     {
         $school_id  = auth()->user()->school_id;
         $classes    = Classes::get()->where('school_id', $school_id);
-        $sessions   = Session::where('school_id', $school_id)->orderByDesc('id')->get();
+        $sessions   = Session::query()->where('school_id', $school_id)->whereNotNull('academic_year_id')
+            ->whereHas('academicYear', fn ($query) => $query->where('school_id', $school_id))
+            ->orderByDesc('id')->get();
+        $academicYears = AcademicYear::query()->where('school_id', $school_id)
+            ->whereHas('legacySessions', fn ($query) => $query->where('school_id', $school_id))
+            ->orderByDesc('start_date')->get();
         $departments = Department::where('school_id', $school_id)->orderBy('name')->get();
         $programmes = Programme::where('school_id', $school_id)->where('is_active', 1)->orderBy('name')->get();
         $intakeSessions = IntakeSession::where('school_id', $school_id)->orderByDesc('id')->get();
+        $cohortEntryYears = [];
+        if (Schema::hasTable('programme_cohorts') && Schema::hasTable('academic_years')) {
+            $cohortEntryYears = DB::table('programme_cohorts')
+                ->join('academic_years', function ($join) {
+                    $join->on('programme_cohorts.entry_academic_year_id', '=', 'academic_years.id')
+                        ->on('programme_cohorts.school_id', '=', 'academic_years.school_id');
+                })
+                ->where('programme_cohorts.school_id', $school_id)
+                ->whereIn('programme_cohorts.status', ['active', 'completed'])
+                ->orderBy('academic_years.start_date')
+                ->get(['programme_cohorts.programme_id', 'programme_cohorts.intake_session_id', 'academic_years.label'])
+                ->groupBy(fn ($row) => $row->programme_id.'|'.$row->intake_session_id)
+                ->map(fn ($rows) => $rows->pluck('label')->unique()->values()->all())
+                ->all();
+        }
         $canRecordExistingStudentFees = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices')
             && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments');
         $canRequestStudyWaiver = $canRecordExistingStudentFees
@@ -1966,11 +1988,27 @@ class AdminController extends Controller
         $feeStructures = $canRecordExistingStudentFees
             ? FeeStructure::where('school_id', $school_id)->where('is_mandatory', 1)->whereNull('class_id')->orderBy('name')->get()
             : collect();
-        $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'departments' => $departments, 'programmes' => $programmes,
+        $runningSessionId = get_school_settings($school_id)->value('running_session');
+        $currentAcademicYearId = DB::table('schools')->where('id', $school_id)->value('current_academic_year_id');
+        $runningSessionYearId = $runningSessionId
+            ? $sessions->firstWhere('id', (int) $runningSessionId)?->academic_year_id
+            : null;
+        $defaultFeeAcademicYearId = $academicYears->contains('id', (int) $currentAcademicYearId)
+            ? (int) $currentAcademicYearId
+            : ($academicYears->contains('id', (int) $runningSessionYearId) ? (int) $runningSessionYearId : null);
+        $defaultFeeSessionId = $sessions->contains(fn ($session) => (int) $session->id === (int) $runningSessionId
+            && (int) $session->academic_year_id === (int) $defaultFeeAcademicYearId)
+            ? (int) $runningSessionId
+            : null;
+        $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'academicYears' => $academicYears,
+            'departments' => $departments, 'programmes' => $programmes,
             'intakeSessions' => $intakeSessions, 'feeStructures' => $feeStructures,
+            'cohortEntryYears' => $cohortEntryYears,
             'canRecordExistingStudentFees' => $canRecordExistingStudentFees,
             'canRequestStudyWaiver' => $canRequestStudyWaiver,
-            'runningSessionId' => get_school_settings($school_id)->value('running_session')];
+            'runningSessionId' => $runningSessionId,
+            'defaultFeeAcademicYearId' => $defaultFeeAcademicYearId,
+            'defaultFeeSessionId' => $defaultFeeSessionId];
         if (! $request->ajax()) {
             return view('admin.common.modal_standalone_wrapper', [
                 'page_title' => get_phrase('Add Existing Student'),
@@ -1996,9 +2034,11 @@ class AdminController extends Controller
         $awardMinor = 0;
         if ($recordFees) {
             abort_unless($canRecordExistingStudentFees, 403);
+            $schoolId = (int) $request->user()->school_id;
             $request->validate([
-                'fee_session_id' => ['required', 'integer', 'exists:sessions,id,school_id,' . auth()->user()->school_id],
-                'fee_structure_id' => ['required', 'integer', 'exists:fee_structures,id,school_id,' . auth()->user()->school_id],
+                'fee_academic_year_id' => ['required', 'integer', Rule::exists('academic_years', 'id')->where('school_id', $schoolId)],
+                'fee_session_id' => ['required', 'integer', Rule::exists('sessions', 'id')->where('school_id', $schoolId)->where('academic_year_id', (int) $request->input('fee_academic_year_id'))],
+                'fee_structure_id' => ['required', 'integer', Rule::exists('fee_structures', 'id')->where('school_id', $schoolId)],
                 'actual_fee_amount' => ['required', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/', 'gt:0'],
                 'prior_paid_amount' => ['nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
             ]);
@@ -2053,6 +2093,7 @@ class AdminController extends Controller
             'password'         => 'nullable|min:6',
             'programme_id'     => 'nullable|exists:programmes,id,school_id,' . auth()->user()->school_id,
             'intake_session_id' => 'nullable|exists:intake_sessions,id,school_id,' . auth()->user()->school_id,
+            'fee_academic_year_id' => ['nullable', 'integer', Rule::exists('academic_years', 'id')->where('school_id', (int) $request->user()->school_id)],
             'nationality'      => 'nullable|max:80',
             'national_id_or_passport' => 'nullable|max:50',
             'year_of_study'    => 'nullable|integer|min:1|max:20',
