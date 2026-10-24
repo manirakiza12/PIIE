@@ -65,6 +65,7 @@ use App\Models\TeacherPermission;
 use App\Models\TeacherProgrammeAssignment;
 use App\Models\User;
 use App\Support\Admissions\ApplicationDocuments;
+use App\Support\AcademicContext;
 use App\Support\ProfilePhoto;
 use App\Support\Staff\StaffProvisioningException;
 use App\Support\Staff\StaffProvisioningService;
@@ -1961,7 +1962,6 @@ class AdminController extends Controller
             ->whereHas('academicYear', fn ($query) => $query->where('school_id', $school_id))
             ->orderByDesc('id')->get();
         $academicYears = AcademicYear::query()->where('school_id', $school_id)
-            ->whereHas('legacySessions', fn ($query) => $query->where('school_id', $school_id))
             ->orderByDesc('start_date')->get();
         $departments = Department::where('school_id', $school_id)->orderBy('name')->get();
         $programmes = Programme::where('school_id', $school_id)->where('is_active', 1)->orderBy('name')->get();
@@ -1988,17 +1988,17 @@ class AdminController extends Controller
         $feeStructures = $canRecordExistingStudentFees
             ? FeeStructure::where('school_id', $school_id)->where('is_mandatory', 1)->whereNull('class_id')->orderBy('name')->get()
             : collect();
-        $runningSessionId = get_school_settings($school_id)->value('running_session');
-        $currentAcademicYearId = DB::table('schools')->where('id', $school_id)->value('current_academic_year_id');
-        $runningSessionYearId = $runningSessionId
-            ? $sessions->firstWhere('id', (int) $runningSessionId)?->academic_year_id
-            : null;
-        $defaultFeeAcademicYearId = $academicYears->contains('id', (int) $currentAcademicYearId)
-            ? (int) $currentAcademicYearId
-            : ($academicYears->contains('id', (int) $runningSessionYearId) ? (int) $runningSessionYearId : null);
-        $defaultFeeSessionId = $sessions->contains(fn ($session) => (int) $session->id === (int) $runningSessionId
-            && (int) $session->academic_year_id === (int) $defaultFeeAcademicYearId)
-            ? (int) $runningSessionId
+        $academicContext = app(AcademicContext::class);
+        $currentAcademicYear = $academicContext->currentYear($school_id);
+        if ((int) ($currentAcademicYear?->school_id ?? 0) !== (int) $school_id || $currentAcademicYear?->status !== 'active') {
+            $currentAcademicYear = null;
+        }
+        $runningSession = $academicContext->legacyRunningSession($school_id);
+        $runningSessionId = $runningSession?->id;
+        $defaultFeeAcademicYearId = $currentAcademicYear?->id;
+        $defaultFeeSessionId = $runningSession
+            && (int) $runningSession->academic_year_id === (int) $defaultFeeAcademicYearId
+            ? (int) $runningSession->id
             : null;
         $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'academicYears' => $academicYears,
             'departments' => $departments, 'programmes' => $programmes,
@@ -2008,7 +2008,8 @@ class AdminController extends Controller
             'canRequestStudyWaiver' => $canRequestStudyWaiver,
             'runningSessionId' => $runningSessionId,
             'defaultFeeAcademicYearId' => $defaultFeeAcademicYearId,
-            'defaultFeeSessionId' => $defaultFeeSessionId];
+            'defaultFeeSessionId' => $defaultFeeSessionId,
+            'hasConfiguredActiveAcademicYear' => $currentAcademicYear !== null];
         if (! $request->ajax()) {
             return view('admin.common.modal_standalone_wrapper', [
                 'page_title' => get_phrase('Add Existing Student'),
@@ -2021,8 +2022,6 @@ class AdminController extends Controller
 
     public function studentCreate(Request $request)
     {
-        $data = $request->all();
-
         $canRecordExistingStudentFees = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices')
             && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments');
         $recordFees = $request->boolean('record_fees');
@@ -2086,7 +2085,9 @@ class AdminController extends Controller
         }
 
         $request->validate([
-            'name'             => 'required|max:255',
+            'name'             => ['nullable', 'string', 'max:255', 'required_without_all:first_name,last_name'],
+            'first_name'       => ['nullable', 'string', 'max:100', 'required_with:last_name'],
+            'last_name'        => ['nullable', 'string', 'max:100', 'required_with:first_name'],
             'registration_number' => 'required|string|max:255',
             'email'            => 'required|email|max:255',
             'password_option'  => 'nullable|in:auto,manual',
@@ -2107,6 +2108,11 @@ class AdminController extends Controller
             'session_id'       => 'nullable|integer|exists:sessions,id',
             'department_id'    => 'nullable|integer|exists:departments,id',
         ]);
+
+        if ($request->filled('first_name') && $request->filled('last_name')) {
+            $request->merge(['name' => trim($request->input('first_name').' '.$request->input('last_name'))]);
+        }
+        $data = $request->all();
 
         \App\Support\Students\StudentProvisioner::assertAcademicScope($data, (int) auth()->user()->school_id);
 
@@ -2130,6 +2136,9 @@ class AdminController extends Controller
         if ($request->hasFile('additional_photo')) {
             $additionalImageName = 'additional_' . time() . '.' . $request->file('additional_photo')->extension();
             $request->file('additional_photo')->move(public_path('assets/uploads/user-images/'), $additionalImageName);
+        }
+        if ($additionalImageName !== '') {
+            $data['additional_image'] = $additionalImageName;
         }
 
         $info = [
@@ -2211,9 +2220,9 @@ class AdminController extends Controller
 
         $destination = auth()->user()->hasPermission('students.edit')
             ? redirect()->route('admin.student.documents', $result['user']->id) : redirect()->back();
-        return $destination->with('message', 'Student ID ' . $result['user']->id . ' (' . $result['user']->code . '). Academic placement is still required: open Student Placement for this account, choose its curriculum, Programme Year and Academic Year, then register and confirm matching Course Allocations. ' . ($sent
-            ? 'Existing student account created. Password setup email sent. Upload the documents held by the administration here; the student does not complete an application.'
-            : 'Existing student account created. Upload the documents held by the administration here. Password setup email was not sent; check mail settings and resend student portal activation.'));
+        return $destination->with('message', $sent
+            ? 'Existing student account created. Password setup email sent. Upload documents from the student record.'
+            : 'Existing student account created. Password setup email was not sent; check mail settings and resend activation from the student record.');
     }
 
     public function studentIdCardGenerate($id)

@@ -4,9 +4,9 @@ const {readFileSync} = require('node:fs');
 const {JSDOM} = require('jsdom');
 const script = readFileSync('public/assets/js/workspace-ui.js', 'utf8');
 
-function fixture(width = 390, path = '/admin/programmes', container = 'form-row') {
+function fixture(width = 390, path = '/admin/programmes', container = 'form-row', formAttributes = '') {
   const fields = Array.from({length:12}, (_, i) => `<div class="fpb-7"><label for="field${i}">Field ${i}</label><input id="field${i}" name="field${i}" value="value${i}" ${i === 10 ? 'required' : ''}></div>`).join('');
-  const dom = new JSDOM(`<body><aside class="sidebar"><nav class="nav-links"><a href="/admin/programmes"><span class="link_name">Programmes</span></a><a href="/admin/students"><span class="link_name">Students</span></a><a href="/logout">Logout</a></nav></aside><div class="menuList">Modules</div><main class="main_content"><form id="page-form" method="post"><input name="csrf" type="hidden" value="token"><div class="form-row">${fields}<div><button type="submit">Save</button></div></div></form></main><div class="offcanvas workspace-surface" id="panel"><div class="offcanvas-body"></div></div><div class="modal" id="confirmModal">Confirm deletion</div></body>`, {url:'http://localhost'+path, runScripts:'outside-only'});
+  const dom = new JSDOM(`<body><aside class="sidebar"><nav class="nav-links"><a href="/admin/programmes"><span class="link_name">Programmes</span></a><a href="/admin/students"><span class="link_name">Students</span></a><a href="/logout">Logout</a></nav></aside><div class="menuList">Modules</div><main class="main_content"><form id="page-form" method="post" ${formAttributes}><input name="csrf" type="hidden" value="token"><div class="form-row">${fields}<div><button type="submit">Save</button></div></div></form></main><div class="offcanvas workspace-surface" id="panel"><div class="offcanvas-body"></div></div><div class="modal" id="confirmModal">Confirm deletion</div></body>`, {url:'http://localhost'+path, runScripts:'outside-only'});
   Object.defineProperty(dom.window, 'innerWidth', {value:width, writable:true});
   dom.window.document.querySelector('#page-form > .form-row').className = container;
   dom.window.eval(script);
@@ -28,6 +28,15 @@ test('dedicated add pages fill the workspace and paginate while preserving all s
   dom.window.innerWidth = 1440;
   dom.window.dispatchEvent(new dom.window.Event('resize'));
   assert.equal(document.querySelector('.workspace-steps span').textContent, 'Step 2 of 2');
+  dom.window.close();
+});
+
+test('continuous forms inside workspace pages and AJAX modals do not get step controls', () => {
+  const dom = fixture(390, '/admin/student/create_modal', 'form-row', 'data-workspace-continuous');
+  const form = dom.window.document.querySelector('#page-form');
+  assert.equal(form.hasAttribute('data-workspace-steps'), false);
+  assert.equal(dom.window.document.querySelectorAll('.workspace-steps').length, 0);
+  assert.equal(dom.window.document.querySelectorAll('.workspace-step-hidden').length, 0);
   dom.window.close();
 });
 

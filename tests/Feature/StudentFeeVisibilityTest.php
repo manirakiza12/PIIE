@@ -23,6 +23,10 @@ class StudentFeeVisibilityTest extends TestCase
     {
         parent::setUp();
         $this->bootAdmissionsTestSchema();
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+        });
         foreach (['2026_10_19_160000_preserve_school_fee_payment_precision.php',
             '2026_10_21_060000_create_student_opening_payments.php', '2026_10_22_000000_add_method_to_student_opening_payments.php',
             '2026_10_21_050000_create_student_fee_awards_table.php', '2026_10_23_100000_create_existing_student_financial_setup_reviews_table.php'] as $migration) {

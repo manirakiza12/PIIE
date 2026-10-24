@@ -1,40 +1,23 @@
-<div class="eoff-form">
-    <div class="alert alert-info">
-        {{ get_phrase('For a new student, complete an application with personal information, programme selection, education history and required documents. Submit and accept the application before enrolling the student.') }}
-        <a href="{{ route('admin.hei_admissions.wizard.create') }}" class="fw-bold">{{ get_phrase('Add Application') }}</a>
-    </div>
-    <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.student.create') }}">
-        <div class="alert alert-info">Add an existing student using their current registration number. The student receives only a password setup email for the student portal. After saving, upload the documents held by the administration on the Documents page. No applicant account, application fee or new enrolment is created.</div>
-        <div class="alert alert-secondary">Finance can set up this student's fee once below. Captured prior payments, approved awards, and study-waiver requests are held for review in Fees Management; they do not change the payable balance or study eligibility until separately confirmed by an authorized reviewer.</div>
-        <div class="alert alert-warning"><strong>Academic placement is a separate step.</strong> Programme, intake and year below are profile details only. After saving, you will open this student's Documents page. Use its Student Placement link to select the approved curriculum, Programme Year and Academic Year, then register and confirm the student in matching Course Allocations. This form creates no class/section enrollment or module registrations.</div>
-        <div class="fpb-7">
-            <label for="registration_number" class="eForm-label">Existing registration number</label>
-            <input type="text" class="form-control eForm-control" id="registration_number" name="registration_number" maxlength="255" required>
 <div class="existing-student-form eoff-form">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-4">
         <div>
             <p class="text-uppercase small fw-semibold text-primary mb-1">Student records</p>
             <h3 class="h4 mb-2">Add Existing Student</h3>
-            <p class="text-muted mb-0">Create a student portal account for someone who already has a PIIE registration number.</p>
+            <p class="text-muted mb-0">Use the student's existing PIIE registration details to create portal access.</p>
         </div>
         <a href="{{ route('admin.hei_admissions.wizard.create') }}" class="btn btn-outline-primary flex-shrink-0">Add a new application</a>
     </div>
 
-    <div class="alert alert-info" role="note">
-        This creates an existing-student portal account only. It does not create an applicant account, application fee, enrolment, curriculum placement, or course registration. Upload documents held by the administration after saving.
-    </div>
-    <div class="alert alert-secondary" role="note">
-        Prior payments, awards, and study-waiver requests remain pending for authorized Finance review. They are not treated as confirmed cash, do not reduce the invoice balance, and do not change study eligibility until reviewed.
-    </div>
+    <p class="small text-muted mb-3">Documents are uploaded after creation. This form does not create an application or academic placement.</p>
 
-    <form method="POST" enctype="multipart/form-data" action="{{ route('admin.student.create') }}" id="existing-student-form">
+    <form method="POST" enctype="multipart/form-data" action="{{ route('admin.student.create') }}" id="existing-student-form" data-workspace-continuous>
         @csrf
 
         <section class="card border-0 shadow-sm mb-4" aria-labelledby="existing-registration-heading">
             <div class="card-body p-3 p-md-4">
                 <div class="mb-3">
-                    <h4 class="h5 mb-1" id="existing-registration-heading">1. Existing registration</h4>
-                    <p class="small text-muted mb-0">Use the student's current PIIE number. Add partner institution details when applicable.</p>
+                    <h4 class="h5 mb-1" id="existing-registration-heading">Existing registration and institution</h4>
+                    <p class="small text-muted mb-0">Use the current PIIE number; add partner institution details if applicable.</p>
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -52,14 +35,19 @@
         <section class="card border-0 shadow-sm mb-4" aria-labelledby="student-account-heading">
             <div class="card-body p-3 p-md-4">
                 <div class="mb-3">
-                    <h4 class="h5 mb-1" id="student-account-heading">2. Student account and portal access</h4>
-                    <p class="small text-muted mb-0">The student receives a password setup email when mail delivery is available.</p>
+                    <h4 class="h5 mb-1" id="student-account-heading">Student account and portal access</h4>
+                    <p class="small text-muted mb-0">A password setup email is sent when mail delivery is available.</p>
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label for="name" class="form-label">Student name <span class="text-danger" aria-hidden="true">*</span></label>
-                        <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" maxlength="255" required>
-                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <label for="first_name" class="form-label">First name <span class="text-danger" aria-hidden="true">*</span></label>
+                        <input type="text" class="form-control @error('first_name') is-invalid @enderror" id="first_name" name="first_name" value="{{ old('first_name') }}" maxlength="100" required autocomplete="given-name">
+                        @error('first_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label for="last_name" class="form-label">Last name <span class="text-danger" aria-hidden="true">*</span></label>
+                        <input type="text" class="form-control @error('last_name') is-invalid @enderror" id="last_name" name="last_name" value="{{ old('last_name') }}" maxlength="100" required autocomplete="family-name">
+                        @error('last_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-md-6">
                         <label for="email" class="form-label">Student email <span class="text-danger" aria-hidden="true">*</span></label>
@@ -86,8 +74,8 @@
         <section class="card border-0 shadow-sm mb-4" aria-labelledby="academic-details-heading">
             <div class="card-body p-3 p-md-4">
                 <div class="mb-3">
-                    <h4 class="h5 mb-1" id="academic-details-heading">3. Programme, intake, and academic details</h4>
-                    <p class="small text-muted mb-0">Programme and intake describe the student's record. Year of Study is their progression stage; it is not an academic year or a placement.</p>
+                    <h4 class="h5 mb-1" id="academic-details-heading">Programme, intake, and academic details</h4>
+                    <p class="small text-muted mb-0">Profile details only; use Student Placement to assign an approved curriculum.</p>
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -114,10 +102,10 @@
                         <label for="year_of_study" class="form-label">Year of Study <span class="text-muted small">Optional</span></label>
                         <input type="number" min="1" max="20" class="form-control @error('year_of_study') is-invalid @enderror" id="year_of_study" name="year_of_study" value="{{ old('year_of_study') }}" inputmode="numeric">
                         @error('year_of_study')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        <div class="form-text">Progression stage (1–20). It is separate from the academic year used for a fee invoice.</div>
+                        <div class="form-text">Progression stage; Finance uses the Academic Year below.</div>
                     </div>
                     <div class="col-md-6">
-                        <label for="fee_academic_year_id" class="form-label">Academic year for Finance <span class="text-muted small">Optional</span></label>
+                        <label for="fee_academic_year_id" class="form-label">Academic Year for Finance <span class="text-muted small">Required for Finance setup</span></label>
                         <select id="fee_academic_year_id" name="fee_academic_year_id" class="form-select @error('fee_academic_year_id') is-invalid @enderror" aria-describedby="fee-academic-year-help fee_academic_year_id_error">
                             <option value="">Select an academic year</option>
                             @foreach($academicYears as $academicYear)
@@ -125,11 +113,14 @@
                             @endforeach
                         </select>
                         @error('fee_academic_year_id')<div class="invalid-feedback" id="fee_academic_year_id_error">{{ $message }}</div>@enderror
-                        <div class="form-text" id="fee-academic-year-help">This context filters Finance's fee-session list only. This form does not create an academic-year placement.</div>
+                        <div class="form-text" id="fee-academic-year-help">Filters the fee sessions available for this invoice.</div>
+                        @unless($hasConfiguredActiveAcademicYear ?? false)
+                            <div class="small text-warning mt-1" id="active-year-message" role="status">No active Academic Year is configured. Select a year before setting up Finance.</div>
+                        @endunless
                     </div>
                     <div class="col-12">
-                        <div class="small text-muted p-3 bg-light rounded" id="cohort-context" role="status" aria-live="polite">
-                            Programme cohorts can connect a programme and intake to an entry academic year. This form saves profile details only; use Student Placement after creation to assign an approved curriculum and academic year.
+                        <div class="small text-muted" id="cohort-context" role="status" aria-live="polite">
+                            Programme and intake are profile details; assign an approved curriculum later in Student Placement.
                         </div>
                     </div>
                 </div>
@@ -141,14 +132,15 @@
             <section class="card border-0 shadow-sm mb-4" aria-labelledby="finance-setup-heading">
                 <div class="card-body p-3 p-md-4">
                     <div class="mb-3">
-                        <h4 class="h5 mb-1" id="finance-setup-heading">4. Optional financial setup</h4>
-                        <p class="small text-muted mb-0">Set up a fee invoice now, or leave this section unchecked to add the student without financial records.</p>
+                        <h4 class="h5 mb-1" id="finance-setup-heading">Optional financial setup</h4>
+                        <p class="small text-muted mb-0">Leave unchecked to add the student without an invoice.</p>
                     </div>
                     <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="record_fees" name="record_fees" value="1" @checked(old('record_fees'))>
+                        <input class="form-check-input" type="checkbox" id="record_fees" name="record_fees" value="1" aria-controls="existing_student_fee_fields" aria-expanded="{{ old('record_fees') ? 'true' : 'false' }}" @checked(old('record_fees'))>
                         <label class="form-check-label fw-semibold" for="record_fees">Set up this student's fee invoice now</label>
                     </div>
-                    @error('record_fees')<div class="alert alert-danger py-2" role="alert">{{ $message }}</div>@enderror
+                    @error('record_fees')<div class="text-danger small mt-2" role="alert">{{ $message }}</div>@enderror
+                    <p class="small text-muted mt-2 mb-0">Prior payments, awards, and waivers remain pending until Finance review.</p>
                     <div id="existing_student_fee_fields" @if(!old('record_fees')) hidden @endif>
                         <div class="alert alert-light border" role="note">The agreed fee stays fully payable. Prior payments, awards, and waiver requests are stored for review and do not affect the balance or eligibility until an authorized reviewer confirms them.</div>
                         <div class="row g-3">
@@ -269,8 +261,7 @@
         <section class="card border-0 shadow-sm mb-4" aria-labelledby="other-details-heading">
             <div class="card-body p-3 p-md-4">
                 <div class="mb-3">
-                    <h4 class="h5 mb-1" id="other-details-heading">5. Next of kin and other details</h4>
-                    <p class="small text-muted mb-0">Add the remaining profile information. Fields marked optional can be completed later.</p>
+                    <h4 class="h5 mb-1" id="other-details-heading">Next of kin and other student details</h4>
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -351,5 +342,3 @@
         </div>
     </form>
 </div>
-
-<script src="{{ asset('assets/js/existing-student-form.js') }}?v=20261024-1" defer></script>

@@ -14,7 +14,7 @@
         const intake = form.querySelector('#intake_session_id');
         const yearOfStudy = form.querySelector('#year_of_study');
         const cohortContext = form.querySelector('#cohort-context');
-        const cohortYearData = document.getElementById('cohort-entry-year-map');
+        const cohortYearData = form.querySelector('#cohort-entry-year-map');
         let cohortEntryYears = {};
 
         try {
@@ -29,6 +29,10 @@
             field.hidden = false;
         }
 
+        function hideMessage(field) {
+            if (field) field.hidden = true;
+        }
+
         function setDetails(toggle, details) {
             if (!toggle || !details) return;
             details.hidden = !financeToggle.checked || !toggle.checked;
@@ -40,15 +44,20 @@
 
         function syncFinanceVisibility() {
             if (!financeToggle || !financeFields) return;
-            financeFields.hidden = !financeToggle.checked;
-            financeFields.querySelectorAll(':scope > .row input, :scope > .row select, :scope > .row textarea').forEach(function (field) {
-                field.disabled = !financeToggle.checked;
+            const enabled = financeToggle.checked;
+            financeFields.hidden = !enabled;
+            financeToggle.setAttribute('aria-expanded', enabled ? 'true' : 'false');
+
+            financeFields.querySelectorAll('input, select, textarea').forEach(function (field) {
+                const dependentDetails = field.closest('#prior_payment_details, #award_details, #study_waiver_details');
+                field.disabled = !enabled || Boolean(dependentDetails && dependentDetails.hidden);
+                field.required = enabled && ['fee_academic_year_id', 'fee_structure_id', 'actual_fee_amount'].includes(field.id);
             });
 
             const priorAmount = form.querySelector('#prior_paid_amount');
             const priorDetails = form.querySelector('#prior_payment_details');
             if (priorAmount && priorDetails) {
-                priorDetails.hidden = !financeToggle.checked || Number(priorAmount.value || 0) <= 0;
+                priorDetails.hidden = !enabled || Number(priorAmount.value || 0) <= 0;
                 priorDetails.querySelectorAll('input, select, textarea').forEach(function (field) {
                     field.disabled = priorDetails.hidden;
                     field.required = !priorDetails.hidden;
@@ -58,9 +67,34 @@
             setDetails(form.querySelector('#record_study_waiver'), form.querySelector('#study_waiver_details'));
         }
 
+        function refreshFeeStructures() {
+            if (!feeStructure) return;
+            const programmeId = programme ? programme.value : '';
+            const sessionId = feeSession ? feeSession.value : '';
+            let selectedWasHidden = false;
+            let visibleCount = 0;
+            Array.from(feeStructure.options).forEach(function (option, index) {
+                if (index === 0) return;
+                const programmeMatches = !option.dataset.programmeId || option.dataset.programmeId === programmeId;
+                const sessionMatches = !option.dataset.sessionId || option.dataset.sessionId === sessionId;
+                option.hidden = !programmeMatches || !sessionMatches;
+                if (!option.hidden) visibleCount += 1;
+                if (option.value === feeStructure.value && option.hidden) selectedWasHidden = true;
+            });
+            if (selectedWasHidden) {
+                feeStructure.value = '';
+                showMessage(form.querySelector('#fee-structure-context-message'), 'The fee type no longer matches this programme and session. Choose a matching fee type.');
+            } else if (feeStructure.value || visibleCount > 0) {
+                hideMessage(form.querySelector('#fee-structure-context-message'));
+            }
+            feeStructure.disabled = !financeToggle?.checked || !sessionId;
+            feeStructure.required = Boolean(financeToggle?.checked && sessionId);
+        }
+
         function refreshFeeSessions() {
             if (!academicYear || !feeSession) return;
             const selectedYearId = academicYear.value;
+            const financeEnabled = Boolean(financeToggle?.checked);
             let visibleCount = 0;
             Array.from(feeSession.options).forEach(function (option, index) {
                 if (index === 0) return;
@@ -72,57 +106,34 @@
             const selectedOption = feeSession.selectedOptions[0];
             if (selectedOption && selectedOption.value && selectedOption.hidden) {
                 feeSession.value = '';
-                showMessage(form.querySelector('#fee-session-context-message'), 'The selected fee session was cleared because it belongs to a different academic year. Choose a session for the year selected above.');
+                showMessage(form.querySelector('#fee-session-context-message'), 'The previous session belongs to another year. Choose a session for the selected Academic Year.');
             }
+
+            const message = form.querySelector('#fee-session-context-message');
             if (!selectedYearId) {
                 feeSession.value = '';
-                feeSession.disabled = true;
-                showMessage(form.querySelector('#fee-session-context-message'), 'Choose an academic year above before selecting a fee session.');
-            } else {
-                feeSession.disabled = !financeToggle?.checked || visibleCount === 0;
-                if (visibleCount === 0) {
-                    feeSession.value = '';
-                    showMessage(form.querySelector('#fee-session-context-message'), 'No Finance sessions are linked to this academic year. Ask an administrator to map the correct session before setting up a fee.');
-                } else if (!selectedOption || !selectedOption.value || !selectedOption.hidden) {
-                    const message = form.querySelector('#fee-session-context-message');
-                    if (message) message.hidden = true;
-                }
+                showMessage(message, 'Select an Academic Year to load its fee sessions.');
+            } else if (visibleCount === 0) {
+                feeSession.value = '';
+                showMessage(message, 'No fee sessions are linked to this Academic Year. Ask an administrator to map a session before creating an invoice.');
+            } else if (!selectedOption || !selectedOption.value || !selectedOption.hidden) {
+                hideMessage(message);
             }
-            refreshFeeStructures();
-        }
 
-        function refreshFeeStructures() {
-            if (!feeStructure) return;
-            const programmeId = programme ? programme.value : '';
-            const sessionId = feeSession ? feeSession.value : '';
-            let selectedWasHidden = false;
-            Array.from(feeStructure.options).forEach(function (option, index) {
-                if (index === 0) return;
-                const programmeMatches = !option.dataset.programmeId || option.dataset.programmeId === programmeId;
-                const sessionMatches = !option.dataset.sessionId || option.dataset.sessionId === sessionId;
-                option.hidden = !programmeMatches || !sessionMatches;
-                if (option.value === feeStructure.value && option.hidden) selectedWasHidden = true;
-            });
-            if (selectedWasHidden) {
-                feeStructure.value = '';
-                showMessage(form.querySelector('#fee-structure-context-message'), 'The previous fee type does not match the selected programme and fee session. Choose a matching fee type.');
-            } else if (feeStructure.value) {
-                const message = form.querySelector('#fee-structure-context-message');
-                if (message) message.hidden = true;
-            }
+            feeSession.disabled = !financeEnabled || !selectedYearId || visibleCount === 0;
+            feeSession.required = financeEnabled && visibleCount > 0;
+            refreshFeeStructures();
         }
 
         function refreshCohortContext() {
             if (!cohortContext) return;
             if (programme?.value && intake?.value) {
                 const years = cohortEntryYears[programme.value + '|' + intake.value] || [];
-                if (years.length) {
-                    cohortContext.textContent = 'Configured programme cohort entry year' + (years.length > 1 ? 's' : '') + ': ' + years.join(', ') + '. This is cohort context only; the form saves the profile and does not create a curriculum placement or enrolment.';
-                } else {
-                    cohortContext.textContent = 'No active or completed programme cohort connects this programme and intake to an entry academic year. The programme, intake, and Year of Study remain profile details; create an approved placement after adding the student.';
-                }
+                cohortContext.textContent = years.length
+                    ? 'Configured cohort entry year' + (years.length > 1 ? 's' : '') + ': ' + years.join(', ') + '. Placement is assigned separately.'
+                    : 'No configured cohort links this programme and intake to an entry year. Placement is assigned separately.';
             } else {
-                cohortContext.textContent = 'Programme cohorts can connect a programme and intake to an entry academic year. This form saves profile details only; use Student Placement after creation to assign an approved curriculum and academic year.';
+                cohortContext.textContent = 'Programme and intake are profile details; assign an approved curriculum later in Student Placement.';
             }
         }
 
@@ -154,13 +165,26 @@
         intake?.addEventListener('change', refreshCohortContext);
         yearOfStudy?.addEventListener('change', refreshCohortContext);
 
+        form.addEventListener('submit', function (event) {
+            if (financeToggle?.checked && (!academicYear?.value || !feeSession?.value || feeSession.disabled)) {
+                event.preventDefault();
+                if (!academicYear?.value) {
+                    showMessage(form.querySelector('#fee-session-context-message'), 'Select an Academic Year before submitting Finance setup.');
+                    academicYear?.focus();
+                } else {
+                    showMessage(form.querySelector('#fee-session-context-message'), 'An invoice needs a fee session linked to the selected Academic Year.');
+                    feeSession?.focus();
+                }
+            }
+        });
+
         syncFinanceVisibility();
         showPasswordField();
         refreshCohortContext();
         refreshFeeSessions();
 
         if (window.jQuery && window.jQuery.fn.daterangepicker && window.moment) {
-            window.jQuery('#birthday').daterangepicker({
+            window.jQuery(form.querySelector('#birthday')).daterangepicker({
                 singleDatePicker: true,
                 showDropdowns: true,
                 minYear: 1901,
@@ -169,8 +193,23 @@
         }
     }
 
+    function initializeForms(root) {
+        if (!root) return;
+        if (root.matches && root.matches('#existing-student-form')) initializeExistingStudentForm(root);
+        root.querySelectorAll?.('#existing-student-form').forEach(initializeExistingStudentForm);
+    }
+
     function init() {
-        initializeExistingStudentForm(document.getElementById('existing-student-form'));
+        initializeForms(document);
+        if (!document.body || !window.MutationObserver || document.body.dataset.existingStudentObserver === 'true') return;
+        document.body.dataset.existingStudentObserver = 'true';
+        new MutationObserver(function (records) {
+            records.forEach(function (record) {
+                record.addedNodes.forEach(function (node) {
+                    if (node.nodeType === 1) initializeForms(node);
+                });
+            });
+        }).observe(document.body, { childList: true, subtree: true });
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

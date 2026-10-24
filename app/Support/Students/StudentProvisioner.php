@@ -48,6 +48,8 @@ final class StudentProvisioner
 
             $student = User::create([
                 'name'             => $data['name'],
+                'first_name'       => $data['first_name'] ?? null,
+                'last_name'        => $data['last_name'] ?? null,
                 'email'            => $email,
                 'password'         => Hash::make($plainPassword),
                 'code'             => $registrationNumber,
@@ -65,6 +67,8 @@ final class StudentProvisioner
                     'school_id'               => $schoolId,
                     // This provisioner is used only by the admin's existing-student add/import flows.
                     'was_existing_at_portal_creation' => true,
+                    'first_name'              => $data['first_name'] ?? null,
+                    'last_name'               => $data['last_name'] ?? null,
                     'programme_id'            => $data['programme_id'] ?? null,
                     'intake_session_id'       => $data['intake_session_id'] ?? null,
                     'year_of_study'           => $data['year_of_study'] ?? null,
@@ -73,6 +77,7 @@ final class StudentProvisioner
                     'next_of_kin_name' => $data['next_of_kin_name'] ?? null,
                     'next_of_kin_address'     => $data['next_of_kin_address'] ?? null,
                     'next_of_kin_contact'     => $data['next_of_kin_contact'] ?? null,
+                    'additional_image'        => $data['additional_image'] ?? null,
                     'status'                  => $data['status'] ?? 'active',
                     ...StudentProfile::affiliationAttributes($data),
                 ]

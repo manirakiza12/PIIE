@@ -266,6 +266,7 @@
          <style> block in the markup. Rendered last so it wins on order. --}}
     @yield('page_styles')
     @include('shared.workspace_assets')
+    <script src="{{ asset('assets/js/existing-student-form.js') }}?v=20261025-1" defer></script>
     <link rel="stylesheet" href="{{ asset('assets/css/academic-ui.css') }}?v=20261015-1">
 </head>
 
