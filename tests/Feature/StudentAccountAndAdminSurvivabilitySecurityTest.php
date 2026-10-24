@@ -413,9 +413,24 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
 
         $targetExam = DB::table('online_exam_submissions')->insertGetId(['student_id' => $student->id]);
         $peerExam = DB::table('online_exam_submissions')->insertGetId(['student_id' => $peer->id]);
-        foreach (['online_exam_answers', 'online_exam_proctoring_events', 'online_exam_user_notifications'] as $table) {
+        foreach (['online_exam_answers', 'online_exam_proctoring_events'] as $table) {
             DB::table($table)->insert([['submission_id' => $targetExam], ['submission_id' => $peerExam]]);
         }
+        $notificationRows = [];
+        foreach ([[$targetExam, $student], [$peerExam, $peer]] as [$submissionId, $recipient]) {
+            $row = ['submission_id' => $submissionId];
+            if (Schema::hasColumn('online_exam_user_notifications', 'user_id')) {
+                $row += [
+                    'school_id' => $this->schoolA,
+                    'user_id' => $recipient->id,
+                    'type' => 'exam_update',
+                    'title' => 'Exam update',
+                    'message' => 'Synthetic test notification',
+                ];
+            }
+            $notificationRows[] = array_intersect_key($row, array_flip(Schema::getColumnListing('online_exam_user_notifications')));
+        }
+        DB::table('online_exam_user_notifications')->insert($notificationRows);
 
         $targetAssignment = DB::table('assignment_submissions')->insertGetId(['student_id' => $student->id]);
         $peerAssignment = DB::table('assignment_submissions')->insertGetId(['student_id' => $peer->id]);
@@ -508,10 +523,12 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
             $table->foreign('student_id')->references('id')->on('users')->onDelete('restrict');
         });
         foreach (['online_exam_answers', 'online_exam_proctoring_events', 'online_exam_user_notifications'] as $name) {
-            Schema::create($name, function (Blueprint $table): void {
-                $table->id(); $table->unsignedBigInteger('submission_id');
-                $table->foreign('submission_id')->references('id')->on('online_exam_submissions')->onDelete('restrict');
-            });
+            if (!Schema::hasTable($name)) {
+                Schema::create($name, function (Blueprint $table): void {
+                    $table->id(); $table->unsignedBigInteger('submission_id');
+                    $table->foreign('submission_id')->references('id')->on('online_exam_submissions')->onDelete('restrict');
+                });
+            }
         }
         Schema::create('assignment_submissions', function (Blueprint $table): void {
             $table->id(); $table->unsignedBigInteger('student_id');
