@@ -268,11 +268,42 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
         $this->seedStudentGraph($student);
         $this->seedStudentGraph($bystander);
 
-        $this->actingAs($admin)->get(route('admin.student.delete', $student->id));
+        $this->actingAs($admin)
+            ->get(route('admin.student.delete', $student->id))
+            ->assertRedirect()
+            ->assertSessionHas('message', 'Student removed successfully.');
 
         $this->assertSame(array_fill_keys(['enrollment', 'student_profiles', 'student_fee_managers', 'daily_attendances', 'book_issues', 'gradebooks', 'payments', 'payment_history', 'users'], 0), $this->graphCounts($student));
         $this->assertSame(1, $this->graphCounts($bystander)['users']);
         $this->assertSame(1, $this->graphCounts($bystander)['payments']);
+    }
+
+    public function test_restrictive_academic_history_prevents_delete_without_partially_removing_student_data(): void
+    {
+        $admin = $this->user(2, $this->schoolA);
+        $student = $this->user(7, $this->schoolA);
+        $this->seedStudentGraph($student);
+
+        // This models the restrictive student reference introduced for
+        // academic history: deleting a student with a curriculum assignment
+        // must be refused, while all other student records remain intact.
+        Schema::create('student_curriculum_assignments', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('student_id');
+            $table->foreign('student_id', 'test_sca_student_fk')
+                ->references('id')->on('users')->onDelete('restrict');
+        });
+        DB::table('student_curriculum_assignments')->insert(['student_id' => $student->id]);
+
+        $before = $this->graphCounts($student);
+
+        $this->actingAs($admin)
+            ->get(route('admin.student.delete', $student->id))
+            ->assertRedirect()
+            ->assertSessionHas('error', 'This student has linked academic records that prevent deletion. No records were changed.');
+
+        $this->assertSame($before, $this->graphCounts($student));
+        $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $student->id]);
     }
 
     // ── A. Documents / password / status targeting (regression) ──────────────

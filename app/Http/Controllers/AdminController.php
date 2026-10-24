@@ -69,6 +69,7 @@ use App\Support\Staff\StaffProvisioningException;
 use App\Support\Staff\StaffProvisioningService;
 use App\Support\StudentFeeInvoiceGenerator;
 use App\Support\StudentPortalActivation;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -2388,45 +2389,51 @@ class AdminController extends Controller
 
     public function studentDelete($id)
     {
-        // RBAC Phase 2D: resolve the student (same school, role 7) before any
-        // related record below is touched.
-        $student = $this->findStudentOrFail($id);
+        try {
+            DB::transaction(function () use ($id): void {
+                // Resolve the target in the transaction and before touching any
+                // related rows, preserving the existing role and tenant guard.
+                $student = $this->findStudentOrFail($id);
 
-        // A programme-based (HEI) student has no Enrollment row at all — only
-        // a StudentProfile — so both must be handled without assuming either
-        // exists, or this crashes/orphans data depending on which structure
-        // the student actually belongs to.
-        $enroll = Enrollment::where('user_id', $id)->first();
-        if ($enroll) {
-            $enroll->delete();
+                // Programme-based students may have a profile without a
+                // legacy Enrollment row; both records remain optional.
+                $enroll = Enrollment::where('user_id', $id)->first();
+                if ($enroll) {
+                    $enroll->delete();
+                }
+
+                $studentProfile = StudentProfile::where('user_id', $id)->first();
+                if ($studentProfile) {
+                    $studentProfile->delete();
+                }
+
+                StudentFeeManager::get()->where('student_id', $id)->map->delete();
+                DailyAttendances::get()->where('student_id', $id)->map->delete();
+                BookIssue::get()->where('student_id', $id)->map->delete();
+                Gradebook::get()->where('student_id', $id)->map->delete();
+                Payments::get()->where('user_id', $id)->map->delete();
+                PaymentHistory::get()->where('user_id', $id)->map->delete();
+
+                // Newer academic-history tables deliberately use RESTRICT
+                // foreign keys. If one references this student, the database
+                // refuses this delete; the transaction restores every child
+                // deleted above instead of leaving a partial student graph.
+                $student->delete();
+            });
+        } catch (QueryException $exception) {
+            $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
+            if (! in_array($sqlState, ['23000', '23503'], true)) {
+                throw $exception;
+            }
+
+            report($exception);
+
+            return redirect()->back()->with(
+                'error',
+                'This student has linked academic records that prevent deletion. No records were changed.'
+            );
         }
 
-        $studentProfile = StudentProfile::where('user_id', $id)->first();
-        if ($studentProfile) {
-            $studentProfile->delete();
-        }
-
-        $fee_history = StudentFeeManager::get()->where('student_id', $id);
-        $fee_history->map->delete();
-
-        $attendances = DailyAttendances::get()->where('student_id', $id);
-        $attendances->map->delete();
-
-        $book_issues = BookIssue::get()->where('student_id', $id);
-        $book_issues->map->delete();
-
-        $gradebooks = Gradebook::get()->where('student_id', $id);
-        $gradebooks->map->delete();
-
-        $payments = Payments::get()->where('user_id', $id);
-        $payments->map->delete();
-
-        $payment_history = PaymentHistory::get()->where('user_id', $id);
-        $payment_history->map->delete();
-
-        $student->delete();
-
-        $students = User::get()->where('role_id', 7);
         return redirect()->back()->with('message', 'Student removed successfully.');
     }
 
