@@ -1,10 +1,14 @@
 <div class="d-flex gap-2 flex-wrap mt-3" role="group" aria-label="{{ $record->label }} actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.academic_structure.show', [$kind, $record->id]) }}"><i class="bi bi-eye" aria-hidden="true"></i> View</a>
     <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.academic_structure.edit', [$kind, $record->id]) }}"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>
-    <form method="post" action="{{ route('admin.academic_structure.destroy', [$kind, $record->id]) }}" class="w-100 mt-2">
-        @csrf @method('DELETE')
-        <p class="small text-danger mb-1">Permanently delete {{ $record->label }} ({{ $record->start_date->format('d/m/y') }} – {{ $record->end_date->format('d/m/y') }}, record #{{ $record->id }}) and its academic-period/session records, course allocations, registrations, placements and dependent workflows. Curriculum versions, shared Course Units, other years and student/staff accounts remain. Only this record's current selection will be cleared. This cannot be undone.</p>
-        <label class="form-label small" for="confirm-academic-delete-{{ $record->id }}">Type DELETE or {{ $record->label }}</label>
-        <div class="d-flex gap-2"><input class="form-control form-control-sm" id="confirm-academic-delete-{{ $record->id }}" name="confirm_deletion" required><button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete</button></div>
-    </form>
+    @include('shared.academic_delete_button', [
+        'deleteAction' => route('admin.academic_structure.destroy', [$kind, $record->id]),
+        'deleteTitle' => $kind === 'years' ? 'Delete Academic Year' : 'Delete '.ucfirst($record->type),
+        'deleteIdentity' => ($kind === 'periods' ? $record->academicYear->label.' — ' : '').$record->label.' ('.$record->start_date->format('d/m/y').' – '.$record->end_date->format('d/m/y').', record #'.$record->id.')',
+        'deleteReference' => $record->label,
+        'deleteRemoves' => $kind === 'years'
+            ? 'This year’s academic periods, legacy sessions, Course Unit links, course allocations, registrations, placements and dependent workflows. Its current selection will be cleared.'
+            : 'This period’s course allocations, registrations and dependent workflows. Its current-period selection will be cleared.',
+        'deleteKeeps' => 'Curriculum versions, shared Course Units, links belonging to other years and periods, and student/staff accounts and profiles.',
+    ])
 </div>

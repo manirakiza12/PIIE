@@ -143,4 +143,5 @@ document.addEventListener('DOMContentLoaded', function () {
 @endif
 </script>
 </div>
+@include('shared.academic_delete_modal')
 @endsection

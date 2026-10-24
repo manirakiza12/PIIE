@@ -42,4 +42,5 @@
         </div>
     </div>
 </div>
+@include('shared.academic_delete_modal')
 @endsection
