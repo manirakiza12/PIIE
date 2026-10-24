@@ -81,7 +81,15 @@ class CurriculumController extends Controller
     {
         abort_unless($request->user()->hasPermission('academic.curriculum.manage'), 403);
         $curriculum = $this->tenantCurriculum($request, $id);
-        $this->curricula->deleteDraft($curriculum, (string) $request->input('confirm_deletion'), (int) $request->user()->id);
+        $data = $request->validate(['confirm_deletion' => ['required', 'string', 'max:150']]);
+        try {
+            $this->curricula->deleteDraft($curriculum, $data['confirm_deletion'], (int) $request->user()->id);
+        } catch (\Illuminate\Database\QueryException $exception) {
+            report($exception);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'delete' => 'The curriculum could not be deleted because a linked record or audit write failed. No changes were saved. Contact an administrator to check the linked records, then retry.',
+            ]);
+        }
         return redirect()->route('admin.curricula.index')->with('success', 'Programme Curriculum and its owned records deleted.');
     }
 

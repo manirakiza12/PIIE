@@ -6,6 +6,7 @@ use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
 use App\Support\AcademicContextManager;
 use App\Support\Academic\AcademicRecordDeletionService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -197,9 +198,17 @@ class AcademicStructureController extends Controller
     public function destroy(Request $request, string $kind, int $recordId, AcademicRecordDeletionService $deletion)
     {
         abort_unless(Auth::user()?->hasPermission('academic.structure.manage'), 403);
+        abort_unless(in_array($kind, ['years', 'periods'], true), 404);
         $data = $request->validate(['confirm_deletion' => ['required', 'string', 'max:150']]);
-        if ($kind === 'years') $deletion->deleteYear($this->schoolId, $recordId, (int) $request->user()->id, $data['confirm_deletion']);
-        else $deletion->deletePeriod($this->schoolId, $recordId, (int) $request->user()->id, $data['confirm_deletion']);
+        try {
+            if ($kind === 'years') $deletion->deleteYear($this->schoolId, $recordId, (int) $request->user()->id, $data['confirm_deletion']);
+            else $deletion->deletePeriod($this->schoolId, $recordId, (int) $request->user()->id, $data['confirm_deletion']);
+        } catch (QueryException $exception) {
+            report($exception);
+            throw ValidationException::withMessages([
+                'delete' => 'The academic record could not be deleted because a linked record or audit write failed. No changes were saved. Contact an administrator to check the linked records, then retry.',
+            ]);
+        }
         return redirect()->route('admin.academic_structure.index', $kind === 'periods' ? ['section' => 'semesters'] : [])->with('success', 'Academic record deleted.');
     }
 
