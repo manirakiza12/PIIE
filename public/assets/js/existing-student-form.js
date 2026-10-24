@@ -51,7 +51,7 @@
             financeFields.querySelectorAll('input, select, textarea').forEach(function (field) {
                 const dependentDetails = field.closest('#prior_payment_details, #award_details, #study_waiver_details');
                 field.disabled = !enabled || Boolean(dependentDetails && dependentDetails.hidden);
-                field.required = enabled && ['fee_academic_year_id', 'fee_structure_id', 'actual_fee_amount'].includes(field.id);
+                field.required = enabled && ['fee_academic_year_id', 'fee_structure_id'].includes(field.id);
             });
 
             const priorAmount = form.querySelector('#prior_paid_amount');
@@ -63,8 +63,42 @@
                     field.required = !priorDetails.hidden;
                 });
             }
+            const receivedAmount = form.querySelector('#received_payment_amount');
+            const receivedDetails = form.querySelector('#received_payment_details');
+            if (receivedAmount && receivedDetails) {
+                receivedDetails.hidden = !enabled || Number(receivedAmount.value || 0) <= 0;
+                receivedDetails.querySelectorAll('input, select, textarea').forEach(function (field) {
+                    field.disabled = receivedDetails.hidden;
+                    field.required = !receivedDetails.hidden;
+                });
+            }
             setDetails(form.querySelector('#record_award'), form.querySelector('#award_details'));
             setDetails(form.querySelector('#record_study_waiver'), form.querySelector('#study_waiver_details'));
+            refreshRemainingBalance();
+        }
+
+        function refreshRemainingBalance() {
+            const amountOutput = form.querySelector('#selected-fee-amount');
+            const balanceOutput = form.querySelector('#remaining-fee-balance');
+            if (!amountOutput || !balanceOutput) return;
+            const selected = feeStructure?.selectedOptions[0];
+            const feeAmount = selected?.value ? Number(selected.dataset.amount) : NaN;
+            if (!Number.isFinite(feeAmount) || feeAmount <= 0) {
+                amountOutput.textContent = 'Select a Fee type to view its amount';
+                balanceOutput.textContent = 'Select a Fee type to calculate';
+                return;
+            }
+            const currency = amountOutput.dataset.currency || '';
+            const formatter = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const received = Number(form.querySelector('#received_payment_amount')?.value || 0);
+            amountOutput.textContent = (currency ? currency + ' ' : '') + formatter.format(feeAmount);
+            if (received < 0 || received > feeAmount) {
+                balanceOutput.textContent = 'Payment must not exceed the configured programme fee';
+                showMessage(form.querySelector('#received-payment-context-message'), 'The confirmed payment cannot exceed the configured programme fee.');
+                return;
+            }
+            hideMessage(form.querySelector('#received-payment-context-message'));
+            balanceOutput.textContent = (currency ? currency + ' ' : '') + formatter.format(feeAmount - received);
         }
 
         function refreshFeeStructures() {
@@ -89,6 +123,7 @@
             }
             feeStructure.disabled = !financeToggle?.checked || !sessionId;
             feeStructure.required = Boolean(financeToggle?.checked && sessionId);
+            refreshRemainingBalance();
         }
 
         function refreshFeeSessions() {
@@ -151,6 +186,7 @@
             refreshFeeSessions();
         });
         form.querySelector('#prior_paid_amount')?.addEventListener('input', syncFinanceVisibility);
+        form.querySelector('#received_payment_amount')?.addEventListener('input', syncFinanceVisibility);
         form.querySelector('#record_award')?.addEventListener('change', syncFinanceVisibility);
         form.querySelector('#record_study_waiver')?.addEventListener('change', syncFinanceVisibility);
         form.querySelectorAll('input[name="password_option"]').forEach(function (radio) {
@@ -158,6 +194,7 @@
         });
         academicYear?.addEventListener('change', refreshFeeSessions);
         feeSession?.addEventListener('change', refreshFeeStructures);
+        feeStructure?.addEventListener('change', refreshRemainingBalance);
         programme?.addEventListener('change', function () {
             refreshCohortContext();
             refreshFeeStructures();
@@ -175,6 +212,20 @@
                     showMessage(form.querySelector('#fee-session-context-message'), 'An invoice needs a fee session linked to the selected Academic Year.');
                     feeSession?.focus();
                 }
+                return;
+            }
+            if (financeToggle?.checked && !feeStructure?.value) {
+                event.preventDefault();
+                showMessage(form.querySelector('#fee-structure-context-message'), 'Select a Fee Structure for the selected programme before creating the invoice.');
+                feeStructure?.focus();
+                return;
+            }
+            const selectedFeeAmount = Number(feeStructure?.selectedOptions[0]?.dataset.amount || 0);
+            const receivedAmount = Number(form.querySelector('#received_payment_amount')?.value || 0);
+            if (financeToggle?.checked && receivedAmount > selectedFeeAmount) {
+                event.preventDefault();
+                showMessage(form.querySelector('#received-payment-context-message'), 'The confirmed payment cannot exceed the configured programme fee.');
+                form.querySelector('#received_payment_amount')?.focus();
             }
         });
 

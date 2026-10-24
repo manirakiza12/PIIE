@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\FeeStructure;
+use App\Models\PaymentMethods;
 use App\Models\Programme;
 use App\Models\Session;
 use App\Models\StudentFeeManager;
@@ -15,8 +16,7 @@ use App\Models\TuitionPayment;
 use App\Models\User;
 use App\Support\StudentFeeInvoiceGenerator;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\{DB, Http, Schema, URL};
 use Tests\Feature\Support\AdmissionsTestHelper;
 use Tests\TestCase;
 
@@ -84,7 +84,7 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
             'programme_id' => $this->programme->id,
             'fee_academic_year_id' => $this->academicYearId,
             'fee_session_id' => $this->period->id, 'fee_structure_id' => $this->structure->id,
-            'actual_fee_amount' => '1200000.00', 'prior_paid_amount' => '200000.00',
+            'prior_paid_amount' => '200000.00',
             'prior_paid_on' => now()->subMonth()->toDateString(), 'prior_payment_method' => 'mobile_money',
             'prior_payment_reference' => 'MM-PRIOR-026', 'prior_payment_reason' => 'Verified against the original mobile money receipt.',
         ], $overrides);
@@ -92,7 +92,9 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
 
     public function test_add_existing_student_stages_financial_setup_without_applying_it_before_confirmation(): void
     {
-        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload())->assertSessionHasNoErrors()->assertRedirect();
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'actual_fee_amount' => '1.00',
+        ]))->assertSessionHasNoErrors()->assertRedirect();
 
         $student = User::where('email', 'continuing@example.test')->firstOrFail();
         $fee = StudentFeeManager::where('student_id', $student->id)->sole();
@@ -101,11 +103,11 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $this->assertTrue((bool) StudentProfile::where('user_id', $student->id)->value('was_existing_at_portal_creation'));
         $this->assertSame((int) $this->period->id, (int) $fee->session_id);
         $this->assertSame((int) $this->structure->id, (int) $fee->fee_structure_id);
-        $this->assertEquals(1200000, $fee->amount);
-        $this->assertEquals(1200000, $fee->total_amount);
+        $this->assertEquals(1500000, $fee->amount);
+        $this->assertEquals(1500000, $fee->total_amount);
         $this->assertEquals(0, $fee->paid_amount);
         $this->assertEquals(0, $fee->opening_paid_amount);
-        $this->assertEquals(1200000, $fee->total_amount - $fee->paid_amount);
+        $this->assertEquals(1500000, $fee->total_amount - $fee->paid_amount);
         $this->assertSame('pending', $review->prior_payment_status);
         $this->assertSame('200000.00', $review->prior_payment['amount']);
         $this->assertSame('mobile_money', $review->prior_payment['method']);
@@ -119,6 +121,139 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $this->assertSame(0, DB::table('enrollment')->where('user_id', $student->id)->count());
         $this->assertSame([], StudentFeeInvoiceGenerator::generateForStudent($student, (int) $this->programme->id, $this->schoolId), 'The linked fee structure must not be invoiced again by a later sync.');
         $this->assertSame(1, StudentFeeManager::where('student_id', $student->id)->where('fee_structure_id', $this->structure->id)->where('session_id', $this->period->id)->count());
+    }
+
+    public function test_confirmed_partial_payment_uses_the_programme_fee_and_online_checkout_uses_the_remaining_balance(): void
+    {
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'prior_paid_amount' => '0',
+            'received_payment_amount' => '400000.00',
+            'received_payment_on' => now()->toDateString(),
+            'received_payment_method' => 'bank_transfer',
+            'received_payment_reference' => 'BANK-RECEIPT-026',
+            'received_payment_reason' => 'Verified receipt for the amount received today.',
+        ]))->assertSessionHasNoErrors()->assertRedirect();
+
+        $student = User::where('email', 'continuing@example.test')->firstOrFail();
+        $fee = StudentFeeManager::where('student_id', $student->id)->sole();
+        $manualPayment = TuitionPayment::where('fee_id', $fee->id)->sole();
+        $this->assertEquals(1500000, $fee->total_amount, 'Invoice amount comes from the selected Fee Structure, not a posted override.');
+        $this->assertEquals(400000, $fee->paid_amount);
+        $this->assertEquals(1100000, $fee->total_amount - $fee->paid_amount);
+        $this->assertSame('unpaid', $fee->status);
+        $this->assertSame('paid', $manualPayment->status);
+        $this->assertSame('bank_transfer', $manualPayment->method);
+        $this->assertEquals(400000, $manualPayment->amount);
+        $this->assertSame('BANK-RECEIPT-026', $manualPayment->gateway_payload['receipt_reference']);
+        $this->assertSame(0, StudentOpeningPayment::count(), 'A payment received now is not stored as historical opening money.');
+        $this->assertDatabaseHas('audit_logs', ['record_type' => TuitionPayment::class, 'record_id' => $manualPayment->id]);
+
+        PaymentMethods::create(['school_id' => $this->schoolId, 'name' => 'pesapal', 'status' => 1,
+            'payment_keys' => json_encode(['environment' => 'sandbox', 'consumer_key' => 'fixture', 'consumer_secret' => 'fixture',
+                'notification_id' => '7e6b62d9-883e-440f-a63e-e1105bbfadc3'])]);
+        config(['app.url' => 'https://piie.example.test']);
+        URL::forceRootUrl('https://piie.example.test');
+        URL::forceScheme('https');
+        $checkoutAmount = null;
+        Http::fake(function ($request) use (&$checkoutAmount) {
+            if (str_contains($request->url(), 'RequestToken')) {
+                return Http::response(['token' => 'fixture', 'expiryDate' => now()->addMinutes(5)->format('Y-m-d\\TH:i:s'), 'status' => '200', 'error' => null]);
+            }
+            if (str_contains($request->url(), 'SubmitOrderRequest')) {
+                $checkoutAmount = (string) $request['amount'];
+                return Http::response(['order_tracking_id' => '7e6b62d9-883e-440f-a63e-e1105bbfadc3', 'merchant_reference' => $request['id'],
+                    'redirect_url' => 'https://cybqa.pesapal.com/pay', 'status' => '200', 'error' => null]);
+            }
+            return Http::response([], 500);
+        });
+
+        $onlinePayment = \App\Support\Payments\TuitionPesaPalPayment::start($fee->fresh());
+        $this->assertSame('1100000.00', $checkoutAmount, 'Online balance checkout requests only the remaining invoice balance.');
+        $this->assertEquals(1100000, $onlinePayment->amount);
+        $this->assertSame('pending', $onlinePayment->status);
+        $this->assertEquals(400000, $fee->fresh()->paid_amount, 'A pending provider order does not add a second credit.');
+    }
+
+    public function test_confirmed_full_payment_is_ledgered_and_leaves_no_online_balance(): void
+    {
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'prior_paid_amount' => '0',
+            'received_payment_amount' => '1500000.00',
+            'received_payment_on' => now()->toDateString(),
+            'received_payment_method' => 'cash',
+            'received_payment_reference' => 'CASH-RECEIPT-FULL-026',
+            'received_payment_reason' => 'Verified the full cash receipt at the Finance counter.',
+        ]))->assertSessionHasNoErrors()->assertRedirect();
+
+        $student = User::where('email', 'continuing@example.test')->firstOrFail();
+        $fee = StudentFeeManager::where('student_id', $student->id)->sole();
+        $this->assertEquals(1500000, $fee->total_amount);
+        $this->assertEquals(1500000, $fee->paid_amount);
+        $this->assertSame('paid', $fee->status);
+        $this->assertSame('paid', TuitionPayment::where('fee_id', $fee->id)->sole()->status);
+        $this->assertEquals(0, $fee->total_amount - $fee->paid_amount, 'A fully confirmed invoice has no balance to pay online.');
+        $this->assertSame(1, TuitionPayment::where('fee_id', $fee->id)->where('status', 'paid')->count());
+    }
+
+    public function test_confirmed_payment_is_permission_gated_and_foreign_fee_structures_are_rejected(): void
+    {
+        $foreignSchool = $this->makeSchool();
+        $foreignProgramme = Programme::create(['school_id' => $foreignSchool, 'name' => 'Foreign Programme', 'code' => 'FP', 'is_active' => 1]);
+        $foreignStructure = FeeStructure::create(['school_id' => $foreignSchool, 'name' => 'Foreign Tuition', 'fee_type' => 'tuition',
+            'amount' => 250000, 'is_mandatory' => 1, 'class_id' => null, 'programme_id' => $foreignProgramme->id, 'session_id' => null]);
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'fee_structure_id' => $foreignStructure->id,
+        ]))->assertSessionHasErrors('fee_structure_id');
+        $this->assertSame(0, User::where('email', 'continuing@example.test')->count());
+        $this->assertSame(0, StudentFeeManager::count());
+
+        $permissionService = \Mockery::mock(\App\Support\Permissions\PermissionService::class);
+        $permissionService->shouldReceive('routePermission')->andReturn(null);
+        $permissionService->shouldReceive('allows')->with($this->admin, 'finance.invoices')->andReturn(true);
+        $permissionService->shouldReceive('allows')->with($this->admin, 'finance.payments')->andReturn(false);
+        $permissionService->shouldReceive('allowsAny')->andReturn(true);
+        $this->app->instance(\App\Support\Permissions\PermissionService::class, $permissionService);
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'prior_paid_amount' => '0',
+            'received_payment_amount' => '100000.00',
+            'received_payment_on' => now()->toDateString(),
+            'received_payment_method' => 'cash',
+            'received_payment_reference' => 'NO-PAYMENT-PERMISSION',
+            'received_payment_reason' => 'Payment permission should be required for this receipt.',
+        ]))->assertForbidden();
+        $this->assertSame(0, User::where('email', 'continuing@example.test')->count());
+        $this->assertSame(0, StudentFeeManager::count());
+        $this->assertSame(0, TuitionPayment::count());
+    }
+
+    public function test_duplicate_payment_reference_and_duplicate_form_submission_do_not_create_duplicate_credits(): void
+    {
+        $receipt = [
+            'prior_paid_amount' => '0', 'received_payment_amount' => '100000.00',
+            'received_payment_on' => now()->toDateString(), 'received_payment_method' => 'cash',
+            'received_payment_reference' => 'UNIQUE-CASH-RECEIPT',
+            'received_payment_reason' => 'Verified cash receipt for the first invoice.',
+        ];
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload($receipt))->assertSessionHasNoErrors();
+        $firstStudent = User::where('email', 'continuing@example.test')->firstOrFail();
+        $firstInvoice = StudentFeeManager::where('student_id', $firstStudent->id)->sole();
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload(array_merge($receipt, [
+            'email' => 'continuing-second-attempt@example.test',
+        ])))
+            ->assertSessionHasErrors('registration_number');
+        $this->assertSame(1, TuitionPayment::count());
+        $this->assertSame(1, StudentFeeManager::count());
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload(array_merge($receipt, [
+            'email' => 'second-student@example.test', 'registration_number' => 'PIIE/CONT/027',
+        ])))->assertSessionHasErrors('received_payment_reference');
+        $this->assertSame(1, User::where('role_id', 7)->where('school_id', $this->schoolId)->count());
+        $this->assertSame(1, StudentFeeManager::count());
+        $this->assertSame(1, TuitionPayment::count());
+        $this->assertEquals(100000, $firstInvoice->fresh()->paid_amount);
     }
 
     public function test_add_existing_student_form_is_one_page_and_finance_sessions_follow_the_selected_academic_year(): void
@@ -138,6 +273,9 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
             ->assertDontSee('Next Step')
             ->assertDontSee('For a new student, complete an application')
             ->assertSee('fee_academic_year_id')
+            ->assertSee('Configured programme fee')
+            ->assertSee('Confirmed payment received now')
+            ->assertDontSee('name="actual_fee_amount"', false)
             ->assertSee('name="first_name"', false)
             ->assertSee('name="last_name"', false)
             ->assertSee('name="additional_photo"', false)
@@ -214,7 +352,7 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
     {
         $payload = $this->payload([
             'record_fees' => null, 'fee_session_id' => null, 'fee_structure_id' => null,
-            'actual_fee_amount' => null, 'prior_paid_amount' => null, 'prior_paid_on' => null,
+            'actual_fee_amount' => null, 'received_payment_amount' => null, 'prior_paid_amount' => null, 'prior_paid_on' => null,
             'prior_payment_method' => null, 'prior_payment_reference' => null, 'prior_payment_reason' => null,
             'fee_academic_year_id' => $this->academicYearId,
             'name' => null, 'first_name' => 'Amina', 'last_name' => 'Mukasa',
@@ -262,7 +400,7 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
     public function test_invalid_prior_payment_rolls_back_student_invoice_and_ledger_together(): void
     {
         $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
-            'prior_paid_amount' => '1300000.00',
+            'prior_paid_amount' => '1600000.00',
         ]))->assertSessionHasErrors('prior_paid_amount');
 
         $this->assertSame(0, User::where('email', 'continuing@example.test')->count());
@@ -279,7 +417,7 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
 
         $student = User::where('email', 'continuing@example.test')->firstOrFail();
         $fee = StudentFeeManager::where('student_id', $student->id)->sole();
-        $this->assertEquals(1200000, $fee->total_amount);
+        $this->assertEquals(1500000, $fee->total_amount);
         $this->assertEquals(0, $fee->paid_amount);
         $this->assertSame(0, StudentOpeningPayment::count());
     }
@@ -297,8 +435,9 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $student = User::where('email', 'continuing@example.test')->firstOrFail();
         $fee = StudentFeeManager::where('student_id', $student->id)->sole();
         $review = StudentFinancialSetupReview::where('fee_id', $fee->id)->sole();
-        $this->assertEquals(1200000, $fee->total_amount, 'The agreed invoice remains intact before review.');
-        $this->assertEquals(900000, app(\App\Support\Billing\ExistingStudentFinancialSetup::class)->projectedBalance($fee, $review) / 100);
+        $this->assertEquals(1500000, $fee->total_amount, 'The configured programme invoice remains intact before review.');
+        $this->assertEquals(1200000, app(\App\Support\Billing\ExistingStudentFinancialSetup::class)->projectedBalance($fee, $review) / 100);
+        $this->assertEquals(1500000, $fee->total_amount - $fee->paid_amount, 'Unverified claims do not reduce the payable invoice balance.');
         $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $fee->id))->assertOk()
             ->assertSee('Financial setup review')->assertSee('Projected balance')
             ->assertSee('SCH-026')->assertSee('MM-PRIOR-026');
@@ -309,20 +448,20 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $confirm = fn (string $item) => $this->actingAs($this->admin)->post(route('admin.tuition_payments.setup.confirm', [$fee->id, $item]));
         $confirm('prior_payment')->assertRedirect()->assertSessionHasNoErrors();
         $this->assertEquals(200000, $fee->fresh()->paid_amount);
-        $this->assertEquals(1200000, $fee->fresh()->total_amount);
+        $this->assertEquals(1500000, $fee->fresh()->total_amount);
         $this->assertEquals(0, TuitionPayment::count());
         $confirm('prior_payment')->assertSessionHasErrors('financial_setup');
         $this->assertSame(1, StudentOpeningPayment::count());
 
         $confirm('award')->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame(1, StudentFeeAward::count());
-        $this->assertEquals(1100000, $fee->fresh()->total_amount);
+        $this->assertEquals(1400000, $fee->fresh()->total_amount);
         $this->assertEquals(200000, $fee->fresh()->paid_amount);
         $this->assertSame(0, TuitionPayment::count());
 
         $confirm('study_waiver')->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame(1, StudentFeeRegistrationWaiver::count());
-        $this->assertEquals(1100000, $fee->fresh()->total_amount);
+        $this->assertEquals(1400000, $fee->fresh()->total_amount);
         $this->assertEquals(200000, $fee->fresh()->paid_amount, 'The study waiver never changes fee accounting.');
     }
 
