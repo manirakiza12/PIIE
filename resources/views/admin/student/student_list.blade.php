@@ -270,9 +270,11 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                               <li>
                                 <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.student_edit_modal', ['id' => $student->id]) }}', 'Edit Student')">{{ get_phrase('Edit') }}</a>
                               </li>
+                              @if(auth()->user()->hasPermission('students.delete'))
                               <li>
-                                <a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.student.delete', ['id' => $student->id]) }}', 'undefined');">{{ get_phrase('Delete') }}</a>
+                                <button class="dropdown-item text-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteStudent{{ $student->id }}">{{ get_phrase('Permanently delete') }}</button>
                               </li>
+                              @endif
                               <li>
                                 <a class="dropdown-item" href="javascript:;" onclick="largeModal('{{ route('admin.student.student_profile', ['id' => $student->id]) }}','{{ get_phrase('Student Profile') }}')">{{ get_phrase('Profile') }}</a>
                               </li>
@@ -307,6 +309,32 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                               @endif
                             </ul>
                           </div>
+                          @if(auth()->user()->hasPermission('students.delete'))
+                          <div class="modal fade" id="deleteStudent{{ $student->id }}" tabindex="-1" aria-labelledby="deleteStudentLabel{{ $student->id }}" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                              <div class="modal-content">
+                                <form method="POST" action="{{ route('admin.student.delete', ['id' => $student->id]) }}">
+                                  @csrf
+                                  @method('DELETE')
+                                  <div class="modal-header">
+                                    <h5 class="modal-title text-danger" id="deleteStudentLabel{{ $student->id }}">{{ get_phrase('Permanently delete student') }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ get_phrase('Close') }}"></button>
+                                  </div>
+                                  <div class="modal-body text-start">
+                                    <p><strong>{{ get_phrase('This permanently deletes the student account and their associated academic, attendance, assessment, library, hostel, messaging, and other account records. This cannot be undone.') }}</strong></p>
+                                    <p>{{ get_phrase('Financial invoices and transaction history that must be retained for reconciliation will remain under the documented finance retention rules.') }}</p>
+                                    <label class="form-label" for="deleteConfirmation{{ $student->id }}">{{ get_phrase('Type DELETE to confirm') }}</label>
+                                    <input class="form-control" id="deleteConfirmation{{ $student->id }}" name="confirmation" type="text" required pattern="DELETE" autocomplete="off">
+                                  </div>
+                                  <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ get_phrase('Cancel') }}</button>
+                                    <button type="submit" class="btn btn-danger">{{ get_phrase('Permanently delete student') }}</button>
+                                  </div>
+                                </form>
+                              </div>
+                            </div>
+                          </div>
+                          @endif
                         </td>
                       </tr>
                     @endforeach
