@@ -25,8 +25,10 @@ final class ProgrammeDeletionService
             }
             // A Curriculum version is owned by this Programme; delete its
             // registrations and other version-specific workflow rows first.
-            foreach (Curriculum::where('school_id', $schoolId)->where('programme_id', $programmeId)->lockForUpdate()->get() as $curriculum) {
-                $this->curricula->deleteDraft($curriculum, 'DELETE', $actorId);
+            if (Schema::hasTable('curricula')) {
+                foreach (Curriculum::where('school_id', $schoolId)->where('programme_id', $programmeId)->lockForUpdate()->get() as $curriculum) {
+                    $this->curricula->deleteDraft($curriculum, 'DELETE', $actorId);
+                }
             }
 
             $protected = ['programmes','curricula','subjects','student_profiles','users','schools','departments','academic_units'];
