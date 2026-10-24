@@ -281,7 +281,10 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
         $expected['student_fee_managers'] = 1; // financial invoice retained with its historical payment rows
         $expected['payments'] = 1;
         $expected['payment_history'] = 1;
-        $this->assertSame($expected, $this->graphCounts($student));
+        $actual = $this->graphCounts($student);
+        ksort($expected);
+        ksort($actual);
+        $this->assertSame($expected, $actual);
         $this->assertSame(1, $this->graphCounts($bystander)['users']);
         $this->assertSame(1, $this->graphCounts($bystander)['payments']);
         $audit = DB::table('audit_logs')->where('action', 'student.delete')->first();
@@ -315,7 +318,7 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
         $this->actingAs($admin)
             ->delete(route('admin.student.delete', $student->id), ['confirmation' => 'DELETE'])
             ->assertRedirect()
-            ->assertSessionHas('message', 'Student removed successfully.');
+            ->assertSessionHas('message', 'Student removed successfully. Financial invoices with recorded payment, award, or provider history were retained for reconciliation.');
 
         $this->assertDatabaseMissing('users', ['id' => $student->id]);
         $this->assertDatabaseMissing('student_curriculum_assignments', ['student_id' => $student->id]);
@@ -487,7 +490,9 @@ class StudentAccountAndAdminSurvivabilitySecurityTest extends TestCase
             'club_members', 'appraisal_submits', 'feedback', 'student_requests',
             'student_fee_registration_waivers', 'student_financial_setup_reviews',
         ] as $name) {
-            Schema::create($name, function (Blueprint $table): void { $table->id(); $table->unsignedBigInteger('student_id'); });
+            if (!Schema::hasTable($name)) {
+                Schema::create($name, function (Blueprint $table): void { $table->id(); $table->unsignedBigInteger('student_id'); });
+            }
         }
         Schema::create('course_offering_attendance_records', function (Blueprint $table): void {
             $table->id(); $table->unsignedBigInteger('student_id'); $table->unsignedBigInteger('course_registration_id');
