@@ -34,8 +34,9 @@
                 <td><span class="badge {{ $row->status === 'approved' ? 'bg-success' : ($row->status === 'retired' ? 'bg-secondary' : 'bg-warning text-dark') }}">{{ ucfirst($row->status) }}</span></td>
                 <td>{{ $row->stages_count }}</td><td>{{ $row->memberships_count }}</td><td>{{ number_format((float)($row->total_credits ?? 0), 2) }}</td>
                 <td><div class="d-flex flex-wrap gap-2"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.curricula.show', $row->id) }}">View</a>
-                @if($row->status === 'draft' && auth()->user()->hasPermission('academic.curriculum.manage'))
-                <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#metadata-heading">Edit</a><form method="POST" action="{{ route('admin.curricula.destroy', $row->id) }}" onsubmit="return confirm('Delete this draft curriculum and its structure?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete</button></form>
+                @if(auth()->user()->hasPermission('academic.curriculum.manage'))
+                <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#metadata-heading">Edit</a>
+                <form method="POST" action="{{ route('admin.curricula.destroy', $row->id) }}" class="d-flex gap-1 align-items-center flex-wrap"><span class="small w-100">Delete {{ $row->programme_code }} {{ $row->version }} and its assignments, cohort links, registrations and dependent workflows. Shared Course Units and student accounts remain.</span>@csrf @method('DELETE')<label class="visually-hidden" for="delete-curriculum-{{ $row->id }}">Type DELETE or {{ $row->programme_code }} {{ $row->version }}</label><input class="form-control form-control-sm" id="delete-curriculum-{{ $row->id }}" name="confirm_deletion" placeholder="Type DELETE or reference" required><button class="btn btn-sm btn-outline-danger">Delete</button></form>
                 @elseif(\App\Support\Curriculum\CurriculumOwnerAccess::allows(auth()->user(), (int) auth()->user()->school_id))
                 <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#owner-controls">Edit / Restore</a>
                 @else<span class="small text-muted">Official structure is protected</span>@endif

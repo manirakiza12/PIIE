@@ -10,7 +10,7 @@
     $courseUnitLabel = 'Course Unit';
     $periodLabel = $calendarPattern === 'semester' ? 'Semester' : 'Term';
 @endphp
-@if(!$isDraft)<div class="alert alert-info">This curriculum is read-only. Use a successor version for structural changes.</div>@endif
+@if(!$isDraft && !auth()->user()->hasPermission('academic.curriculum.manage'))<div class="alert alert-info">This curriculum is read-only for your account.</div>@endif
 @include('admin.curriculum_units.placements')
 @endisset
 @endsection

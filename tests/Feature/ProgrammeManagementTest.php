@@ -222,7 +222,7 @@ class ProgrammeManagementTest extends TestCase
 
     // ── Delete guard ─────────────────────────────────────────────────────
 
-    public function test_a_programme_with_an_admission_cannot_be_deleted(): void
+    public function test_a_programme_deletion_cascades_its_admissions(): void
     {
         $schoolId = $this->makeSchool();
         $admin = $this->makeAdminUser($schoolId);
@@ -230,14 +230,15 @@ class ProgrammeManagementTest extends TestCase
 
         $this->makeAdmission($schoolId, ['programme_id' => $programmeId]);
 
-        $response = $this->actingAs($admin)->get(route('admin.programmes.destroy', $programmeId));
+        $response = $this->actingAs($admin)->delete(route('admin.programmes.destroy', $programmeId), ['confirm_deletion' => 'PRG']);
 
         $response->assertRedirect();
-        $response->assertSessionHas('error');
-        $this->assertDatabaseHas('programmes', ['id' => $programmeId]);
+        $response->assertSessionHas('success');
+        $this->assertDatabaseMissing('programmes', ['id' => $programmeId]);
+        $this->assertDatabaseMissing('admissions', ['programme_id' => $programmeId]);
     }
 
-    public function test_a_programme_with_a_student_profile_cannot_be_deleted(): void
+    public function test_a_programme_deletion_preserves_student_and_clears_its_programme_link(): void
     {
         $schoolId = $this->makeSchool();
         $admin = $this->makeAdminUser($schoolId);
@@ -252,10 +253,11 @@ class ProgrammeManagementTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $response = $this->actingAs($admin)->get(route('admin.programmes.destroy', $programmeId));
+        $response = $this->actingAs($admin)->delete(route('admin.programmes.destroy', $programmeId), ['confirm_deletion' => 'PRG']);
 
-        $response->assertSessionHas('error');
-        $this->assertDatabaseHas('programmes', ['id' => $programmeId]);
+        $response->assertSessionHas('success');
+        $this->assertDatabaseMissing('programmes', ['id' => $programmeId]);
+        $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id, 'programme_id' => null]);
     }
 
     public function test_an_untouched_programme_can_still_be_deleted(): void
@@ -264,10 +266,35 @@ class ProgrammeManagementTest extends TestCase
         $admin = $this->makeAdminUser($schoolId);
         $programmeId = $this->makeProgramme($schoolId);
 
-        $response = $this->actingAs($admin)->get(route('admin.programmes.destroy', $programmeId));
+        $response = $this->actingAs($admin)->delete(route('admin.programmes.destroy', $programmeId), ['confirm_deletion' => 'PRG']);
 
         $response->assertSessionHas('success');
         $this->assertDatabaseMissing('programmes', ['id' => $programmeId]);
+    }
+
+    public function test_programme_deletion_requires_typed_confirmation_and_is_tenant_scoped(): void
+    {
+        $schoolA = $this->makeSchool(); $schoolB = $this->makeSchool();
+        $adminA = $this->makeAdminUser($schoolA);
+        $own = $this->makeProgramme($schoolA, ['code' => 'OWN']);
+        $foreign = $this->makeProgramme($schoolB, ['code' => 'FOREIGN']);
+
+        $this->actingAs($adminA)->from(route('admin.programmes.index'))
+            ->delete(route('admin.programmes.destroy', $own), ['confirm_deletion' => 'not-the-code'])
+            ->assertSessionHasErrors('confirm_deletion');
+        $this->assertDatabaseHas('programmes', ['id' => $own]);
+
+        $this->actingAs($adminA)->delete(route('admin.programmes.destroy', $foreign), ['confirm_deletion' => 'DELETE'])->assertNotFound();
+        $this->assertDatabaseHas('programmes', ['id' => $foreign, 'school_id' => $schoolB]);
+    }
+
+    public function test_a_viewer_without_programme_management_cannot_submit_deletion(): void
+    {
+        $schoolId = $this->makeSchool();
+        $programmeId = $this->makeProgramme($schoolId);
+        $viewer = \App\Models\User::factory()->create(['role_id' => 3, 'school_id' => $schoolId, 'account_status' => 'active']);
+        $this->actingAs($viewer)->delete(route('admin.programmes.destroy', $programmeId), ['confirm_deletion' => 'DELETE'])->assertForbidden();
+        $this->assertDatabaseHas('programmes', ['id' => $programmeId, 'school_id' => $schoolId]);
     }
 
     // ── Orphaned programmes must never silently disappear ───────────────────

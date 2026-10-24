@@ -1784,7 +1784,7 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
     Route::post('admin/programmes/levels', 'storeLevel')->name('admin.programmes.levels.store');
     Route::post('admin/programmes/store',           'store')->name('admin.programmes.store');
     Route::post('admin/programmes/update/{id}',     'update')->name('admin.programmes.update');
-    Route::get('admin/programmes/delete/{id}',      'destroy')->name('admin.programmes.destroy');
+    Route::delete('admin/programmes/{id}',          'destroy')->whereNumber('id')->name('admin.programmes.destroy');
     Route::get('admin/programmes/toggle/{id}',      'toggleStatus')->name('admin.programmes.toggle');
 
     // ΓöÇΓöÇ Programme catalogue: cover, price metadata, website publication ΓöÇΓöÇΓöÇΓöÇ

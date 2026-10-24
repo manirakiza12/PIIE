@@ -132,33 +132,79 @@ class CurriculumFoundationTest extends TestCase
         $this->assertSame('approved', $this->service->approve($valid)->status);
     }
 
-    public function test_approved_structure_is_immutable_and_can_only_be_retired_once(): void
+    public function test_curriculum_structure_and_metadata_can_be_edited_in_every_lifecycle_status(): void
     {
         $curriculum = $this->curriculum(1, 'approved', $this->academicYear(1));
         $stage = $this->stage($curriculum);
         $membership = $this->membership($curriculum, $this->subject(1), $stage);
         $approved = $this->service->approve($curriculum);
-
-        try {
-            $this->service->addStage($approved, 'Another stage', 2);
-            $this->fail('An approved Curriculum accepted a stage.');
-        } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('curriculum', $exception->errors());
+        foreach (['draft', 'approved', 'retired'] as $status) {
+            DB::table('curricula')->where('id', $approved->id)->update(['status' => $status]);
+            $current = $approved->fresh();
+            $this->service->updateStage($current, $stage->fresh(), 'Year '.$status, 1);
+            $this->service->updateMembership($current, $membership->fresh(), [
+                'curriculum_stage_id' => $stage->id, 'classification' => 'compulsory', 'credits' => '9.00', 'sequence' => 0,
+            ]);
+            $year = $this->academicYear(1);
+            $this->service->updateDraftMetadata($current, 'version-'.$status, $year, $status === 'draft' ? null : 'Corrected programme structure.');
+            $this->assertSame('Year '.$status, $stage->fresh()->label);
+            $this->assertSame('9.00', $membership->fresh()->credits);
+            $this->assertSame('version-'.$status, $current->fresh()->version);
         }
+        DB::table('curricula')->where('id', $approved->id)->update(['status' => 'retired']);
+        $this->assertRejected(fn () => $this->service->approve($approved->fresh()), 'curriculum');
+    }
 
-        try {
-            $membership->credits = '9.00';
-            $membership->save();
-            $this->fail('An approved membership was materially edited.');
-        } catch (DomainException $exception) {
-            $this->assertStringContainsString('draft', $exception->getMessage());
+    public function test_typed_delete_removes_version_owned_rows_and_preserves_shared_subject_and_other_version(): void
+    {
+        $subject = $this->subject(1);
+        $first = $this->curriculum(1, 'v1');
+        $second = $this->curriculum(1, 'v2');
+        $stageA = $this->stage($first);
+        $stageB = $this->stage($second);
+        $this->membership($first, $subject, $stageA);
+        $this->membership($second, $subject, $stageB);
+
+        $this->assertRejected(fn () => $this->service->deleteDraft($first, 'wrong'), 'confirm_deletion');
+        $this->assertDatabaseHas('curricula', ['id' => $first->id]);
+        $this->service->deleteDraft($first, 'DELETE', 7);
+        $this->assertDatabaseMissing('curricula', ['id' => $first->id]);
+        $this->assertDatabaseMissing('curriculum_stages', ['curriculum_id' => $first->id]);
+        $this->assertDatabaseMissing('curriculum_memberships', ['curriculum_id' => $first->id]);
+        $this->assertDatabaseHas('curricula', ['id' => $second->id]);
+        $this->assertDatabaseHas('subjects', ['id' => $subject]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_DELETED', 'user_id' => 7, 'record_id' => $first->id]);
+    }
+
+    public function test_unmapped_restrictive_curriculum_dependency_rolls_back_cleanup_and_audit(): void
+    {
+        DB::statement('PRAGMA foreign_keys = ON');
+        Schema::create('opaque_curriculum_reference', function (Blueprint $table): void {
+            $table->unsignedBigInteger('owner_curriculum_id');
+            $table->foreign('owner_curriculum_id')->references('id')->on('curricula')->onDelete('restrict');
+        });
+        $curriculum = $this->curriculum(1, 'blocked');
+        $stage = $this->stage($curriculum);
+        $membership = $this->membership($curriculum, $this->subject(1), $stage);
+        DB::table('opaque_curriculum_reference')->insert(['owner_curriculum_id' => $curriculum->id]);
+
+        try { $this->service->deleteDraft($curriculum, 'DELETE', 7); $this->fail('Unknown restrictive reference should fail deletion.'); }
+        catch (\Illuminate\Database\QueryException) { }
+        $this->assertDatabaseHas('curricula', ['id' => $curriculum->id]);
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $stage->id]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $membership->id]);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'CURRICULUM_DELETED', 'record_id' => $curriculum->id]);
+    }
+
+    public function test_every_curriculum_lifecycle_status_can_be_deleted_after_explicit_confirmation(): void
+    {
+        foreach (['draft', 'approved', 'retired'] as $status) {
+            $curriculum = $this->curriculum(1, 'delete-'.$status);
+            DB::table('curricula')->where('id', $curriculum->id)->update(['status' => $status]);
+            $this->service->deleteDraft($curriculum, $curriculum->version, 9);
+            $this->assertDatabaseMissing('curricula', ['id' => $curriculum->id]);
+            $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_DELETED', 'user_id' => 9, 'record_id' => $curriculum->id]);
         }
-
-        $retired = $this->service->retire($approved);
-        $this->assertSame('retired', $retired->status);
-        $this->assertRejected(fn () => $this->service->approve($retired), 'curriculum');
-        $this->assertRejected(fn () => $this->service->retire($retired), 'status');
-        $this->assertSame('retired', $retired->fresh()->status);
     }
 
     public function test_k12_subject_usage_does_not_require_a_curriculum(): void
@@ -280,6 +326,13 @@ class CurriculumFoundationTest extends TestCase
             $table->unsignedBigInteger('school_id'); $table->unsignedBigInteger('curriculum_id');
             $table->unsignedBigInteger('membership_id'); $table->unsignedBigInteger('prerequisite_membership_id');
             $table->primary(['membership_id', 'prerequisite_membership_id']);
+        });
+        Schema::create('audit_logs', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('school_id')->nullable(); $table->unsignedBigInteger('user_id');
+            $table->string('user_name')->nullable(); $table->unsignedBigInteger('role_id')->nullable(); $table->string('role_name')->nullable();
+            $table->string('action')->nullable(); $table->string('event_type')->nullable(); $table->string('module')->nullable();
+            $table->text('description')->nullable(); $table->string('record_type')->nullable(); $table->unsignedBigInteger('record_id')->nullable();
+            $table->timestamp('created_at')->nullable();
         });
 
         DB::table('schools')->insert([

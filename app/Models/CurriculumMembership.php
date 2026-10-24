@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use DomainException;
 use Illuminate\Database\Eloquent\Model;
 
 class CurriculumMembership extends Model
@@ -17,19 +16,6 @@ class CurriculumMembership extends Model
         'credits' => 'decimal:2',
         'sequence' => 'integer',
     ];
-
-    protected static function booted(): void
-    {
-        static::saving(fn (self $membership) => self::assertDraftOwner($membership));
-        static::deleting(fn (self $membership) => self::assertDraftOwner($membership));
-    }
-
-    private static function assertDraftOwner(self $membership): void
-    {
-        if ($membership->curriculum_id && Curriculum::where('school_id', $membership->school_id)->whereKey($membership->curriculum_id)->value('status') !== 'draft') {
-            throw new DomainException('Curriculum memberships may only be changed while their Curriculum is draft.');
-        }
-    }
 
     public function curriculum()
     {

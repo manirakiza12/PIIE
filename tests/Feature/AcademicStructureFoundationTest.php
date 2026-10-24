@@ -9,6 +9,8 @@ use App\Models\Session;
 use App\Http\Controllers\AcademicStructureController;
 use App\Support\AcademicContext;
 use App\Support\AcademicContextManager;
+use App\Support\Academic\AcademicRecordDeletionService;
+use App\Support\CourseOffering\CourseOfferingService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -82,6 +84,17 @@ class AcademicStructureFoundationTest extends TestCase
             $table->text('value');
         });
         DB::table('global_settings')->insert(['key' => 'running_session', 'value' => '777']);
+        Schema::create('course_offerings', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('school_id'); $table->unsignedBigInteger('academic_year_id'); $table->unsignedBigInteger('academic_period_id');
+        });
+        Schema::create('audit_logs', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('school_id')->nullable(); $table->unsignedBigInteger('user_id');
+            $table->string('user_name')->nullable(); $table->unsignedBigInteger('role_id')->nullable(); $table->string('role_name')->nullable();
+            $table->string('action')->nullable(); $table->string('event_type')->nullable(); $table->string('module')->nullable();
+            $table->text('description')->nullable(); $table->string('record_type')->nullable(); $table->unsignedBigInteger('record_id')->nullable();
+            $table->json('new_values')->nullable();
+            $table->timestamp('created_at')->nullable();
+        });
     }
 
     private function school(string $pattern): School
@@ -132,6 +145,79 @@ class AcademicStructureFoundationTest extends TestCase
         $this->assertSame('2027-03-31', AcademicPeriod::firstOrFail()->end_date->toDateString());
         $controller->update(Request::create('/', 'PUT', ['label' => 'October intake revised', 'start_date' => '01/10/26', 'end_date' => '30/09/27']), 'years', $year->id);
         $this->assertSame('October intake revised', $year->fresh()->label);
+    }
+
+    public function test_years_and_periods_in_all_lifecycle_states_can_be_deleted_with_owned_rows(): void
+    {
+        $deletion = new AcademicRecordDeletionService(new CourseOfferingService());
+        foreach (['planned', 'active', 'completed', 'cancelled'] as $status) {
+            $school = $this->school('semester');
+            $year = $this->year($school, 'Year '.$status);
+            $year->status = $status; $year->save();
+            $period = $this->period($year, 'semester', 'Semester '.$status);
+            $period->status = $status; $period->save();
+            DB::table('sessions')->insert(['session_title' => 'Legacy '.$status, 'status' => 1, 'school_id' => $school->id, 'academic_year_id' => $year->id]);
+            DB::table('schools')->where('id', $school->id)->update(['current_academic_year_id' => $year->id, 'current_academic_period_id' => $period->id]);
+
+            try { $deletion->deletePeriod((int) $school->id, (int) $period->id, 1, 'wrong'); $this->fail('Invalid confirmation deleted a period.'); }
+            catch (ValidationException $exception) { $this->assertArrayHasKey('confirm_deletion', $exception->errors()); }
+            $deletion->deletePeriod((int) $school->id, (int) $period->id, 1, 'DELETE');
+            $this->assertDatabaseMissing('academic_periods', ['id' => $period->id]);
+            $deletion->deleteYear((int) $school->id, (int) $year->id, 1, 'DELETE');
+            $this->assertDatabaseMissing('academic_years', ['id' => $year->id]);
+            $this->assertDatabaseMissing('sessions', ['academic_year_id' => $year->id]);
+            $this->assertNull(DB::table('schools')->where('id', $school->id)->value('current_academic_year_id'));
+            $this->assertDatabaseHas('audit_logs', ['action' => 'ACADEMIC_YEAR_DELETED', 'user_id' => 1, 'record_id' => $year->id]);
+        }
+    }
+
+    public function test_academic_deletion_cannot_cross_tenant_boundaries(): void
+    {
+        $schoolA = $this->school('semester'); $schoolB = $this->school('semester');
+        $yearA = $this->year($schoolA, 'Tenant A year');
+        $deletion = new AcademicRecordDeletionService(new CourseOfferingService());
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        $deletion->deleteYear((int) $schoolB->id, (int) $yearA->id, 1, 'DELETE');
+    }
+
+    public function test_year_and_period_edits_save_in_each_lifecycle_state(): void
+    {
+        foreach (['planned', 'active', 'completed', 'cancelled'] as $status) {
+            $school = $this->school('semester'); $controller = $this->controllerFor($school);
+            $year = $this->year($school, 'Academic '.$status);
+            DB::table('academic_years')->where('id', $year->id)->update(['status' => $status]);
+            $period = $this->period($year, 'semester', 'Period '.$status);
+            DB::table('academic_periods')->where('id', $period->id)->update(['status' => $status]);
+            $controller->update(Request::create('/', 'PUT', [
+                'label' => 'Edited '.$status, 'start_date' => '01/09/26', 'end_date' => '31/08/27',
+            ]), 'years', (int) $year->id);
+            $controller->update(Request::create('/', 'PUT', [
+                'label' => 'Edited period '.$status, 'academic_year_id' => $year->id,
+                'type' => 'semester', 'sequence' => 1, 'start_date' => '01/09/26', 'end_date' => '15/01/27',
+            ]), 'periods', (int) $period->id);
+            $this->assertSame('Edited '.$status, $year->fresh()->label);
+            $this->assertSame('Edited period '.$status, $period->fresh()->label);
+            $this->assertSame($status, $year->fresh()->status);
+            $this->assertSame($status, $period->fresh()->status);
+        }
+    }
+
+    public function test_unmapped_restrictive_dependency_rolls_back_the_entire_year_deletion(): void
+    {
+        DB::statement('PRAGMA foreign_keys = ON');
+        Schema::create('opaque_year_reference', function (Blueprint $table): void {
+            $table->unsignedBigInteger('owner_year_id');
+            $table->foreign('owner_year_id')->references('id')->on('academic_years')->onDelete('restrict');
+        });
+        $school = $this->school('semester'); $year = $this->year($school, 'Protected year');
+        DB::table('schools')->where('id', $school->id)->update(['current_academic_year_id' => $year->id]);
+        DB::table('opaque_year_reference')->insert(['owner_year_id' => $year->id]);
+        $deletion = new AcademicRecordDeletionService(new CourseOfferingService());
+        try { $deletion->deleteYear((int) $school->id, (int) $year->id, 1, 'DELETE'); $this->fail('A restrictive unknown dependency did not block deletion.'); }
+        catch (\Illuminate\Database\QueryException) { }
+        $this->assertDatabaseHas('academic_years', ['id' => $year->id]);
+        $this->assertSame((int) $year->id, (int) DB::table('schools')->where('id', $school->id)->value('current_academic_year_id'));
+        $this->assertDatabaseHas('opaque_year_reference', ['owner_year_id' => $year->id]);
     }
 
     public function test_day_first_invalid_calendar_dates_are_rejected(): void
