@@ -1878,7 +1878,7 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         $this->assertDatabaseMissing('academic_periods', ['id' => $period->id]);
         $this->assertDatabaseMissing('course_offerings', ['id' => $offeringId]);
         $this->assertDatabaseHas('schools', ['id' => $a['school'], 'current_academic_year_id' => $year->id, 'current_academic_period_id' => null]);
-        $this->delete(route('admin.academic_structure.destroy', ['years', $year->id]), ['confirm_deletion' => '2030/2031'])->assertSessionHasNoErrors();
+        $this->delete(route('admin.academic_structure.destroy', ['years', $year->id]), ['confirm_deletion' => $year->label])->assertSessionHasNoErrors();
         $this->assertDatabaseMissing('academic_years', ['id' => $year->id]);
     }
 
