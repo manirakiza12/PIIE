@@ -64,12 +64,13 @@ final class AcademicRecordDeletionService
         $protected = ['schools','users','subjects','programmes','departments','curricula','course_offerings','student_profiles'];
         $rows = [$root => [DB::table($root)->where('school_id', $schoolId)->where('id', $id)->first()]];
         $rows[$root] = array_filter($rows[$root]); $edges = [];
+        $directColumns = $root === 'academic_years'
+            ? ['academic_year_id', 'entry_academic_year_id', 'effective_from_academic_year_id']
+            : ['academic_period_id'];
         foreach ($tables as $table) {
             if ($table === $root || in_array($table, $protected, true)) continue;
-            foreach (['academic_year_id', 'academic_period_id'] as $column) {
+            foreach ($directColumns as $column) {
                 if (! Schema::hasColumn($table, $column)) continue;
-                $isTarget = ($root === 'academic_years' && $column === 'academic_year_id') || ($root === 'academic_periods' && $column === 'academic_period_id');
-                if (! $isTarget) continue;
                 $query = DB::table($table)->where($column, $id);
                 if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
                 $found = $query->get();
@@ -128,8 +129,9 @@ final class AcademicRecordDeletionService
         foreach ($order as $table) {
             if ($table === $root) continue;
             if (! Schema::hasColumn($table, 'id')) {
-                if (Schema::hasColumn($table, $root === 'academic_years' ? 'academic_year_id' : 'academic_period_id')) {
-                    $query = DB::table($table)->where($root === 'academic_years' ? 'academic_year_id' : 'academic_period_id', $id);
+                $directColumn = collect($directColumns)->first(fn (string $column): bool => Schema::hasColumn($table, $column));
+                if ($directColumn !== null) {
+                    $query = DB::table($table)->where($directColumn, $id);
                     if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
                     $query->delete(); continue;
                 }
