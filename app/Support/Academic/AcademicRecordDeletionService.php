@@ -66,7 +66,7 @@ final class AcademicRecordDeletionService
     private function deleteOwnedGraph(string $root, int $id, int $schoolId): void
     {
         $tables = array_map(static fn (string $name): string => substr(strrchr('.'.$name, '.'), 1), Schema::getTableListing());
-        $protected = ['schools','users','subjects','programmes','departments','curricula','course_offerings','student_profiles'];
+        $protected = ['schools','users','subjects','programmes','departments','curricula','course_offerings','student_profiles','staff_profiles','audit_logs'];
         $rows = [$root => [DB::table($root)->where('school_id', $schoolId)->where('id', $id)->first()]];
         $rows[$root] = array_filter($rows[$root]); $edges = [];
         $directColumns = $root === 'academic_years'
@@ -88,6 +88,9 @@ final class AcademicRecordDeletionService
         }
         if ($root === 'academic_years' && isset($rows['sessions'])) {
             $sessionIds = collect($rows['sessions'])->pluck('id')->filter()->all();
+            // The legacy current-session pointer is not protected by a FK.
+            // Clear it only for the tenant and sessions actually being deleted.
+            DB::table('schools')->where('id', $schoolId)->whereIn('running_session', $sessionIds)->update(['running_session' => null]);
             foreach (['subjects', 'student_profiles'] as $shared) {
                 if (Schema::hasTable($shared) && Schema::hasColumn($shared, 'session_id')) {
                     $query = DB::table($shared)->whereIn('session_id', $sessionIds);

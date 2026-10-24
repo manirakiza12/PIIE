@@ -91,7 +91,10 @@ class CurriculumFoundationService
         $tables = array_map(static fn (string $name): string => substr(strrchr('.'.$name, '.'), 1), Schema::getTableListing());
         $rows = ['curricula' => [DB::table('curricula')->where('school_id', $schoolId)->where('id', $curriculum->id)->first()]];
         $rows['curricula'] = array_filter($rows['curricula']); $edges = [];
-        $protected = ['subjects','users','schools','programmes','academic_years','academic_periods','course_offerings','curricula'];
+        // Course Units are programme/catalogue masters, never version-owned:
+        // removing their last membership does not establish exclusive ownership.
+        // Profiles and audit history must never become graph-owned descendants.
+        $protected = ['subjects','users','schools','programmes','academic_years','academic_periods','course_offerings','curricula','student_profiles','staff_profiles','audit_logs'];
         foreach ($tables as $table) {
             if (in_array($table, $protected, true) || ! Schema::hasColumn($table, 'curriculum_id')) continue;
             $query = DB::table($table)->where('curriculum_id', $curriculum->id);
@@ -103,7 +106,14 @@ class CurriculumFoundationService
             $changed = false;
             foreach ($tables as $child) {
                 if (in_array($child, $protected, true)) continue;
-                foreach (Schema::getForeignKeys($child) as $fk) {
+                $foreignKeys = Schema::getForeignKeys($child);
+                // Legacy registration schemas can carry the placement id
+                // without a declared FK. A shared allocation survives deletion,
+                // but registrations for the removed version must not be orphaned.
+                if ($child === 'course_registrations' && Schema::hasColumn($child, 'curriculum_membership_id')) {
+                    $foreignKeys[] = ['foreign_table' => 'curriculum_memberships', 'columns' => ['curriculum_membership_id'], 'foreign_columns' => ['id']];
+                }
+                foreach ($foreignKeys as $fk) {
                     $parent = $fk['foreign_table'] ?? null; $local = $fk['columns'] ?? []; $foreign = $fk['foreign_columns'] ?? [];
                     if (! $parent || ! isset($rows[$parent]) || ! $local || count($local) !== count($foreign)) continue;
                     $query = DB::table($child)->where(function ($or) use ($rows, $parent, $local, $foreign): void {

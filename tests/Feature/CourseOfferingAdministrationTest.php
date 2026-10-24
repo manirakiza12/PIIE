@@ -19,6 +19,185 @@ class CourseOfferingAdministrationTest extends TestCase
 
     private array $tenants;
 
+    public function test_academic_deletes_reject_missing_csrf_tokens(): void
+    {
+        $csrf = $this->getMockBuilder(\App\Http\Middleware\VerifyCsrfToken::class)
+            ->setConstructorArgs([$this->app, $this->app['encrypter']])
+            ->onlyMethods(['runningUnitTests'])->getMock();
+        $csrf->method('runningUnitTests')->willReturn(false);
+        $this->app->instance(\App\Http\Middleware\VerifyCsrfToken::class, $csrf);
+        $tenant = $this->tenants[1];
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+        foreach ([route('admin.curricula.destroy', $tenant['curriculum']), route('admin.academic_structure.destroy', ['years', $tenant['year']])] as $url) {
+            $this->withSession(['_token' => 'delete-csrf-test'])->delete($url, ['confirm_deletion' => 'DELETE'])->assertStatus(419);
+        }
+        $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum']]);
+        $this->assertDatabaseHas('academic_years', ['id' => $tenant['year']]);
+    }
+
+    public function test_year_delete_failure_rolls_back_allocation_links_context_and_audits(): void
+    {
+        $tenant = $this->tenants[1];
+        $offering = $this->createOffering($tenant, 'YEAR-ROLLBACK');
+        $this->attach($tenant, $offering, $tenant['member']);
+        DB::table('schools')->where('id', $tenant['school'])->update(['current_academic_year_id' => $tenant['year'], 'current_academic_period_id' => $tenant['period']]);
+        $this->actingAs($this->staff(1, ['academic.structure.manage']));
+        $url = route('admin.academic_structure.destroy', ['years', $tenant['year']]);
+        $this->delete($url, ['confirm_deletion' => 'wrong'])->assertSessionHasErrors('confirm_deletion');
+        DB::unprepared("CREATE TRIGGER reject_year_audit BEFORE INSERT ON audit_logs WHEN NEW.action = 'ACADEMIC_YEAR_DELETED' BEGIN SELECT RAISE(ABORT, 'audit failure'); END");
+        try {
+            $this->delete($url, ['confirm_deletion' => 'DELETE'])->assertSessionHasErrors('delete');
+            $this->assertStringContainsString('No changes were saved', session('errors')->first('delete'));
+            $this->assertDatabaseHas('academic_years', ['id' => $tenant['year']]);
+            $this->assertDatabaseHas('academic_periods', ['id' => $tenant['period']]);
+            $this->assertDatabaseHas('course_offerings', ['id' => $offering->id]);
+            $this->assertDatabaseHas('course_offering_curriculum_memberships', ['course_offering_id' => $offering->id]);
+            $this->assertDatabaseHas('schools', ['id' => $tenant['school'], 'current_academic_year_id' => $tenant['year'], 'current_academic_period_id' => $tenant['period']]);
+            $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'effective_academic_year_id' => $tenant['year']]);
+            $this->assertDatabaseMissing('audit_logs', ['action' => 'COURSE_OFFERING_DELETED', 'record_id' => $offering->id]);
+        } finally {
+            DB::unprepared('DROP TRIGGER reject_year_audit');
+        }
+        $this->actingAs($this->staff(1, []))->delete($url, ['confirm_deletion' => 'DELETE'])->assertForbidden();
+        $this->actingAs($this->staff(2, ['academic.structure.manage']))->delete($url, ['confirm_deletion' => 'DELETE'])->assertNotFound();
+    }
+
+    public function test_curriculum_row_actions_and_edit_delete_permissions_cover_every_status(): void
+    {
+        $tenant = $this->tenants[1];
+        $ids = [];
+        foreach (['draft', 'approved', 'retired'] as $status) {
+            $ids[$status] = $this->curriculumFor($tenant, $status, 'actions-'.$status);
+        }
+        $manager = $this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage']);
+        $viewer = $this->staff(1, ['academic.curriculum.view']);
+        foreach ([$manager, $viewer] as $user) {
+            $response = $this->actingAs($user)->get(route('admin.curricula.index'))->assertOk()->assertDontSee('Edit / Restore');
+            $dom = new \DOMDocument(); @$dom->loadHTML($response->getContent());
+            $xpath = new \DOMXPath($dom);
+            foreach ($ids as $status => $id) {
+                $row = '//tr[@data-curriculum-id="'.$id.'"]';
+                $this->assertSame(1, $xpath->query($row.'//a[normalize-space(.)="View"]')->length, $status);
+                if ($user->id === $manager->id) {
+                    $this->assertSame(1, $xpath->query($row.'//a[normalize-space(.)="Edit"]')->length, $status);
+                    $this->assertSame(1, $xpath->query($row.'//form[@action="'.route('admin.curricula.destroy', $id).'"]//button[normalize-space(.)="Delete"]')->length, $status);
+                    $this->assertSame(1, $xpath->query($row.'//input[@name="_token"]')->length);
+                    $this->assertSame(1, $xpath->query($row.'//input[@name="_method" and @value="DELETE"]')->length);
+                } else {
+                    $this->assertSame(1, $xpath->query($row.'//button[@disabled and normalize-space(.)="Edit"]')->length, $status);
+                    $this->assertSame(1, $xpath->query($row.'//button[@disabled and normalize-space(.)="Delete"]')->length, $status);
+                    $this->assertSame(0, $xpath->query($row.'//form')->length);
+                }
+            }
+        }
+        foreach ($ids as $status => $id) {
+            $payload = ['version' => 'edited-'.$status, 'effective_academic_year_id' => $tenant['year'], 'reason' => 'Correct version label'];
+            $this->actingAs($viewer)->put(route('admin.curricula.update', $id), $payload)->assertForbidden();
+            $this->delete(route('admin.curricula.destroy', $id), ['confirm_deletion' => 'DELETE'])->assertForbidden();
+            $this->actingAs($manager)->get(route('admin.curricula.show', $id))->assertOk()->assertSee('name="version"', false);
+            $this->put(route('admin.curricula.update', $id), $payload)->assertSessionHasNoErrors();
+            $this->assertDatabaseHas('curricula', ['id' => $id, 'version' => 'edited-'.$status, 'status' => $status]);
+            $this->delete(route('admin.curricula.destroy', $id))->assertSessionHasErrors('confirm_deletion');
+            $this->delete(route('admin.curricula.destroy', $id), ['confirm_deletion' => 'wrong'])->assertSessionHasErrors('confirm_deletion');
+            $this->delete(route('admin.curricula.destroy', $id), ['confirm_deletion' => 'DELETE'])->assertSessionHasNoErrors();
+            $this->assertDatabaseMissing('curricula', ['id' => $id]);
+            $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_DELETED', 'record_id' => $id, 'user_id' => $manager->id]);
+        }
+        $this->delete(route('admin.curricula.destroy', $this->tenants[2]['curriculum']), ['confirm_deletion' => 'DELETE'])->assertNotFound();
+    }
+
+    public function test_year_delete_removes_only_selected_year_course_links_and_legacy_current_pointer(): void
+    {
+        $tenant = $this->tenants[1];
+        $next = $tenant;
+        $next['year'] = DB::table('academic_years')->insertGetId(['school_id' => $tenant['school'], 'label' => '2027/2028', 'start_date' => '2027-01-01', 'end_date' => '2027-12-31', 'status' => 'active']);
+        $next['period'] = DB::table('academic_periods')->insertGetId(['school_id' => $tenant['school'], 'academic_year_id' => $next['year'], 'type' => 'semester', 'label' => 'Next semester', 'sequence' => 1, 'start_date' => '2027-01-01', 'end_date' => '2027-06-30', 'status' => 'active']);
+        $first = $this->createOffering($tenant, 'YEAR-DELETE');
+        $second = $this->createOffering($next, 'YEAR-KEEP');
+        $this->attach($tenant, $first, $tenant['member']);
+        $this->attach($next, $second, $tenant['member']);
+        Schema::table('sessions', fn (Blueprint $table) => $table->unsignedBigInteger('academic_year_id')->nullable());
+        $sessionId = DB::table('sessions')->insertGetId(['school_id' => $tenant['school'], 'session_title' => 'Deleted year session', 'academic_year_id' => $tenant['year'], 'status' => 1]);
+        DB::table('schools')->where('id', $tenant['school'])->update(['running_session' => $sessionId]);
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+        $this->delete(route('admin.academic_structure.destroy', ['years', $tenant['year']]), ['confirm_deletion' => 'DELETE'])->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('academic_years', ['id' => $tenant['year']]);
+        $this->assertDatabaseMissing('course_offerings', ['id' => $first->id]);
+        $this->assertDatabaseMissing('course_offering_curriculum_memberships', ['course_offering_id' => $first->id]);
+        $this->assertDatabaseHas('subjects', ['id' => $tenant['subject']]);
+        $this->assertDatabaseHas('course_offerings', ['id' => $second->id]);
+        $this->assertDatabaseHas('course_offering_curriculum_memberships', ['course_offering_id' => $second->id, 'curriculum_membership_id' => $tenant['member']]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $tenant['member']]);
+        $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'effective_academic_year_id' => null]);
+        $this->assertDatabaseHas('academic_years', ['id' => $next['year']]);
+        $this->assertNull(DB::table('schools')->where('id', $tenant['school'])->value('running_session'));
+    }
+
+    public function test_curriculum_delete_preserves_shared_allocation_and_removes_exclusive_allocation(): void
+    {
+        $tenant = $this->tenants[1];
+        $otherId = $this->curriculumFor($tenant, 'approved', 'shared-version');
+        $stage = DB::table('curriculum_stages')->insertGetId(['school_id' => $tenant['school'], 'curriculum_id' => $otherId, 'label' => 'Year 1', 'sequence' => 1]);
+        $member = $this->createMembership($tenant, $otherId, $tenant['subject'], 'semester', 1, $stage);
+        $shared = $this->createOffering($tenant, 'VERSION-SHARED');
+        $exclusive = $this->createOffering($tenant, 'VERSION-EXCLUSIVE');
+        $this->attach($tenant, $shared, $tenant['member']);
+        $this->attach($tenant, $shared, $member);
+        $this->attach($tenant, $exclusive, $tenant['member']);
+        Schema::table('course_registrations', function (Blueprint $table): void {
+            $table->unsignedBigInteger('course_offering_id')->nullable();
+            $table->unsignedBigInteger('curriculum_membership_id')->nullable();
+        });
+        $student = $this->staff(1, [], ['role_id' => 7]);
+        $registration = ['school_id' => $tenant['school'], 'subject_id' => $tenant['subject'], 'student_id' => $student->id, 'status' => 'registered', 'course_offering_id' => $shared->id];
+        $ownedRegistration = DB::table('course_registrations')->insertGetId($registration + ['curriculum_membership_id' => $tenant['member']]);
+        $sharedRegistration = DB::table('course_registrations')->insertGetId($registration + ['curriculum_membership_id' => $member]);
+        Schema::create('registration_evidence', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('school_id'); $table->unsignedBigInteger('course_registration_id');
+            $table->foreign('course_registration_id')->references('id')->on('course_registrations')->restrictOnDelete();
+        });
+        DB::table('registration_evidence')->insert([
+            ['school_id' => $tenant['school'], 'course_registration_id' => $ownedRegistration],
+            ['school_id' => $tenant['school'], 'course_registration_id' => $sharedRegistration],
+        ]);
+        $manager = $this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage']);
+        $this->actingAs($manager)->delete(route('admin.curricula.destroy', $tenant['curriculum']), ['confirm_deletion' => 'DELETE'])->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('curricula', ['id' => $tenant['curriculum']]);
+        $this->assertDatabaseMissing('course_offerings', ['id' => $exclusive->id]);
+        $this->assertDatabaseMissing('course_offering_curriculum_memberships', ['curriculum_id' => $tenant['curriculum']]);
+        $this->assertDatabaseHas('course_offerings', ['id' => $shared->id]);
+        $this->assertDatabaseHas('course_offering_curriculum_memberships', ['course_offering_id' => $shared->id, 'curriculum_membership_id' => $member]);
+        $this->assertDatabaseHas('subjects', ['id' => $tenant['subject']]);
+        $this->assertDatabaseHas('curricula', ['id' => $otherId]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $member]);
+        $this->assertDatabaseHas('users', ['id' => $manager->id]);
+        $this->assertDatabaseHas('users', ['id' => $student->id]);
+        $this->assertDatabaseMissing('course_registrations', ['id' => $ownedRegistration]);
+        $this->assertDatabaseMissing('registration_evidence', ['course_registration_id' => $ownedRegistration]);
+        $this->assertDatabaseHas('course_registrations', ['id' => $sharedRegistration]);
+        $this->assertDatabaseHas('registration_evidence', ['course_registration_id' => $sharedRegistration]);
+    }
+
+    public function test_failed_curriculum_delete_rolls_back_children_and_returns_useful_error(): void
+    {
+        $tenant = $this->tenants[1];
+        $offering = $this->createOffering($tenant, 'DELETE-ROLLBACK');
+        $this->attach($tenant, $offering, $tenant['member']);
+        $this->actingAs($this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage']));
+        DB::unprepared("CREATE TRIGGER reject_curriculum_audit BEFORE INSERT ON audit_logs WHEN NEW.action = 'CURRICULUM_DELETED' BEGIN SELECT RAISE(ABORT, 'audit failure'); END");
+        try {
+            $this->delete(route('admin.curricula.destroy', $tenant['curriculum']), ['confirm_deletion' => 'DELETE'])->assertSessionHasErrors('delete');
+            $this->assertStringContainsString('No changes were saved', session('errors')->first('delete'));
+            $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum']]);
+            $this->assertDatabaseHas('curriculum_memberships', ['id' => $tenant['member']]);
+            $this->assertDatabaseHas('course_offerings', ['id' => $offering->id]);
+            $this->assertDatabaseHas('course_offering_curriculum_memberships', ['course_offering_id' => $offering->id]);
+            $this->assertDatabaseMissing('audit_logs', ['action' => 'COURSE_OFFERING_DELETED', 'record_id' => $offering->id]);
+        } finally {
+            DB::unprepared('DROP TRIGGER reject_curriculum_audit');
+        }
+    }
+
     public function test_programme_pages_keep_guidance_in_the_academic_workspace_instead_of_repeating_it(): void
     {
         $tenant = $this->tenants[1];
@@ -72,7 +251,7 @@ class CourseOfferingAdministrationTest extends TestCase
         if (getenv('PIIE_CAPTURE_PROGRAMME_WORKSPACE') === '1') {
             file_put_contents(base_path('output/programme-workspace-browser/curriculum-owner-approved.html'), $ownerPage->getContent());
         }
-        $this->get(route('admin.curricula.index'))->assertOk()->assertSee('Edit / Restore');
+        $this->get(route('admin.curricula.index'))->assertOk()->assertSee('Edit')->assertDontSee('Edit / Restore');
         $this->post(route('admin.curricula.owner_status', $id), ['status' => 'draft', 'reason' => ''])->assertSessionHasErrors('reason');
         $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'approved']);
         $this->post(route('admin.curricula.owner_status', $id), ['status' => 'draft', 'reason' => 'Owner correcting approved year label'])->assertSessionHasNoErrors();
