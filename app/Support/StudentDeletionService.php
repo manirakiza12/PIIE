@@ -97,7 +97,9 @@ class StudentDeletionService
             // intact; a candidate row with votes is anonymized below so those
             // ballots continue to point to a valid, non-personal candidate.
             $this->deleteWhere('election_votes', 'voter_id', $studentId);
-            $votedCandidateIds = $this->idsWhereIn('election_votes', 'candidate_id', $candidateIds);
+            $votedCandidateIds = $candidateIds && Schema::hasTable('election_votes') && Schema::hasColumn('election_votes', 'candidate_id')
+                ? DB::table('election_votes')->whereIn('candidate_id', $candidateIds)->distinct()->pluck('candidate_id')->map(fn ($id) => (int) $id)->all()
+                : [];
             if ($votedCandidateIds) {
                 if (Schema::hasColumn('election_candidates', 'student_id')) {
                     DB::table('election_candidates')->whereIn('id', $votedCandidateIds)->update(['student_id' => null, 'manifesto' => null]);
