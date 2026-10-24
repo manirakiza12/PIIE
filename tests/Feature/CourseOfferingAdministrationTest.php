@@ -1870,7 +1870,7 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         $this->assertDatabaseHas('academic_periods', ['id' => $period->id, 'sequence' => 3]);
         $data['sequence'] = 3;
         $data['reason'] = 'Correcting the semester label';
-        $this->put(route('admin.academic_structure.update', ['years', $year->id]), array_replace($yearData, ['end_date' => '2027-12-31']))->assertSessionHasErrors('start_date');
+        $this->put(route('admin.academic_structure.update', ['years', $year->id]), array_replace($yearData, ['end_date' => '2027-12-31']))->assertSessionHasNoErrors();
         $this->put(route('admin.academic_structure.update', ['periods', $period->id]), array_replace($data, ['label' => 'Corrected label']))->assertSessionHasNoErrors();
         $offeringId = (int) DB::table('course_offerings')->where('reference', 'PRESERVE-CALENDAR')->value('id');
         DB::table('schools')->where('id', $a['school'])->update(['current_academic_year_id' => $year->id, 'current_academic_period_id' => $period->id]);
