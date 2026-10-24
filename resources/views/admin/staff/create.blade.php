@@ -61,6 +61,8 @@
     @endif
 
     <form method="POST" action="{{ route('admin.staff.create.store', $type) }}" enctype="multipart/form-data" id="staff-create-form">
+        <p role="note">Photos: up to 4 MiB. Each document: up to {{ round($maxKb / 1024, 1) }} MiB. Combined uploads: up to 20 MiB. Additional documents can be added from the staff profile after creation.</p>
+        <p id="staff-upload-error" role="alert" tabindex="-1" hidden></p>
         @csrf
         <input type="hidden" name="role_key" value="{{ $type }}">
 
@@ -149,13 +151,7 @@
                         <label class="sc-label" for="nationality">{{ get_phrase('Nationality') }}</label>
                         <input id="nationality" name="nationality" class="form-control" value="{{ old('nationality') }}">
                     </div>
-                    <div class="col-12 col-md-6 col-xl-4 sc-field">
-                        <label class="sc-label" for="blood_group">{{ get_phrase('Blood Group') }}</label>
-                        <select id="blood_group" name="blood_group" class="form-select">
-                            <option value="">{{ get_phrase('Select a blood group') }}</option>
-                            @foreach($bloodGroups as $b)<option value="{{ $b }}" @selected(old('blood_group') === $b)>{{ get_phrase($b) }}</option>@endforeach
-                        </select>
-                    </div>
+
 
                     <div class="col-12 col-md-6 col-xl-4 sc-field">
                         {{-- Presentation only: the encrypted NIN architecture is unchanged. --}}

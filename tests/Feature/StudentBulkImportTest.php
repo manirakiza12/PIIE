@@ -42,7 +42,7 @@ class StudentBulkImportTest extends TestCase
             'name' => 'Partner Student', 'email' => 'partner@example.test',
             'next_of_kin_name' => 'Mary Example',
             'registration_number' => 'PIIE/OLD/0042', 'password_option' => 'auto',
-            'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
+            'gender' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
             'affiliated_institution_name' => 'Partner University', 'affiliated_student_id' => '0012/ABC',
         ])->assertRedirect()->assertSessionHasNoErrors();
         $student = User::where('email', 'partner@example.test')->firstOrFail();
@@ -54,7 +54,7 @@ class StudentBulkImportTest extends TestCase
         $this->assertSame(0, DB::table('enrollment')->count());
         $this->actingAs($this->admin)->post(route('admin.student.update', $student->id), [
             'name' => $student->name, 'email' => $student->email,
-            'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
+            'gender' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
             'class_id' => DB::table('classes')->where('school_id', $this->school)->value('id'),
             'next_of_kin_name' => 'John Example',
             'affiliated_institution_name' => 'Updated University', 'affiliated_student_id' => '0005/EDIT',
@@ -72,7 +72,7 @@ class StudentBulkImportTest extends TestCase
         $this->actingAs($this->admin)->post(route('admin.student.create'), [
             'name' => 'Partner Student', 'email' => 'invalid-partner@example.test',
             'registration_number' => 'PIIE/OLD/0043', 'password_option' => 'auto',
-            'gender' => '', 'blood_group' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
+            'gender' => '', 'birthday' => '2000-01-01', 'phone' => '', 'address' => '',
             'affiliated_student_id' => '0012/ABC',
         ])->assertSessionHasErrors('affiliated_institution_name');
         $this->assertFalse(User::where('email', 'invalid-partner@example.test')->exists());
@@ -175,11 +175,12 @@ class StudentBulkImportTest extends TestCase
         $this->actingAs($this->admin)->post(route('admin.student.create'), [
             'name' => 'Continuing Student', 'email' => 'continuing@x.test',
             'registration_number' => 'PIIE/2018/0007', 'password_option' => 'auto',
-            'gender' => 'Female', 'blood_group' => '', 'birthday' => '2000-01-01',
+            'gender' => 'Female', 'birthday' => '2000-01-01',
             'phone' => '0700000000', 'address' => 'Kampala',
         ])->assertSessionHasNoErrors()->assertRedirect();
         $student = User::where('email', 'continuing@x.test')->firstOrFail();
         $this->assertSame('PIIE/2018/0007', $student->code);
+        $this->assertArrayNotHasKey('blood_group', json_decode($student->user_information, true));
         $this->assertTrue((bool) $student->force_password_change);
         $this->assertSame(0, DB::table('enrollment')->count());
         $this->assertSame(0, DB::table('student_fee_managers')->count());
@@ -222,6 +223,15 @@ class StudentBulkImportTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
         $this->assertStringContainsString('class_name', $response->getContent());
+    }
+
+    public function test_offline_admission_csv_preview_does_not_request_blood_group(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.offline_admission.preview'))
+            ->assertOk()
+            ->assertSee('csv_file.svg')
+            ->assertDontSee('Blood Group')
+            ->assertDontSee('blood_group');
     }
 
     public function test_preview_reports_rows_without_creating_anything(): void

@@ -12,6 +12,7 @@ use App\Models\AdmissionDocument;
 use App\Models\ApplicationPayment;
 use App\Models\AdmitCard;
 use App\Models\AcademicCalendar;
+use App\Models\AcademicYear;
 use App\Models\Appraisal;
 use App\Models\Appraisal_submit;
 use App\Models\AuditLog;
@@ -68,7 +69,9 @@ use App\Support\ProfilePhoto;
 use App\Support\Staff\StaffProvisioningException;
 use App\Support\Staff\StaffProvisioningService;
 use App\Support\StudentFeeInvoiceGenerator;
+use App\Support\StudentDeletionService;
 use App\Support\StudentPortalActivation;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -77,6 +80,7 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Mail;
 use PDF;
@@ -640,14 +644,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1005,14 +1008,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1166,14 +1168,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1312,14 +1313,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1421,7 +1421,6 @@ class AdminController extends Controller
         }
         $info = [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
@@ -1522,14 +1521,13 @@ class AdminController extends Controller
             }
         }
 
-        $info = [
+        $info = array_merge((array) (json_decode($parentUser->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1657,14 +1655,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1853,7 +1850,7 @@ class AdminController extends Controller
                 continue;
             }
             $profile = StudentProfile::where('user_id', $student->id)->first();
-            $info = (object) array_merge(['phone' => null, 'gender' => null, 'blood_group' => null], (array) (json_decode($student->user_information ?? '') ?: []));
+            $info = (object) array_merge(['phone' => null, 'gender' => null], (array) (json_decode($student->user_information ?? '') ?: []));
 
             $rows[] = [
                 $i + 1,
@@ -1862,7 +1859,6 @@ class AdminController extends Controller
                 $student->email,
                 $info->phone,
                 $info->gender,
-                $info->blood_group,
                 optional($profile?->programme)->name,
                 optional($profile?->intakeSession)->name,
                 $profile->status ?? 'active',
@@ -1872,7 +1868,7 @@ class AdminController extends Controller
 
         return \App\Support\Export\ExcelExportService::download(
             'students_' . date('Y-m-d'),
-            ['#', 'Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Blood Group', 'Programme', 'Intake', 'Status', 'Account Status'],
+            ['#', 'Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Programme', 'Intake', 'Status', 'Account Status'],
             $rows
         );
     }
@@ -1909,7 +1905,6 @@ class AdminController extends Controller
             $student_details['email'] ?? '',
             $student_details['phone'] ?? '',
             $student_details['gender'] ?? '',
-            strtoupper($student_details['blood_group'] ?? ''),
             optional($profile?->programme)->name,
             optional($profile?->intakeSession)->name,
             $profile->nationality ?? '',
@@ -1920,7 +1915,7 @@ class AdminController extends Controller
 
         return \App\Support\Export\ExcelExportService::download(
             'student_' . ($student_details['code'] ?? $id),
-            ['Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Blood Group', 'Programme', 'Intake', 'Nationality', 'Status', 'Affiliated University / School', 'Student ID at Affiliated Institution'],
+            ['Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Programme', 'Intake', 'Nationality', 'Status', 'Affiliated University / School', 'Student ID at Affiliated Institution'],
             $rows
         );
     }
@@ -1962,10 +1957,30 @@ class AdminController extends Controller
     {
         $school_id  = auth()->user()->school_id;
         $classes    = Classes::get()->where('school_id', $school_id);
-        $sessions   = Session::where('school_id', $school_id)->orderByDesc('id')->get();
+        $sessions   = Session::query()->where('school_id', $school_id)->whereNotNull('academic_year_id')
+            ->whereHas('academicYear', fn ($query) => $query->where('school_id', $school_id))
+            ->orderByDesc('id')->get();
+        $academicYears = AcademicYear::query()->where('school_id', $school_id)
+            ->whereHas('legacySessions', fn ($query) => $query->where('school_id', $school_id))
+            ->orderByDesc('start_date')->get();
         $departments = Department::where('school_id', $school_id)->orderBy('name')->get();
         $programmes = Programme::where('school_id', $school_id)->where('is_active', 1)->orderBy('name')->get();
         $intakeSessions = IntakeSession::where('school_id', $school_id)->orderByDesc('id')->get();
+        $cohortEntryYears = [];
+        if (Schema::hasTable('programme_cohorts') && Schema::hasTable('academic_years')) {
+            $cohortEntryYears = DB::table('programme_cohorts')
+                ->join('academic_years', function ($join) {
+                    $join->on('programme_cohorts.entry_academic_year_id', '=', 'academic_years.id')
+                        ->on('programme_cohorts.school_id', '=', 'academic_years.school_id');
+                })
+                ->where('programme_cohorts.school_id', $school_id)
+                ->whereIn('programme_cohorts.status', ['active', 'completed'])
+                ->orderBy('academic_years.start_date')
+                ->get(['programme_cohorts.programme_id', 'programme_cohorts.intake_session_id', 'academic_years.label'])
+                ->groupBy(fn ($row) => $row->programme_id.'|'.$row->intake_session_id)
+                ->map(fn ($rows) => $rows->pluck('label')->unique()->values()->all())
+                ->all();
+        }
         $canRecordExistingStudentFees = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices')
             && app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments');
         $canRequestStudyWaiver = $canRecordExistingStudentFees
@@ -1973,11 +1988,27 @@ class AdminController extends Controller
         $feeStructures = $canRecordExistingStudentFees
             ? FeeStructure::where('school_id', $school_id)->where('is_mandatory', 1)->whereNull('class_id')->orderBy('name')->get()
             : collect();
-        $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'departments' => $departments, 'programmes' => $programmes,
+        $runningSessionId = get_school_settings($school_id)->value('running_session');
+        $currentAcademicYearId = DB::table('schools')->where('id', $school_id)->value('current_academic_year_id');
+        $runningSessionYearId = $runningSessionId
+            ? $sessions->firstWhere('id', (int) $runningSessionId)?->academic_year_id
+            : null;
+        $defaultFeeAcademicYearId = $academicYears->contains('id', (int) $currentAcademicYearId)
+            ? (int) $currentAcademicYearId
+            : ($academicYears->contains('id', (int) $runningSessionYearId) ? (int) $runningSessionYearId : null);
+        $defaultFeeSessionId = $sessions->contains(fn ($session) => (int) $session->id === (int) $runningSessionId
+            && (int) $session->academic_year_id === (int) $defaultFeeAcademicYearId)
+            ? (int) $runningSessionId
+            : null;
+        $view_data  = ['classes' => $classes, 'sessions' => $sessions, 'academicYears' => $academicYears,
+            'departments' => $departments, 'programmes' => $programmes,
             'intakeSessions' => $intakeSessions, 'feeStructures' => $feeStructures,
+            'cohortEntryYears' => $cohortEntryYears,
             'canRecordExistingStudentFees' => $canRecordExistingStudentFees,
             'canRequestStudyWaiver' => $canRequestStudyWaiver,
-            'runningSessionId' => get_school_settings($school_id)->value('running_session')];
+            'runningSessionId' => $runningSessionId,
+            'defaultFeeAcademicYearId' => $defaultFeeAcademicYearId,
+            'defaultFeeSessionId' => $defaultFeeSessionId];
         if (! $request->ajax()) {
             return view('admin.common.modal_standalone_wrapper', [
                 'page_title' => get_phrase('Add Existing Student'),
@@ -2003,9 +2034,11 @@ class AdminController extends Controller
         $awardMinor = 0;
         if ($recordFees) {
             abort_unless($canRecordExistingStudentFees, 403);
+            $schoolId = (int) $request->user()->school_id;
             $request->validate([
-                'fee_session_id' => ['required', 'integer', 'exists:sessions,id,school_id,' . auth()->user()->school_id],
-                'fee_structure_id' => ['required', 'integer', 'exists:fee_structures,id,school_id,' . auth()->user()->school_id],
+                'fee_academic_year_id' => ['required', 'integer', Rule::exists('academic_years', 'id')->where('school_id', $schoolId)],
+                'fee_session_id' => ['required', 'integer', Rule::exists('sessions', 'id')->where('school_id', $schoolId)->where('academic_year_id', (int) $request->input('fee_academic_year_id'))],
+                'fee_structure_id' => ['required', 'integer', Rule::exists('fee_structures', 'id')->where('school_id', $schoolId)],
                 'actual_fee_amount' => ['required', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/', 'gt:0'],
                 'prior_paid_amount' => ['nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
             ]);
@@ -2060,6 +2093,7 @@ class AdminController extends Controller
             'password'         => 'nullable|min:6',
             'programme_id'     => 'nullable|exists:programmes,id,school_id,' . auth()->user()->school_id,
             'intake_session_id' => 'nullable|exists:intake_sessions,id,school_id,' . auth()->user()->school_id,
+            'fee_academic_year_id' => ['nullable', 'integer', Rule::exists('academic_years', 'id')->where('school_id', (int) $request->user()->school_id)],
             'nationality'      => 'nullable|max:80',
             'national_id_or_passport' => 'nullable|max:50',
             'year_of_study'    => 'nullable|integer|min:1|max:20',
@@ -2100,7 +2134,6 @@ class AdminController extends Controller
 
         $info = [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
@@ -2293,14 +2326,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($student->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
         $data['user_information'] = json_encode($info);
         $user = User::find($id);
         if ($user) {
@@ -2386,48 +2418,34 @@ class AdminController extends Controller
         }
     }
 
-    public function studentDelete($id)
+    public function studentDelete(Request $request, $id, StudentDeletionService $deletion)
     {
-        // RBAC Phase 2D: resolve the student (same school, role 7) before any
-        // related record below is touched.
-        $student = $this->findStudentOrFail($id);
+        $request->validate([
+            'confirmation' => ['required', 'in:DELETE'],
+        ], [
+            'confirmation.in' => 'Type DELETE to confirm permanent removal of this student and all associated academic and account records.',
+        ]);
 
-        // A programme-based (HEI) student has no Enrollment row at all — only
-        // a StudentProfile — so both must be handled without assuming either
-        // exists, or this crashes/orphans data depending on which structure
-        // the student actually belongs to.
-        $enroll = Enrollment::where('user_id', $id)->first();
-        if ($enroll) {
-            $enroll->delete();
+        try {
+            $result = $deletion->delete((int) $id, $request->user());
+        } catch (QueryException $exception) {
+            report($exception);
+
+            return redirect()->back()->with(
+                'error',
+                'Student deletion could not be completed. No records were changed.'
+            );
         }
 
-        $studentProfile = StudentProfile::where('user_id', $id)->first();
-        if ($studentProfile) {
-            $studentProfile->delete();
+        $message = 'Student removed successfully.';
+        if ($result['retained_financial_invoices'] > 0) {
+            $message .= ' Financial invoices with recorded payment, award, or provider history were retained for reconciliation.';
+        }
+        if ($result['retained_applications'] > 0) {
+            $message .= ' Admission records linked to application payment history were retained for reconciliation.';
         }
 
-        $fee_history = StudentFeeManager::get()->where('student_id', $id);
-        $fee_history->map->delete();
-
-        $attendances = DailyAttendances::get()->where('student_id', $id);
-        $attendances->map->delete();
-
-        $book_issues = BookIssue::get()->where('student_id', $id);
-        $book_issues->map->delete();
-
-        $gradebooks = Gradebook::get()->where('student_id', $id);
-        $gradebooks->map->delete();
-
-        $payments = Payments::get()->where('user_id', $id);
-        $payments->map->delete();
-
-        $payment_history = PaymentHistory::get()->where('user_id', $id);
-        $payment_history->map->delete();
-
-        $student->delete();
-
-        $students = User::get()->where('role_id', 7);
-        return redirect()->back()->with('message', 'Student removed successfully.');
+        return redirect()->back()->with('message', $message);
     }
 
     /**
@@ -2616,7 +2634,6 @@ class AdminController extends Controller
 
             $info = [
                 'gender'      => $data['gender'],
-                'blood_group' => $data['blood_group'],
                 'birthday'    => strtotime($data['eDefaultDateRange']),
                 'phone'       => $data['phone'],
                 'address'     => $data['address'],
@@ -2692,7 +2709,6 @@ class AdminController extends Controller
 
                 $info = [
                     'gender'      => $students_gender[$key],
-                    'blood_group' => '',
                     'birthday'    => '',
                     'phone'       => '',
                     'address'     => '',
@@ -2769,30 +2785,56 @@ class AdminController extends Controller
         if (($handle = fopen($filepath, 'r')) !== false) { // Check the resource is valid
             $count               = 0;
             $duplication_counter = 0;
+            $columns = [
+                'name' => 0, 'email' => 1, 'password' => 2, 'phone' => 3,
+                'gender' => 5, 'birthday' => 6, 'address' => 7,
+            ]; // Legacy BloodGroup column is intentionally ignored.
 
             while (($all_data = fgetcsv($handle, 1000, ",")) !== false) { // Check opening the file is OK!
+                if ($count === 0) {
+                    $headers = array_map(fn ($header) => strtolower(preg_replace('/[^a-z0-9]/i', '', (string) $header)), $all_data);
+                    $headerIndexes = array_flip($headers);
+                    foreach ([
+                        'name' => ['studentname', 'name'], 'email' => ['email'],
+                        'password' => ['password'], 'phone' => ['phone'],
+                        'gender' => ['gender'], 'birthday' => ['birthday'],
+                        'address' => ['address', 'adress'],
+                    ] as $field => $aliases) {
+                        foreach ($aliases as $alias) {
+                            if (isset($headerIndexes[$alias])) {
+                                $columns[$field] = $headerIndexes[$alias];
+                                break;
+                            }
+                        }
+                    }
+                    // Older templates placed a retired BloodGroup column at index 4.
+                    if (! isset($headerIndexes['gender'])) {
+                        $columns['gender'] = isset($headerIndexes['bloodgroup']) ? 5 : 4;
+                        $columns['birthday'] = $columns['gender'] + 1;
+                        $columns['address'] = $columns['birthday'] + 1;
+                    }
+                }
                 if ($student_limit == 'unlimited' || $student_limit > $student_count) {
                     if ($count > 0) {
 
-                        $duplicate_user_check = User::get()->where('email', $all_data[1]);
+                        $duplicate_user_check = User::get()->where('email', $all_data[$columns['email']] ?? '');
 
                         if (count($duplicate_user_check) == 0) {
 
                             $info = [
-                                'gender'      => $all_data[5],
-                                'blood_group' => $all_data[4],
-                                'birthday'    => strtotime($all_data[6]),
-                                'phone'       => $all_data[3],
-                                'address'     => $all_data[7],
+                                'gender'      => $all_data[$columns['gender']] ?? '',
+                                'birthday'    => strtotime($all_data[$columns['birthday']] ?? ''),
+                                'phone'       => $all_data[$columns['phone']] ?? '',
+                                'address'     => $all_data[$columns['address']] ?? '',
                                 'photo'       => '',
                             ];
 
                             $data['user_information'] = json_encode($info);
 
                             $user = User::create([
-                                'name'             => $all_data[0],
-                                'email'            => $all_data[1],
-                                'password'         => Hash::make($all_data[2]),
+                                'name'             => $all_data[$columns['name']] ?? '',
+                                'email'            => $all_data[$columns['email']] ?? '',
+                                'password'         => Hash::make($all_data[$columns['password']] ?? ''),
                                 'code'             => student_code(),
                                 'role_id'          => '7',
                                 'school_id'        => $school_id,
@@ -4439,45 +4481,25 @@ class AdminController extends Controller
      */
     public function studentFeeManagerList(Request $request)
     {
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-        $programmes = Programme::where('school_id', auth()->user()->school_id)->where('is_active', 1)->orderBy('name')->get();
-
-        if (count($request->all()) > 0) {
-            $data              = $request->all();
-            $date              = explode('-', $data['eDateRange']);
-            $date_from         = strtotime($date[0] . ' 00:00:00');
-            $date_to           = strtotime($date[1] . ' 23:59:59');
-            $selected_class    = $data['class'];
-            $selected_status   = $data['status'];
-            $selected_programme = $data['programme'] ?? 'all';
-
-            $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)
-                ->where('school_id', auth()->user()->school_id)
-                ->where('session_id', $active_session)
-                ->when($selected_class != "all", fn($q) => $q->where('class_id', $selected_class))
-                ->when($selected_status != "all", fn($q) => $q->where('status', $selected_status))
-                ->when($selected_programme != "all", fn($q) => $q->where('programme_id', $selected_programme))
-                ->with(['awards' => fn ($q) => $q->whereNull('revoked_at')])->get();
-
-            $classes = Classes::where('school_id', auth()->user()->school_id)->get();
-
-            return view('admin.student_fee_manager.student_fee_manager', ['classes' => $classes, 'programmes' => $programmes, 'invoices' => $invoices, 'date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $selected_class, 'selected_status' => $selected_status, 'selected_programme' => $selected_programme]);
-        } else {
-            $classes         = Classes::where('school_id', auth()->user()->school_id)->get();
-            $date_from       = strtotime(date('d-m-Y', strtotime('first day of this month')) . ' 00:00:00');
-            $date_to         = strtotime(date('d-m-Y', strtotime('last day of this month')) . ' 23:59:59');
-            $selected_class  = "";
-            $selected_status = "";
-            $selected_programme = "";
-            $invoices        = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->with(['awards' => fn ($q) => $q->whereNull('revoked_at')])->get();
-            return view('admin.student_fee_manager.student_fee_manager', ['classes' => $classes, 'programmes' => $programmes, 'invoices' => $invoices, 'date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $selected_class, 'selected_status' => $selected_status, 'selected_programme' => $selected_programme]);
-        }
+        $schoolId = (int) $request->user()->school_id;
+        $overview = app(\App\Support\Billing\StudentFeeOverview::class);
+        $studentData = $overview->build($request);
+        $filters = $overview->reportFilters($request);
+        $invoices = StudentFeeManager::where('school_id', $schoolId)->where('session_id', $studentData['feeSessionId'])
+            ->whereHas('student', fn ($q) => $q->where('school_id', $schoolId)->where('role_id', 7))
+            ->whereBetween('timestamp', [$filters['date_from'], $filters['date_to']])
+            ->when($filters['selected_class'] !== 'all', fn ($q) => $q->where('class_id', $filters['selected_class']))
+            ->when($filters['selected_status'] !== 'all', fn ($q) => $q->where('status', $filters['selected_status']))
+            ->when($filters['selected_programme'] !== 'all', fn ($q) => $q->where('programme_id', $filters['selected_programme']))
+            ->with(['awards' => fn ($q) => $q->where('school_id', $schoolId)->whereNull('revoked_at')])->get();
+        $classes = Classes::where('school_id', $schoolId)->get();
+        $programmes = Programme::where('school_id', $schoolId)->where('is_active', 1)->orderBy('name')->get();
+        return view('admin.student_fee_manager.student_fee_manager', compact('classes', 'invoices') + compact('programmes') + $filters + $studentData);
     }
-
     public function feeManagerExport($date_from = "", $date_to = "", $selected_class = "", $selected_status = "")
     {
 
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
+        $active_session = app(\App\Support\Billing\StudentFeeOverview::class)->sessionId(request());
 
         if ($selected_class != "all" && $selected_status != "all") {
             $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('class_id', $selected_class)->where('status', $selected_status)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();
@@ -4517,7 +4539,7 @@ class AdminController extends Controller
     public function feeManagerExportPdfPrint($date_from = "", $date_to = "", $selected_class = "", $selected_status = "")
     {
 
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
+        $active_session = app(\App\Support\Billing\StudentFeeOverview::class)->sessionId(request());
 
         if ($selected_class != "all" && $selected_status != "all") {
             $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('class_id', $selected_class)->where('status', $selected_status)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();

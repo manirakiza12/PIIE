@@ -43,8 +43,6 @@ use Illuminate\Validation\ValidationException;
  */
 class StaffCreateController extends Controller
 {
-    /** The only blood groups a staff record may record. */
-    public const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
     /** Genders offered on the form, matching the existing create flows. */
     public const GENDERS = ['Male', 'Female', 'Other'];
@@ -96,7 +94,6 @@ class StaffCreateController extends Controller
             'maxKb' => StaffDocumentStorage::maxKb(),
             'maxDocuments' => self::MAX_DOCUMENTS,
             'acceptedMime' => self::ACCEPTED_MIME_LABELS,
-            'bloodGroups' => self::BLOOD_GROUPS,
             'genders' => self::GENDERS,
             'employmentTypes' => self::EMPLOYMENT_TYPES,
             'staffStatuses' => StaffStatus::ALL,
@@ -107,6 +104,8 @@ class StaffCreateController extends Controller
     {
         $config = $this->type($type, $request->user());
         $schoolId = (int) $request->user()->school_id;
+
+        \App\Support\Staff\StaffUploadLimits::validate($request);
 
         $data = $request->validate([
             // Personal
@@ -121,7 +120,6 @@ class StaffCreateController extends Controller
             'nationality' => ['nullable', 'string', 'max:100'],
             'nin' => ['nullable', 'string', 'min:'.StaffNin::MIN_LENGTH, 'max:'.StaffNin::MAX_LENGTH],
             'years_teaching_experience' => ['nullable', 'integer', 'min:0', 'max:80'],
-            'blood_group' => ['nullable', Rule::in(self::BLOOD_GROUPS)],
             'address' => ['nullable', 'string', 'max:1000'],
             // Contact — the staff module's own contact pattern, so this form
             // cannot drift from what the profile screens accept.
@@ -154,7 +152,7 @@ class StaffCreateController extends Controller
         // optional field is normalised rather than left undefined.
         $data += [
             'middle_name' => '', 'title' => '', 'nationality' => '', 'nin' => '',
-            'blood_group' => '', 'address' => '', 'alternative_phone' => '',
+            'address' => '', 'alternative_phone' => '',
             'department_id' => null, 'date_joined' => null, 'birthday' => '',
             'years_teaching_experience' => null,
         ];

@@ -20,10 +20,10 @@
 </div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger"><strong>{{ get_phrase('Please correct the following:') }}</strong><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
-@if($isDraft)<div class="alert alert-warning"><strong>{{ get_phrase('Draft — not official') }}.</strong> {{ get_phrase('Changes are editable until approval. Approval makes the structure immutable.') }}</div>
+@if($isDraft)<div class="alert alert-warning"><strong>{{ get_phrase('Draft — not official') }}.</strong> {{ get_phrase('Managers can edit this version. Approval marks it official; edits to official or retired versions require a reason.') }}</div>
 @elseif($isOwner)<div class="alert alert-info"><strong>Owner access.</strong> You can reopen this {{ $curriculum->status }} curriculum for editing{{ $curriculum->status === 'retired' ? ' or restore it to Approved' : '' }} using the controls below.</div>
-@elseif($curriculum->status === 'approved')<div class="alert alert-success"><strong>{{ get_phrase('Official approved Curriculum') }}.</strong> {{ get_phrase('This academic structure is read-only. Material changes require a successor version.') }}</div>
-@else<div class="alert alert-secondary"><strong>{{ get_phrase('Retired historical Curriculum') }}.</strong> {{ get_phrase('This record is preserved and read-only.') }}</div>@endif
+@elseif($curriculum->status === 'approved')<div class="alert alert-success"><strong>{{ get_phrase('Official approved Curriculum') }}.</strong> {{ get_phrase('Managers may correct this version; provide a reason for saved changes.') }}</div>
+@else<div class="alert alert-secondary"><strong>{{ get_phrase('Retired historical Curriculum') }}.</strong> {{ get_phrase('Managers may correct this version; provide a reason for saved changes.') }}</div>@endif
 
 
 
@@ -39,12 +39,13 @@
 @endif
 <section class="eSection-wrap mb-3" aria-labelledby="metadata-heading">
     <h5 id="metadata-heading">{{ get_phrase('Curriculum Details') }}</h5>
-    @if($isDraft && $canManage)
+    @if($canManage)
     <form method="POST" action="{{ route('admin.curricula.update', $curriculum->id) }}" class="row g-2">@csrf @method('PUT')
         <div class="col-md-4"><label class="form-label">{{ get_phrase('Programme') }}</label><input class="form-control" readonly value="{{ $curriculum->programme->code }} — {{ $curriculum->programme->name }}"></div>
         <div class="col-md-3"><label class="form-label">{{ get_phrase('Version') }}</label><input class="form-control" name="version" maxlength="50" required value="{{ old('version', $curriculum->version) }}"></div>
         <div class="col-md-3"><label class="form-label">{{ get_phrase('Applies From Academic Year') }}</label><select class="form-select" name="effective_academic_year_id"><option value="">{{ get_phrase('Choose later') }}</option>@foreach($academicYears as $year)<option value="{{ $year->id }}" @selected((string)$curriculum->effective_academic_year_id === (string)$year->id)>{{ $year->label }} ({{ $year->start_date->format('d/m/y') }} — {{ $year->end_date->format('d/m/y') }})</option>@endforeach</select></div>
-        <div class="col-md-2 d-flex align-items-end"><button class="eBtn eBtn-primary" type="submit">{{ get_phrase('Save draft') }}</button></div>
+        @if(!$isDraft)<div class="col-md-12"><label class="form-label">Reason for changing this {{ $curriculum->status }} version</label><textarea class="form-control" name="reason" maxlength="500" required>{{ old('reason') }}</textarea></div>@endif
+        <div class="col-md-2 d-flex align-items-end"><button class="eBtn eBtn-primary" type="submit">{{ get_phrase('Save changes') }}</button></div>
     </form>
     @else<p class="mb-0">{{ get_phrase('Programme') }}: {{ $curriculum->programme->code }} — {{ $curriculum->programme->name }} · {{ get_phrase('Department') }}: {{ $curriculum->programme->department->name ?? '—' }} · {{ get_phrase('Version') }}: {{ $curriculum->version }}</p>@endif
 </section>
@@ -76,7 +77,17 @@
     </form>
 </section>
 @endif
-@if($isDraft && $canManage)
-<section class="eSection-wrap mt-3"><h5>Delete draft</h5><p class="text-muted">Delete this draft and its structure. Referenced curricula and approved historical records cannot be deleted.</p><form method="POST" action="{{ route('admin.curricula.destroy', $curriculum->id) }}" onsubmit="return confirm('Delete this draft curriculum and all its years and placements?')">@csrf @method('DELETE')<button class="btn btn-outline-danger">Delete Draft</button></form></section>
+@if($canManage)
+<section class="eSection-wrap mt-3"><h5>Delete Programme Curriculum</h5>
+@include('shared.academic_delete_button', [
+    'deleteAction' => route('admin.curricula.destroy', $curriculum->id),
+    'deleteTitle' => 'Delete Programme Curriculum',
+    'deleteIdentity' => $curriculum->programme->code.' '.$curriculum->version.' — '.$curriculum->programme->name.' (record #'.$curriculum->id.')',
+    'deleteReference' => trim($curriculum->programme->code.' '.$curriculum->version),
+    'deleteRemoves' => 'This version’s Programme Years, Course Unit placements, assignments, cohort links, exclusive course allocations, registrations and dependent workflows.',
+    'deleteKeeps' => 'Shared Course Units, allocations linked to other versions, other curricula, and student/staff accounts and profiles.',
+])
+</section>
 @endif
+@include('shared.academic_delete_modal')
 @endsection

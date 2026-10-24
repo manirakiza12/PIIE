@@ -50,7 +50,6 @@ class StaffCreationCharacterizationTest extends TestCase
             'first_name' => 'Sarah',
             'last_name' => 'Nakato',
             'gender' => 'Female',
-            'blood_group' => 'o+',
             'birthday' => '01/15/1990',
             'phone' => '0700000001',
             'address' => '1 Test Street',
@@ -94,13 +93,14 @@ class StaffCreationCharacterizationTest extends TestCase
         $this->assertNull($user->school_role);
 
         $expectedInfo = [
-            'gender' => 'Female', 'blood_group' => 'o+', 'birthday' => strtotime('01/15/1990'),
+            'gender' => 'Female', 'birthday' => strtotime('01/15/1990'),
             'phone' => '0700000001', 'address' => '1 Test Street', 'photo' => '',
         ];
         if ($roleId === 2) {
             $expectedInfo['school_role'] = 0;
         }
         $this->assertSame($expectedInfo, json_decode($user->user_information, true));
+        $this->assertArrayNotHasKey('blood_group', json_decode($user->user_information, true));
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('flows')]

@@ -99,24 +99,6 @@
         </div>
 
         <div class="row fmb-14 justify-content-between align-items-center">
-            <label for="blood_group" class="col-sm-2 col-eForm-label">{{ get_phrase('Blood group') }}</label>
-            <div class="col-md-10">
-                <select name="blood_group" id="blood_group"
-                    class="form-select eForm-select eChoice-multiple-with-remove" required>
-                    <option value="">{{ get_phrase('Select a blood group') }}</option>
-                    <option value="a+">{{ get_phrase('A+') }}</option>
-                    <option value="a-">{{ get_phrase('A-') }}</option>
-                    <option value="b+">{{ get_phrase('B+') }}</option>
-                    <option value="b-">{{ get_phrase('B-') }}</option>
-                    <option value="ab+">{{ get_phrase('AB+') }}</option>
-                    <option value="ab-">{{ get_phrase('AB-') }}</option>
-                    <option value="o+">{{ get_phrase('O+') }}</option>
-                    <option value="o-">{{ get_phrase('O-') }}</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="row fmb-14 justify-content-between align-items-center">
             <label for="address" class="col-sm-2 col-eForm-label">{{ get_phrase('Address') }}</label>
             <div class="col-md-10">
                 <textarea class="form-control eForm-control" id="address" rows="4" name = "address" required></textarea>

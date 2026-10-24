@@ -197,46 +197,24 @@ class AccountantController extends Controller
      */
     public function studentFeeManagerList(Request $request)
     {
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
-
-        if(count($request->all()) > 0){
-            $data = $request->all();
-            $date = explode('-', $data['eDateRange']);
-            $date_from = strtotime($date[0].' 00:00:00');
-            $date_to  = strtotime($date[1].' 23:59:59');
-            $selected_class = $data['class'];
-            $selected_status = $data['status'];
-
-            if ($selected_class != "all" && $selected_status != "all") {
-                $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('class_id', $selected_class)->where('status', $selected_status)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->with(['awards' => fn ($q) => $q->whereNull('revoked_at')])->get();
-            } else if ($selected_class != "all") {
-                $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('class_id', $selected_class)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->with(['awards' => fn ($q) => $q->whereNull('revoked_at')])->get();
-            } else if ($selected_status != "all"){
-                $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('status', $selected_status)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->with(['awards' => fn ($q) => $q->whereNull('revoked_at')])->get();
-            } else {
-                $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->with(['awards' => fn ($q) => $q->whereNull('revoked_at')])->get();
-            }
-
-
-            $classes = Classes::where('school_id', auth()->user()->school_id)->get();
-
-            return view('accountant.student_fee_manager.student_fee_manager', ['classes' => $classes, 'invoices' => $invoices, 'date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $selected_class, 'selected_status' => $selected_status]);
-
-         } else {
-            $classes = Classes::where('school_id', auth()->user()->school_id)->get();
-            $date_from = strtotime(date('d-m-Y',strtotime('first day of this month')).' 00:00:00');
-            $date_to = strtotime(date('d-m-Y',strtotime('last day of this month')).' 23:59:59');
-            $selected_class = "";
-            $selected_status = "";
-            $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();
-            return view('accountant.student_fee_manager.student_fee_manager', ['classes' => $classes, 'invoices' => $invoices, 'date_from' => $date_from, 'date_to' => $date_to, 'selected_class' => $selected_class, 'selected_status' => $selected_status]);
-         }
+        $schoolId = (int) $request->user()->school_id;
+        $overview = app(\App\Support\Billing\StudentFeeOverview::class);
+        $studentData = $overview->build($request);
+        $filters = $overview->reportFilters($request);
+        $invoices = StudentFeeManager::where('school_id', $schoolId)->where('session_id', $studentData['feeSessionId'])
+            ->whereHas('student', fn ($q) => $q->where('school_id', $schoolId)->where('role_id', 7))
+            ->whereBetween('timestamp', [$filters['date_from'], $filters['date_to']])
+            ->when($filters['selected_class'] !== 'all', fn ($q) => $q->where('class_id', $filters['selected_class']))
+            ->when($filters['selected_status'] !== 'all', fn ($q) => $q->where('status', $filters['selected_status']))
+            ->when($filters['selected_programme'] !== 'all', fn ($q) => $q->where('programme_id', $filters['selected_programme']))
+            ->with(['awards' => fn ($q) => $q->where('school_id', $schoolId)->whereNull('revoked_at')])->get();
+        $classes = Classes::where('school_id', $schoolId)->get();
+        return view('accountant.student_fee_manager.student_fee_manager', compact('classes', 'invoices') + $filters + $studentData);
     }
-
     public function feeManagerExport($date_from = "", $date_to = "", $selected_class = "", $selected_status = "")
     {
 
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
+        $active_session = app(\App\Support\Billing\StudentFeeOverview::class)->sessionId(request());
 
         if ($selected_class != "all" && $selected_status != "all") {
             $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('class_id', $selected_class)->where('status', $selected_status)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();
@@ -280,7 +258,7 @@ class AccountantController extends Controller
     public function feeManagerExportPdfPrint($date_from = "", $date_to = "", $selected_class = "", $selected_status = "")
     {
 
-        $active_session = get_school_settings(auth()->user()->school_id)->value('running_session');
+        $active_session = app(\App\Support\Billing\StudentFeeOverview::class)->sessionId(request());
 
         if ($selected_class != "all" && $selected_status != "all") {
             $invoices = StudentFeeManager::where('timestamp', '>=', $date_from)->where('timestamp', '<=', $date_to)->where('class_id', $selected_class)->where('status', $selected_status)->where('school_id', auth()->user()->school_id)->where('session_id', $active_session)->get();

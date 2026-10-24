@@ -17,6 +17,16 @@ class CurriculumController extends Controller
 {
     public function __construct(private CurriculumFoundationService $curricula)
     {
+        $this->middleware(function ($request, $next) {
+            $name = (string) $request->route()?->getName();
+            if (str_starts_with($name, 'admin.curricula.') && in_array($name, [
+                'admin.curricula.store', 'admin.curricula.update', 'admin.curricula.destroy',
+                'admin.curricula.stages.store', 'admin.curricula.stages.update', 'admin.curricula.stages.move', 'admin.curricula.stages.destroy',
+                'admin.curricula.memberships.store', 'admin.curricula.memberships.update', 'admin.curricula.memberships.destroy',
+                'admin.curricula.prerequisites.store', 'admin.curricula.prerequisites.destroy', 'admin.curricula.successor',
+            ], true)) abort_unless($request->user()?->hasPermission('academic.curriculum.manage'), 403);
+            return $next($request);
+        });
     }
 
     public function index(Request $request)
@@ -69,8 +79,18 @@ class CurriculumController extends Controller
 
     public function destroy(Request $request, int $id)
     {
-        $this->curricula->deleteDraft($this->tenantCurriculum($request, $id));
-        return redirect()->route('admin.curricula.index')->with('success', 'Draft Programme Curriculum deleted.');
+        abort_unless($request->user()->hasPermission('academic.curriculum.manage'), 403);
+        $curriculum = $this->tenantCurriculum($request, $id);
+        $data = $request->validate(['confirm_deletion' => ['required', 'string', 'max:150']]);
+        try {
+            $this->curricula->deleteDraft($curriculum, $data['confirm_deletion'], (int) $request->user()->id);
+        } catch (\Illuminate\Database\QueryException $exception) {
+            report($exception);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'delete' => 'The curriculum could not be deleted because a linked record or audit write failed. No changes were saved. Contact an administrator to check the linked records, then retry.',
+            ]);
+        }
+        return redirect()->route('admin.curricula.index')->with('success', 'Programme Curriculum and its owned records deleted.');
     }
 
     public function units(Request $request)
@@ -132,15 +152,17 @@ class CurriculumController extends Controller
 
     public function update(Request $request, int $id)
     {
+        abort_unless($request->user()->hasPermission('academic.curriculum.manage'), 403);
         $curriculum = $this->tenantCurriculum($request, $id);
         $schoolId = (int) $request->user()->school_id;
         $data = $request->validate([
             'version' => ['required', 'string', 'max:50'],
             'effective_academic_year_id' => ['nullable', 'integer', Rule::exists('academic_years', 'id')->where('school_id', $schoolId)],
+            'reason' => ['nullable', 'string', 'max:500'],
         ]);
-        $this->curricula->updateDraftMetadata($curriculum, $data['version'], isset($data['effective_academic_year_id']) ? (int) $data['effective_academic_year_id'] : null);
+        $this->curricula->updateDraftMetadata($curriculum, $data['version'], isset($data['effective_academic_year_id']) ? (int) $data['effective_academic_year_id'] : null, $data['reason'] ?? null);
 
-        return back()->with('success', 'Draft metadata saved.');
+        return back()->with('success', 'Programme Curriculum changes saved.');
     }
 
     public function storeStage(Request $request, int $id)

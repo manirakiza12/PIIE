@@ -42,7 +42,6 @@ class StudentProvisioningService
      *   email: string,
      *   password?: string,
      *   gender?: string,
-     *   blood_group?: string,
      *   birthday?: string,
      *   phone?: string,
      *   address?: string,
@@ -106,7 +105,6 @@ class StudentProvisioningService
                     'force_password_change'  => true,
                     'user_information'       => json_encode([
                         'gender'      => $data['gender'] ?? null,
-                        'blood_group' => $data['blood_group'] ?? null,
                         'birthday'    => $data['birthday'] ?? null,
                         'phone'       => $data['phone'] ?? null,
                         'address'     => $data['address'] ?? null,

@@ -7,8 +7,8 @@
             @forelse($stage->memberships as $membership)
                 <div class="border-top p-3">
                     <div class="d-flex justify-content-between"><div><strong>{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }}</strong><div class="small text-muted">{{ $periodLabel }} {{ $membership->period_sequence ?: '—' }} · {{ ucfirst($membership->classification) }} · {{ number_format((float)$membership->credits, 2) }} credits</div></div>
-                    @if($isDraft && $canManage)<form method="POST" action="{{ route('admin.curricula.memberships.destroy', [$curriculum->id, $membership->id]) }}" onsubmit="return confirm('{{ get_phrase('Remove this Course Unit from the draft? Its prerequisite edges will also be removed.') }}')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove') }}</button></form>@endif</div>
-                    @if($isDraft && $canManage)
+                    @if($canManage)<form method="POST" action="{{ route('admin.curricula.memberships.destroy', [$curriculum->id, $membership->id]) }}" onsubmit="return confirm('{{ get_phrase('Remove this Course Unit from the Programme Curriculum? Its prerequisite edges will also be removed.') }}')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove') }}</button></form>@endif</div>
+                    @if($canManage)
                     <form method="POST" action="{{ route('admin.curricula.memberships.update', [$curriculum->id, $membership->id]) }}" class="row g-2 mt-1">@csrf @method('PUT')
                         <div class="col-lg-3"><label class="form-label small">{{ get_phrase('Programme Year') }}</label><select class="form-select form-select-sm" name="curriculum_stage_id">@foreach($curriculum->stages as $choice)<option value="{{ $choice->id }}" @selected($choice->id === $stage->id)>{{ $choice->sequence }}. {{ $choice->label }}</option>@endforeach</select></div>
                         <div class="col-lg-2"><label class="form-label small">{{ $periodLabel }} (relative)</label><input class="form-control form-control-sm" type="number" name="period_sequence" min="1" max="65535" value="{{ $membership->period_sequence }}" placeholder="—" onchange="this.form.elements.period_type.value=this.value ? '{{ $calendarPattern }}' : ''"><input type="hidden" name="period_type" value="{{ $membership->period_sequence ? $calendarPattern : '' }}"></div>
@@ -24,7 +24,7 @@
 </section>
 
 <section class="eSection-wrap mb-3" id="prerequisites"><h5>{{ get_phrase('Prerequisites') }}</h5><p class="text-muted">{{ get_phrase('Prerequisites are relationships between Course Units in this Curriculum only.') }}</p>
-    @if($isDraft && $canManage && $curriculum->memberships->count() > 1)
+    @if($canManage && $curriculum->memberships->count() > 1)
     <form method="POST" action="{{ route('admin.curricula.prerequisites.store', $curriculum->id) }}" class="row g-2 mb-3">@csrf
         <div class="col-md-5"><label class="form-label">{{ get_phrase('Course Unit') }}</label><select class="form-select" name="membership_id" required>@foreach($curriculum->memberships as $membership)<option value="{{ $membership->id }}">{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }}</option>@endforeach</select></div>
         <div class="col-md-5"><label class="form-label">{{ get_phrase('Requires first') }}</label><select class="form-select" name="prerequisite_membership_id" required>@foreach($curriculum->memberships as $membership)<option value="{{ $membership->id }}">{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }}</option>@endforeach</select></div>
@@ -35,7 +35,7 @@
         @foreach($membership->prerequisites as $required)
             @php $edgeCount++; @endphp
             <div class="d-flex justify-content-between border rounded p-2 mb-1"><span>{{ $membership->subject->code ?: '—' }} — {{ $membership->subject->name }} <span class="text-muted">{{ get_phrase('requires') }}</span> {{ $required->subject->code ?: '—' }} — {{ $required->subject->name }}</span>
-            @if($isDraft && $canManage)<form method="POST" action="{{ route('admin.curricula.prerequisites.destroy', $curriculum->id) }}">@csrf @method('DELETE')<input type="hidden" name="membership_id" value="{{ $membership->id }}"><input type="hidden" name="prerequisite_membership_id" value="{{ $required->id }}"><button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove') }}</button></form>@endif</div>
+            @if($canManage)<form method="POST" action="{{ route('admin.curricula.prerequisites.destroy', $curriculum->id) }}">@csrf @method('DELETE')<input type="hidden" name="membership_id" value="{{ $membership->id }}"><input type="hidden" name="prerequisite_membership_id" value="{{ $required->id }}"><button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove') }}</button></form>@endif</div>
         @endforeach
     @endforeach
     @if(!$edgeCount)<p class="text-muted">{{ get_phrase('No prerequisites defined.') }}</p>@endif

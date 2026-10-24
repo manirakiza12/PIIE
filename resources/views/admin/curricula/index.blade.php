@@ -11,6 +11,7 @@
 </div>
 
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+@if($errors->any())<div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 @if($selectedProgramme)<div class="alert alert-info">{{ get_phrase('Programme context') }}: <strong>{{ $selectedProgramme->code }} — {{ $selectedProgramme->name }}</strong></div>@endif
 
 <div class="eSection-wrap">
@@ -28,17 +29,27 @@
         <thead><tr><th>{{ get_phrase('Programme') }}</th><th>{{ get_phrase('Department / Faculty') }}</th><th>{{ get_phrase('Version') }}</th><th>{{ get_phrase('Applies From Academic Year') }}</th><th>{{ get_phrase('Status') }}</th><th>{{ get_phrase('Years') }}</th><th>{{ get_phrase('Course Units') }}</th><th>{{ get_phrase('Total Credits') }}</th><th>{{ get_phrase('Actions') }}</th></tr></thead>
         <tbody>
         @forelse($curriculumRows as $row)
-            <tr>
+            <tr data-curriculum-id="{{ $row->id }}">
                 <td><strong>{{ $row->programme_code }}</strong><br>{{ $row->programme_name }}</td>
                 <td>{{ $row->department_name ?: '—' }}</td><td>{{ $row->version }}</td><td>{{ $row->academic_year_label ?: '—' }}</td>
                 <td><span class="badge {{ $row->status === 'approved' ? 'bg-success' : ($row->status === 'retired' ? 'bg-secondary' : 'bg-warning text-dark') }}">{{ ucfirst($row->status) }}</span></td>
                 <td>{{ $row->stages_count }}</td><td>{{ $row->memberships_count }}</td><td>{{ number_format((float)($row->total_credits ?? 0), 2) }}</td>
                 <td><div class="d-flex flex-wrap gap-2"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.curricula.show', $row->id) }}">View</a>
-                @if($row->status === 'draft' && auth()->user()->hasPermission('academic.curriculum.manage'))
-                <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#metadata-heading">Edit</a><form method="POST" action="{{ route('admin.curricula.destroy', $row->id) }}" onsubmit="return confirm('Delete this draft curriculum and its structure?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete</button></form>
-                @elseif(\App\Support\Curriculum\CurriculumOwnerAccess::allows(auth()->user(), (int) auth()->user()->school_id))
-                <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#owner-controls">Edit / Restore</a>
-                @else<span class="small text-muted">Official structure is protected</span>@endif
+                @if(auth()->user()->hasPermission('academic.curriculum.manage'))
+                <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#metadata-heading">Edit</a>
+                @include('shared.academic_delete_button', [
+                    'deleteAction' => route('admin.curricula.destroy', $row->id),
+                    'deleteTitle' => 'Delete Programme Curriculum',
+                    'deleteIdentity' => $row->programme_code.' '.$row->version.' — '.$row->programme_name.' (record #'.$row->id.')',
+                    'deleteReference' => trim($row->programme_code.' '.$row->version),
+                    'deleteRemoves' => 'This version’s Programme Years, Course Unit placements, assignments, cohort links, exclusive course allocations, registrations and dependent workflows.',
+                    'deleteKeeps' => 'Shared Course Units, allocations linked to other versions, other curricula, and student/staff accounts and profiles.',
+                ])
+                @else
+                <button type="button" class="btn btn-sm btn-outline-primary" disabled aria-describedby="curriculum-permission-{{ $row->id }}">Edit</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" disabled aria-describedby="curriculum-permission-{{ $row->id }}">Delete</button>
+                <span id="curriculum-permission-{{ $row->id }}" class="small text-muted">Curriculum management permission is required to edit or delete this version.</span>
+                @endif
                 </div></td>
             </tr>
         @empty
@@ -48,4 +59,5 @@
     </table></div>
     {{ $curriculumRows->links() }}
 </div>
+@include('shared.academic_delete_modal')
 @endsection

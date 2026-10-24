@@ -8,7 +8,7 @@ Numbers are assigned once in `users.code`. Existing students/staff retain their 
 
 Persistent, locked sequence counters are global per prefix, preventing collisions across schools sharing a programme abbreviation. Separate programme/month/role prefixes restart at 001; numbers expand past 999. Deleted accounts do not free their numbers. Existing imported numbers, with or without a legacy trailing slash, are skipped. Account creation and counter advancement share the provisioning transaction.
 
-Students cannot edit their name, login email, date of birth or registration number in the student portal. These identity fields are displayed read-only and ignored by the self-service update endpoint, including forged requests. Corrections must be made by authorized institutional staff. Phone, address, gender, blood group and passport/photo remain editable.
+Students cannot edit their name, login email, date of birth or registration number in the student portal. These identity fields are displayed read-only and ignored by the self-service update endpoint, including forged requests. Corrections must be made by authorized institutional staff. Phone, address, gender and passport/photo remain editable.
 
 CSV student imports now accept `intake_name`; this is required for programme students and validated during preview without allocating numbers. It must match exactly one intake in the current school. Download a fresh template before importing programme students.
 

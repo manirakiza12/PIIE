@@ -255,7 +255,7 @@ class ProgrammeGalleryImageTest extends TestCase
         $foreign = Programme::findOrFail($this->makeProgramme($this->makeSchool()));
         $foreignImage = $service->add($foreign, $this->upload());
         $path = $service->absolutePath($image->path);
-        $this->actingAs($this->admin)->get(route('admin.programmes.destroy', $this->programme->id))->assertRedirect();
+        $this->actingAs($this->admin)->delete(route('admin.programmes.destroy', $this->programme->id), ['confirm_deletion' => (string) $this->programme->code])->assertRedirect();
         $this->assertNull($this->programme->fresh());
         $this->assertNull($image->fresh());
         $this->assertFileDoesNotExist($path);

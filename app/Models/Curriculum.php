@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use DomainException;
 use Illuminate\Database\Eloquent\Model;
 
 class Curriculum extends Model
@@ -14,21 +13,6 @@ class Curriculum extends Model
     protected $casts = [
         'effective_academic_year_id' => 'integer',
     ];
-
-    protected static function booted(): void
-    {
-        static::updating(function (self $curriculum): void {
-            if ($curriculum->isDirty()) {
-                throw new DomainException('Curriculum lifecycle and structure must be changed through CurriculumFoundationService.');
-            }
-        });
-
-        static::deleting(function (self $curriculum): void {
-            if ($curriculum->status !== 'draft') {
-                throw new DomainException('Approved or retired curricula cannot be deleted.');
-            }
-        });
-    }
 
     public function school()
     {

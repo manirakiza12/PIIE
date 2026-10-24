@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1050" height="180" viewBox="0 0 1050 180" role="img" aria-labelledby="title">
+  <title id="title">Student CSV example</title>
+  <rect width="1050" height="180" fill="#fff"/>
+  <rect x="0" y="0" width="1050" height="34" fill="#eaf2f8"/>
+  <g stroke="#c7cdd3" stroke-width="1">
+    <path d="M0 34H1050M0 70H1050M0 106H1050M0 142H1050M0 178H1050"/>
+    <path d="M0 0V180M145 0V180M290 0V180M435 0V180M580 0V180M725 0V180M870 0V180M1050 0V180"/>
+  </g>
+  <g fill="#30363b" font-family="Arial,sans-serif" font-size="16">
+    <text x="12" y="23" font-weight="700">StudentName</text><text x="157" y="23" font-weight="700">Email</text>
+    <text x="302" y="23" font-weight="700">Password</text><text x="447" y="23" font-weight="700">Phone</text>
+    <text x="592" y="23" font-weight="700">Gender</text><text x="737" y="23" font-weight="700">Birthday</text>
+    <text x="882" y="23" font-weight="700">Address</text>
+    <text x="12" y="59">Sher</text><text x="157" y="59">sher@gmail.com</text><text x="302" y="59">1234</text>
+    <text x="447" y="59">90225897500</text><text x="592" y="59">Male</text><text x="737" y="59">28-05-00</text><text x="882" y="59">New York</text>
+    <text x="12" y="95">Rumysha</text><text x="157" y="95">rumysha@gmail.com</text><text x="302" y="95">1234</text>
+    <text x="447" y="95">90227564199</text><text x="592" y="95">Female</text><text x="737" y="95">15-03-99</text><text x="882" y="95">Toronto</text>
+    <text x="12" y="131">Roktim</text><text x="157" y="131">roktim@example.com</text><text x="302" y="131">1234</text>
+    <text x="447" y="131">90200543215</text><text x="592" y="131">Male</text><text x="737" y="131">21-10-10</text><text x="882" y="131">Copenhagen</text>
+  </g>
+</svg>

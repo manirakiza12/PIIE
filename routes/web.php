@@ -675,7 +675,7 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::get('admin/student/id_card/{id}', 'studentIdCardGenerate')->name('admin.student.id_card');
     Route::get('admin/student/edit/{id}', 'studentEditModal')->name('admin.student_edit_modal');
     Route::post('admin/student/{id}', 'studentUpdate')->name('admin.student.update');
-    Route::get('admin/student/delete/{id}', 'studentDelete')->name('admin.student.delete');
+    Route::delete('admin/student/delete/{id}', 'studentDelete')->name('admin.student.delete');
     Route::get('admin/student/student_profile/{id}', 'studentProfile')->name('admin.student.student_profile');
     Route::get('admin/student/export-excel', 'studentListExportExcel')->name('admin.student.export_excel')->middleware('admin_permission');
     Route::get('admin/student/profile-pdf/{id}', 'studentProfilePdf')->name('admin.student.profile_pdf');
@@ -1784,7 +1784,7 @@ Route::controller(ProgrammeController::class)->middleware('auth', 'admin', 'rbac
     Route::post('admin/programmes/levels', 'storeLevel')->name('admin.programmes.levels.store');
     Route::post('admin/programmes/store',           'store')->name('admin.programmes.store');
     Route::post('admin/programmes/update/{id}',     'update')->name('admin.programmes.update');
-    Route::get('admin/programmes/delete/{id}',      'destroy')->name('admin.programmes.destroy');
+    Route::delete('admin/programmes/{id}',          'destroy')->whereNumber('id')->name('admin.programmes.destroy');
     Route::get('admin/programmes/toggle/{id}',      'toggleStatus')->name('admin.programmes.toggle');
 
     // ΓöÇΓöÇ Programme catalogue: cover, price metadata, website publication ΓöÇΓöÇΓöÇΓöÇ

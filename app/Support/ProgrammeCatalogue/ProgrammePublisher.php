@@ -4,6 +4,7 @@ namespace App\Support\ProgrammeCatalogue;
 
 use App\Models\Programme;
 use App\Models\WebsiteItem;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * The explicit bridge between the academic Programme record and the public
@@ -150,6 +151,34 @@ class ProgrammePublisher
         $programme->forceFill(['website_item_id' => null])->save();
 
         return $programme->refresh();
+    }
+
+    /**
+     * Detach a CMS projection before its academic Programme is deleted.
+     * The CMS row remains CMS-owned content; only the reverse academic marker
+     * that would point at a deleted Programme is removed.
+     */
+    public function detachDeletedProgramme(Programme $programme): void
+    {
+        if (! Schema::hasTable('website_items') || ! Schema::hasColumn('website_items', 'meta_json')) {
+            return;
+        }
+
+        $items = collect();
+        if ($item = $this->projectionFor($programme)) $items->push($item);
+        $marked = WebsiteItem::query()
+            ->where(fn ($query) => $query->where('school_id', $programme->school_id)->orWhereNull('school_id'))
+            ->get()
+            ->filter(fn (WebsiteItem $item): bool => $this->markerOf($item) === (int) $programme->id);
+        foreach ($marked as $item) $items->put($item->id, $item);
+
+        foreach ($items as $item) {
+            $meta = is_string($item->meta_json) ? json_decode($item->meta_json, true) : [];
+            if (! is_array($meta) || $this->markerOf($item) !== (int) $programme->id) continue;
+            unset($meta[self::META_KEY], $meta['programme_code'], $meta['origin']);
+            $item->meta_json = $meta === [] ? null : (string) json_encode($meta);
+            $item->save();
+        }
     }
 
     /**

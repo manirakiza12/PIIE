@@ -42,6 +42,7 @@ class CurriculumPermissionTest extends TestCase
             'admin.curricula.show' => 'academic.curriculum.view',
             'admin.curricula.subjects.search' => 'academic.curriculum.view',
             'admin.curricula.store' => 'academic.curriculum.manage',
+            'admin.curricula.destroy' => 'academic.curriculum.manage',
             'admin.curricula.memberships.update' => 'academic.curriculum.manage',
             'admin.curricula.successor' => 'academic.curriculum.manage',
             'admin.curricula.approve' => 'academic.curriculum.approve',
@@ -128,6 +129,8 @@ class CurriculumPermissionTest extends TestCase
         };
         $this->assertSame(403, $authorize('admin.curricula.store', $viewOnly));
         $this->assertSame('reached', $authorize('admin.curricula.store', $manageOnly));
+        $this->assertSame(403, $authorize('admin.curricula.destroy', $viewOnly));
+        $this->assertSame('reached', $authorize('admin.curricula.destroy', $manageOnly));
         $this->assertSame(403, $authorize('admin.curricula.approve', $manageOnly));
         $this->assertSame('reached', $authorize('admin.curricula.approve', $approveOnly));
     }

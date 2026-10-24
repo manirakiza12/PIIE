@@ -12,6 +12,7 @@ use App\Support\ProgrammeCatalogue\ProgrammeCatalogueSchema;
 use App\Support\ProgrammeCatalogue\ProgrammeCoverImage;
 use App\Support\ProgrammeCatalogue\ProgrammeEditor;
 use App\Support\ProgrammeCatalogue\ProgrammeGalleryImageService;
+use App\Support\Academic\ProgrammeDeletionService;
 use App\Support\ProgrammeCatalogue\ProgrammePrice;
 use Illuminate\Support\Facades\DB;
 use App\Support\ProgrammeCatalogue\ProgrammePublisher;
@@ -374,34 +375,13 @@ class ProgrammeController extends Controller
         return redirect()->route('admin.programmes.index')->with('success', get_phrase('Programme updated successfully'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id, ProgrammeDeletionService $deletion)
     {
-        $programme = Programme::where('school_id', $this->school_id)->findOrFail($id);
-
-        // A programme selectable in the admission portal (or already chosen
-        // by a live application) should never disappear out from under an
-        // applicant mid-application — deactivating hides it from new
-        // applicants without corrupting an application that already
-        // references it. Only a programme nobody has ever touched is
-        // actually deletable.
-        if ($programme->admissions()->exists() || $programme->studentProfiles()->exists()) {
-            return redirect()->back()->with('error', get_phrase('This programme has applications or students linked to it and cannot be deleted. Deactivate it instead.'));
-        }
-
-        AuditLog::record('delete', 'Programmes', "Deleted programme: {$programme->name}");
-        $images = \Illuminate\Support\Facades\DB::transaction(function () use ($programme) {
-            Programme::where('school_id', $this->school_id)->whereKey($programme->id)->lockForUpdate()->firstOrFail();
-            $images = $this->gallery->records($programme);
-            foreach ($images as $image) {
-                $image->delete();
-            }
-            $programme->delete();
-            return $images;
-        });
-        foreach ($images as $image) {
-            $this->gallery->deleteFile($image->path);
-        }
-        return redirect()->back()->with('success', get_phrase('Programme deleted'));
+        abort_unless($request->user()->hasPermission('academic.programmes'), 403);
+        $owned = $this->findOwned($id);
+        $confirmation = $request->validate(['confirm_deletion' => ['required', 'string', 'max:255']]);
+        $deletion->delete((int) $this->school_id, (int) $owned->id, (int) $request->user()->id, $confirmation['confirm_deletion']);
+        return redirect()->back()->with('success', get_phrase('Programme and its owned academic records deleted'));
     }
 
     public function toggleStatus($id)

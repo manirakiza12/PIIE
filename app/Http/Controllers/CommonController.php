@@ -50,7 +50,6 @@ class CommonController extends Controller
             $fallback['phone'] = '';
             $fallback['birthday'] = '';
             $fallback['gender'] = '';
-            $fallback['blood_group'] = '';
             $fallback['student_info'] = '';
             $fallback['photo'] = isset($api) && $api == 'api' ? get_user_image_url($id) : get_user_image($id);
             $fallback['school_id'] = null;
@@ -96,7 +95,6 @@ class CommonController extends Controller
         $enrol_data['phone'] = $info->phone ?? '';
         $enrol_data['birthday'] = $info->birthday ?? '';
         $enrol_data['gender'] = $info->gender ?? '';
-        $enrol_data['blood_group'] = $info->blood_group??"";
         $enrol_data['student_info']    = $student->student_info;
         $enrol_data['photo'] = isset($api) && $api == 'api' ? get_user_image_url($id): get_user_image($id);
         $enrol_data['school_id'] = $student->school_id;
@@ -130,7 +128,6 @@ class CommonController extends Controller
                 'phone'       => '',
                 'birthday'    => '',
                 'gender'      => '',
-                'blood_group' => '',
                 'photo'       => get_user_image($id),
                 'school_id'   => null,
                 'code'        => '',
@@ -154,7 +151,6 @@ class CommonController extends Controller
         $user_data['phone'] = $info->phone ?? '';
         $user_data['birthday'] = $info->birthday ?? '';
         $user_data['gender'] = $info->gender ?? '';
-        $user_data['blood_group'] = $info->blood_group??"";
         $user_data['photo'] = get_user_image($id);
         $user_data['school_id'] = $user_details->school_id;
         $user_data['code'] = $user_details->code;

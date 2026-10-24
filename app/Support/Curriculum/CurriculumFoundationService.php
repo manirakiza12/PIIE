@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\Programme;
 use App\Models\Subject;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -42,26 +43,124 @@ class CurriculumFoundationService
         });
     }
 
-    public function deleteDraft(Curriculum $curriculum): void
+    public function deleteDraft(Curriculum $curriculum, string $confirmation = '', ?int $actorId = null): void
     {
-        DB::transaction(function () use ($curriculum): void {
+        DB::transaction(function () use ($curriculum, $confirmation, $actorId): void {
             $locked = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
-            $this->assertDraft($locked);
-            foreach (['student_curriculum_assignments', 'programme_cohorts', 'course_offering_curriculum_memberships'] as $table) {
-                if (\Illuminate\Support\Facades\Schema::hasTable($table)
-                    && DB::table($table)->where('curriculum_id', $locked->id)->exists()) {
-                    $this->fail('curriculum', 'This curriculum is already referenced and cannot be deleted.');
+            $reference = trim(($locked->programme?->code ?? '').' '.$locked->version);
+            if (! in_array(trim($confirmation), ['DELETE', $reference], true)) $this->fail('confirm_deletion', 'Type DELETE or '.$reference.' to confirm deletion.');
+            $this->deleteExclusiveCourseOfferings($locked, $actorId ?? (int) (auth()->id() ?? 0));
+            $this->deleteOwnedCurriculumRows($locked);
+            $actor = Schema::hasTable('users') && $actorId ? \App\Models\User::find($actorId) : auth()->user();
+            AuditLog::create([
+                'school_id' => $locked->school_id, 'user_id' => $actorId ?? $actor?->id ?? 0,
+                'user_name' => $actor?->name, 'role_id' => $actor?->role_id,
+                'role_name' => AuditLog::roleName($actor?->role_id), 'action' => 'CURRICULUM_DELETED',
+                'event_type' => 'DATA', 'module' => 'Curriculum', 'description' => 'Programme Curriculum deletion.',
+                'record_type' => Curriculum::class, 'record_id' => $locked->id, 'created_at' => now(),
+            ]);
+            DB::table('curricula')->where('school_id', $locked->school_id)->where('id', $locked->id)->delete();
+        });
+    }
+
+    /**
+     * A Course Allocation is version-owned only when this is its last
+     * Curriculum applicability. Shared allocations survive while this
+     * version's link is removed by deleteOwnedCurriculumRows().
+     */
+    private function deleteExclusiveCourseOfferings(Curriculum $curriculum, int $actorId): void
+    {
+        if (! Schema::hasTable('course_offering_curriculum_memberships') || ! Schema::hasTable('course_offerings')) return;
+        $offeringIds = DB::table('course_offering_curriculum_memberships')->where('school_id', $curriculum->school_id)
+            ->where('curriculum_id', $curriculum->id)->distinct()->pluck('course_offering_id');
+        if ($offeringIds->isEmpty()) return;
+        if ($actorId < 1) throw new \DomainException('A signed-in administrator is required to audit deletion of a Curriculum-owned Course Allocation.');
+
+        $offerings = app(\App\Support\CourseOffering\CourseOfferingService::class);
+        foreach ($offeringIds as $offeringId) {
+            $shared = DB::table('course_offering_curriculum_memberships')->where('school_id', $curriculum->school_id)
+                ->where('course_offering_id', $offeringId)->where('curriculum_id', '<>', $curriculum->id)->exists();
+            if (! $shared) $offerings->deleteAllocation((int) $curriculum->school_id, (int) $offeringId, $actorId, 'DELETE');
+        }
+    }
+
+    /** Delete curriculum-owned descendants child-first without traversing shared masters. */
+    private function deleteOwnedCurriculumRows(Curriculum $curriculum): void
+    {
+        $schoolId = (int) $curriculum->school_id;
+        $tables = array_map(static fn (string $name): string => substr(strrchr('.'.$name, '.'), 1), Schema::getTableListing());
+        $rows = ['curricula' => [DB::table('curricula')->where('school_id', $schoolId)->where('id', $curriculum->id)->first()]];
+        $rows['curricula'] = array_filter($rows['curricula']); $edges = [];
+        // Course Units are programme/catalogue masters, never version-owned:
+        // removing their last membership does not establish exclusive ownership.
+        // Profiles and audit history must never become graph-owned descendants.
+        $protected = ['subjects','users','schools','programmes','academic_years','academic_periods','course_offerings','curricula','student_profiles','staff_profiles','audit_logs'];
+        foreach ($tables as $table) {
+            if (in_array($table, $protected, true) || ! Schema::hasColumn($table, 'curriculum_id')) continue;
+            $query = DB::table($table)->where('curriculum_id', $curriculum->id);
+            if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+            $found = $query->lockForUpdate()->get(); if ($found->isNotEmpty()) { $rows[$table] = $found->all(); $edges['curricula'][] = $table; }
+        }
+        $changed = true;
+        while ($changed) {
+            $changed = false;
+            foreach ($tables as $child) {
+                if (in_array($child, $protected, true)) continue;
+                $foreignKeys = Schema::getForeignKeys($child);
+                // Legacy registration schemas can carry the placement id
+                // without a declared FK. A shared allocation survives deletion,
+                // but registrations for the removed version must not be orphaned.
+                if ($child === 'course_registrations' && Schema::hasColumn($child, 'curriculum_membership_id')) {
+                    $foreignKeys[] = ['foreign_table' => 'curriculum_memberships', 'columns' => ['curriculum_membership_id'], 'foreign_columns' => ['id']];
+                }
+                foreach ($foreignKeys as $fk) {
+                    $parent = $fk['foreign_table'] ?? null; $local = $fk['columns'] ?? []; $foreign = $fk['foreign_columns'] ?? [];
+                    if (! $parent || ! isset($rows[$parent]) || ! $local || count($local) !== count($foreign)) continue;
+                    $query = DB::table($child)->where(function ($or) use ($rows, $parent, $local, $foreign): void {
+                        foreach ($rows[$parent] as $parentRow) $or->orWhere(function ($and) use ($parentRow, $local, $foreign): void { foreach ($local as $i => $column) $and->where($column, $parentRow->{$foreign[$i]}); });
+                    });
+                    if (Schema::hasColumn($child, 'school_id')) $query->where('school_id', $schoolId);
+                    $found = $query->lockForUpdate()->get(); if ($found->isEmpty()) continue;
+                    $edges[$parent][] = $child;
+                    $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', serialize($row));
+                    $known = collect($rows[$child] ?? [])->keyBy($fingerprint);
+                    foreach ($found as $row) { $key = $fingerprint($row); if (! $known->has($key)) { $known->put($key, $row); $changed = true; } }
+                    $rows[$child] = $known->values()->all();
                 }
             }
-            foreach ($locked->memberships()->get() as $membership) {
-                $this->removeMembership($locked, $membership);
-            }
-            foreach ($locked->stages()->get() as $stage) {
-                $this->removeStage($locked, $stage);
-            }
-            $this->audit('CURRICULUM_DRAFT_DELETED', $locked, $locked->only(['programme_id', 'version', 'status']), []);
-            $locked->delete();
-        });
+        }
+        $ordered = []; $visited = [];
+        $visit = function (string $table) use (&$visit, &$ordered, &$visited, $edges, $rows): void {
+            if (isset($visited[$table])) return; $visited[$table] = true;
+            foreach (array_unique($edges[$table] ?? []) as $child) if (isset($rows[$child])) $visit($child);
+            $ordered[] = $table;
+        };
+        foreach (array_keys($rows) as $table) $visit($table);
+        foreach ($ordered as $table) {
+            if ($table === 'curricula') continue;
+            $this->deleteCollectedRows($table, $rows[$table], $schoolId);
+        }
+    }
+
+    /** Delete only the collected tenant rows, including composite-key pivots without an id. */
+    private function deleteCollectedRows(string $table, array $rows, int $schoolId): void
+    {
+        $query = DB::table($table);
+        if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+        if (Schema::hasColumn($table, 'id')) {
+            $query->whereIn('id', collect($rows)->pluck('id')->filter()->unique()->values());
+        } else {
+            $columns = Schema::getColumnListing($table);
+            $query->where(function ($or) use ($rows, $columns): void {
+                foreach ($rows as $row) $or->orWhere(function ($and) use ($row, $columns): void {
+                    foreach ($columns as $column) {
+                        $value = $row->{$column} ?? null;
+                        $value === null ? $and->whereNull($column) : $and->where($column, $value);
+                    }
+                });
+            });
+        }
+        $query->delete();
     }
 
     public function createDraft(int $schoolId, int $programmeId, string $version, ?int $effectiveAcademicYearId = null): Curriculum
@@ -100,9 +199,9 @@ class CurriculumFoundationService
         return $curriculum;
     }
 
-    public function updateDraftMetadata(Curriculum $curriculum, string $version, ?int $effectiveAcademicYearId): Curriculum
+    public function updateDraftMetadata(Curriculum $curriculum, string $version, ?int $effectiveAcademicYearId, ?string $reason = null): Curriculum
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $this->validate([
             'version' => $version,
             'effective_academic_year_id' => $effectiveAcademicYearId,
@@ -124,6 +223,19 @@ class CurriculumFoundationService
         }
 
         $before = $curriculum->only(['version', 'effective_academic_year_id']);
+        $changed = $before !== ['version' => $version, 'effective_academic_year_id' => $effectiveAcademicYearId];
+        if ($changed && $curriculum->status !== 'draft' && trim((string) $reason) === '') {
+            $this->fail('reason', 'A reason is required when changing an official or restored Curriculum.');
+        }
+        if ($effectiveAcademicYearId !== null && Schema::hasTable('course_offering_curriculum_memberships')) {
+            $effectiveStart = DB::table('academic_years')->where('school_id', $curriculum->school_id)->where('id', $effectiveAcademicYearId)->value('start_date');
+            $invalidOffering = DB::table('course_offering_curriculum_memberships as link')
+                ->join('course_offerings as offering', function ($join) { $join->on('offering.id', '=', 'link.course_offering_id')->on('offering.school_id', '=', 'link.school_id'); })
+                ->join('academic_years as year', function ($join) { $join->on('year.id', '=', 'offering.academic_year_id')->on('year.school_id', '=', 'offering.school_id'); })
+                ->where('link.school_id', $curriculum->school_id)->where('link.curriculum_id', $curriculum->id)
+                ->where('year.start_date', '<', $effectiveStart)->exists();
+            if ($invalidOffering) $this->fail('effective_academic_year_id', 'The selected effective year would make linked Course Allocations precede this Curriculum version.');
+        }
         DB::table('curricula')->where('school_id', $curriculum->school_id)->where('id', $curriculum->id)->update([
             'version' => $version,
             'effective_academic_year_id' => $effectiveAcademicYearId,
@@ -132,7 +244,7 @@ class CurriculumFoundationService
 
         $curriculum->refresh();
         if ($before !== $curriculum->only(['version', 'effective_academic_year_id'])) {
-            $this->audit('CURRICULUM_METADATA_UPDATED', $curriculum, $before, $curriculum->only(['version', 'effective_academic_year_id']));
+            $this->audit('CURRICULUM_METADATA_UPDATED', $curriculum, $before, $curriculum->only(['version', 'effective_academic_year_id']) + ($curriculum->status === 'draft' ? [] : ['reason' => trim((string) $reason)]));
         }
 
         return $curriculum;
@@ -140,7 +252,7 @@ class CurriculumFoundationService
 
     public function addStage(Curriculum $curriculum, string $label, int $sequence): CurriculumStage
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $this->validate(['label' => $label, 'sequence' => $sequence], [
             'label' => ['required', 'string', 'max:100'],
             'sequence' => ['required', 'integer', 'min:1', 'max:65535'],
@@ -165,7 +277,7 @@ class CurriculumFoundationService
 
     public function updateStage(Curriculum $curriculum, CurriculumStage $stage, string $label, int $sequence): CurriculumStage
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $this->assertStageInCurriculum($curriculum, $stage);
         $this->validate(['label' => $label, 'sequence' => $sequence], [
             'label' => ['required', 'string', 'max:100'],
@@ -177,9 +289,21 @@ class CurriculumFoundationService
         }
 
         $before = $stage->only(['label', 'sequence']);
-        $stage->label = $label;
-        $stage->sequence = $sequence;
-        $stage->save();
+        DB::transaction(function () use ($stage, $label, $sequence, $curriculum, $before): void {
+            $stage->label = $label;
+            $stage->sequence = $sequence;
+            $stage->save();
+            if ((int) $before['sequence'] !== $sequence
+                && Schema::hasTable('student_curriculum_assignments')
+                && Schema::hasColumn('student_curriculum_assignments', 'entry_curriculum_stage_id')
+                && Schema::hasTable('student_profiles') && Schema::hasColumn('student_profiles', 'year_of_study')) {
+                $studentIds = DB::table('student_curriculum_assignments')->where('school_id', $curriculum->school_id)
+                    ->where('curriculum_id', $curriculum->id)->where('entry_curriculum_stage_id', $stage->id)
+                    ->whereNull('ended_at')->pluck('student_id');
+                DB::table('student_profiles')->where('school_id', $curriculum->school_id)
+                    ->whereIn('user_id', $studentIds)->update(['year_of_study' => $sequence]);
+            }
+        });
 
         $this->audit('CURRICULUM_STAGE_UPDATED', $curriculum, ['id' => $stage->id] + $before, $stage->only(['id', 'label', 'sequence']));
 
@@ -188,7 +312,7 @@ class CurriculumFoundationService
 
     public function removeStage(Curriculum $curriculum, CurriculumStage $stage): void
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $this->assertStageInCurriculum($curriculum, $stage);
         if ($stage->memberships()->exists()) {
             $this->fail('stage', 'Move or remove this Programme Year’s Course Units before removing the Programme Year.');
@@ -204,7 +328,7 @@ class CurriculumFoundationService
 
     public function moveStage(Curriculum $curriculum, CurriculumStage $stage, string $direction): void
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $this->assertStageInCurriculum($curriculum, $stage);
         if (! in_array($direction, ['up', 'down'], true)) {
             $this->fail('direction', 'Choose up or down.');
@@ -234,7 +358,7 @@ class CurriculumFoundationService
 
     public function addMembership(Curriculum $curriculum, int $subjectId, int $stageId, array $attributes): CurriculumMembership
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $subject = Subject::where('school_id', $curriculum->school_id)->whereKey($subjectId)->first();
         if (! $subject) {
             $this->fail('subject_id', 'The Subject must belong to this tenant.');
@@ -267,7 +391,7 @@ class CurriculumFoundationService
 
     public function updateMembership(Curriculum $curriculum, CurriculumMembership $membership, array $attributes): CurriculumMembership
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $this->assertMembershipInCurriculum($curriculum, $membership);
 
         $subjectId = (int) ($attributes['subject_id'] ?? $membership->subject_id);
@@ -285,10 +409,31 @@ class CurriculumFoundationService
         }
 
         $before = $membership->only(['subject_id', 'curriculum_stage_id', 'period_type', 'period_sequence', 'classification', 'credits', 'sequence']);
-        $membership->forceFill($data + [
-            'subject_id' => $subjectId,
-            'curriculum_stage_id' => $stageId,
-        ])->save();
+        $linkedOfferings = collect();
+        if (Schema::hasTable('course_offering_curriculum_memberships')) {
+            $linkedOfferings = DB::table('course_offering_curriculum_memberships as link')
+                ->join('course_offerings as offering', function ($join) { $join->on('offering.id', '=', 'link.course_offering_id')->on('offering.school_id', '=', 'link.school_id'); })
+                ->join('academic_periods as period', function ($join) { $join->on('period.id', '=', 'offering.academic_period_id')->on('period.school_id', '=', 'offering.school_id')->on('period.academic_year_id', '=', 'offering.academic_year_id'); })
+                ->where('link.school_id', $curriculum->school_id)->where('link.curriculum_id', $curriculum->id)
+                ->where('link.curriculum_membership_id', $membership->id)->get(['offering.subject_id', 'period.type', 'period.sequence']);
+        }
+        if ($linkedOfferings->isNotEmpty() && $subjectId !== (int) $membership->subject_id) {
+            $this->fail('subject_id', 'This Course Unit is linked to Course Allocations. Remove or remap those links before changing its identity.');
+        }
+        foreach ($linkedOfferings as $offering) {
+            if (($data['period_type'] ?? null) !== $offering->type || (int) ($data['period_sequence'] ?? 0) !== (int) $offering->sequence) {
+                $this->fail('period_sequence', 'The revised placement must continue to match every linked Course Allocation semester or term.');
+            }
+        }
+        DB::transaction(function () use ($membership, $data, $subjectId, $stageId, $curriculum): void {
+            $membership->forceFill($data + ['subject_id' => $subjectId, 'curriculum_stage_id' => $stageId])->save();
+            if (Schema::hasTable('course_registrations') && Schema::hasColumn('course_registrations', 'curriculum_membership_id')) {
+                $updates = [];
+                if (Schema::hasColumn('course_registrations', 'registered_credits')) $updates['registered_credits'] = $data['credits'];
+                if (Schema::hasColumn('course_registrations', 'registered_classification')) $updates['registered_classification'] = $data['classification'];
+                if ($updates) DB::table('course_registrations')->where('school_id', $curriculum->school_id)->where('curriculum_membership_id', $membership->id)->update($updates);
+            }
+        });
 
         $after = $membership->only(['subject_id', 'curriculum_stage_id', 'period_type', 'period_sequence', 'classification', 'credits', 'sequence']);
         if ($before !== $after) {
@@ -300,7 +445,7 @@ class CurriculumFoundationService
 
     public function removeMembership(Curriculum $curriculum, CurriculumMembership $membership): void
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $this->assertMembershipInCurriculum($curriculum, $membership);
         $before = $membership->only(['id', 'subject_id', 'curriculum_stage_id', 'period_type', 'period_sequence', 'classification', 'credits', 'sequence']);
         DB::transaction(function () use ($curriculum, $membership): void {
@@ -322,7 +467,7 @@ class CurriculumFoundationService
 
     public function addPrerequisite(Curriculum $curriculum, int $membershipId, int $prerequisiteMembershipId): CurriculumPrerequisite
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         if ($membershipId === $prerequisiteMembershipId) {
             $this->fail('prerequisite_membership_id', 'A membership cannot be its own prerequisite.');
         }
@@ -354,7 +499,7 @@ class CurriculumFoundationService
 
     public function removePrerequisite(Curriculum $curriculum, int $membershipId, int $prerequisiteMembershipId): void
     {
-        $this->assertDraft($curriculum);
+        $this->assertEditable($curriculum);
         $this->membershipInCurriculum($curriculum, $membershipId, 'membership_id');
         $this->membershipInCurriculum($curriculum, $prerequisiteMembershipId, 'prerequisite_membership_id');
         $deleted = DB::table('curriculum_prerequisites')->where('school_id', $curriculum->school_id)
@@ -613,6 +758,13 @@ class CurriculumFoundationService
         $status = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->value('status');
         if ($status !== 'draft') {
             $this->fail('curriculum', 'Only draft Curricula may be structurally changed.');
+        }
+    }
+
+    private function assertEditable(Curriculum $curriculum): void
+    {
+        if (! Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->exists()) {
+            $this->fail('curriculum', 'The Curriculum must belong to this tenant.');
         }
     }
 

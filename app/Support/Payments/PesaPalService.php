@@ -123,8 +123,15 @@ final class PesaPalService
         $this->envelope($data);
         if (! is_string($data['order_tracking_id'] ?? null) || ! self::isGuid($data['order_tracking_id'])
             || ($data['merchant_reference'] ?? null) !== $order['id']) { throw new PesaPalException(); }
-        $this->httpsUrl($data['redirect_url'] ?? null, $this->configuration->environment === 'live' ? 'pay.pesapal.com' : 'cybqa.pesapal.com');
+        $this->checkoutUrl($data['redirect_url'] ?? null);
         return new PesaPalOrder(strtolower($data['order_tracking_id']), $data['merchant_reference'], $data['redirect_url'], 200);
+    }
+
+    /** Validate both fresh provider URLs and persisted URLs before resuming. */
+    public function checkoutUrl(mixed $url): string
+    {
+        $this->httpsUrl($url, $this->configuration->environment === 'live' ? 'pay.pesapal.com' : 'cybqa.pesapal.com');
+        return $url;
     }
 
     public function getTransactionStatus(string $orderTrackingId): PesaPalTransactionStatus

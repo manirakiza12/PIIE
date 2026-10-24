@@ -3,10 +3,9 @@
 @section('content')
     @php
         $user_information = array_merge(
-            ['phone' => null, 'address' => null, 'birthday' => null, 'gender' => null, 'photo' => null, 'blood_group' => null],
+            ['phone' => null, 'address' => null, 'birthday' => null, 'gender' => null, 'photo' => null],
             (array) (json_decode(auth()->user()->user_information ?? '', true) ?: [])
         );
-        $bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
     @endphp
     <!-- Start User Profile area -->
     <div class="user-profile-area d-flex flex-wrap">
@@ -59,15 +58,13 @@
                 </p>
                 </div>
                 <div class="item">
-                <p class="title">{{ get_phrase('Blood Group') }}</p>
-                <p class="info">{{ $user_information['blood_group'] ?: get_phrase('Not set') }}</p>
                 </div>
             </div>
             </div>
         </div>
         <!-- Right side -->
         <div class="user-details-info">
-            
+
             <!-- Tab content -->
             <div class="tab-content eNav-Tabs-content" id="myTabContent">
             {{-- Regional Settings (personal timezone) lives on its own screen
@@ -105,7 +102,7 @@
                             </ul>
                         </div>
                     @endif
-                    
+
                     <div class="fpb-7">
                     <label for="eInputName" class="eForm-label">{{ get_phrase('Name') }}</label>
                     <input
@@ -133,7 +130,7 @@
                     />
                     </div>
 
-                    
+
                     <div class="fpb-7">
                     <label for="studentDateOfBirth" class="eForm-label"
                         >{{ get_phrase('Date of Birth') }}</label
@@ -188,21 +185,6 @@
                         placeholder="Enter Address"
                         aria-label="Enter Address"
                     />
-                    </div>
-
-                    <div class="fpb-7">
-                    <label for="eBloodGroup" class="eForm-label"
-                        >{{ get_phrase('Blood Group') }}</label
-                    >
-                    <select name="blood_group" id="eBloodGroup"
-                        class="form-select eForm-select eChoice-multiple-without-remove"
-                        data-placeholder="Type to search..."
-                    >
-                        <option value="">{{ get_phrase('Select') }}</option>
-                        @foreach($bloodGroups as $bloodGroup)
-                            <option value="{{ $bloodGroup }}" {{ strtoupper($user_information['blood_group'] ?? '') === $bloodGroup ? 'selected' : '' }}>{{ $bloodGroup }}</option>
-                        @endforeach
-                    </select>
                     </div>
 
                     <div class="fpb-7">

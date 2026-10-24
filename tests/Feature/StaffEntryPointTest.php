@@ -194,17 +194,20 @@ class StaffEntryPointTest extends TestCase
         foreach (self::WORKFLOWS as $key => $workflow) {
             $form = $this->actingAs($this->admin)->get(route($workflow['form']), ['X-Requested-With' => 'XMLHttpRequest'])->assertOk()->getContent();
             $this->assertStringContainsString('action="' . route($workflow['post']) . '"', $form, $key);
+            $this->assertStringNotContainsString('Blood Group', $form, $key);
+            $this->assertStringNotContainsString('blood_group', $form, $key);
         }
 
         // The existing handler still creates the base role it always did.
         $this->actingAs($this->admin)->post(route('admin.teacher.create'), [
-            'first_name' => 'Benjamin', 'last_name' => 'Okoth', 'email' => 'benjamin@a.test', 'gender' => 'Male', 'blood_group' => 'a+',
+            'first_name' => 'Benjamin', 'last_name' => 'Okoth', 'email' => 'benjamin@a.test', 'gender' => 'Male',
             'birthday' => '1990-01-01', 'phone' => '0700', 'address' => 'Nairobi', 'password_mode' => 'manual', 'password' => 'secret-pass',
         ])->assertRedirect();
         $benjamin = User::where('email', 'benjamin@a.test')->first();
         $this->assertNotNull($benjamin);
         $this->assertSame(3, (int) $benjamin->role_id);
         $this->assertSame($this->school, (int) $benjamin->school_id);
+        $this->assertArrayNotHasKey('blood_group', json_decode($benjamin->user_information, true));
 
         // …and the new staff member appears in the Staff Directory, ready for Manage Access.
         $this->actingAs($this->admin)->get(route('admin.rbac.staff.index'))->assertOk()->assertSee('Benjamin Okoth');

@@ -155,14 +155,14 @@ class StudentOpeningPaymentsTest extends TestCase
         $this->assertEquals(0, $this->fee->fresh()->paid_amount);
     }
 
-    public function test_invoice_lists_link_once_to_their_own_payment_screen(): void
+    public function test_student_overview_and_invoice_report_link_to_their_own_payment_screen(): void
     {
         $this->actingAs($this->admin)->get(route('admin.fee_manager.list'))
             ->assertOk()->assertSee('Review invoice and financial setup')
             ->assertSee(route('admin.tuition_payments.show', $this->fee->id))
             ->assertDontSee('Payments / prior payments / awards');
         $adminHtml = $this->get(route('admin.fee_manager.list'))->getContent();
-        $this->assertSame(1, substr_count($adminHtml, route('admin.tuition_payments.show', $this->fee->id)));
+        $this->assertSame(2, substr_count($adminHtml, route('admin.tuition_payments.show', $this->fee->id)), 'One student overview link and one invoice report link.');
 
         $accountant = User::create(['school_id' => $this->fee->school_id, 'role_id' => 4, 'name' => 'Finance',
             'email' => 'finance-list@example.test', 'account_status' => 'active']);
@@ -170,7 +170,7 @@ class StudentOpeningPaymentsTest extends TestCase
             ->assertOk()->assertSee('Review invoice and financial setup')
             ->assertSee(route('accountant.tuition_payments.show', $this->fee->id))
             ->getContent();
-        $this->assertSame(1, substr_count($accountantHtml, route('accountant.tuition_payments.show', $this->fee->id)));
+        $this->assertSame(2, substr_count($accountantHtml, route('accountant.tuition_payments.show', $this->fee->id)), 'One student overview link and one invoice report link.');
     }
 
     public function test_accountant_can_reach_and_record_eligible_existing_student_prior_payment(): void
@@ -230,6 +230,37 @@ class StudentOpeningPaymentsTest extends TestCase
         $this->assertEquals(100, $this->fee->fresh()->opening_paid_amount);
         $this->assertEquals(0, $this->fee->fresh()->collected_amount);
         $this->assertEquals(100, $this->fee->fresh()->paid_amount);
+    }
+
+    public function test_payment_workspace_shows_the_fee_award_and_study_minimum_without_changing_money(): void
+    {
+        \App\Models\Session::create(['school_id' => $this->fee->school_id, 'session_title' => '2026/2027 Semester 1']);
+        $this->student->update(['name' => 'Continuing Student', 'code' => 'PIIE/MA/002']);
+        $this->fee->update(['title' => 'ALL MASTERS PROGRAMMES', 'amount' => 1200000, 'total_amount' => 1200000]);
+        app(StudentFeeAwards::class)->change($this->admin, $this->fee->id, ['action' => 'grant', 'type' => 'bursary',
+            'amount' => '300000.00', 'reference' => 'BOARD-300', 'reason' => 'Approved bursary coverage for this student.']);
+        $before = $this->fee->fresh()->getAttributes();
+        $auditCount = DB::table('audit_logs')->count();
+        $html = $this->actingAs($this->admin)->get(route('admin.tuition_payments.show', $this->fee->id))
+            ->assertOk()->assertSee('Continuing Student')->assertSee('PIIE/MA/002')->assertSee('2026/2027 Semester 1')
+            ->assertSee('Fee breakdown')->assertSee('180,000.00')->assertSee('No new online payments yet.')->getContent();
+        $dom = new \DOMDocument(); @$dom->loadHTML($html); $xpath = new \DOMXPath($dom);
+        foreach (['base' => '1,200,000.00', 'awards' => '300,000.00', 'net' => '900,000.00',
+            'balance' => '900,000.00', 'prior' => '0.00', 'new' => '0.00'] as $key => $value) {
+            $this->assertSame($value, trim($xpath->query('//*[@data-fee-value="' . $key . '"]')->item(0)->textContent));
+        }
+        $this->assertSame('18000000', $xpath->query('//progress')->item(0)->getAttribute('max'));
+        $this->assertSame('0', $xpath->query('//progress')->item(0)->getAttribute('value'));
+        $this->assertSame(1, $xpath->query('//details[not(@open)]/summary[text()="Manage current award"]')->length);
+        $this->assertSame($before, $this->fee->fresh()->getAttributes());
+        $this->assertSame($auditCount, DB::table('audit_logs')->count());
+        if (getenv('PIIE_CAPTURE_FEE_PAYMENT_UI') === '1') {
+            $styles = file_get_contents(public_path('assets/vendors/bootstrap-5.1.3/css/bootstrap.min.css')) . file_get_contents(public_path('assets/css/fee-payment.css'));
+            $preview = preg_replace('/<link rel="stylesheet"[^>]*>/', '', $html);
+            $preview = str_replace('</head>', '<style>' . $styles . '</style></head>', $preview);
+            $preview = preg_replace('/<button\b/', '<button disabled', $preview);
+            file_put_contents(getenv('PIIE_FEE_PREVIEW_PATH'), $preview);
+        }
     }
 
     public function test_invalid_precision_future_dates_and_missing_receipts_are_rejected(): void

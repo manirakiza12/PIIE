@@ -12,23 +12,21 @@ use DomainException;
 
 class CourseOfferingService
 {
-    public function deleteDraft(int $schoolId, int $offeringId): void
+    public function deleteAllocation(int $schoolId, int $offeringId, int $actorId, string $confirmation): void
     {
-        DB::transaction(function () use ($schoolId, $offeringId): void {
-            $offering = $this->offering($schoolId, $offeringId, true, true);
-            // Retain every delivery, registration and lecturer history record.
-            // Inspect references so new modules cannot silently become orphaned.
-            foreach (Schema::getTableListing() as $table) {
-                $unqualifiedTable = substr(strrchr('.'.$table, '.'), 1);
-                if ($unqualifiedTable === 'course_offering_curriculum_memberships' || ! Schema::hasColumn($table, 'course_offering_id')) {
-                    continue;
-                }
-                if (DB::table($table)->where('course_offering_id', $offeringId)->exists()) {
-                    throw new DomainException('This Course Allocation has related records. Cancel it to preserve its history.');
-                }
+        DB::transaction(function () use ($schoolId, $offeringId, $actorId, $confirmation): void {
+            $offering = $this->offering($schoolId, $offeringId, false, true);
+            if (! hash_equals('DELETE', trim($confirmation)) && ! hash_equals((string) $offering->reference, trim($confirmation))) {
+                throw new DomainException('Type DELETE or the exact Allocation reference to confirm deletion.');
             }
-            $this->audit('COURSE_OFFERING_DRAFT_DELETED', $offering, $offering->only(['subject_id', 'academic_year_id', 'academic_period_id', 'reference', 'status']), []);
-            DB::table('course_offering_curriculum_memberships')->where('school_id', $schoolId)->where('course_offering_id', $offeringId)->delete();
+
+            $old = $offering->only(['subject_id', 'academic_year_id', 'academic_period_id', 'reference', 'status']);
+            // Discover every row that belongs to this allocation from direct
+            // allocation links and declared FK descendants. Rows are collected
+            // before deletion and removed leaf-first; shared parent records
+            // (Course Units, curricula, students, lecturers) are never traversed.
+            $this->deleteAllocationWorkflowRows($schoolId, $offeringId);
+            $this->recordRequiredAudit('COURSE_OFFERING_DELETED', $offering, $actorId, $old);
             DB::table('course_offerings')->where('school_id', $schoolId)->where('id', $offeringId)->delete();
         });
     }
@@ -59,9 +57,9 @@ class CourseOfferingService
             if (! DB::table('schools')->where('id', $schoolId)->lockForUpdate()->first(['id'])) {
                 throw new DomainException('The tenant School does not exist.');
             }
-            $this->assertDraftIdentity($schoolId, $subjectId, $academicYearId, $academicPeriodId, null);
+            $this->assertAllocationIdentity($schoolId, $subjectId, $academicYearId, $academicPeriodId, null);
             $reference ??= $this->generatedReference($schoolId, $subjectId, $academicYearId, $academicPeriodId);
-            $this->assertDraftIdentity($schoolId, $subjectId, $academicYearId, $academicPeriodId, $reference);
+            $this->assertAllocationIdentity($schoolId, $subjectId, $academicYearId, $academicPeriodId, $reference);
 
             $id = DB::table('course_offerings')->insertGetId([
                 'school_id' => $schoolId,
@@ -81,11 +79,11 @@ class CourseOfferingService
     }
 
     /**
-     * Identity-only draft edit.
+     * Identity-only edit for any allocation status.
      *
-     * Identity (Course Unit, Academic Year, Academic Period) may change while the
-     * Allocation is DRAFT; the lifecycle freeze for open/in-progress/completed is
-     * enforced by offering(..., draftOnly: true) below and is unchanged.
+     * Identity (Course Unit, Academic Year, Academic Period) can be corrected
+     * in every lifecycle state. Linked Study Plans and registrations are checked
+     * against the candidate identity, and non-draft changes require a reason.
      *
      * The reference is SERVER-AUTHORITATIVE and is regenerated here from the
      * final validated identity, in the same statement that persists that
@@ -106,49 +104,54 @@ class CourseOfferingService
      * at creation. No new allocation scheme is introduced, and the existing
      * unique (school_id, reference) constraint remains the backstop.
      */
-    public function updateDraft(int $schoolId, int $offeringId, array $changes): CourseOffering
+    public function updateAllocation(int $schoolId, int $offeringId, array $changes, int $actorId, ?string $reason = null): CourseOffering
     {
-        return DB::transaction(function () use ($schoolId, $offeringId, $changes): CourseOffering {
-            $offering = $this->offering($schoolId, $offeringId, true, true);
+        return DB::transaction(function () use ($schoolId, $offeringId, $changes, $actorId, $reason): CourseOffering {
+            $offering = $this->offering($schoolId, $offeringId, false, true);
             $allowed = ['subject_id', 'academic_year_id', 'academic_period_id'];
             if (array_diff(array_keys($changes), $allowed)) {
-                throw new DomainException('Only the Allocation Course Unit, Academic Year and Academic Period may be updated while draft.');
+                throw new DomainException('Only the Allocation Course Unit, Academic Year and Academic Period may be updated.');
             }
 
             // 'reference' is in the audited set but never in $allowed, so it is
             // computed here and can never be supplied by the request.
             $audited = array_merge($allowed, ['reference']);
 
-            $before = $offering->only($audited);
+            $before = $offering->only(array_merge($audited, ['status']));
             $next = array_merge($offering->only($allowed), $changes);
             $subjectId = (int) $next['subject_id'];
             $yearId = (int) $next['academic_year_id'];
             $periodId = (int) $next['academic_period_id'];
 
-            if ($subjectId !== (int) $offering->subject_id && $offering->applicability()->exists()) {
-                throw new DomainException('Remove all linked Study Plans before changing the Course Unit.');
-            }
-            $this->assertDraftIdentity($schoolId, $subjectId, $yearId, $periodId, null, $offeringId);
+            $this->assertAllocationIdentity($schoolId, $subjectId, $yearId, $periodId, null, $offeringId);
 
+            $candidate = clone $offering;
+            $candidate->setRawAttributes(array_merge($offering->getAttributes(), [
+                'subject_id' => $subjectId,
+                'academic_year_id' => $yearId,
+                'academic_period_id' => $periodId,
+            ]), true);
             if ($offering->applicability()->exists()) {
-                $candidate = clone $offering;
-                $candidate->setRawAttributes(array_merge($offering->getAttributes(), [
-                    'subject_id' => $subjectId,
-                    'academic_year_id' => $yearId,
-                    'academic_period_id' => $periodId,
-                ]), true);
                 foreach ($offering->applicability()->get() as $link) {
                     $this->validateApplicability($candidate, (int) $link->curriculum_membership_id);
                 }
+            }
+            $this->validateRegistrationIdentity($offering, $candidate);
+            $identityChanged = $subjectId !== (int) $offering->subject_id
+                || $yearId !== (int) $offering->academic_year_id
+                || $periodId !== (int) $offering->academic_period_id;
+            if ($identityChanged && $offering->status !== CourseOffering::STATUS_DRAFT && trim((string) $reason) === '') {
+                throw new DomainException('A reason is required when changing the identity of a non-draft Course Allocation.');
             }
 
             // Authoritative reference for the FINAL identity, ignoring this
             // Allocation's own current row so a no-op edit does not bump itself.
             $reference = $this->generatedReference($schoolId, $subjectId, $yearId, $periodId, $offeringId);
-            $this->assertDraftIdentity($schoolId, $subjectId, $yearId, $periodId, $reference, $offeringId);
+            $this->assertAllocationIdentity($schoolId, $subjectId, $yearId, $periodId, $reference, $offeringId);
 
             // One statement: identity and its reference can never diverge, and a
             // rejected update above has written nothing at all.
+            $this->syncDenormalizedIdentity($schoolId, $offeringId, $subjectId, $yearId, $periodId);
             DB::table('course_offerings')->where('school_id', $schoolId)->where('id', $offeringId)->update([
                 'subject_id' => $subjectId,
                 'academic_year_id' => $yearId,
@@ -159,11 +162,26 @@ class CourseOfferingService
             $offering->refresh();
             $after = $offering->only($audited);
             if ($before != $after) {
-                $this->audit('COURSE_OFFERING_DRAFT_UPDATED', $offering, $before, $after);
+                $newValues = array_merge($after, [
+                    'status' => $offering->status,
+                    'actor_user_id' => $actorId,
+                    'reason' => $identityChanged && $offering->status !== CourseOffering::STATUS_DRAFT ? trim((string) $reason) : null,
+                ]);
+                if ($offering->status === CourseOffering::STATUS_DRAFT) {
+                    $this->audit('COURSE_OFFERING_DRAFT_UPDATED', $offering, $before, $newValues);
+                } else {
+                    $this->recordRequiredAudit('COURSE_OFFERING_IDENTITY_UPDATED', $offering, $actorId, $before, $newValues);
+                }
             }
 
             return $offering;
         });
+    }
+
+    /** Backward-compatible service entry point; authorization remains at the HTTP boundary. */
+    public function updateDraft(int $schoolId, int $offeringId, array $changes): CourseOffering
+    {
+        return $this->updateAllocation($schoolId, $offeringId, $changes, (int) (auth()->id() ?? 0));
     }
 
     /**
@@ -539,7 +557,7 @@ class CourseOfferingService
         });
     }
 
-    private function assertDraftIdentity(int $schoolId, int $subjectId, int $yearId, int $periodId, ?string $reference, ?int $ignoreOfferingId = null): void
+    private function assertAllocationIdentity(int $schoolId, int $subjectId, int $yearId, int $periodId, ?string $reference, ?int $ignoreOfferingId = null): void
     {
         if (! DB::table('subjects')->where('school_id', $schoolId)->where('id', $subjectId)->exists()) {
             throw new DomainException('The selected Course Unit does not belong to this institution.');
@@ -674,6 +692,193 @@ class CourseOfferingService
             'event_type' => 'COURSE_OFFERING',
             'old_values' => $old ?: null,
             'new_values' => $new ?: null,
+        ]);
+    }
+
+    private function validateRegistrationIdentity(CourseOffering $offering, CourseOffering $candidate): void
+    {
+        if (! Schema::hasTable('course_registrations') || ! Schema::hasColumn('course_registrations', 'course_offering_id')) {
+            return;
+        }
+        $registrations = DB::table('course_registrations')->where('school_id', $offering->school_id)
+            ->where('course_offering_id', $offering->id)->get();
+        foreach ($registrations as $registration) {
+            if (isset($registration->curriculum_membership_id) && $registration->curriculum_membership_id !== null) {
+                $membership = $this->validateApplicability($candidate, (int) $registration->curriculum_membership_id);
+                $updates = [];
+                if (Schema::hasColumn('course_registrations', 'subject_id')) $updates['subject_id'] = $candidate->subject_id;
+                if (Schema::hasColumn('course_registrations', 'registered_classification')) $updates['registered_classification'] = $membership->classification;
+                if (Schema::hasColumn('course_registrations', 'registered_credits')) $updates['registered_credits'] = $membership->credits;
+                if ($updates) {
+                    DB::table('course_registrations')->where('school_id', $offering->school_id)->where('id', $registration->id)->update($updates);
+                }
+            } elseif ((int) ($registration->subject_id ?? 0) !== (int) $candidate->subject_id) {
+                throw new DomainException('This identity change would make an existing registration inconsistent. Resolve its Study Plan placement before editing the Allocation.');
+            }
+        }
+    }
+
+    private function syncDenormalizedIdentity(int $schoolId, int $offeringId, int $subjectId, int $yearId, int $periodId): void
+    {
+        foreach (Schema::getTableListing() as $table) {
+            if ($table === 'course_offerings' || $table === 'course_registrations'
+                || ! Schema::hasColumn($table, 'course_offering_id') || ! Schema::hasColumn($table, 'subject_id')) continue;
+            $updates = ['subject_id' => $subjectId];
+            if (Schema::hasColumn($table, 'academic_year_id')) $updates['academic_year_id'] = $yearId;
+            if (Schema::hasColumn($table, 'academic_period_id')) $updates['academic_period_id'] = $periodId;
+            $query = DB::table($table)->where('course_offering_id', $offeringId);
+            if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+            $query->update($updates);
+        }
+    }
+
+    /** Delete allocation-owned rows and FK descendants, leaf-first, in caller transaction. */
+    private function deleteAllocationWorkflowRows(int $schoolId, int $offeringId): void
+    {
+        $tables = array_map(static fn (string $table): string => substr(strrchr('.'.$table, '.'), 1), Schema::getTableListing());
+        $rowsByTable = [];
+        $dependencies = [];
+        foreach ($tables as $table) {
+            if ($table === 'course_offerings' || ! Schema::hasColumn($table, 'course_offering_id')) continue;
+            $query = DB::table($table)->where('course_offering_id', $offeringId);
+            if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+            $rows = $query->get();
+            if ($rows->isNotEmpty()) $rowsByTable[$table] = $rows->all();
+        }
+
+        // Legacy workflow tables intentionally do not all declare constraints.
+        // Keep those allocation-owned relationships explicit so SQLite test
+        // schemas and older production schemas receive the same safe cleanup.
+        $knownChildren = [
+            'course_offering_attendance_records' => [['course_offering_attendance_sessions', 'attendance_session_id'], ['course_registrations', 'course_registration_id']],
+            'live_class_materials' => [['live_classes', 'live_class_id']],
+            'live_class_attendances' => [['live_classes', 'live_class_id']],
+            'live_class_notifications' => [['live_classes', 'live_class_id']],
+            'live_class_meet_guests' => [],
+            'course_offering_lesson_resources' => [['course_offering_lessons', 'course_offering_lesson_id']],
+            'course_offering_lesson_progress' => [['course_offering_lessons', 'course_offering_lesson_id']],
+            'assignment_submissions' => [['assignments', 'assignment_id']],
+            'assignment_resources' => [['assignments', 'assignment_id']],
+            'assignment_notifications' => [['assignments', 'assignment_id']],
+            'assignment_submission_items' => [['assignment_submissions', 'assignment_submission_id'], ['assignments', 'assignment_id']],
+            'assignment_questions' => [['assignments', 'assignment_id']],
+            'assignment_question_responses' => [['assignment_questions', 'assignment_question_id'], ['assignment_submissions', 'assignment_submission_id'], ['assignments', 'assignment_id']],
+            'online_exam_questions' => [['online_exams', 'online_exam_id']],
+            'online_exam_submissions' => [['online_exams', 'online_exam_id']],
+            'online_exam_notifications' => [['online_exams', 'online_exam_id']],
+            'online_exam_user_notifications' => [['online_exams', 'online_exam_id'], ['online_exam_submissions', 'submission_id']],
+        ];
+
+        // Follow only child -> owned parent relationships. This reaches workflow
+        // rows such as attendance records and submission evidence which do not
+        // carry course_offering_id themselves, while never walking upward into
+        // shared Course Units, curricula, students, staff or schools.
+        $changed = true;
+        while ($changed) {
+            $changed = false;
+            foreach ($tables as $childTable) {
+                if ($childTable === 'course_offerings') continue;
+                $relations = [];
+                foreach (Schema::getForeignKeys($childTable) as $foreignKey) {
+                    $relations[] = [$foreignKey['foreign_table'] ?? null, $foreignKey['columns'] ?? [], $foreignKey['foreign_columns'] ?? []];
+                }
+                foreach ($knownChildren[$childTable] ?? [] as [$parent, $column]) {
+                    $relations[] = [$parent, [$column], ['id']];
+                }
+                foreach ($relations as [$parent, $localColumns, $foreignColumns]) {
+                    if (! $parent || ! isset($rowsByTable[$parent])) continue;
+                    if (! $localColumns || count($localColumns) !== count($foreignColumns)) continue;
+                    $query = DB::table($childTable)->where(function ($where) use ($rowsByTable, $parent, $localColumns, $foreignColumns): void {
+                        foreach ($rowsByTable[$parent] as $parentRow) {
+                            $values = [];
+                            foreach ($foreignColumns as $index => $column) $values[$localColumns[$index]] = $parentRow->{$column};
+                            $where->orWhere(function ($match) use ($values): void {
+                                foreach ($values as $column => $value) $match->where($column, $value);
+                            });
+                        }
+                    });
+                    if (Schema::hasColumn($childTable, 'school_id')) $query->where('school_id', $schoolId);
+                    $rows = $query->get();
+                    if ($rows->isNotEmpty()) {
+                        $dependencies[$parent][] = $childTable;
+                        $fingerprint = static fn ($row): string => isset($row->id) ? 'id:'.$row->id : 'row:'.hash('sha256', serialize($row));
+                        $knownRows = collect($rowsByTable[$childTable] ?? [])->keyBy($fingerprint);
+                        foreach ($rows as $row) {
+                            $key = $fingerprint($row);
+                            if (! $knownRows->has($key)) {
+                                $knownRows->put($key, $row);
+                                $changed = true;
+                            }
+                        }
+                        $rowsByTable[$childTable] = $knownRows->values()->all();
+                    }
+                }
+            }
+        }
+
+        // A parent may itself have been discovered before its child, or both
+        // may have a direct offering_id. Topologically order the collected graph
+        // so every child is removed before each parent in either case.
+        $orderedTables = [];
+        $visited = [];
+        $visit = function (string $table) use (&$visit, &$orderedTables, &$visited, $dependencies, $rowsByTable): void {
+            if (isset($visited[$table])) return;
+            $visited[$table] = true;
+            foreach (array_unique($dependencies[$table] ?? []) as $child) {
+                if (isset($rowsByTable[$child])) $visit($child);
+            }
+            $orderedTables[] = $table;
+        };
+        foreach (array_keys($rowsByTable) as $table) $visit($table);
+
+        foreach ($orderedTables as $table) {
+            if (! Schema::hasColumn($table, 'id')) {
+                $columns = Schema::getColumnListing($table);
+                $query = DB::table($table);
+                if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+                $query->where(function ($or) use ($rowsByTable, $table, $columns): void {
+                    foreach ($rowsByTable[$table] as $row) $or->orWhere(function ($and) use ($row, $columns): void {
+                        foreach ($columns as $column) {
+                            $value = $row->{$column} ?? null;
+                            $value === null ? $and->whereNull($column) : $and->where($column, $value);
+                        }
+                    });
+                });
+                $query->delete();
+                continue;
+            }
+            $ids = array_values(array_unique(array_map(fn ($row) => $row->id, $rowsByTable[$table])));
+            $query = DB::table($table)->whereIn('id', $ids);
+            if (Schema::hasColumn($table, 'school_id')) $query->where('school_id', $schoolId);
+            $query->delete();
+        }
+    }
+
+    /** A deletion/official identity audit is mandatory and rolls back the mutation if it cannot be stored. */
+    private function recordRequiredAudit(string $action, CourseOffering $offering, int $actorId, array $old, array $new = []): void
+    {
+        $actor = \App\Models\User::query()->find($actorId);
+        AuditLog::create([
+            'school_id' => $offering->school_id,
+            'user_id' => $actorId,
+            'user_name' => $actor?->name,
+            'role_id' => $actor?->role_id,
+            'role_name' => AuditLog::roleName($actor?->role_id),
+            'action' => $action,
+            'event_type' => 'COURSE_OFFERING',
+            'module' => 'Course Allocations',
+            'route_name' => \Illuminate\Support\Facades\Route::currentRouteName(),
+            'url' => request()->fullUrl(),
+            'method' => request()->method(),
+            'description' => "{$action} for Course Allocation #{$offering->id}.",
+            'record_type' => CourseOffering::class,
+            'record_id' => $offering->id,
+            'old_values' => $old,
+            'new_values' => $new ?: null,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'status' => 'success',
+            'created_at' => now(),
         ]);
     }
 }

@@ -1205,14 +1205,13 @@ class StudentController extends Controller
             'gender' => 'sometimes|nullable|string',
             'phone' => 'sometimes|nullable|string',
             'address' => 'sometimes|nullable|string',
-            'blood_group' => 'sometimes|nullable|string',
             'photo' => 'sometimes|nullable|file|image|mimes:jpg,jpeg,png|max:4096',
         ]);
         // Institutional identity fields are maintained by authorized staff only.
         $data = [];
 
         $user_info = (array) (json_decode(auth()->user()->user_information ?? '', true) ?: []);
-        foreach ($request->only(['gender', 'phone', 'address', 'blood_group']) as $field => $value) {
+        foreach ($request->only(['gender', 'phone', 'address']) as $field => $value) {
             $user_info[$field] = $value;
         }
 

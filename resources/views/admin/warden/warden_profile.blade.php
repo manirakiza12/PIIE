@@ -13,7 +13,7 @@
     }
     .text{
         border-top: 1px solid #817e7e21;
-        
+
     } 
     .text h4{
         border-bottom: 1px solid #817e7e21;
@@ -47,7 +47,7 @@
                   <div class="name_title mt-3 text-center">
                       <h4>{{ get_phrase('Name') }} : {{ $user_details['name'] }}</h4>
                       <h4>{{ get_phrase('Email') }} : {{ null_checker($user_details['email']) }}</h4>
-                      
+
                   </div>
               </div>
           </div>
@@ -102,7 +102,7 @@
                     <h4>{{ get_phrase('Name') }} : {{ $user_details['name'] }}</h4>
                     <h4>{{ get_phrase('Gender') }} : {{ null_checker($user_details['gender']) }}</h4>
                     <h4>{{ get_phrase('Address') }} : {{ null_checker($user_details['address']) }}</h4>
-                    <h4>{{ get_phrase('Blood') }} : {{ null_checker(strtoupper($user_details['blood_group'])) }}</h4>
+
                     <h4>{{ get_phrase('Contact') }} : {{ null_checker($user_details['phone']) }}</h4>
                     <h4>{{ get_phrase('Department') }} : {{ null_checker($user_details['department'] ?? '') }}</h4>
                     <h4>{{ get_phrase('Designation') }} : {{ null_checker($user_details['designation'] ?? '') }}</h4>
@@ -123,7 +123,7 @@
                         <input type="text" class="form-control eForm-control" name="password" id="password{{ $user_details['id'] }}">
                         <input type="hidden" name="user_id" value="{{ $user_details['id'] }}">
                     </div>
-    
+
                     <div class="generatePass d-flex">
                         <div class="pt-2">
                             <button type="button"
