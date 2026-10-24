@@ -6,8 +6,8 @@ const { JSDOM } = require('jsdom');
 
 const source = fs.readFileSync(path.join(__dirname, '../../public/assets/js/existing-student-form.js'), 'utf8');
 
-function buildForm() {
-  const dom = new JSDOM(`<!doctype html><body>
+function formMarkup() {
+  return `
     <form id="existing-student-form">
       <select id="programme_id"><option value="">Programme</option><option value="10" selected>Programme A</option><option value="11">Programme B</option></select>
       <select id="intake_session_id"><option value="">Intake</option><option value="20" selected>Intake A</option><option value="21">Intake B</option></select>
@@ -36,10 +36,13 @@ function buildForm() {
       <input type="radio" name="password_option" value="auto" checked>
       <input type="radio" name="password_option" value="manual">
       <div id="password_manual_wrap" hidden><input id="password"></div>
-    </form>
-  </body>`, { runScripts: 'outside-only' });
+    </form>`;
+}
+
+function buildForm() {
+  const dom = new JSDOM(`<!doctype html><body>${formMarkup()}</body>`, { runScripts: 'outside-only' });
   dom.window.eval(source);
-  dom.window.initializeExistingStudentForm(dom.window.document.getElementById('existing-student-form'));
+  dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
   return dom;
 }
 
@@ -50,6 +53,8 @@ test('fee sessions are filtered by academic year and a stale session and fee typ
   const session = document.getElementById('fee_session_id');
   const fee = document.getElementById('fee_structure_id');
 
+  assert.equal(document.getElementById('existing_student_fee_fields').hidden, false, 'A checked Finance option reveals the complete panel on initialization');
+  assert.equal(session.disabled, false, 'Finance controls are enabled after the initializer runs');
   assert.equal(session.options[1].hidden, false);
   assert.equal(session.options[2].hidden, true);
   assert.equal(fee.options[1].hidden, false);
@@ -61,7 +66,7 @@ test('fee sessions are filtered by academic year and a stale session and fee typ
   assert.equal(session.value, '', 'A session from another academic year cannot remain selected');
   assert.equal(session.options[1].hidden, true);
   assert.equal(session.options[2].hidden, false);
-  assert.match(document.getElementById('fee-session-context-message').textContent, /cleared because it belongs to a different academic year/);
+  assert.match(document.getElementById('fee-session-context-message').textContent, /previous session belongs to another year/);
   assert.equal(fee.value, '', 'A fee restricted to the old session cannot remain selected');
   dom.window.close();
 });
@@ -86,15 +91,15 @@ test('programme and intake changes refresh fee-type and cohort-year context inde
   assert.equal(fee.value, '', 'A programme restricted fee is cleared when the programme changes');
   assert.equal(fee.options[1].hidden, true);
   assert.equal(fee.options[2].hidden, false, 'The new programme and selected session fee is refreshed');
-  assert.match(context.textContent, /No active or completed programme cohort connects/);
+  assert.match(context.textContent, /No configured cohort links/);
 
   intake.value = '21';
   intake.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-  assert.match(context.textContent, /Configured programme cohort entry year: 2027\/28/);
+  assert.match(context.textContent, /Configured cohort entry year: 2027\/28/);
 
   yearOfStudy.value = '2';
   yearOfStudy.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-  assert.match(context.textContent, /Configured programme cohort entry year: 2027\/28/);
+  assert.match(context.textContent, /Configured cohort entry year: 2027\/28/);
   assert.equal(academicYear.value, '31', 'Progression year does not silently become an academic year');
   dom.window.close();
 });
@@ -111,12 +116,59 @@ test('finance remains optional and dependent review fields are disabled until se
   toggle.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   assert.equal(fields.hidden, true);
   assert.equal(session.disabled, true);
+  assert.equal(document.getElementById('actual_fee_amount').disabled, true);
   assert.equal(paymentDate.disabled, true);
 
   toggle.checked = true;
   toggle.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   assert.equal(fields.hidden, false);
   assert.equal(session.disabled, false);
+  assert.equal(document.getElementById('actual_fee_amount').disabled, false);
   assert.equal(paymentDate.disabled, true, 'Review details stay optional until a prior payment is entered');
+  dom.window.close();
+});
+
+test('Finance controls initialize after the current AJAX modal inserts its form', async () => {
+  const dom = new JSDOM('<!doctype html><body><div id="right-modal"></div></body>', { runScripts: 'outside-only' });
+  dom.window.eval(source);
+  dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
+  dom.window.document.getElementById('right-modal').innerHTML = formMarkup().replace(' checked', '').replace('id="existing_student_fee_fields"', 'id="existing_student_fee_fields" hidden');
+  await new Promise(resolve => dom.window.setTimeout(resolve, 0));
+
+  const document = dom.window.document;
+  const toggle = document.getElementById('record_fees');
+  const fields = document.getElementById('existing_student_fee_fields');
+  const session = document.getElementById('fee_session_id');
+  assert.equal(fields.hidden, true);
+  assert.equal(session.disabled, true);
+
+  toggle.checked = true;
+  toggle.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  assert.equal(fields.hidden, false, 'Opening through AJAX and enabling Finance reveals its fields');
+  assert.equal(session.disabled, false);
+  assert.equal(document.getElementById('actual_fee_amount').disabled, false);
+  dom.window.close();
+});
+
+test('an academic year with no fee sessions explains the issue and blocks invoice submission', () => {
+  const dom = buildForm();
+  const document = dom.window.document;
+  const year = document.getElementById('fee_academic_year_id');
+  const session = document.getElementById('fee_session_id');
+  const form = document.getElementById('existing-student-form');
+  const noSessionYear = document.createElement('option');
+  noSessionYear.value = '32';
+  noSessionYear.textContent = '2028/2029';
+  year.append(noSessionYear);
+
+  year.value = '32';
+  year.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+
+  assert.equal(session.value, '');
+  assert.equal(session.disabled, true);
+  assert.match(document.getElementById('fee-session-context-message').textContent, /No fee sessions are linked/);
+  const submit = new dom.window.Event('submit', { bubbles: true, cancelable: true });
+  form.dispatchEvent(submit);
+  assert.equal(submit.defaultPrevented, true, 'Finance cannot submit an invoice without a session for the selected year');
   dom.window.close();
 });

@@ -28,6 +28,10 @@ class StudentBulkImportTest extends TestCase
     {
         parent::setUp();
         $this->bootAdmissionsTestSchema();
+        \Illuminate\Support\Facades\Schema::table('users', function ($table) {
+            $table->string('first_name', 100)->nullable();
+            $table->string('last_name', 100)->nullable();
+        });
         (require database_path('migrations/2026_10_21_060000_create_student_opening_payments.php'))->up();
         $this->school = $this->makeSchool();
         $this->admin = $this->makeAdminUser($this->school);

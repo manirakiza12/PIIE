@@ -27,6 +27,10 @@ class ExistingStudentAcademicPlacementTest extends TestCase
     {
         parent::setUp();
         $this->bootAdmissionsTestSchema();
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('first_name', 100)->nullable();
+            $table->string('last_name', 100)->nullable();
+        });
         (require database_path('migrations/2026_10_21_060000_create_student_opening_payments.php'))->up();
         Schema::table('schools', function (Blueprint $table) {
             $table->string('school_type')->default('higher_ed');

@@ -19,6 +19,10 @@ class ExistingStudentPortalOnlyTest extends TestCase
     {
         parent::setUp();
         $this->bootAdmissionsTestSchema();
+        Schema::table('users', function ($table) {
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+        });
         Schema::create('password_resets', function ($table) {
             $table->string('email')->index();
             $table->string('token');

@@ -46,6 +46,10 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
             $table->string('school_currency')->default('UGX');
             $table->unsignedBigInteger('current_academic_year_id')->nullable();
         });
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+        });
         Schema::create('academic_years', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('school_id');
@@ -119,20 +123,74 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
 
     public function test_add_existing_student_form_is_one_page_and_finance_sessions_follow_the_selected_academic_year(): void
     {
-        $this->actingAs($this->admin)->get(route('admin.student.open_modal'))
+        $response = $this->actingAs($this->admin)->get(route('admin.student.open_modal'), ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest'])
             ->assertOk()
             ->assertSee('Existing registration')
             ->assertSee('Student account and portal access')
             ->assertSee('Programme, intake, and academic details')
             ->assertSee('Optional financial setup')
-            ->assertSee('Next of kin and other details')
+            ->assertSee('Next of kin and other student details')
             ->assertSee('Create Student')
             ->assertSee('2026/2027')
             ->assertSee('2026 Semester 2')
-            ->assertDontSee('Step 1: enter the agreed fee')
+            ->assertDontSee('Step 1')
+            ->assertDontSee('Previous')
             ->assertDontSee('Next Step')
+            ->assertDontSee('For a new student, complete an application')
             ->assertSee('fee_academic_year_id')
+            ->assertSee('name="first_name"', false)
+            ->assertSee('name="last_name"', false)
+            ->assertSee('name="additional_photo"', false)
             ->assertSee('data-academic-year-id="'.$this->academicYearId.'"', false);
+        $this->assertSame(1, substr_count($response->getContent(), '<form'));
+        $this->assertStringContainsString('data-workspace-continuous', $response->getContent());
+    }
+
+    public function test_finance_year_default_uses_the_configured_active_year_not_the_running_session_year(): void
+    {
+        $otherYearId = DB::table('academic_years')->insertGetId([
+            'school_id' => $this->schoolId, 'label' => '2031/2032', 'start_date' => '2031-08-01', 'end_date' => '2032-07-31',
+            'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $runningSession = Session::create(['school_id' => $this->schoolId, 'session_title' => '2031 Semester 1', 'status' => 1]);
+        DB::table('sessions')->where('id', $runningSession->id)->update(['academic_year_id' => $otherYearId]);
+        DB::table('sessions')->where('id', $this->period->id)->update(['academic_year_id' => $otherYearId]);
+        DB::table('schools')->where('id', $this->schoolId)->update(['running_session' => $runningSession->id]);
+
+        $response = $this->actingAs($this->admin)->get(route('admin.student.open_modal'), ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest'])
+            ->assertOk()
+            ->assertSee('2026/2027')
+            ->assertSee('2031/2032')
+            ->assertSee('data-academic-year-id="'.$otherYearId.'"', false);
+        $this->assertSame(1, preg_match('/<option value="'.$this->academicYearId.'"\s+selected>2026\/2027<\/option>/', $response->getContent()));
+    }
+
+    public function test_missing_active_year_shows_selection_guidance_and_keeps_years_available(): void
+    {
+        DB::table('schools')->where('id', $this->schoolId)->update(['current_academic_year_id' => null]);
+
+        $response = $this->actingAs($this->admin)->get(route('admin.student.open_modal'), ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest'])
+            ->assertOk()
+            ->assertSee('No active Academic Year is configured. Select a year before setting up Finance.')
+            ->assertSee('Select an academic year')
+            ->assertSee('2026/2027');
+        $this->assertDoesNotMatchRegularExpression('/<option value="'.$this->academicYearId.'"[^>]*selected>/', $response->getContent());
+    }
+
+    public function test_finance_rejects_an_academic_year_without_a_linked_fee_session(): void
+    {
+        $yearWithoutSessions = DB::table('academic_years')->insertGetId([
+            'school_id' => $this->schoolId, 'label' => '2028/2029', 'start_date' => '2028-08-01', 'end_date' => '2029-07-31',
+            'status' => 'planned', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'fee_academic_year_id' => $yearWithoutSessions,
+            'fee_session_id' => null,
+        ]))->assertSessionHasErrors('fee_session_id');
+
+        $this->assertSame(0, User::where('email', 'continuing@example.test')->count());
+        $this->assertSame(0, StudentFeeManager::count());
     }
 
     public function test_finance_rejects_a_fee_session_outside_the_selected_academic_year(): void
@@ -159,11 +217,17 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
             'actual_fee_amount' => null, 'prior_paid_amount' => null, 'prior_paid_on' => null,
             'prior_payment_method' => null, 'prior_payment_reference' => null, 'prior_payment_reason' => null,
             'fee_academic_year_id' => $this->academicYearId,
+            'name' => null, 'first_name' => 'Amina', 'last_name' => 'Mukasa',
         ]);
 
         $this->actingAs($this->admin)->post(route('admin.student.create'), $payload)->assertSessionHasNoErrors()->assertRedirect();
 
         $student = User::where('email', 'continuing@example.test')->firstOrFail();
+        $this->assertSame('Amina Mukasa', $student->name);
+        $this->assertSame('Amina', $student->first_name);
+        $this->assertSame('Mukasa', $student->last_name);
+        $this->assertSame('Amina', StudentProfile::where('user_id', $student->id)->value('first_name'));
+        $this->assertSame('Mukasa', StudentProfile::where('user_id', $student->id)->value('last_name'));
         $this->assertSame(0, StudentFeeManager::where('student_id', $student->id)->count());
         $this->assertSame(0, DB::table('admissions')->count());
         $this->assertSame(0, DB::table('application_payments')->count());
