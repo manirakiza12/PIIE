@@ -59,7 +59,6 @@ use Illuminate\View\View;
 class StaffProfileController extends Controller
 {
     /** The same vocabularies staff creation accepts, so the two cannot drift. */
-    private const BLOOD_GROUPS = StaffCreateController::BLOOD_GROUPS;
 
     private const GENDERS = StaffCreateController::GENDERS;
 
@@ -297,7 +296,6 @@ class StaffProfileController extends Controller
             'titles' => StaffTitle::ALL,
             'relationships' => StaffNextOfKin::ALL,
             'qualificationLevels' => StaffQualificationLevel::ALL,
-            'bloodGroups' => self::BLOOD_GROUPS,
             'genders' => self::GENDERS,
             'employmentTypes' => self::EMPLOYMENT_TYPES,
             'staffStatuses' => StaffStatus::ALL,
@@ -348,7 +346,6 @@ class StaffProfileController extends Controller
             'birthday' => ['nullable', 'date', 'before:today'],
             'nationality' => ['nullable', 'string', 'max:100'],
             'nin' => ['nullable', 'string', 'min:'.StaffNin::MIN_LENGTH, 'max:'.StaffNin::MAX_LENGTH],
-            'blood_group' => ['nullable', Rule::in(self::BLOOD_GROUPS)],
             'address' => ['nullable', 'string', 'max:1000'],
             // Contact
             'email' => ['required', 'email:filter', 'max:191'],
@@ -484,7 +481,6 @@ class StaffProfileController extends Controller
 
         $information = array_merge($information, [
             'gender' => $data['gender'],
-            'blood_group' => $data['blood_group'] ?? '',
             'birthday' => empty($data['birthday']) ? 0 : strtotime((string) $data['birthday']),
             'phone' => $data['phone'],
             'address' => trim((string) ($data['address'] ?? '')),

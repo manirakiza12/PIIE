@@ -30,20 +30,7 @@
             <input type="text" class="form-control eForm-control" id="phone" name = "phone" required>
         </div>
 
-        <div class="fpb-7">
-            <label for="blood_group" class="eForm-label">{{ get_phrase('Blood group') }}</label>
-            <select name="blood_group" id="blood_group" class="form-select eForm-select eChoice-multiple-with-remove">
-                <option value="">{{ get_phrase('Select a blood group') }}</option>
-                <option value="a+">{{ get_phrase('A+') }}</option>
-                <option value="a-">{{ get_phrase('A-') }}</option>
-                <option value="b+">{{ get_phrase('B+') }}</option>
-                <option value="b-">{{ get_phrase('B-') }}</option>
-                <option value="ab+">{{ get_phrase('AB+') }}</option>
-                <option value="ab-">{{ get_phrase('AB-') }}</option>
-                <option value="o+">{{ get_phrase('O+') }}</option>
-                <option value="o-">{{ get_phrase('O-') }}</option>
-            </select>
-        </div>
+
 
         <div class="fpb-7">
             <label for="phone" class="eForm-label">{{ get_phrase('Address') }}</label>

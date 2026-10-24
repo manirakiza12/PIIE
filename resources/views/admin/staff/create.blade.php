@@ -151,13 +151,7 @@
                         <label class="sc-label" for="nationality">{{ get_phrase('Nationality') }}</label>
                         <input id="nationality" name="nationality" class="form-control" value="{{ old('nationality') }}">
                     </div>
-                    <div class="col-12 col-md-6 col-xl-4 sc-field">
-                        <label class="sc-label" for="blood_group">{{ get_phrase('Blood Group') }}</label>
-                        <select id="blood_group" name="blood_group" class="form-select">
-                            <option value="">{{ get_phrase('Select a blood group') }}</option>
-                            @foreach($bloodGroups as $b)<option value="{{ $b }}" @selected(old('blood_group') === $b)>{{ get_phrase($b) }}</option>@endforeach
-                        </select>
-                    </div>
+
 
                     <div class="col-12 col-md-6 col-xl-4 sc-field">
                         {{-- Presentation only: the encrypted NIN architecture is unchanged. --}}

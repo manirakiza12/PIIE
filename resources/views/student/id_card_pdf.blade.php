@@ -69,7 +69,7 @@
                         <tr><td class="label">{{ get_phrase('Class') }}</td><td>{{ null_checker($student_details['class_name']) }}</td></tr>
                         <tr><td class="label">{{ get_phrase('Section') }}</td><td>{{ null_checker($student_details['section_name']) }}</td></tr>
                     @endif
-                    <tr><td class="label">{{ get_phrase('Blood') }}</td><td>{{ null_checker(strtoupper((string) $student_details['blood_group'])) }}</td></tr>
+
                     <tr><td class="label">{{ get_phrase('Contact') }}</td><td>{{ \App\Support\IdCard::INSTITUTION_PHONE }}</td></tr>
                 </table>
             </td>

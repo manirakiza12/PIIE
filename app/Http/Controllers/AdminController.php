@@ -642,14 +642,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1007,14 +1006,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1168,14 +1166,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1314,14 +1311,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1423,7 +1419,6 @@ class AdminController extends Controller
         }
         $info = [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
@@ -1524,14 +1519,13 @@ class AdminController extends Controller
             }
         }
 
-        $info = [
+        $info = array_merge((array) (json_decode($parentUser->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1659,14 +1653,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($user->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
 
         $data['user_information'] = json_encode($info);
 
@@ -1855,7 +1848,7 @@ class AdminController extends Controller
                 continue;
             }
             $profile = StudentProfile::where('user_id', $student->id)->first();
-            $info = (object) array_merge(['phone' => null, 'gender' => null, 'blood_group' => null], (array) (json_decode($student->user_information ?? '') ?: []));
+            $info = (object) array_merge(['phone' => null, 'gender' => null], (array) (json_decode($student->user_information ?? '') ?: []));
 
             $rows[] = [
                 $i + 1,
@@ -1864,7 +1857,6 @@ class AdminController extends Controller
                 $student->email,
                 $info->phone,
                 $info->gender,
-                $info->blood_group,
                 optional($profile?->programme)->name,
                 optional($profile?->intakeSession)->name,
                 $profile->status ?? 'active',
@@ -1874,7 +1866,7 @@ class AdminController extends Controller
 
         return \App\Support\Export\ExcelExportService::download(
             'students_' . date('Y-m-d'),
-            ['#', 'Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Blood Group', 'Programme', 'Intake', 'Status', 'Account Status'],
+            ['#', 'Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Programme', 'Intake', 'Status', 'Account Status'],
             $rows
         );
     }
@@ -1911,7 +1903,6 @@ class AdminController extends Controller
             $student_details['email'] ?? '',
             $student_details['phone'] ?? '',
             $student_details['gender'] ?? '',
-            strtoupper($student_details['blood_group'] ?? ''),
             optional($profile?->programme)->name,
             optional($profile?->intakeSession)->name,
             $profile->nationality ?? '',
@@ -1922,7 +1913,7 @@ class AdminController extends Controller
 
         return \App\Support\Export\ExcelExportService::download(
             'student_' . ($student_details['code'] ?? $id),
-            ['Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Blood Group', 'Programme', 'Intake', 'Nationality', 'Status', 'Affiliated University / School', 'Student ID at Affiliated Institution'],
+            ['Registration No.', 'Name', 'Email', 'Phone', 'Gender', 'Programme', 'Intake', 'Nationality', 'Status', 'Affiliated University / School', 'Student ID at Affiliated Institution'],
             $rows
         );
     }
@@ -2102,7 +2093,6 @@ class AdminController extends Controller
 
         $info = [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
@@ -2295,14 +2285,13 @@ class AdminController extends Controller
                 $photo = '';
             }
         }
-        $info = [
+        $info = array_merge((array) (json_decode($student->user_information ?? '', true) ?: []), [
             'gender'      => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday'    => strtotime($data['birthday']),
             'phone'       => $data['phone'],
             'address'     => $data['address'],
             'photo'       => $photo,
-        ];
+        ]);
         $data['user_information'] = json_encode($info);
         $user = User::find($id);
         if ($user) {
@@ -2604,7 +2593,6 @@ class AdminController extends Controller
 
             $info = [
                 'gender'      => $data['gender'],
-                'blood_group' => $data['blood_group'],
                 'birthday'    => strtotime($data['eDefaultDateRange']),
                 'phone'       => $data['phone'],
                 'address'     => $data['address'],
@@ -2680,7 +2668,6 @@ class AdminController extends Controller
 
                 $info = [
                     'gender'      => $students_gender[$key],
-                    'blood_group' => '',
                     'birthday'    => '',
                     'phone'       => '',
                     'address'     => '',
@@ -2757,30 +2744,56 @@ class AdminController extends Controller
         if (($handle = fopen($filepath, 'r')) !== false) { // Check the resource is valid
             $count               = 0;
             $duplication_counter = 0;
+            $columns = [
+                'name' => 0, 'email' => 1, 'password' => 2, 'phone' => 3,
+                'gender' => 5, 'birthday' => 6, 'address' => 7,
+            ]; // Legacy BloodGroup column is intentionally ignored.
 
             while (($all_data = fgetcsv($handle, 1000, ",")) !== false) { // Check opening the file is OK!
+                if ($count === 0) {
+                    $headers = array_map(fn ($header) => strtolower(preg_replace('/[^a-z0-9]/i', '', (string) $header)), $all_data);
+                    $headerIndexes = array_flip($headers);
+                    foreach ([
+                        'name' => ['studentname', 'name'], 'email' => ['email'],
+                        'password' => ['password'], 'phone' => ['phone'],
+                        'gender' => ['gender'], 'birthday' => ['birthday'],
+                        'address' => ['address', 'adress'],
+                    ] as $field => $aliases) {
+                        foreach ($aliases as $alias) {
+                            if (isset($headerIndexes[$alias])) {
+                                $columns[$field] = $headerIndexes[$alias];
+                                break;
+                            }
+                        }
+                    }
+                    // Older templates placed a retired BloodGroup column at index 4.
+                    if (! isset($headerIndexes['gender'])) {
+                        $columns['gender'] = isset($headerIndexes['bloodgroup']) ? 5 : 4;
+                        $columns['birthday'] = $columns['gender'] + 1;
+                        $columns['address'] = $columns['birthday'] + 1;
+                    }
+                }
                 if ($student_limit == 'unlimited' || $student_limit > $student_count) {
                     if ($count > 0) {
 
-                        $duplicate_user_check = User::get()->where('email', $all_data[1]);
+                        $duplicate_user_check = User::get()->where('email', $all_data[$columns['email']] ?? '');
 
                         if (count($duplicate_user_check) == 0) {
 
                             $info = [
-                                'gender'      => $all_data[5],
-                                'blood_group' => $all_data[4],
-                                'birthday'    => strtotime($all_data[6]),
-                                'phone'       => $all_data[3],
-                                'address'     => $all_data[7],
+                                'gender'      => $all_data[$columns['gender']] ?? '',
+                                'birthday'    => strtotime($all_data[$columns['birthday']] ?? ''),
+                                'phone'       => $all_data[$columns['phone']] ?? '',
+                                'address'     => $all_data[$columns['address']] ?? '',
                                 'photo'       => '',
                             ];
 
                             $data['user_information'] = json_encode($info);
 
                             $user = User::create([
-                                'name'             => $all_data[0],
-                                'email'            => $all_data[1],
-                                'password'         => Hash::make($all_data[2]),
+                                'name'             => $all_data[$columns['name']] ?? '',
+                                'email'            => $all_data[$columns['email']] ?? '',
+                                'password'         => Hash::make($all_data[$columns['password']] ?? ''),
                                 'code'             => student_code(),
                                 'role_id'          => '7',
                                 'school_id'        => $school_id,

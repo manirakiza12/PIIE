@@ -96,8 +96,7 @@
                             <h4>{{ academic_term('section', auth()->user()->school_id) }} : {{ null_checker($student_details['section_name']) }}</h4>
                             @endif
                             <h4>{{ get_phrase('Parent') }} : {{ null_checker($student_details['parent_name']) }}</h4>
-                            <h4>{{ get_phrase('Blood') }} :
-                                {{ null_checker(strtoupper($student_details['blood_group'] ?? '')) }}</h4>
+
                             <h4>{{ get_phrase('Contact') }} : {{ null_checker($student_details['phone']) }}</h4>
                         </div>
                     </div>

@@ -78,14 +78,7 @@
         </div>
         <div class="sc-card-body">
             <dl class="sc-facts">
-                <div><dt>{{ get_phrase('Title') }}</dt><dd>{{ \App\Support\Staff\StaffTitle::base($profile->title ?? '') ?: '—' }}</dd></div>
-                <div><dt>{{ get_phrase('First Name') }}</dt><dd>{{ $member->first_name ?: '—' }}</dd></div>
-                <div><dt>{{ get_phrase('Middle Name') }}</dt><dd>{{ $profile->middle_name ?: '—' }}</dd></div>
-                <div><dt>{{ get_phrase('Last Name') }}</dt><dd>{{ $member->last_name ?: '—' }}</dd></div>
-                <div><dt>{{ get_phrase('Gender') }}</dt><dd>{{ $information['gender'] ?? '—' }}</dd></div>
-                <div><dt>{{ get_phrase('Date of Birth') }}</dt><dd>{{ $birthday ? date('d M Y', strtotime($birthday)) : '—' }}</dd></div>
-                <div><dt>{{ get_phrase('Nationality') }}</dt><dd>{{ $profile->nationality ?: '—' }}</dd></div>
-                <div><dt>{{ get_phrase('Blood Group') }}</dt><dd>{{ $information['blood_group'] ?: '—' }}</dd></div>
+
                 {{-- Never the stored NIN: masked with staff.nin.view, otherwise just "recorded". --}}
                 <div><dt>{{ get_phrase('National ID / Passport No.') }}</dt><dd>{{ $ninDisplay }}</dd></div>
                 <div class="sc-facts-wide"><dt>{{ get_phrase('Address') }}</dt><dd>{{ $information['address'] ?: '—' }}</dd></div>

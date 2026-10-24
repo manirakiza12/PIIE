@@ -90,7 +90,6 @@ class StaffProvisioningService
 
         $info = [
             'gender' => $data['gender'],
-            'blood_group' => $data['blood_group'],
             'birthday' => strtotime($data['birthday']),
             'phone' => $data['phone'],
             'address' => $data['address'],
@@ -312,7 +311,7 @@ class StaffProvisioningService
         }
 
         $this->validateProfessional($account, $profile, $qualifications, $registrations, $experiences, $documents);
-        $account += ['gender' => '', 'blood_group' => '', 'birthday' => '', 'phone' => '', 'address' => ''];
+        $account += ['gender' => '', 'birthday' => '', 'phone' => '', 'address' => ''];
 
         $storedKeys = [];
         try {

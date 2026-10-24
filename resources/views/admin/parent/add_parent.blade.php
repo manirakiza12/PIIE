@@ -1,5 +1,5 @@
 @extends('admin.navigation')
-   
+
 @section('content')
 
 <div class="mainSection-title">
@@ -96,7 +96,7 @@
                                             <button type="button" class="btn btn-icon btn-success" onclick="appendRow()"> <i class="bi bi-plus"></i> </button>
                                         </div>
                                     </div>
-                                    
+
                                 </div>
 
 
@@ -124,20 +124,7 @@
                                     </select>
                                 </div>
 
-                                <div class="fpb-7">
-                                    <label for="blood_group" class="eForm-label">{{ get_phrase('Blood group') }}</label>
-                                    <select name="blood_group" id="blood_group" class="form-select eForm-select eChoice-multiple-with-remove"  required>
-                                        <option value="">{{ get_phrase('Select a blood group') }}</option>
-                                        <option value="a+">{{ get_phrase('A+') }}</option>
-                                        <option value="a-">{{ get_phrase('A-') }}</option>
-                                        <option value="b+">{{ get_phrase('B+') }}</option>
-                                        <option value="b-">{{ get_phrase('B-') }}</option>
-                                        <option value="ab+">{{ get_phrase('AB+') }}</option>
-                                        <option value="ab-">{{ get_phrase('AB-') }}</option>
-                                        <option value="o+">{{ get_phrase('O+') }}</option>
-                                        <option value="o-">{{ get_phrase('O-') }}</option>
-                                    </select>
-                                </div>
+
 
                                 <div class="fpb-7">
                                     <label for="address" class="eForm-label">{{ get_phrase('Address') }}</label>
@@ -194,7 +181,7 @@
       );
     });
 
-    
+
     function classWiseSection(classId) {
         let url = "{{ route('class_wise_sections', ['id' => ":classId"]) }}";
         url = url.replace(":classId", classId);
@@ -251,7 +238,7 @@
             $('#first_row').append(blank_field);
             $('#student_id').attr('id', 'student_id_' + child_count);
             $('#student_name').attr('id', 'student_name_' + child_count);
-           
+
 
             var name = "";
 
@@ -261,7 +248,7 @@
                 url: url,
                 success: function(response){
                     name=response;
-                    
+
                     $('#student_name_' + child_count).val(name);
                     $('#student_id_' + child_count).val(id);
                 }

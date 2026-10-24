@@ -276,7 +276,6 @@ class InstallController extends Controller
 
             $info = array(
                 'gender' => "Male",
-                'blood_group' => "a+",
                 'birthday' => time(),
                 'phone' => $data['superadmin_phone'],
                 'address' => $data['superadmin_address'],

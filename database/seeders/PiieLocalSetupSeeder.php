@@ -125,7 +125,7 @@ class PiieLocalSetupSeeder extends Seeder
                     'force_password_change' => false, 'language' => 'english',
                     'code' => $user->code ?: 'PIIE-'.strtoupper($handle),
                     'user_information' => $user->user_information ?: json_encode([
-                        'gender' => '', 'blood_group' => '', 'birthday' => '',
+                        'gender' => '', 'birthday' => '',
                         'phone' => '', 'address' => '', 'photo' => '',
                     ]),
                 ]);
@@ -167,7 +167,7 @@ class PiieLocalSetupSeeder extends Seeder
                 'force_password_change' => false, 'language' => 'english',
                 'code' => $student->code ?: 'PIIE-STUDENT',
                 'user_information' => $student->user_information ?: json_encode([
-                    'gender' => '', 'blood_group' => '', 'birthday' => '',
+                    'gender' => '', 'birthday' => '',
                     'phone' => '', 'address' => '', 'photo' => '',
                 ]),
             ]);

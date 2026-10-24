@@ -119,7 +119,7 @@
                         <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Section') }}</span><span class="idc-field-value">{{ empty($studentDetails['section_name']) ? get_phrase('Not assigned') : $studentDetails['section_name'] }}</span></td></tr>
                     @endif
                     @unless($staffCard)
-                        <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Blood') }}</span><span class="idc-field-value">{{ null_checker(strtoupper((string) $studentDetails['blood_group'])) }}</span></td></tr>
+
                     @endunless
                     <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Contact') }}</span><span class="idc-field-value">{{ \App\Support\IdCard::INSTITUTION_PHONE }}</span></td></tr>
                 </table>

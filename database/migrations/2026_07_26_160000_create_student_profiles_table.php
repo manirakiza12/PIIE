@@ -10,8 +10,8 @@ return new class extends Migration
      * Holds student fields that have no existing authoritative column
      * elsewhere. Deliberately does NOT duplicate: registration number
      * (users.code), name (users.name), email (users.email),
-     * phone/gender/dob/blood_group/address/photo (users.user_information
-     * JSON), or portal password (users.password).
+     * phone/gender/dob/address/photo (users.user_information JSON), or portal
+     * password (users.password). Historical JSON keys remain untouched.
      */
     public function up()
     {

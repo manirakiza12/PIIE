@@ -33,20 +33,7 @@
                 <label for="phone" class="eForm-label">{{ get_phrase('Phone number') }}</label>
                 <input type="text" class="form-control eForm-control" value="{{ $info->phone ?? '' }}" id="phone" name = "phone" placeholder="Provide accountant number" required>
             </div>
-            <div class="fpb-7">
-                <label for="blood_group" class="eForm-label">{{ get_phrase('Blood group') }}</label>
-                <select name="blood_group" id="blood_group" class="form-select eForm-select eChoice-multiple-with-remove">
-                    <option value="">{{ get_phrase('Select a blood group') }}</option>
-                    <option value="a+" {{ ($info->blood_group ?? '') == 'a+' ?  'selected':'' }} >{{ get_phrase('A+') }}</option>
-                    <option value="a-" {{ ($info->blood_group ?? '') == 'a-' ?  'selected':'' }} >{{ get_phrase('A-') }}</option>
-                    <option value="b+" {{ ($info->blood_group ?? '') == 'b+' ?  'selected':'' }} >{{ get_phrase('B+') }}</option>
-                    <option value="b-" {{ ($info->blood_group ?? '') == 'b-' ?  'selected':'' }} >{{ get_phrase('B-') }}</option>
-                    <option value="ab+" {{ ($info->blood_group ?? '') == 'ab+' ?  'selected':'' }} >{{ get_phrase('AB+') }}</option>
-                    <option value="ab-" {{ ($info->blood_group ?? '') == 'ab-' ?  'selected':'' }} >{{ get_phrase('AB-') }}</option>
-                    <option value="o+" {{ ($info->blood_group ?? '') == 'o+' ?  'selected':'' }} >{{ get_phrase('O+') }}</option>
-                    <option value="o-" {{ ($info->blood_group ?? '') == 'o-' ?  'selected':'' }} >{{ get_phrase('O-') }}</option>
-                </select>
-            </div>
+
 
             <div class="fpb-7">
                 <label for="address" class="eForm-label">{{ get_phrase('Address') }}</label>
@@ -95,5 +82,5 @@
         }
       });
     }
-    
+
 </script>
