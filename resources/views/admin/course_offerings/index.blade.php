@@ -39,13 +39,9 @@
 @if(auth()->user()->hasPermission('academic.course_offering.lecturer.view'))<a class="btn btn-sm btn-outline-secondary mt-2" href="{{ route('admin.course_offerings.lecturers.index', $offering->id) }}">Lecturers</a>@endif
 
 <div class="d-flex flex-wrap gap-2 mt-2" aria-label="Allocation actions">
-    @if($offering->status === 'draft' && auth()->user()->hasPermission('academic.course_offering.manage'))
+    @if(auth()->user()->hasPermission('academic.course_offering.manage'))
         <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.course_offerings.show', $offering->id) }}#offering-details">Edit</a>
-        <form method="POST" action="{{ route('admin.course_offerings.destroy', $offering->id) }}" onsubmit="return confirm('Delete this unused draft Course Allocation? Records in use are protected.')">@csrf @method('DELETE')<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button></form>
-    @else
-        <button type="button" class="btn btn-sm btn-outline-primary" disabled aria-disabled="true" title="{{ $offering->status === 'draft' ? 'Your account does not have Course Allocation management permission.' : 'This allocation has history and its identity is protected.' }}">Edit</button>
-        <button type="button" class="btn btn-sm btn-outline-danger" disabled aria-disabled="true" title="{{ $offering->status === 'draft' ? 'Your account does not have Course Allocation management permission.' : 'This allocation has history and cannot be deleted.' }}">Delete</button>
-        <small class="w-100 text-muted">{{ $offering->status === 'draft' ? 'Course Allocation management permission required' : 'Historical identity is protected' }}</small>
+        <a class="btn btn-sm btn-outline-danger" href="{{ route('admin.course_offerings.show', $offering->id) }}#delete-allocation">Delete</a>
     @endif
 </div>
 </td></tr>
