@@ -37,13 +37,14 @@
                 <td><div class="d-flex flex-wrap gap-2"><a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.curricula.show', $row->id) }}">View</a>
                 @if(auth()->user()->hasPermission('academic.curriculum.manage'))
                 <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.curricula.show', $row->id) }}#metadata-heading">Edit</a>
-                <form method="POST" action="{{ route('admin.curricula.destroy', $row->id) }}" class="d-flex gap-1 align-items-center flex-wrap">
-                    <span class="small w-100">Permanently delete {{ $row->programme_code }} {{ $row->version }} (record #{{ $row->id }}), its Programme Years, Course Unit placements, assignments, cohort links, exclusive course allocations, registrations and dependent workflows. Shared Course Units, allocations linked to other versions, and student/staff accounts remain. This cannot be undone.</span>
-                    @csrf @method('DELETE')
-                    <label class="visually-hidden" for="delete-curriculum-{{ $row->id }}">Type DELETE or {{ $row->programme_code }} {{ $row->version }}</label>
-                    <input class="form-control form-control-sm" id="delete-curriculum-{{ $row->id }}" name="confirm_deletion" placeholder="Type DELETE or reference" required>
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                </form>
+                @include('shared.academic_delete_button', [
+                    'deleteAction' => route('admin.curricula.destroy', $row->id),
+                    'deleteTitle' => 'Delete Programme Curriculum',
+                    'deleteIdentity' => $row->programme_code.' '.$row->version.' — '.$row->programme_name.' (record #'.$row->id.')',
+                    'deleteReference' => trim($row->programme_code.' '.$row->version),
+                    'deleteRemoves' => 'This version’s Programme Years, Course Unit placements, assignments, cohort links, exclusive course allocations, registrations and dependent workflows.',
+                    'deleteKeeps' => 'Shared Course Units, allocations linked to other versions, other curricula, and student/staff accounts and profiles.',
+                ])
                 @else
                 <button type="button" class="btn btn-sm btn-outline-primary" disabled aria-describedby="curriculum-permission-{{ $row->id }}">Edit</button>
                 <button type="button" class="btn btn-sm btn-outline-danger" disabled aria-describedby="curriculum-permission-{{ $row->id }}">Delete</button>
@@ -58,4 +59,5 @@
     </table></div>
     {{ $curriculumRows->links() }}
 </div>
+@include('shared.academic_delete_modal')
 @endsection

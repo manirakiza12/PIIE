@@ -78,6 +78,16 @@
 </section>
 @endif
 @if($canManage)
-<section class="eSection-wrap mt-3"><h5>Delete Programme Curriculum</h5><p class="text-danger">This permanently removes {{ $curriculum->programme->code }} {{ $curriculum->version }}, its Programme Years and Course Unit placements, student curriculum assignments, cohort links, applicability links, registrations and dependent registration workflows. Shared Course Units, other curriculum versions and student accounts remain. This cannot be undone.</p><form method="POST" action="{{ route('admin.curricula.destroy', $curriculum->id) }}">@csrf @method('DELETE')<label class="form-label" for="confirm-curriculum-delete">Type DELETE or {{ $curriculum->programme->code }} {{ $curriculum->version }}</label><input class="form-control mb-2" id="confirm-curriculum-delete" name="confirm_deletion" required><button class="btn btn-outline-danger">Permanently delete version</button></form></section>
+<section class="eSection-wrap mt-3"><h5>Delete Programme Curriculum</h5>
+@include('shared.academic_delete_button', [
+    'deleteAction' => route('admin.curricula.destroy', $curriculum->id),
+    'deleteTitle' => 'Delete Programme Curriculum',
+    'deleteIdentity' => $curriculum->programme->code.' '.$curriculum->version.' — '.$curriculum->programme->name.' (record #'.$curriculum->id.')',
+    'deleteReference' => trim($curriculum->programme->code.' '.$curriculum->version),
+    'deleteRemoves' => 'This version’s Programme Years, Course Unit placements, assignments, cohort links, exclusive course allocations, registrations and dependent workflows.',
+    'deleteKeeps' => 'Shared Course Units, allocations linked to other versions, other curricula, and student/staff accounts and profiles.',
+])
+</section>
 @endif
+@include('shared.academic_delete_modal')
 @endsection

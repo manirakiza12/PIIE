@@ -19,6 +19,56 @@ class CourseOfferingAdministrationTest extends TestCase
 
     private array $tenants;
 
+    public function test_academic_delete_buttons_open_one_labeled_modal_with_exact_record_and_safe_retention_details(): void
+    {
+        $tenant = $this->tenants[1];
+        $periodId = DB::table('academic_periods')->insertGetId([
+            'school_id' => $tenant['school'], 'academic_year_id' => $tenant['year'], 'type' => 'semester',
+            'label' => 'Semester 2', 'sequence' => 2, 'start_date' => '2027-01-01', 'end_date' => '2027-06-30', 'status' => 'active',
+        ]);
+        $manager = $this->staff(1, [], ['role_id' => 2]);
+        $curriculumReference = DB::table('programmes')->where('id', $tenant['programme'])->value('code').' '.DB::table('curricula')->where('id', $tenant['curriculum'])->value('version');
+        $this->actingAs($manager);
+
+        $curricula = $this->get(route('admin.curricula.index'))->assertOk()
+            ->assertSee('data-delete-title="Delete Programme Curriculum"', false)
+            ->assertSee('data-delete-removes="This version’s Programme Years', false)
+            ->assertSee('data-delete-keeps="Shared Course Units', false)
+            ->assertDontSee('Type DELETE or reference', false);
+        $this->assertSame(1, substr_count($curricula->getContent(), 'id="academic-delete-modal"'));
+        $this->assertSame(0, substr_count($curricula->getContent(), '<form method="POST" action="'.route('admin.curricula.destroy', $tenant['curriculum']).'"'));
+        $this->get(route('admin.curricula.show', $tenant['curriculum']))->assertOk()
+            ->assertSee('data-delete-action="'.route('admin.curricula.destroy', $tenant['curriculum']).'"', false)
+            ->assertSee('data-delete-reference="'.$curriculumReference.'"', false);
+
+        $year = DB::table('academic_years')->where('id', $tenant['year'])->first();
+        $yearIdentity = $year->label.' ('.date('d/m/y', strtotime($year->start_date)).' – '.date('d/m/y', strtotime($year->end_date)).', record #'.$tenant['year'].')';
+        $years = $this->get(route('admin.academic_structure.index'))->assertOk()
+            ->assertSee('data-delete-title="Delete Academic Year"', false)
+            ->assertSee('data-delete-identity="'.$yearIdentity.'"', false)
+            ->assertSee('data-delete-removes="This year’s academic periods', false)
+            ->assertSee('data-delete-keeps="Curriculum versions, shared Course Units', false);
+        $this->assertSame(1, substr_count($years->getContent(), 'id="academic-delete-modal"'));
+
+        $periods = $this->get(route('admin.academic_structure.index', ['section' => 'semesters']))->assertOk()
+            ->assertSee('data-delete-title="Delete Semester"', false)
+            ->assertSee('Semester 2 (01/01/27 – 30/06/27, record #'.$periodId.')', false)
+            ->assertSee('data-delete-removes="This period’s course allocations', false)
+            ->assertSee('data-delete-keeps="Curriculum versions, shared Course Units', false);
+        $this->assertSame(1, substr_count($periods->getContent(), 'id="academic-delete-modal"'));
+
+        $deleteUrl = route('admin.curricula.destroy', $tenant['curriculum']);
+        $this->delete($deleteUrl, ['_delete_target' => $deleteUrl])->assertSessionHasErrors('confirm_deletion');
+        $retry = $this->get(route('admin.curricula.index'))->assertOk()
+            ->assertSee('data-reopen-target="'.$deleteUrl.'"', false)
+            ->assertSee('data-delete-error', false);
+        $dom = new \DOMDocument(); @$dom->loadHTML($retry->getContent());
+        $this->assertSame(1, (new \DOMXPath($dom))->query('//div[@data-delete-error and normalize-space(.) != ""]')->length);
+        $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum']]);
+        $this->assertDatabaseHas('academic_years', ['id' => $tenant['year']]);
+        $this->assertDatabaseHas('academic_periods', ['id' => $periodId]);
+    }
+
     public function test_academic_deletes_reject_missing_csrf_tokens(): void
     {
         $csrf = $this->getMockBuilder(\App\Http\Middleware\VerifyCsrfToken::class)
@@ -80,9 +130,9 @@ class CourseOfferingAdministrationTest extends TestCase
                 $this->assertSame(1, $xpath->query($row.'//a[normalize-space(.)="View"]')->length, $status);
                 if ($user->id === $manager->id) {
                     $this->assertSame(1, $xpath->query($row.'//a[normalize-space(.)="Edit"]')->length, $status);
-                    $this->assertSame(1, $xpath->query($row.'//form[@action="'.route('admin.curricula.destroy', $id).'"]//button[normalize-space(.)="Delete"]')->length, $status);
-                    $this->assertSame(1, $xpath->query($row.'//input[@name="_token"]')->length);
-                    $this->assertSame(1, $xpath->query($row.'//input[@name="_method" and @value="DELETE"]')->length);
+                    $this->assertSame(1, $xpath->query($row.'//button[@data-delete-action="'.route('admin.curricula.destroy', $id).'" and @data-bs-toggle="modal"]')->length, $status);
+                    $this->assertSame(1, $xpath->query('//div[@id="academic-delete-modal"]//input[@name="_token"]')->length);
+                    $this->assertSame(1, $xpath->query('//div[@id="academic-delete-modal"]//input[@name="_method" and @value="DELETE"]')->length);
                 } else {
                     $this->assertSame(1, $xpath->query($row.'//button[@disabled and normalize-space(.)="Edit"]')->length, $status);
                     $this->assertSame(1, $xpath->query($row.'//button[@disabled and normalize-space(.)="Delete"]')->length, $status);
