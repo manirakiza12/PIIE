@@ -1,5 +1,5 @@
 @extends('superadmin.navigation')
-   
+
 @section('content')
 <div class="mainSection-title">
     <div class="row">
@@ -136,20 +136,7 @@
 					                    <option value="Female">{{ get_phrase('Female') }}</option>
 					                </select>
 					            </div>
-								<div class="fpb-7">
-					                <label for="blood_group" class="eForm-label">{{ get_phrase('Blood group') }}</label>
-					                <select name="blood_group" id="blood_group" class="form-select eForm-select eChoice-multiple-with-remove" required>
-					                    <option value="">{{ get_phrase('Select a blood group') }}</option>
-					                    <option value="a+">{{ get_phrase('A+') }}</option>
-					                    <option value="a-">{{ get_phrase('A-') }}</option>
-					                    <option value="b+">{{ get_phrase('B+') }}</option>
-					                    <option value="b-">{{ get_phrase('B-') }}</option>
-					                    <option value="ab+">{{ get_phrase('AB+') }}</option>
-					                    <option value="ab-">{{ get_phrase('AB-') }}</option>
-					                    <option value="o+">{{ get_phrase('O+') }}</option>
-					                    <option value="o-">{{ get_phrase('O-') }}</option>
-					                </select>
-					            </div>
+
 								<div class="fpb-7">
 									<label for="admin_address" class="eForm-label">{{ get_phrase('Admin Address') }}</label>
 									<input type="text" class="form-control eForm-control" id="admin_address" name="admin_address" required>

@@ -7,17 +7,7 @@ use Illuminate\Http\UploadedFile;
 use Tests\Feature\Support\AdmissionsTestHelper;
 use Tests\TestCase;
 
-/**
- * Covers the student's own "Personal Information" self-edit form
- * (StudentController::profile()/profile_update()) — the form itself
- * already existed (name/email/birthday/gender/phone/address/photo), but
- * Blood Group had no field at all despite the ID card prominently
- * displaying it, and — since profile_update() rebuilds the whole
- * user_information JSON from just the fields the form posts — every
- * profile edit was silently wiping out a blood_group an admin had set at
- * admission time. Both fixed together: the field is now read into the
- * form and written back on save.
- */
+/** Covers the student's self-edit form and preserves opaque legacy JSON keys. */
 class StudentProfileUpdateTest extends TestCase
 {
     use AdmissionsTestHelper;
@@ -37,10 +27,13 @@ class StudentProfileUpdateTest extends TestCase
         ]);
     }
 
-    public function test_a_student_can_set_their_blood_group(): void
+    public function test_student_profile_does_not_request_or_accept_blood_group(): void
     {
         $schoolId = $this->makeSchool();
         $student = $this->makeStudent($schoolId, 'bloodgroup@example.com');
+
+        $this->actingAs($student)->get(route('student.profile'))
+            ->assertOk()->assertDontSee('Blood Group')->assertDontSee('blood_group');
 
         $response = $this->actingAs($student)->post(route('student.profile.update'), [
             'name' => $student->name,
@@ -49,16 +42,16 @@ class StudentProfileUpdateTest extends TestCase
             'gender' => 'Male',
             'phone' => '0700111222',
             'address' => 'Kampala',
-            'blood_group' => 'O+',
+            'blood_group' => 'O+', // Forged legacy field must be ignored.
             'old_photo' => '',
         ]);
 
         $response->assertRedirect(route('student.profile'));
         $info = json_decode($student->fresh()->user_information, true);
-        $this->assertSame('O+', $info['blood_group']);
+        $this->assertArrayNotHasKey('blood_group', $info);
     }
 
-    public function test_editing_the_profile_does_not_wipe_a_blood_group_set_at_admission(): void
+    public function test_profile_edits_preserve_legacy_blood_group_without_displaying_it(): void
     {
         $schoolId = $this->makeSchool();
         $student = $this->makeStudent($schoolId, 'preexisting@example.com', ['blood_group' => 'AB-', 'phone' => '0700000000']);
@@ -70,16 +63,17 @@ class StudentProfileUpdateTest extends TestCase
             'gender' => 'Male',
             'phone' => '0700999888',
             'address' => 'Entebbe',
-            'blood_group' => 'AB-',
+            'blood_group' => 'forged-value',
             'old_photo' => '',
         ]);
 
         $info = json_decode($student->fresh()->user_information, true);
         $this->assertSame('AB-', $info['blood_group']);
         $this->assertSame('0700999888', $info['phone']);
+        $this->get(route('student.profile'))->assertOk()->assertDontSee('Blood Group')->assertDontSee('AB-');
     }
 
-    public function test_the_profile_page_shows_the_current_blood_group(): void
+    public function test_the_profile_page_hides_a_legacy_blood_group_value(): void
     {
         $schoolId = $this->makeSchool();
         $student = $this->makeStudent($schoolId, 'showbloodgroup@example.com', ['blood_group' => 'B+']);
@@ -87,7 +81,7 @@ class StudentProfileUpdateTest extends TestCase
         $response = $this->actingAs($student)->get(route('student.profile'));
 
         $response->assertOk();
-        $response->assertSee('B+');
+        $response->assertDontSee('Blood Group')->assertDontSee('B+');
     }
 
     public function test_a_student_can_upload_a_new_profile_photo(): void
@@ -103,7 +97,6 @@ class StudentProfileUpdateTest extends TestCase
             'gender' => 'Male',
             'phone' => '0700111222',
             'address' => 'Kampala',
-            'blood_group' => 'O+',
             'old_photo' => '',
             'photo' => UploadedFile::fake()->image('avatar.png'),
         ]);
@@ -116,7 +109,7 @@ class StudentProfileUpdateTest extends TestCase
         @unlink(public_path('assets/uploads/user-images/' . $info['photo']));
     }
 
-    public function test_photo_only_upload_preserves_account_and_admission_information(): void
+    public function test_photo_only_upload_preserves_opaque_legacy_information(): void
     {
         $original = ['blood_group' => 'AB+', 'phone' => '0700123456', 'admission_note' => 'Keep this'];
         $student = $this->makeStudent($this->makeSchool(), 'photoonly@example.com', $original);

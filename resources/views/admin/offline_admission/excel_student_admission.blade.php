@@ -18,7 +18,7 @@
             <div class="col-xl-2"></div>
             <div class="col-xl-4 p-1">
                 <div class="col-12">
-                    <a href="{{ asset('assets/csv_file/student.generate.csv') }}" class="btn btn-success btn-sm" download>Generate csv file <i class="bi bi-download"></i> </a>
+                    <a href="{{ asset('assets/csv_file/tableConvert.com_d987vl.csv') }}" class="btn btn-success btn-sm" download>Generate csv file <i class="bi bi-download"></i> </a>
                     <button href="#" class="btn btn-dark bi bi-eye" onclick="largeModal('{{ route('admin.offline_admission.preview') }}', 'CSV Format');" data-toggle="tooltip" data-placement="top" title="" data-original-title="{{ 'Preview csv format' }}"></button>
 
                 </div>

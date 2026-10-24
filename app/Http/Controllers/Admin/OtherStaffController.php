@@ -87,7 +87,7 @@ class OtherStaffController extends Controller
         if (isset($data['department_id']) && !Department::where('school_id', $school)->whereKey($data['department_id'])->exists()) abort(422);
         if (!Designation::where('school_id', $school)->whereKey($data['designation_id'])->exists()) abort(422);
 
-        $account = $data + ['password_mode' => 'auto', 'blood_group' => '', 'photo' => null];
+        $account = $data + ['password_mode' => 'auto', 'photo' => null];
         $profile = ['nin' => $data['nin']];
         $qualifications = array_values(array_filter($data['qualifications'] ?? [], fn ($row) => !empty($row['qualification_name'])));
         $user = $provisioning->provisionProfessional(auth()->user(), SystemRole::GENERIC_STAFF, $account, $profile, $qualifications);

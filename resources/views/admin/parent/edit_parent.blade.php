@@ -1,5 +1,5 @@
 @extends('admin.navigation')
-   
+
 @section('content')
 
 <div class="mainSection-title">
@@ -86,7 +86,7 @@
                                             <button type="button" class="btn btn-icon btn-success" onclick="appendRow()"> <i class="bi bi-plus"></i> </button>
                                         </div>
                                     </div>
-                                    
+
                                 </div>
 
 
@@ -96,7 +96,7 @@
 
                                 @if(count($childs) > 0)
                                     @foreach($childs as $child)
-                                        
+
                                         <div id="existing_row{{ $child->id }}">
                                             <div class="child_existing_row row">
                                                 <div class="form-group col-xl-10 col-lg-5 col-md-5 col-sm-12 col-xs-12 pt-2">
@@ -138,20 +138,7 @@
                                     </select>
                                 </div>
 
-                                <div class="fpb-7">
-                                    <label for="blood_group" class="eForm-label">{{ get_phrase('Blood group') }}</label>
-                                    <select name="blood_group" id="blood_group" class="form-select eForm-select eChoice-multiple-with-remove">
-                                        <option value="">{{ get_phrase('Select a blood group') }}</option>
-                                        <option value="a+" {{ ($info->blood_group ?? '') == 'a+' ?  'selected':'' }} >{{ get_phrase('A+') }}</option>
-                                        <option value="a-" {{ ($info->blood_group ?? '') == 'a-' ?  'selected':'' }} >{{ get_phrase('A-') }}</option>
-                                        <option value="b+" {{ ($info->blood_group ?? '') == 'b+' ?  'selected':'' }} >{{ get_phrase('B+') }}</option>
-                                        <option value="b-" {{ ($info->blood_group ?? '') == 'b-' ?  'selected':'' }} >{{ get_phrase('B-') }}</option>
-                                        <option value="ab+" {{ ($info->blood_group ?? '') == 'ab+' ?  'selected':'' }} >{{ get_phrase('AB+') }}</option>
-                                        <option value="ab-" {{ ($info->blood_group ?? '') == 'ab-' ?  'selected':'' }} >{{ get_phrase('AB-') }}</option>
-                                        <option value="o+" {{ ($info->blood_group ?? '') == 'o+' ?  'selected':'' }} >{{ get_phrase('O+') }}</option>
-                                        <option value="o-" {{ ($info->blood_group ?? '') == 'o-' ?  'selected':'' }} >{{ get_phrase('O-') }}</option>
-                                    </select>
-                                </div>
+
 
                                 <div class="fpb-7">
                                     <label for="address" class="eForm-label">{{ get_phrase('Address') }}</label>
@@ -206,7 +193,7 @@
       );
     });
 
-    
+
     function classWiseSection(classId) {
         let url = "{{ route('class_wise_sections', ['id' => ":classId"]) }}";
         url = url.replace(":classId", classId);
@@ -243,7 +230,7 @@
             $('#first_row').append(blank_field);
             $('#student_id').attr('id', 'student_id_' + child_count);
             $('#student_name').attr('id', 'student_name_' + child_count);
-           
+
 
             var name = "";
 
@@ -253,7 +240,7 @@
                 url: url,
                 success: function(response){
                     name=response;
-                    
+
                     $('#student_name_' + child_count).val(name);
                     $('#student_id_' + child_count).val(id);
                 }
@@ -272,7 +259,7 @@
     function removeRow(elem) {
         $(elem).closest('.child_added_row').remove();
     }
-    
+
     function removeExistingRow(elem) {
         $(elem).closest('.child_existing_row').remove();
     }

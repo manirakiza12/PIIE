@@ -17,8 +17,8 @@ use App\Models\User;
  *
  * Shows the minimum needed to confirm "this is a real, currently active
  * student ID" — name, photo, class/programme, school, status. Deliberately
- * does NOT show phone, blood group, or any other personal detail the card
- * itself carries: those are fine printed on physical plastic a student
+ * does NOT show phone or other personal detail the card itself carries:
+ * those are fine printed on physical plastic a student
  * carries, but not fine served to anyone who scans a code, unauthenticated,
  * from anywhere.
  */

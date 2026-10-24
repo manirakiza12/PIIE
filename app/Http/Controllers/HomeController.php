@@ -287,7 +287,6 @@ class HomeController extends Controller
                     }
                     $info = array(
                         'gender' => $data['gender'],
-                        'blood_group' => $data['blood_group'],
                         'birthday' => isset($data['birthday'])? strtotime($data['birthday']):"",
                         'phone' => $data['admin_phone'],
                         'address' => $data['admin_address'],
@@ -346,7 +345,6 @@ class HomeController extends Controller
                     }
                     $info = array(
                         'gender' => $data['gender'],
-                        'blood_group' => $data['blood_group'],
                         'birthday' => isset($data['birthday'])? strtotime($data['birthday']):"",
                         'phone' => $data['admin_phone'],
                         'address' => $data['admin_address'],

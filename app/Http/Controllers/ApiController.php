@@ -513,17 +513,17 @@ class ApiController extends Controller
     {
         $previous_data = User::find(auth('sanctum')->user()->id);
         
-        $prev_user_info = json_decode($previous_data->user_information);
+        $prev_user_info = (array) (json_decode($previous_data->user_information ?? '', true) ?: []);
 
         $data['name'] = $request->name;
         $data['email'] = $request->email;
+        $user_info = $prev_user_info;
         $user_info['gender'] = $request->gender;
-        $user_info['blood_group'] = $prev_user_info->blood_group;
-        $user_info['birthday'] = $prev_user_info->birthday;
+        $user_info['birthday'] = $prev_user_info['birthday'] ?? null;
         $user_info['phone'] = $request->phone;
         $user_info['address'] = $request->address;
 
-        $user_info['photo'] = $prev_user_info->photo;
+        $user_info['photo'] = $prev_user_info['photo'] ?? null;
 
         $data['user_information'] = json_encode($user_info);
 
@@ -547,20 +547,20 @@ class ApiController extends Controller
     {
         $previous_data = User::find(auth('sanctum')->user()->id);
 
-        $prev_user_info = json_decode($previous_data->user_information);
+        $prev_user_info = (array) (json_decode($previous_data->user_information ?? '', true) ?: []);
 
         if(!empty($request->file('user_image'))){
 
-            $user_info['photo'] = $prev_user_info->photo;
+            $user_info = $prev_user_info;
+            $user_info['photo'] = $prev_user_info['photo'] ?? null;
 
 
             $data['name'] = $previous_data->name;
             $data['email'] = $previous_data->email;
-            $user_info['gender'] = $prev_user_info->gender;
-            $user_info['blood_group'] = $prev_user_info->blood_group;
-            $user_info['birthday'] = $prev_user_info->birthday;
-            $user_info['phone'] = $prev_user_info->phone;
-            $user_info['address'] = $prev_user_info->address;
+            $user_info['gender'] = $prev_user_info['gender'] ?? null;
+            $user_info['birthday'] = $prev_user_info['birthday'] ?? null;
+            $user_info['phone'] = $prev_user_info['phone'] ?? null;
+            $user_info['address'] = $prev_user_info['address'] ?? null;
 
             $data['user_information'] = json_encode($user_info);
 
