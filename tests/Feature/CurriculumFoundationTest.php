@@ -207,7 +207,7 @@ class CurriculumFoundationTest extends TestCase
         $this->assertDatabaseHas('subjects', ['id' => $subject]);
     }
 
-    public function test_unmapped_restrictive_curriculum_dependency_rolls_back_cleanup_and_audit(): void
+    public function test_discovered_restrictive_curriculum_dependency_is_deleted_with_its_version(): void
     {
         DB::statement('PRAGMA foreign_keys = ON');
         Schema::create('opaque_curriculum_reference', function (Blueprint $table): void {
@@ -219,12 +219,12 @@ class CurriculumFoundationTest extends TestCase
         $membership = $this->membership($curriculum, $this->subject(1), $stage);
         DB::table('opaque_curriculum_reference')->insert(['owner_curriculum_id' => $curriculum->id]);
 
-        try { $this->service->deleteDraft($curriculum, 'DELETE', 7); $this->fail('Unknown restrictive reference should fail deletion.'); }
-        catch (\Illuminate\Database\QueryException) { }
-        $this->assertDatabaseHas('curricula', ['id' => $curriculum->id]);
-        $this->assertDatabaseHas('curriculum_stages', ['id' => $stage->id]);
-        $this->assertDatabaseHas('curriculum_memberships', ['id' => $membership->id]);
-        $this->assertDatabaseMissing('audit_logs', ['action' => 'CURRICULUM_DELETED', 'record_id' => $curriculum->id]);
+        $this->service->deleteDraft($curriculum, 'DELETE', 7);
+        $this->assertDatabaseMissing('curricula', ['id' => $curriculum->id]);
+        $this->assertDatabaseMissing('curriculum_stages', ['id' => $stage->id]);
+        $this->assertDatabaseMissing('curriculum_memberships', ['id' => $membership->id]);
+        $this->assertDatabaseMissing('opaque_curriculum_reference', ['owner_curriculum_id' => $curriculum->id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_DELETED', 'record_id' => $curriculum->id]);
     }
 
     public function test_every_curriculum_lifecycle_status_can_be_deleted_after_explicit_confirmation(): void
