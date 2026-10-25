@@ -23,10 +23,12 @@ function formMarkup() {
           </select>
           <div id="fee-session-context-message" hidden></div>
           <select id="fee_structure_id">
-            <option value="">Choose fee</option><option value="50" data-programme-id="10" data-session-id="40" data-amount="1500000.00" selected>Fee A</option><option value="51" data-programme-id="11" data-session-id="41" data-amount="600000.00">Fee B</option><option value="52" data-programme-id="" data-session-id="" data-amount="100000.00">General fee</option>
+            <option value="">Choose fee</option><option value="50" data-name="Fee A" data-fee-type="tuition" data-per-semester="1" data-programme-id="10" data-session-id="40" data-session-academic-year-id="30" data-amount="1500000.00" selected>Fee A · Tuition · UGX 1,500,000 · Per semester</option><option value="51" data-name="Fee B" data-fee-type="tuition" data-per-semester="1" data-programme-id="11" data-session-id="41" data-session-academic-year-id="31" data-amount="600000.00">Fee B · Tuition · UGX 600,000 · Per semester</option><option value="52" data-name="Registration" data-fee-type="registration" data-per-semester="0" data-programme-id="10" data-session-id="" data-amount="100000.00">Registration</option>
           </select>
           <div id="fee-structure-context-message" hidden></div>
           <output id="selected-fee-amount" data-currency="UGX"></output>
+          <div id="fee-billing-basis"></div>
+          <output id="invoice-period-summary"></output>
           <output id="remaining-fee-balance"></output>
           <input id="received_payment_amount" value="0">
           <div id="received-payment-context-message" hidden></div>
@@ -65,6 +67,9 @@ test('fee sessions are filtered by academic year and a stale session and fee typ
   assert.equal(fee.options[2].hidden, true);
   assert.match(document.getElementById('selected-fee-amount').textContent, /1,500,000/);
   assert.match(document.getElementById('remaining-fee-balance').textContent, /1,500,000/);
+  assert.match(document.getElementById('selected-fee-amount').textContent, /Tuition/);
+  assert.match(document.getElementById('fee-billing-basis').textContent, /Per semester.*full configured amount.*no multiplier/);
+  assert.match(document.getElementById('invoice-period-summary').textContent, /2026\/27.*Session A/);
 
   const received = document.getElementById('received_payment_amount');
   const balance = document.getElementById('remaining-fee-balance');
@@ -172,7 +177,7 @@ test('Finance controls initialize after the current AJAX modal inserts its form'
   dom.window.close();
 });
 
-test('an academic year with no fee sessions explains the issue and blocks invoice submission', () => {
+test('an academic year with no Finance Session explains setup, keeps programme fees selectable, and blocks invoice submission', () => {
   const dom = buildForm();
   const document = dom.window.document;
   const year = document.getElementById('fee_academic_year_id');
@@ -188,7 +193,15 @@ test('an academic year with no fee sessions explains the issue and blocks invoic
 
   assert.equal(session.value, '');
   assert.equal(session.disabled, true);
-  assert.match(document.getElementById('fee-session-context-message').textContent, /No fee sessions are linked/);
+  const fee = document.getElementById('fee_structure_id');
+  assert.match(document.getElementById('fee-session-context-message').textContent, /No Finance Session is linked.*create or edit a Finance Session.*Session Manager/);
+  assert.equal(fee.disabled, false, 'A missing accounting period does not disable programme Fee Structure selection');
+  assert.equal(fee.options[3].hidden, false, 'A non-semester programme fee remains visible independently of the missing session');
+  fee.value = '52';
+  fee.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  assert.match(document.getElementById('selected-fee-amount').textContent, /Registration.*100,000/);
+  assert.match(document.getElementById('fee-billing-basis').textContent, /Not charged per semester/);
+  assert.match(document.getElementById('invoice-period-summary').textContent, /No Finance Session is linked/);
   const submit = new dom.window.Event('submit', { bubbles: true, cancelable: true });
   form.dispatchEvent(submit);
   assert.equal(submit.defaultPrevented, true, 'Finance cannot submit an invoice without a session for the selected year');

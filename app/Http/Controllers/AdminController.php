@@ -2039,27 +2039,30 @@ class AdminController extends Controller
             $schoolId = (int) $request->user()->school_id;
             $request->validate([
                 'fee_academic_year_id' => ['required', 'integer', Rule::exists('academic_years', 'id')->where('school_id', $schoolId)],
-                'fee_session_id' => ['required', 'integer', Rule::exists('sessions', 'id')->where('school_id', $schoolId)->where('academic_year_id', (int) $request->input('fee_academic_year_id'))],
+                'fee_session_id' => ['nullable', 'integer', Rule::exists('sessions', 'id')->where('school_id', $schoolId)->where('academic_year_id', (int) $request->input('fee_academic_year_id'))],
                 'fee_structure_id' => ['required', 'integer', Rule::exists('fee_structures', 'id')->where('school_id', $schoolId)],
                 'programme_id' => ['required', 'integer', Rule::exists('programmes', 'id')->where('school_id', $schoolId)],
                 'received_payment_amount' => ['nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
                 'prior_paid_amount' => ['nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
             ]);
 
-            $sessionId = (int) $request->input('fee_session_id');
+            $sessionId = $request->filled('fee_session_id') ? (int) $request->input('fee_session_id') : null;
             $programmeId = (int) $request->input('programme_id');
             $feeStructure = FeeStructure::where('school_id', $schoolId)->whereKey((int) $request->input('fee_structure_id'))
                 ->where('is_mandatory', 1)->whereNull('class_id')
-                ->where(fn ($query) => $query->whereNull('session_id')->orWhere('session_id', $sessionId))
+                ->where(fn ($query) => $query->whereNull('session_id')->when($sessionId, fn ($sessionQuery) => $sessionQuery->orWhere('session_id', $sessionId)))
                 ->where(fn ($query) => $query->whereNull('programme_id')->orWhere('programme_id', $programmeId))
                 ->first();
             if (! $feeStructure) {
-                throw ValidationException::withMessages(['fee_structure_id' => 'Choose a mandatory fee structure available for this programme and fee session.']);
+                throw ValidationException::withMessages(['fee_structure_id' => 'Choose a mandatory Fee Structure configured for this programme. Session-specific fee structures must match the selected Finance Session.']);
             }
 
             $feeAmountMinor = \App\Support\Payments\DecimalAmount::minorUnits($feeStructure->amount) ?? 0;
             if ($feeAmountMinor <= 0) {
                 throw ValidationException::withMessages(['fee_structure_id' => 'The selected programme fee must have a positive configured amount.']);
+            }
+            if (! $sessionId) {
+                throw ValidationException::withMessages(['fee_session_id' => 'This programme fee is available, but an invoice cannot be created until a Finance Session is linked to the selected Academic Year. Create or edit a Finance Session in Admin → Settings → Session Manager and assign it to this year. Invoices store the Finance Session ID for accounting reports, balances, payment flows, and study eligibility; the Academic Year alone is not an invoice period.']);
             }
             $receivedPaymentMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('received_payment_amount', '0')) ?? 0;
             $priorMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('prior_paid_amount', '0'));
@@ -2210,7 +2213,7 @@ class AdminController extends Controller
             }
             $configuredFee = \App\Support\Payments\DecimalAmount::decimal($configuredFeeMinor);
             $invoice = StudentFeeManager::create([
-                'title' => $structure->name, 'amount' => $configuredFee, 'discounted_price' => 0, 'total_amount' => $configuredFee,
+                'title' => $structure->name . ' — ' . $session->session_title, 'amount' => $configuredFee, 'discounted_price' => 0, 'total_amount' => $configuredFee,
                 'class_id' => 0, 'programme_id' => $data['programme_id'] ?? null, 'student_id' => $student->id,
                 'fee_structure_id' => $structure->id, 'parent_id' => $student->parent_id, 'payment_method' => 'unpaid',
                 'paid_amount' => 0, 'status' => 'unpaid', 'school_id' => $schoolId, 'session_id' => $session->id,
@@ -6065,7 +6068,10 @@ class AdminController extends Controller
 
     public function sessionManager()
     {
-        $sessions = Session::where('school_id', auth()->user()->school_id)->get();
+        $schoolId = (int) auth()->user()->school_id;
+        $sessions = Session::where('school_id', $schoolId)
+            ->with(['academicYear' => fn ($query) => $query->where('school_id', $schoolId)])
+            ->get();
         return view('admin.session.session_manager', ['sessions' => $sessions]);
     }
 
@@ -6099,43 +6105,63 @@ class AdminController extends Controller
 
     public function createSession()
     {
-        return view('admin.session.create');
+        $academicYears = AcademicYear::where('school_id', auth()->user()->school_id)->orderByDesc('start_date')->get();
+        return view('admin.session.create', compact('academicYears'));
     }
 
     public function sessionCreate(Request $request)
     {
-        $data = $request->all();
-
-        $duplicate_session_check = Session::get()->where('session_title', $data['session_title'])->where('school_id', auth()->user()->school_id);
-
-        if (count($duplicate_session_check) == 0) {
-
-            $data['status']    = '0';
-            $data['school_id'] = auth()->user()->school_id;
-
-            Session::create($data);
-
-            return redirect()->back()->with('message', 'You have successfully create a session.');
-        } else {
-            return redirect()->back()->with('error', 'Sorry this session already exists');
+        $schoolId = (int) $request->user()->school_id;
+        $data = $request->validate([
+            'session_title' => ['required', 'string', 'max:100'],
+            'academic_year_id' => ['nullable', 'integer', Rule::exists('academic_years', 'id')->where('school_id', $schoolId)],
+        ]);
+        if (Session::where('school_id', $schoolId)->where('session_title', trim($data['session_title']))->exists()) {
+            throw ValidationException::withMessages(['session_title' => 'A Finance Session with this title already exists in this school.']);
         }
+
+        DB::transaction(function () use ($data, $schoolId): void {
+            $session = Session::create(['session_title' => trim($data['session_title']), 'status' => 0, 'school_id' => $schoolId]);
+            if (! empty($data['academic_year_id'])) {
+                app(\App\Support\AcademicContextManager::class)->mapLegacySession($schoolId, (int) $session->id, (int) $data['academic_year_id']);
+            }
+        });
+
+        return redirect()->back()->with('message', 'Finance Session created.');
     }
 
     public function editSession($id = '')
     {
         $session = Session::where('school_id', auth()->user()->school_id)->findOrFail($id);
-        return view('admin.session.edit', ['session' => $session]);
+        $academicYears = AcademicYear::where('school_id', auth()->user()->school_id)->orderByDesc('start_date')->get();
+        return view('admin.session.edit', compact('session', 'academicYears'));
     }
 
     public function sessionUpdate(Request $request, $id)
     {
-        $data = $request->all();
+        $schoolId = (int) $request->user()->school_id;
+        $data = $request->validate([
+            'session_title' => ['required', 'string', 'max:100'],
+            'academic_year_id' => ['nullable', 'integer', Rule::exists('academic_years', 'id')->where('school_id', $schoolId)],
+        ]);
+        $session = Session::where('school_id', $schoolId)->findOrFail($id);
+        if (Session::where('school_id', $schoolId)->where('session_title', trim($data['session_title']))->where('id', '<>', $session->id)->exists()) {
+            throw ValidationException::withMessages(['session_title' => 'A Finance Session with this title already exists in this school.']);
+        }
 
-        unset($data['_token']);
+        DB::transaction(function () use ($request, $schoolId, $session, $data): void {
+            $locked = Session::where('school_id', $schoolId)->whereKey($session->id)->lockForUpdate()->firstOrFail();
+            $locked->update(['session_title' => trim($data['session_title'])]);
+            if ($request->exists('academic_year_id')) {
+                app(\App\Support\AcademicContextManager::class)->mapLegacySession(
+                    $schoolId,
+                    (int) $locked->id,
+                    filled($data['academic_year_id'] ?? null) ? (int) $data['academic_year_id'] : null,
+                );
+            }
+        });
 
-        Session::where('id', $id)->where('school_id', auth()->user()->school_id)->update($data);
-
-        return redirect()->back()->with('message', 'You have successfully update session.');
+        return redirect()->back()->with('message', 'Finance Session updated.');
     }
 
     public function sessionDelete($id = '')

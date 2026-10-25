@@ -51,7 +51,7 @@
             financeFields.querySelectorAll('input, select, textarea').forEach(function (field) {
                 const dependentDetails = field.closest('#prior_payment_details, #award_details, #study_waiver_details');
                 field.disabled = !enabled || Boolean(dependentDetails && dependentDetails.hidden);
-                field.required = enabled && ['fee_academic_year_id', 'fee_structure_id'].includes(field.id);
+                field.required = enabled && field.id === 'fee_academic_year_id';
             });
 
             const priorAmount = form.querySelector('#prior_paid_amount');
@@ -80,25 +80,57 @@
         function refreshRemainingBalance() {
             const amountOutput = form.querySelector('#selected-fee-amount');
             const balanceOutput = form.querySelector('#remaining-fee-balance');
+            const basisOutput = form.querySelector('#fee-billing-basis');
             if (!amountOutput || !balanceOutput) return;
             const selected = feeStructure?.selectedOptions[0];
             const feeAmount = selected?.value ? Number(selected.dataset.amount) : NaN;
             if (!Number.isFinite(feeAmount) || feeAmount <= 0) {
                 amountOutput.textContent = 'Select a Fee type to view its amount';
                 balanceOutput.textContent = 'Select a Fee type to calculate';
+                if (basisOutput) basisOutput.textContent = 'The configured amount is used as listed; it is never calculated from the Academic Year.';
+                refreshInvoicePeriod();
                 return;
             }
             const currency = amountOutput.dataset.currency || '';
             const formatter = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const received = Number(form.querySelector('#received_payment_amount')?.value || 0);
-            amountOutput.textContent = (currency ? currency + ' ' : '') + formatter.format(feeAmount);
+            const displayName = selected.dataset.name || selected.textContent.split(' · ')[0].trim();
+            const feeType = selected.dataset.feeType
+                ? selected.dataset.feeType.charAt(0).toUpperCase() + selected.dataset.feeType.slice(1)
+                : 'Fee';
+            const formattedAmount = (currency ? currency + ' ' : '') + formatter.format(feeAmount);
+            amountOutput.textContent = displayName + ' (' + feeType + ') · ' + formattedAmount;
+            const perSemester = selected.dataset.perSemester === '1';
+            if (basisOutput) {
+                basisOutput.textContent = perSemester
+                    ? 'Per semester · the full configured amount applies once to this selected Finance Session; no multiplier is applied.'
+                    : 'Not charged per semester · the configured amount is used as listed for this invoice.';
+            }
             if (received < 0 || received > feeAmount) {
                 balanceOutput.textContent = 'Payment must not exceed the configured programme fee';
                 showMessage(form.querySelector('#received-payment-context-message'), 'The confirmed payment cannot exceed the configured programme fee.');
+                refreshInvoicePeriod();
                 return;
             }
             hideMessage(form.querySelector('#received-payment-context-message'));
             balanceOutput.textContent = (currency ? currency + ' ' : '') + formatter.format(feeAmount - received);
+            refreshInvoicePeriod();
+        }
+
+        function refreshInvoicePeriod() {
+            const periodOutput = form.querySelector('#invoice-period-summary');
+            if (!periodOutput) return;
+            const yearLabel = academicYear?.selectedOptions[0]?.textContent?.trim();
+            const sessionOption = feeSession?.selectedOptions[0];
+            if (!yearLabel) {
+                periodOutput.textContent = 'Select an Academic Year and a linked Finance Session to place the invoice.';
+                return;
+            }
+            if (!sessionOption?.value || sessionOption.hidden) {
+                periodOutput.textContent = 'No Finance Session is linked to this Academic Year. The programme Fee Structure and amount remain independent; link a Finance Session in Session Manager before creating the invoice.';
+                return;
+            }
+            periodOutput.textContent = 'Invoice period: ' + yearLabel + ' · Finance Session ' + sessionOption.textContent.trim() + '.';
         }
 
         function refreshFeeStructures() {
@@ -110,19 +142,22 @@
             Array.from(feeStructure.options).forEach(function (option, index) {
                 if (index === 0) return;
                 const programmeMatches = !option.dataset.programmeId || option.dataset.programmeId === programmeId;
-                const sessionMatches = !option.dataset.sessionId || option.dataset.sessionId === sessionId;
+                const sessionMatches = !option.dataset.sessionId
+                    || (sessionId
+                        ? option.dataset.sessionId === sessionId
+                        : Boolean(academicYear?.value && option.dataset.sessionAcademicYearId === academicYear.value));
                 option.hidden = !programmeMatches || !sessionMatches;
                 if (!option.hidden) visibleCount += 1;
                 if (option.value === feeStructure.value && option.hidden) selectedWasHidden = true;
             });
             if (selectedWasHidden) {
                 feeStructure.value = '';
-                showMessage(form.querySelector('#fee-structure-context-message'), 'The fee type no longer matches this programme and session. Choose a matching fee type.');
+                showMessage(form.querySelector('#fee-structure-context-message'), 'The selected Fee Structure is not configured for this programme and Finance Session. Choose a matching programme fee.');
             } else if (feeStructure.value || visibleCount > 0) {
                 hideMessage(form.querySelector('#fee-structure-context-message'));
             }
-            feeStructure.disabled = !financeToggle?.checked || !sessionId;
-            feeStructure.required = Boolean(financeToggle?.checked && sessionId);
+            feeStructure.disabled = !financeToggle?.checked || !programmeId;
+            feeStructure.required = Boolean(financeToggle?.checked && programmeId);
             refreshRemainingBalance();
         }
 
@@ -138,10 +173,11 @@
                 if (visible) visibleCount += 1;
             });
 
-            const selectedOption = feeSession.selectedOptions[0];
+            let selectedOption = feeSession.selectedOptions[0];
             if (selectedOption && selectedOption.value && selectedOption.hidden) {
                 feeSession.value = '';
                 showMessage(form.querySelector('#fee-session-context-message'), 'The previous session belongs to another year. Choose a session for the selected Academic Year.');
+                selectedOption = feeSession.selectedOptions[0];
             }
 
             const message = form.querySelector('#fee-session-context-message');
@@ -150,14 +186,15 @@
                 showMessage(message, 'Select an Academic Year to load its fee sessions.');
             } else if (visibleCount === 0) {
                 feeSession.value = '';
-                showMessage(message, 'No fee sessions are linked to this Academic Year. Ask an administrator to map a session before creating an invoice.');
+                showMessage(message, 'No Finance Session is linked to this Academic Year. Programme Fee Structures remain available; create or edit a Finance Session in Admin → Settings → Session Manager and assign it to this year before creating an invoice.');
             } else if (!selectedOption || !selectedOption.value || !selectedOption.hidden) {
                 hideMessage(message);
             }
 
             feeSession.disabled = !financeEnabled || !selectedYearId || visibleCount === 0;
-            feeSession.required = financeEnabled && visibleCount > 0;
+            feeSession.required = financeEnabled && Boolean(selectedYearId);
             refreshFeeStructures();
+            refreshInvoicePeriod();
         }
 
         function refreshCohortContext() {
@@ -206,10 +243,10 @@
             if (financeToggle?.checked && (!academicYear?.value || !feeSession?.value || feeSession.disabled)) {
                 event.preventDefault();
                 if (!academicYear?.value) {
-                    showMessage(form.querySelector('#fee-session-context-message'), 'Select an Academic Year before submitting Finance setup.');
+                    showMessage(form.querySelector('#fee-session-context-message'), 'Select an Academic Year to provide invoice context. It does not determine the programme fee.');
                     academicYear?.focus();
                 } else {
-                    showMessage(form.querySelector('#fee-session-context-message'), 'An invoice needs a fee session linked to the selected Academic Year.');
+                    showMessage(form.querySelector('#fee-session-context-message'), 'This programme fee is available, but invoice creation needs a Finance Session linked to the selected Academic Year. Create or edit one in Admin → Settings → Session Manager.');
                     feeSession?.focus();
                 }
                 return;
