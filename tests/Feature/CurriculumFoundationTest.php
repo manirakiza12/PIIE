@@ -307,6 +307,21 @@ class CurriculumFoundationTest extends TestCase
         $this->assertSame(2, $source->memberships()->count());
     }
 
+    public function test_successor_clone_preserves_a_legacy_programme_year_label_with_a_period_name(): void
+    {
+        $source = $this->curriculum(1, 'legacy-label', $this->academicYear(1));
+        $stage = $this->stage($source, 'Year 1', 1);
+        DB::table('curriculum_stages')->where('id', $stage->id)->update(['label' => 'YEAR ONE-SEMESTER 1']);
+        $stage->refresh();
+        $this->membership($source, $this->subject(1), $stage);
+        $source = $this->service->approve($source);
+
+        $successor = $this->service->createSuccessor($source, 'legacy-label-successor', null, true);
+
+        $this->assertSame('YEAR ONE-SEMESTER 1', $successor->stages()->firstOrFail()->label);
+        $this->assertSame('YEAR ONE-SEMESTER 1', $stage->fresh()->label);
+    }
+
     private function createFoundationSchema(): void
     {
         Schema::create('schools', function (Blueprint $table): void {

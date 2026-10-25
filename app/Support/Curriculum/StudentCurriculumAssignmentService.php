@@ -25,7 +25,7 @@ class StudentCurriculumAssignmentService
             $curriculum = $this->assignableCurriculum($schoolId, (int) $curriculum->programme_id, $curriculumId);
             $year = $this->academicYear($schoolId, $yearId, 'academic_year_id');
             $this->assertEffectiveDateNotBeforeCurriculumFloor($curriculum, $year);
-            $stage = \App\Models\CurriculumStage::where('school_id', $schoolId)->where('curriculum_id', $curriculumId)->find($stageId);
+            $stage = \App\Models\CurriculumStage::where('school_id', $schoolId)->when(\Illuminate\Support\Facades\Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($q) => $q->whereNull('archived_at'))->where('curriculum_id', $curriculumId)->find($stageId);
             if (!$stage) throw new DomainException('Choose a Programme Year from the selected approved Programme Curriculum.');
             if (trim($reason) === '') throw new DomainException('Explain the placement correction.');
             if (StudentCurriculumAssignment::where('school_id', $schoolId)->where('student_id', $placement->student_id)->count() !== 1) {
@@ -123,7 +123,7 @@ class StudentCurriculumAssignmentService
             [$student, $programme, $entryYear, $effectiveYear, $actor] = $this->lockAndValidateContext($schoolId, $studentId, $programmeId, $academicYearId, $academicYearId, $actorId);
             $this->assertNoActiveAssignment($schoolId, $studentId);
             $curriculum = $this->assignableCurriculum($schoolId, $programmeId, $curriculumId);
-            $stage = \App\Models\CurriculumStage::query()->where('school_id', $schoolId)->where('curriculum_id', $curriculumId)->whereKey($stageId)->first();
+            $stage = \App\Models\CurriculumStage::query()->where('school_id', $schoolId)->when(\Illuminate\Support\Facades\Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($q) => $q->whereNull('archived_at'))->where('curriculum_id', $curriculumId)->whereKey($stageId)->first();
             if (! $stage) {
                 throw new DomainException('Choose a Programme Year from the selected approved Programme Curriculum.');
             }

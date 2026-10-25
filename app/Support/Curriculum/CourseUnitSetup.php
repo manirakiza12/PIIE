@@ -22,7 +22,13 @@ final class CourseUnitSetup
         }
         $schoolId = (int) $user->school_id;
         $plans = Curriculum::where('school_id', $schoolId)->where('status', 'draft')
-            ->with(['programme', 'effectiveAcademicYear' => fn ($query) => $query->where('school_id', $schoolId), 'stages', 'memberships.stage', 'memberships.subject', 'memberships.prerequisites'])->orderBy('id')->get();
+            ->with([
+                'programme',
+                'effectiveAcademicYear' => fn ($query) => $query->where('school_id', $schoolId),
+                'stages' => fn ($query) => $query->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($stageQuery) => $stageQuery->whereNull('archived_at')),
+                'memberships' => fn ($query) => $query->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($membershipQuery) => $membershipQuery->whereHas('stage', fn ($stageQuery) => $stageQuery->whereNull('archived_at'))),
+                'memberships.stage', 'memberships.subject', 'memberships.prerequisites',
+            ])->orderBy('id')->get();
         return ['plans' => $plans, 'subjectId' => $subject?->id];
     }
 

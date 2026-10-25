@@ -8,7 +8,7 @@ class CurriculumStage extends Model
 {
     protected $fillable = ['label', 'sequence'];
 
-    protected $casts = ['sequence' => 'integer'];
+    protected $casts = ['sequence' => 'integer', 'archived_at' => 'datetime'];
 
     public function curriculum()
     {

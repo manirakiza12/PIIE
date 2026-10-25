@@ -343,7 +343,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $id = $tenant['curriculum'];
         DB::table('curricula')->where('id', $id)->update(['status' => 'retired']);
         $this->actingAs($this->staff(1, [], ['role_id' => 2]));
-        $page = $this->get(route('admin.programme_years.index', ['curriculum_id' => $id]))->assertOk()->assertSee('Edit Year')->assertSee('Delete Year');
+        $page = $this->get(route('admin.programme_years.index', ['curriculum_id' => $id]))->assertOk()->assertSee('Edit Year')->assertSee('Delete or archive Programme Year');
         $this->assertStringNotContainsString('Use a successor curriculum', $page->getContent());
         if (getenv('PIIE_CAPTURE_PROGRAMME_WORKSPACE') === '1') file_put_contents(base_path('output/programme-workspace-browser/years-owner-retired.html'), $page->getContent());
         $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Corrected Year One', 'sequence' => 1, 'reason' => 'Owner fixes retired year'])->assertSessionHasNoErrors();
@@ -354,27 +354,38 @@ class CourseOfferingAdministrationTest extends TestCase
         $newId = DB::table('curriculum_stages')->where('curriculum_id', $id)->where('sequence', 2)->value('id');
         $this->get(route('admin.programme_years.show', $newId))->assertOk()->assertSee('Year Two');
         DB::table('curricula')->where('id', $id)->update(['status' => 'retired']);
-        $this->delete(route('admin.programme_years.destroy', $tenant['stage']), ['reason' => 'Cannot remove populated year'])->assertSessionHasErrors('stage');
+        $this->delete(route('admin.programme_years.destroy', $tenant['stage']), ['reason' => 'Cannot remove populated year'])->assertSessionHasErrors('confirmation');
         $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'retired']);
+        $firstPhrase = 'Corrected Year One — '.DB::table('programmes')->where('id', $tenant['programme'])->value('name').' — '.DB::table('curricula')->where('id', $id)->value('version');
+        $this->delete(route('admin.programme_years.destroy', $tenant['stage']), ['confirmation' => $firstPhrase, 'reason' => 'Removing unused official year'])->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('curriculum_stages', ['id' => $tenant['stage']]);
+        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'draft']);
         Schema::create('student_curriculum_assignments', function (Blueprint $table): void { $table->id(); $table->unsignedBigInteger('entry_curriculum_stage_id'); });
         DB::table('student_curriculum_assignments')->insert(['entry_curriculum_stage_id' => $newId]);
-        $this->delete(route('admin.programme_years.destroy', $newId), ['reason' => 'Student reference must be protected'])->assertSessionHasErrors('stage');
-        $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'retired']);
-        DB::table('student_curriculum_assignments')->delete();
-        $this->delete(route('admin.programme_years.destroy', $newId), ['reason' => 'Remove unused year'])->assertSessionHasNoErrors();
-        $this->assertDatabaseMissing('curriculum_stages', ['id' => $newId]);
+        $secondPhrase = 'Year Two — '.DB::table('programmes')->where('id', $tenant['programme'])->value('name').' — '.DB::table('curricula')->where('id', $id)->value('version');
+        $this->delete(route('admin.programme_years.destroy', $newId), ['confirmation' => $secondPhrase])->assertSessionHasNoErrors();
+        $this->assertNotNull(DB::table('curriculum_stages')->where('id', $newId)->value('archived_at'));
         $this->assertDatabaseHas('curricula', ['id' => $id, 'status' => 'draft']);
     }
 
-    public function test_curriculum_manager_can_change_official_programme_years(): void
+    public function test_only_curriculum_owners_can_reopen_official_programme_years_with_a_reason(): void
     {
         $tenant = $this->tenants[1];
         $this->actingAs($this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage']));
-        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Manager corrected year', 'sequence' => 1, 'reason' => 'Correcting the official year label'])->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('curriculum_stages', ['id' => $tenant['stage'], 'label' => 'Manager corrected year']);
-        $this->post(route('admin.programme_years.store'), ['curriculum_id' => $tenant['curriculum'], 'label' => 'Year Two', 'sequence' => 2, 'reason' => 'Adding a programme year'])->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('curriculum_stages', ['curriculum_id' => $tenant['curriculum'], 'label' => 'Year Two', 'sequence' => 2]);
+        $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Manager corrected year', 'sequence' => 1])->assertForbidden();
+        $this->put(route('admin.curricula.stages.update', [$tenant['curriculum'], $tenant['stage']]), ['label' => 'Manager corrected year', 'sequence' => 1])->assertForbidden();
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $tenant['stage'], 'label' => 'Year 1']);
         $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'status' => 'approved']);
+
+        $owner = $this->staff(1, [], ['role_id' => 2]);
+        $this->actingAs($owner)->put(route('admin.programme_years.update', $tenant['stage']), [
+            'label' => 'Owner corrected year', 'sequence' => 1,
+        ])->assertSessionHasErrors('reason');
+        $this->put(route('admin.curricula.stages.update', [$tenant['curriculum'], $tenant['stage']]), [
+            'label' => 'Owner corrected year', 'sequence' => 1, 'reason' => 'Correcting the official year label',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $tenant['stage'], 'label' => 'Owner corrected year']);
+        $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'status' => 'draft']);
     }
 
     public function test_standalone_programme_years_crud_and_tenant_boundaries(): void
@@ -390,7 +401,14 @@ class CourseOfferingAdministrationTest extends TestCase
         $this->assertDatabaseHas('curriculum_stages', ['id' => $year, 'label' => 'Foundation Year']);
         $this->get(route('admin.programme_years.index', ['curriculum_id' => $this->tenants[2]['curriculum']]))->assertNotFound();
         $this->put(route('admin.programme_years.update', $this->tenants[2]['stage']), ['label' => 'Forbidden', 'sequence' => 1])->assertNotFound();
-        $this->delete(route('admin.programme_years.destroy', $year))->assertSessionHasNoErrors();
+        $this->delete(route('admin.programme_years.destroy', $this->tenants[2]['stage']), ['confirmation' => 'foreign'])->assertNotFound();
+        $viewer = $this->staff(1, ['academic.curriculum.view'], ['role_id' => 3]);
+        $viewerPhrase = 'Foundation Year — '.DB::table('programmes')->where('id', $tenant['programme'])->value('name').' — standalone-years';
+        $this->actingAs($viewer)->delete(route('admin.programme_years.destroy', $year), ['confirmation' => $viewerPhrase])->assertForbidden();
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $year, 'label' => 'Foundation Year']);
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+        $confirmation = 'Foundation Year — '.DB::table('programmes')->where('id', $tenant['programme'])->value('name').' — standalone-years';
+        $this->delete(route('admin.programme_years.destroy', $year), ['confirmation' => $confirmation])->assertSessionHasNoErrors();
         $this->assertDatabaseMissing('curriculum_stages', ['id' => $year]);
         $this->put(route('admin.programme_years.update', $tenant['stage']), ['label' => 'Needs reason', 'sequence' => 1])->assertSessionHasErrors('reason');
     }
@@ -416,6 +434,65 @@ class CourseOfferingAdministrationTest extends TestCase
             if (! is_dir($directory)) mkdir($directory, 0777, true);
             file_put_contents($directory.'/curriculum-unit-placements.html', $response->getContent());
         }
+    }
+
+    public function test_programme_year_delete_cascades_owned_placements_and_prerequisites_but_preserves_shared_course_units(): void
+    {
+        $tenant = $this->tenants[1];
+        $curriculumId = $this->curriculumFor($tenant, 'draft', 'year-cascade');
+        $curriculum = \App\Models\Curriculum::findOrFail($curriculumId);
+        $service = app(\App\Support\Curriculum\CurriculumFoundationService::class);
+        $year = $service->addStage($curriculum, 'Year to remove', 1);
+        $otherYear = $service->addStage($curriculum, 'Year to keep', 2);
+        $owned = $service->addMembership($curriculum, $tenant['subject'], $year->id, ['classification' => 'compulsory', 'credits' => 3]);
+        $remaining = $service->addMembership($curriculum, $this->subject($tenant['school'], 'Other unit', 'OTHER-KEEP'), $otherYear->id, ['classification' => 'compulsory', 'credits' => 3]);
+        $sharedCurriculumId = $this->curriculumFor($tenant, 'draft', 'year-cascade-shared');
+        $sharedYear = $service->addStage(\App\Models\Curriculum::findOrFail($sharedCurriculumId), 'Shared year', 1);
+        $shared = $service->addMembership(\App\Models\Curriculum::findOrFail($sharedCurriculumId), $tenant['subject'], $sharedYear->id, ['classification' => 'compulsory', 'credits' => 3]);
+        DB::table('curriculum_prerequisites')->insert(['school_id' => $tenant['school'], 'curriculum_id' => $curriculumId, 'membership_id' => $owned->id, 'prerequisite_membership_id' => $remaining->id]);
+        $draftOffering = $this->createOffering($tenant, 'YEAR-CASCADE-DRAFT-LINK');
+        DB::table('course_offering_curriculum_memberships')->insert([
+            'school_id' => $tenant['school'], 'course_offering_id' => $draftOffering->id, 'curriculum_id' => $curriculumId,
+            'curriculum_membership_id' => $owned->id, 'subject_id' => $tenant['subject'], 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $actor = $this->staff(1, ['academic.curriculum.manage'], ['role_id' => 2]);
+        $phrase = 'Year to remove — '.DB::table('programmes')->where('id', $tenant['programme'])->value('name').' — year-cascade';
+        $this->actingAs($actor)->get(route('admin.programme_years.index', ['curriculum_id' => $curriculumId]))->assertOk()->assertSee('1 Course Unit placements; 1 draft Allocation links will be removed');
+        $this->delete(route('admin.programme_years.destroy', $year->id), ['confirmation' => $phrase])->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('curriculum_stages', ['id' => $year->id]);
+        $this->assertDatabaseMissing('curriculum_memberships', ['id' => $owned->id]);
+        $this->assertDatabaseMissing('curriculum_prerequisites', ['membership_id' => $owned->id]);
+        $this->assertDatabaseMissing('course_offering_curriculum_memberships', ['course_offering_id' => $draftOffering->id, 'curriculum_membership_id' => $owned->id]);
+        $this->assertDatabaseHas('course_offerings', ['id' => $draftOffering->id]);
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $otherYear->id]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $remaining->id]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $shared->id]);
+        $this->assertDatabaseHas('subjects', ['id' => $tenant['subject']]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_STAGE_REMOVED', 'school_id' => $tenant['school'], 'user_id' => $actor->id]);
+    }
+
+    public function test_programme_year_cascade_rolls_back_when_a_child_delete_fails(): void
+    {
+        $tenant = $this->tenants[1];
+        $curriculumId = $this->curriculumFor($tenant, 'draft', 'year-cascade-rollback');
+        $curriculum = \App\Models\Curriculum::findOrFail($curriculumId);
+        $service = app(\App\Support\Curriculum\CurriculumFoundationService::class);
+        $year = $service->addStage($curriculum, 'Year rollback', 1);
+        $membership = $service->addMembership($curriculum, $tenant['subject'], $year->id, ['classification' => 'compulsory', 'credits' => 3]);
+        $thrown = false;
+        DB::listen(function ($query): void {
+            if (str_contains(strtolower($query->sql), 'delete from') && str_contains(strtolower($query->sql), 'curriculum_memberships')) {
+                throw new \RuntimeException('Simulated cascade failure');
+            }
+        });
+        try {
+            $service->removeStage($curriculum, $year);
+        } catch (\RuntimeException $exception) {
+            $thrown = $exception->getMessage() === 'Simulated cascade failure';
+        }
+        $this->assertTrue($thrown);
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $year->id]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $membership->id]);
     }
 
     public function test_independent_delivery_modules_do_not_require_opening_an_allocation(): void
@@ -1587,6 +1664,98 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             ])->assertForbidden();
     }
 
+    public function test_programme_year_names_separate_study_years_from_periods_and_preserve_legacy_labels(): void
+    {
+        $tenant = $this->tenants[1];
+        $curriculum = $this->curriculumFor($tenant, 'draft', 'programme-year-label-quality');
+        $manager = $this->staff(1, ['academic.curriculum.manage', 'academic.curriculum.view']);
+        $this->actingAs($manager);
+        $url = route('admin.programme_years.index', ['curriculum_id' => $curriculum]);
+
+        $this->from($url)->post(route('admin.programme_years.store'), [
+            'curriculum_id' => $curriculum, 'label' => 'YEAR ONE-SEMESTER 1', 'sequence' => 1,
+        ])->assertSessionHasErrors('label');
+        $this->from($url)->post(route('admin.programme_years.store'), [
+            'curriculum_id' => $curriculum, 'label' => 'Year 1', 'sequence' => 1,
+        ])->assertSessionHasNoErrors();
+        $this->from($url)->post(route('admin.programme_years.store'), [
+            'curriculum_id' => $curriculum, 'label' => ' year 1 ', 'sequence' => 2,
+        ])->assertSessionHasErrors('label');
+        $this->from($url)->post(route('admin.programme_years.store'), [
+            'curriculum_id' => $curriculum, 'label' => 'Year 2', 'sequence' => 1,
+        ])->assertSessionHasErrors('sequence');
+
+        $legacyId = (int) DB::table('curriculum_stages')->insertGetId([
+            'school_id' => $tenant['school'], 'curriculum_id' => $curriculum,
+            'label' => 'YEAR ONE-SEMESTER 1', 'sequence' => 3, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->get($url)->assertOk()->assertSee('Review this saved label')->assertSee('YEAR ONE-SEMESTER 1');
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $legacyId, 'label' => 'YEAR ONE-SEMESTER 1', 'sequence' => 3]);
+
+        $this->from($url)->put(route('admin.programme_years.update', $legacyId), [
+            'label' => 'YEAR ONE-SEMESTER 1', 'sequence' => 4,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $legacyId, 'label' => 'YEAR ONE-SEMESTER 1', 'sequence' => 4]);
+        $audit = \App\Models\AuditLog::where('school_id', $tenant['school'])
+            ->where('record_type', \App\Models\Curriculum::class)->where('record_id', $curriculum)
+            ->where('action', 'CURRICULUM_STAGE_UPDATED')->latest('id')->firstOrFail();
+        $this->assertSame($manager->id, (int) $audit->user_id);
+        $this->assertSame('YEAR ONE-SEMESTER 1', $audit->old_values['label']);
+        $this->assertSame('YEAR ONE-SEMESTER 1', $audit->new_values['label']);
+        $this->assertSame(3, (int) $audit->old_values['sequence']);
+        $this->assertSame(4, (int) $audit->new_values['sequence']);
+    }
+
+    public function test_programme_year_deletion_archives_year_when_student_history_exists_and_preserves_records(): void
+    {
+        $tenant = $this->tenants[1];
+        $this->actingAs($this->staff(1, [], ['role_id' => 2]));
+        $curriculum = $this->curriculumFor($tenant, 'draft', 'programme-year-placement-block');
+        $stage = app(\App\Support\Curriculum\CurriculumFoundationService::class)
+            ->addStage(\App\Models\Curriculum::findOrFail($curriculum), 'Year without units', 1);
+        $historicalMembership = app(\App\Support\Curriculum\CurriculumFoundationService::class)->addMembership(
+            \App\Models\Curriculum::findOrFail($curriculum), $tenant['subject'], $stage->id,
+            ['classification' => 'compulsory', 'credits' => 3, 'period_type' => 'semester', 'period_sequence' => 1]
+        );
+        Schema::create('student_curriculum_assignments', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('school_id'); $table->unsignedBigInteger('entry_curriculum_stage_id');
+        });
+        DB::table('student_curriculum_assignments')->insert([
+            'school_id' => $tenant['school'], 'entry_curriculum_stage_id' => $stage->id,
+        ]);
+
+        $phrase = 'Year without units — '.DB::table('programmes')->where('id', $tenant['programme'])->value('name').' — '.DB::table('curricula')->where('id', $curriculum)->value('version');
+        $this->get(route('admin.programme_years.index', ['curriculum_id' => $curriculum]))->assertOk()
+            ->assertSee('1 student placement/history record(s)')
+            ->assertSee('student placement/history records will be preserved')
+            ->assertSee('Type')->assertSee($phrase);
+
+        $this->delete(route('admin.programme_years.destroy', $stage->id), ['confirmation' => 'wrong name'])->assertSessionHasErrors('confirmation');
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $stage->id, 'archived_at' => null]);
+        $this->delete(route('admin.programme_years.destroy', $stage->id), ['confirmation' => $phrase])
+            ->assertSessionHasNoErrors()->assertSessionHas('success');
+        $this->assertDatabaseHas('curriculum_stages', ['id' => $stage->id]);
+        $this->assertNotNull(DB::table('curriculum_stages')->where('id', $stage->id)->value('archived_at'));
+        $this->assertDatabaseHas('student_curriculum_assignments', ['entry_curriculum_stage_id' => $stage->id]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $historicalMembership->id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_STAGE_ARCHIVED', 'school_id' => $tenant['school'], 'record_id' => $curriculum]);
+        try {
+            $service = app(\App\Support\Curriculum\CurriculumFoundationService::class);
+            $service->addMembership(\App\Models\Curriculum::findOrFail($curriculum), $this->subject($tenant['school'], 'Archived placement test', 'ARCHIVED-PLACEMENT'), $stage->id, ['classification' => 'compulsory', 'credits' => 3]);
+            $this->fail('Archived Programme Years must not accept new Course Unit placements.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('curriculum_stage_id', $exception->errors());
+        }
+        DB::table('curricula')->where('id', $curriculum)->update(['status' => 'approved']);
+        $offering = $this->createOffering($tenant, 'ARCHIVED-STAGE-LINK');
+        try {
+            app(CourseOfferingService::class)->addApplicability($tenant['school'], $offering->id, $historicalMembership->id);
+            $this->fail('Archived Programme Years must not be used for new Course Allocation links.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('archived Programme Year', $exception->getMessage());
+        }
+    }
+
     public function test_stage_forms_are_distinct_edit_preserves_record_and_add_creates_another_without_stale_subject_errors(): void
     {
         $tenant = $this->tenants[1];
@@ -2174,7 +2343,7 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         Schema::create('academic_years', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('school_id'); $t->string('label'); $t->date('start_date'); $t->date('end_date'); $t->string('status'); $t->timestamps(); });
         Schema::create('academic_periods', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('academic_year_id'); $t->string('type'); $t->string('label'); $t->unsignedSmallInteger('sequence'); $t->date('start_date'); $t->date('end_date'); $t->string('status'); $t->timestamps(); });
         Schema::create('curricula', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('programme_id'); $t->string('version'); $t->unsignedBigInteger('effective_academic_year_id')->nullable(); $t->string('status'); $t->timestamps(); });
-        Schema::create('curriculum_stages', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('curriculum_id'); $t->string('label'); $t->unsignedSmallInteger('sequence'); $t->timestamps(); });
+        Schema::create('curriculum_stages', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('curriculum_id'); $t->string('label'); $t->unsignedSmallInteger('sequence'); $t->timestamp('archived_at')->nullable(); $t->timestamps(); });
         Schema::create('curriculum_memberships', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('school_id'); $t->unsignedBigInteger('curriculum_id'); $t->unsignedBigInteger('subject_id'); $t->unsignedBigInteger('curriculum_stage_id'); $t->string('period_type')->nullable(); $t->unsignedSmallInteger('period_sequence')->nullable(); $t->string('classification'); $t->decimal('credits',6,2); $t->unsignedSmallInteger('sequence')->default(0); $t->timestamps(); });
         Schema::create('curriculum_prerequisites', function (Blueprint $t): void {
             $t->unsignedBigInteger('school_id');

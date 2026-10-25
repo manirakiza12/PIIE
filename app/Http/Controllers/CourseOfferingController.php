@@ -178,6 +178,7 @@ class CourseOfferingController extends Controller
                 ->join('academic_periods as op', fn ($j) => $j->where('op.id', $offering->academic_period_id)->where('op.school_id', $schoolId)->where('op.academic_year_id', $offering->academic_year_id))
                 ->leftJoin('academic_years as ey', fn ($j) => $j->on('ey.id','=','c.effective_academic_year_id')->where('ey.school_id',$schoolId))
                 ->leftJoin('curriculum_stages as cs', fn ($j) => $j->on('cs.id','=','curriculum_memberships.curriculum_stage_id')->where('cs.school_id',$schoolId))
+                ->when(\Illuminate\Support\Facades\Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('cs.archived_at'))
                 ->where(fn ($q) => $q->whereNull('c.effective_academic_year_id')->orWhereColumn('oy.start_date','>=','ey.start_date'))
                 ->whereColumn('curriculum_memberships.period_type','op.type')->whereColumn('curriculum_memberships.period_sequence','op.sequence')
                 ->select('curriculum_memberships.id','curriculum_memberships.period_type','curriculum_memberships.period_sequence','c.version','p.code as programme_code','p.name as programme_name','cs.label as stage_label')->orderBy('p.name')->limit(100)->get();

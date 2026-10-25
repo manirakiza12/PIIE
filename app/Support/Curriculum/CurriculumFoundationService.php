@@ -250,80 +250,154 @@ class CurriculumFoundationService
         return $curriculum;
     }
 
-    public function addStage(Curriculum $curriculum, string $label, int $sequence): CurriculumStage
+    public function addStage(Curriculum $curriculum, string $label, int $sequence, bool $preserveLegacyLabel = false): CurriculumStage
     {
-        $this->assertEditable($curriculum);
-        $this->validate(['label' => $label, 'sequence' => $sequence], [
-            'label' => ['required', 'string', 'max:100'],
-            'sequence' => ['required', 'integer', 'min:1', 'max:65535'],
-        ]);
+        return DB::transaction(function () use ($curriculum, $label, $sequence, $preserveLegacyLabel): CurriculumStage {
+            $lockedCurriculum = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
+            $this->assertEditable($lockedCurriculum);
+            $label = $preserveLegacyLabel ? $label : trim($label);
+            $this->validate(['label' => $label, 'sequence' => $sequence], [
+                'label' => ['required', 'string', 'max:100'],
+                'sequence' => ['required', 'integer', 'min:1', 'max:65535'],
+            ]);
 
-        if (CurriculumStage::where('curriculum_id', $curriculum->id)->where('sequence', $sequence)->exists()) {
-            $this->fail('sequence', 'That year position is already used in this Curriculum.');
-        }
+            if (! $preserveLegacyLabel) {
+                $this->assertValidStageLabel($lockedCurriculum, $label);
+            }
+            if (CurriculumStage::where('school_id', $lockedCurriculum->school_id)->where('curriculum_id', $lockedCurriculum->id)->where('sequence', $sequence)->exists()) {
+                $this->fail('sequence', 'That year position is already used in this Curriculum.');
+            }
 
-        $stage = new CurriculumStage();
-        $stage->forceFill([
-            'school_id' => $curriculum->school_id,
-            'curriculum_id' => $curriculum->id,
-            'label' => $label,
-            'sequence' => $sequence,
-        ])->save();
+            $stage = new CurriculumStage();
+            $stage->forceFill([
+                'school_id' => $lockedCurriculum->school_id,
+                'curriculum_id' => $lockedCurriculum->id,
+                'label' => $label,
+                'sequence' => $sequence,
+            ])->save();
 
-        $this->audit('CURRICULUM_STAGE_CREATED', $curriculum, [], $stage->only(['id', 'label', 'sequence']));
-
-        return $stage;
+            $this->audit('CURRICULUM_STAGE_CREATED', $lockedCurriculum, [], $stage->only(['id', 'label', 'sequence']));
+            return $stage;
+        });
     }
 
     public function updateStage(Curriculum $curriculum, CurriculumStage $stage, string $label, int $sequence): CurriculumStage
     {
-        $this->assertEditable($curriculum);
-        $this->assertStageInCurriculum($curriculum, $stage);
-        $this->validate(['label' => $label, 'sequence' => $sequence], [
-            'label' => ['required', 'string', 'max:100'],
-            'sequence' => ['required', 'integer', 'min:1', 'max:65535'],
-        ]);
+        return DB::transaction(function () use ($curriculum, $stage, $label, $sequence): CurriculumStage {
+            $lockedCurriculum = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
+            $lockedStage = CurriculumStage::where('school_id', $lockedCurriculum->school_id)->where('curriculum_id', $lockedCurriculum->id)->whereKey($stage->id)->lockForUpdate()->firstOrFail();
+            $this->assertEditable($lockedCurriculum);
+            $this->assertStageInCurriculum($lockedCurriculum, $lockedStage);
+            $label = trim($label);
+            $this->validate(['label' => $label, 'sequence' => $sequence], [
+                'label' => ['required', 'string', 'max:100'],
+                'sequence' => ['required', 'integer', 'min:1', 'max:65535'],
+            ]);
 
-        if (CurriculumStage::where('curriculum_id', $curriculum->id)->where('sequence', $sequence)->where('id', '<>', $stage->id)->exists()) {
-            $this->fail('sequence', 'That year position is already used in this Curriculum.');
-        }
+            // Keep legacy labels intact unless an administrator deliberately edits
+            // them. New and changed labels must not combine a study year with a
+            // dated semester/term label, which belongs to placement periods.
+            $this->assertValidStageLabel($lockedCurriculum, $label, $lockedStage);
+            if (CurriculumStage::where('school_id', $lockedCurriculum->school_id)
+                ->where('curriculum_id', $lockedCurriculum->id)->where('sequence', $sequence)
+                ->where('id', '<>', $lockedStage->id)->exists()) {
+                $this->fail('sequence', 'That year position is already used in this Curriculum.');
+            }
 
-        $before = $stage->only(['label', 'sequence']);
-        DB::transaction(function () use ($stage, $label, $sequence, $curriculum, $before): void {
-            $stage->label = $label;
-            $stage->sequence = $sequence;
-            $stage->save();
+            $before = $lockedStage->only(['label', 'sequence']);
+            $lockedStage->label = $label;
+            $lockedStage->sequence = $sequence;
+            $lockedStage->save();
             if ((int) $before['sequence'] !== $sequence
                 && Schema::hasTable('student_curriculum_assignments')
                 && Schema::hasColumn('student_curriculum_assignments', 'entry_curriculum_stage_id')
                 && Schema::hasTable('student_profiles') && Schema::hasColumn('student_profiles', 'year_of_study')) {
-                $studentIds = DB::table('student_curriculum_assignments')->where('school_id', $curriculum->school_id)
-                    ->where('curriculum_id', $curriculum->id)->where('entry_curriculum_stage_id', $stage->id)
+                $studentIds = DB::table('student_curriculum_assignments')->where('school_id', $lockedCurriculum->school_id)
+                    ->where('curriculum_id', $lockedCurriculum->id)->where('entry_curriculum_stage_id', $lockedStage->id)
                     ->whereNull('ended_at')->pluck('student_id');
-                DB::table('student_profiles')->where('school_id', $curriculum->school_id)
+                DB::table('student_profiles')->where('school_id', $lockedCurriculum->school_id)
                     ->whereIn('user_id', $studentIds)->update(['year_of_study' => $sequence]);
             }
+            $this->audit('CURRICULUM_STAGE_UPDATED', $lockedCurriculum, ['id' => $lockedStage->id] + $before, $lockedStage->only(['id', 'label', 'sequence']));
+            return $lockedStage;
         });
-
-        $this->audit('CURRICULUM_STAGE_UPDATED', $curriculum, ['id' => $stage->id] + $before, $stage->only(['id', 'label', 'sequence']));
-
-        return $stage;
     }
 
-    public function removeStage(Curriculum $curriculum, CurriculumStage $stage): void
+    public function stageDeletionImpact(Curriculum $curriculum, CurriculumStage $stage): array
     {
-        $this->assertEditable($curriculum);
-        $this->assertStageInCurriculum($curriculum, $stage);
-        if ($stage->memberships()->exists()) {
-            $this->fail('stage', 'Move or remove this Programme Year’s Course Units before removing the Programme Year.');
-        }
-        if (\Illuminate\Support\Facades\Schema::hasColumn('student_curriculum_assignments', 'entry_curriculum_stage_id')
-            && DB::table('student_curriculum_assignments')->where('entry_curriculum_stage_id', $stage->id)->exists()) {
-            $this->fail('stage', 'This Programme Year is used by student placements and cannot be deleted.');
-        }
-        $before = $stage->only(['id', 'label', 'sequence']);
-        $stage->delete();
-        $this->audit('CURRICULUM_STAGE_REMOVED', $curriculum, $before, []);
+        $membershipIds = CurriculumMembership::where('school_id', $curriculum->school_id)
+            ->where('curriculum_id', $curriculum->id)->where('curriculum_stage_id', $stage->id)->pluck('id');
+        $count = static fn (string $table, string $column, $ids): int => Schema::hasTable($table) && Schema::hasColumn($table, $column)
+            ? (int) DB::table($table)->whereIn($column, $ids)->where('school_id', $curriculum->school_id)->count()
+            : 0;
+        $draftApplicabilities = Schema::hasTable('course_offering_curriculum_memberships') && $membershipIds->isNotEmpty()
+            ? DB::table('course_offering_curriculum_memberships as link')
+                ->join('course_offerings as offering', fn ($join) => $join->on('offering.id', '=', 'link.course_offering_id')->on('offering.school_id', '=', 'link.school_id'))
+                ->where('link.school_id', $curriculum->school_id)->where('link.curriculum_id', $curriculum->id)
+                ->whereIn('link.curriculum_membership_id', $membershipIds)->where('offering.status', 'draft')->count()
+            : 0;
+        $assignments = Schema::hasTable('student_curriculum_assignments') && Schema::hasColumn('student_curriculum_assignments', 'entry_curriculum_stage_id')
+            ? DB::table('student_curriculum_assignments')->where('entry_curriculum_stage_id', $stage->id)
+                ->when(Schema::hasColumn('student_curriculum_assignments', 'school_id'), fn ($q) => $q->where('school_id', $curriculum->school_id))
+                ->when(Schema::hasColumn('student_curriculum_assignments', 'curriculum_id'), fn ($q) => $q->where('curriculum_id', $curriculum->id))->count()
+            : 0;
+        return [
+            'course_unit_placements' => $membershipIds->count(),
+            'offering_applicabilities' => $count('course_offering_curriculum_memberships', 'curriculum_membership_id', $membershipIds),
+            'draft_offering_links_to_remove' => (int) $draftApplicabilities,
+            'non_draft_offering_links_to_preserve' => max(0, $count('course_offering_curriculum_memberships', 'curriculum_membership_id', $membershipIds) - $draftApplicabilities),
+            'course_registrations' => $count('course_registrations', 'curriculum_membership_id', $membershipIds),
+            'student_placement_history' => $assignments,
+            'prerequisite_links' => Schema::hasTable('curriculum_prerequisites') && $membershipIds->isNotEmpty()
+                ? DB::table('curriculum_prerequisites')->where('school_id', $curriculum->school_id)->where('curriculum_id', $curriculum->id)
+                    ->where(fn ($q) => $q->whereIn('membership_id', $membershipIds)->orWhereIn('prerequisite_membership_id', $membershipIds))->count()
+                : 0,
+        ];
+    }
+
+    public function removeStage(Curriculum $curriculum, CurriculumStage $stage): array
+    {
+        return DB::transaction(function () use ($curriculum, $stage): array {
+            $lockedCurriculum = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
+            $lockedStage = CurriculumStage::where('school_id', $lockedCurriculum->school_id)->where('curriculum_id', $lockedCurriculum->id)->whereKey($stage->id)->lockForUpdate()->firstOrFail();
+            $this->assertEditable($lockedCurriculum);
+            $this->assertStageInCurriculum($lockedCurriculum, $lockedStage);
+            $impact = $this->stageDeletionImpact($lockedCurriculum, $lockedStage);
+            $draftLinks = Schema::hasTable('course_offering_curriculum_memberships') && Schema::hasTable('course_offerings')
+                ? DB::table('course_offering_curriculum_memberships as link')
+                    ->join('course_offerings as offering', fn ($join) => $join->on('offering.id', '=', 'link.course_offering_id')->on('offering.school_id', '=', 'link.school_id'))
+                    ->where('link.school_id', $lockedCurriculum->school_id)->where('link.curriculum_id', $lockedCurriculum->id)
+                    ->whereIn('link.curriculum_membership_id', CurriculumMembership::where('school_id', $lockedCurriculum->school_id)->where('curriculum_id', $lockedCurriculum->id)->where('curriculum_stage_id', $lockedStage->id)->select('id'))
+                    ->where('offering.status', 'draft')->get(['link.course_offering_id', 'link.curriculum_membership_id'])
+                : collect();
+            foreach ($draftLinks as $link) {
+                app(\App\Support\CourseOffering\CourseOfferingService::class)->removeApplicability(
+                    (int) $lockedCurriculum->school_id, (int) $link->course_offering_id, (int) $link->curriculum_membership_id
+                );
+            }
+            $before = $lockedStage->only(['id', 'label', 'sequence']);
+            $historicalReferences = $impact['non_draft_offering_links_to_preserve'] + $impact['course_registrations'] + $impact['student_placement_history'];
+            if ($historicalReferences > 0) {
+                if (! Schema::hasColumn('curriculum_stages', 'archived_at')) {
+                    $this->fail('stage', 'Historical records reference this year. Apply the Programme Year archive migration before removing it.');
+                }
+                $lockedStage->forceFill(['archived_at' => now()])->save();
+                $this->audit('CURRICULUM_STAGE_ARCHIVED', $lockedCurriculum, $before, ['archived' => true, 'impact' => $impact]);
+                return ['outcome' => 'archived', 'impact' => $impact];
+            }
+
+            $membershipIds = CurriculumMembership::where('school_id', $lockedCurriculum->school_id)
+                ->where('curriculum_id', $lockedCurriculum->id)->where('curriculum_stage_id', $lockedStage->id)->pluck('id');
+            if ($membershipIds->isNotEmpty() && Schema::hasTable('curriculum_prerequisites')) {
+                DB::table('curriculum_prerequisites')->where('school_id', $lockedCurriculum->school_id)->where('curriculum_id', $lockedCurriculum->id)
+                    ->where(fn ($q) => $q->whereIn('membership_id', $membershipIds)->orWhereIn('prerequisite_membership_id', $membershipIds))->delete();
+            }
+            CurriculumMembership::where('school_id', $lockedCurriculum->school_id)->where('curriculum_id', $lockedCurriculum->id)
+                ->where('curriculum_stage_id', $lockedStage->id)->delete();
+            $lockedStage->delete();
+            $this->audit('CURRICULUM_STAGE_REMOVED', $lockedCurriculum, $before, ['removed' => true, 'impact' => $impact]);
+            return ['outcome' => 'deleted', 'impact' => $impact];
+        });
     }
 
     public function moveStage(Curriculum $curriculum, CurriculumStage $stage, string $direction): void
@@ -365,6 +439,7 @@ class CurriculumFoundationService
         }
 
         $stage = CurriculumStage::where('school_id', $curriculum->school_id)
+            ->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('archived_at'))
             ->where('curriculum_id', $curriculum->id)
             ->whereKey($stageId)
             ->first();
@@ -521,7 +596,7 @@ class CurriculumFoundationService
             if ($clone) {
                 $membershipMap = [];
                 foreach ($source->stages()->with('memberships.subject')->orderBy('sequence')->get() as $stage) {
-                    $newStage = $this->addStage($successor, $stage->label, (int) $stage->sequence);
+                    $newStage = $this->addStage($successor, $stage->label, (int) $stage->sequence, preserveLegacyLabel: true);
                     foreach ($stage->memberships as $membership) {
                         $newMembership = $this->addMembership($successor, (int) $membership->subject_id, (int) $newStage->id, [
                             'period_type' => $membership->period_type,
@@ -715,6 +790,7 @@ class CurriculumFoundationService
     {
         $membership = CurriculumMembership::where('school_id', $curriculum->school_id)
             ->where('curriculum_id', $curriculum->id)
+            ->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereHas('stage', fn ($stageQuery) => $stageQuery->whereNull('archived_at')))
             ->whereKey($id)
             ->first();
 
@@ -773,9 +849,26 @@ class CurriculumFoundationService
         $this->assertStageIdInCurriculum($curriculum, (int) $stage->id);
     }
 
+    private function assertValidStageLabel(Curriculum $curriculum, string $label, ?CurriculumStage $except = null): void
+    {
+        $unchanged = $except !== null && trim((string) $except->label) === $label;
+        if (preg_match('/\\b(?:semester|term)\\s*(?:no\\.?\\s*)?[1-9][0-9]*\\b/i', $label) === 1
+            && ! $unchanged) {
+            $this->fail('label', 'A Programme Year is a study-year level. Set its Semester or Term on each Course Unit placement instead.');
+        }
+
+        $duplicate = ! $unchanged && CurriculumStage::where('school_id', $curriculum->school_id)
+            ->where('curriculum_id', $curriculum->id)->whereRaw('LOWER(TRIM(label)) = ?', [strtolower($label)])
+            ->when($except, fn ($query) => $query->where('id', '<>', $except->id))->exists();
+
+        if ($duplicate) {
+            $this->fail('label', 'Use a different Programme Year name within this Curriculum.');
+        }
+    }
+
     private function assertStageIdInCurriculum(Curriculum $curriculum, int $stageId): void
     {
-        if (! CurriculumStage::where('school_id', $curriculum->school_id)->where('curriculum_id', $curriculum->id)->whereKey($stageId)->exists()) {
+        if (! CurriculumStage::where('school_id', $curriculum->school_id)->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('archived_at'))->where('curriculum_id', $curriculum->id)->whereKey($stageId)->exists()) {
             $this->fail('curriculum_stage_id', 'The Programme Year must belong to this Curriculum and tenant.');
         }
     }
@@ -784,6 +877,10 @@ class CurriculumFoundationService
     {
         if ((int) $membership->school_id !== (int) $curriculum->school_id || (int) $membership->curriculum_id !== (int) $curriculum->id) {
             $this->fail('membership', 'The membership must belong to this Curriculum and tenant.');
+        }
+        if (Schema::hasColumn('curriculum_stages', 'archived_at')
+            && CurriculumStage::where('school_id', $curriculum->school_id)->whereKey($membership->curriculum_stage_id)->whereNotNull('archived_at')->exists()) {
+            $this->fail('membership', 'This Course Unit placement is archived with its Programme Year and cannot be changed.');
         }
     }
 
