@@ -10,6 +10,7 @@
     $courseUnitLabel = 'Course Unit';
     $periodLabel = $calendarPattern === 'semester' ? 'Semester' : 'Term';
 @endphp
+@if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}@if(session('curriculum_next_step') === 'placement') <a class="alert-link ms-2" href="#subject-search-form">Add Another Course Unit</a><span class="mx-1">·</span><a class="alert-link" href="{{ route('admin.curricula.show', $curriculum->id) }}#review">Review Curriculum</a>@endif</div>@endif
 @if(!$isDraft && !auth()->user()->hasPermission('academic.curriculum.manage'))<div class="alert alert-info">This curriculum is read-only for your account.</div>@endif
 @include('admin.curriculum_units.placements')
 @endisset

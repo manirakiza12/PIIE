@@ -19,6 +19,77 @@ class CourseOfferingAdministrationTest extends TestCase
 
     private array $tenants;
 
+    public function test_curriculum_setup_actions_follow_saved_structure_blockers_status_and_permissions(): void
+    {
+        $tenant = $this->tenants[1];
+        $curriculumId = $this->curriculumFor($tenant, 'draft', 'setup-v0');
+        $viewer = $this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage', 'academic.course_offering.manage', 'academic.course_offering.view']);
+        $this->actingAs($viewer)->get(route('admin.curricula.show', $curriculumId))
+            ->assertOk()->assertSee('Add Programme Years')->assertSee(route('admin.programme_years.index', ['curriculum_id' => $curriculumId]));
+
+        $stage = (int) DB::table('curriculum_stages')->insertGetId([
+            'school_id' => $tenant['school'], 'curriculum_id' => $curriculumId, 'label' => 'Year 1', 'sequence' => 1,
+        ]);
+        DB::table('curricula')->where('id', $curriculumId)->update(['effective_academic_year_id' => null]);
+        $this->get(route('admin.curricula.show', $curriculumId))->assertOk()->assertSee('Add Course Units')->assertSee('0 placements saved');
+
+        DB::table('curriculum_memberships')->insert([
+            'school_id' => $tenant['school'], 'curriculum_id' => $curriculumId, 'subject_id' => $tenant['subject'],
+            'curriculum_stage_id' => $stage, 'period_type' => 'semester', 'period_sequence' => 1,
+            'classification' => 'compulsory', 'credits' => '3.00', 'sequence' => 1,
+        ]);
+        $this->get(route('admin.curricula.show', $curriculumId))->assertOk()
+            ->assertSee('approval blocker(s)')->assertSee('Effective Academic Year')->assertSee('Review curriculum details');
+        DB::table('curricula')->where('id', $curriculumId)->update(['effective_academic_year_id' => $tenant['year']]);
+        $this->get(route('admin.curricula.show', $curriculumId))->assertOk()->assertSee('Review');
+
+        DB::table('curricula')->where('id', $curriculumId)->update(['status' => 'approved']);
+        $this->get(route('admin.curricula.show', $curriculumId))->assertOk()
+            ->assertSee('Create Course Allocation')->assertSee(route('admin.course_offerings.index', ['curriculum_id' => $curriculumId]))
+            ->assertSee(route('admin.course_offerings.create', ['curriculum_id' => $curriculumId]));
+        $approvedPage = $this->get(route('admin.curricula.show', $curriculumId))->getContent();
+        $dom = new \DOMDocument(); @$dom->loadHTML($approvedPage);
+        $this->assertSame(0, (new \DOMXPath($dom))->query('//details[@id="manage-curriculum" and @open]')->length, 'Approved curriculum management remains collapsed by default.');
+        $membershipId = (int) DB::table('curriculum_memberships')->where('curriculum_id', $curriculumId)->value('id');
+        $this->get(route('admin.course_offerings.create', ['curriculum_id' => $curriculumId]))
+            ->assertOk()->assertSee('value="'.$membershipId.'" data-subject="'.$tenant['subject'].'"', false)
+            ->assertDontSee('value="'.$tenant['member'].'" data-subject="'.$tenant['subject'].'"', false);
+        $readOnly = $this->staff(1, ['academic.curriculum.view']);
+        $this->actingAs($readOnly)->get(route('admin.curricula.show', $curriculumId))->assertOk()
+            ->assertSee('Create Course Allocation')->assertSee('Course Allocation management permission is required')
+            ->assertSee('View Course Allocations')->assertSee('Course Allocation view permission is required');
+    }
+
+    public function test_existing_course_unit_can_be_placed_in_another_curriculum_without_duplicate_master(): void
+    {
+        $tenant = $this->tenants[1];
+        $secondCurriculum = $this->curriculumFor($tenant, 'draft', 'reuse-v2');
+        $stage = (int) DB::table('curriculum_stages')->insertGetId([
+            'school_id' => $tenant['school'], 'curriculum_id' => $secondCurriculum, 'label' => 'Year 1', 'sequence' => 1,
+        ]);
+        $manager = $this->staff(1, ['academic.curriculum.manage', 'academic.curriculum.view']);
+        $this->actingAs($manager)->get(route('admin.curriculum_units.index', ['curriculum_id' => $secondCurriculum]))
+            ->assertOk()->assertSee('Select Existing Course Unit')->assertSee('Create New Course Unit');
+        $this->post(route('admin.curricula.memberships.store', $secondCurriculum), [
+            'curriculum_stage_id' => $stage, 'subject_ids' => [$tenant['subject']], 'classification' => 'elective',
+            'credits' => '4.50', 'period_type' => 'semester', 'period_sequence' => 2, 'sequence' => 3,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(1, DB::table('subjects')->where('school_id', $tenant['school'])->where('id', $tenant['subject'])->count());
+        $this->assertDatabaseHas('curriculum_memberships', [
+            'school_id' => $tenant['school'], 'curriculum_id' => $secondCurriculum, 'subject_id' => $tenant['subject'],
+            'curriculum_stage_id' => $stage, 'classification' => 'elective', 'credits' => '4.50', 'period_sequence' => 2, 'sequence' => 3,
+        ]);
+        $this->post(route('admin.curricula.memberships.store', $secondCurriculum), [
+            'curriculum_stage_id' => $stage, 'subject_ids' => [$tenant['subject']], 'classification' => 'compulsory',
+            'credits' => '3.00', 'period_type' => 'semester', 'period_sequence' => 1, 'sequence' => 1,
+        ])->assertSessionHasErrors('subject_id');
+        $this->assertSame(1, DB::table('curriculum_memberships')->where('curriculum_id', $secondCurriculum)->count());
+        $reusedMembership = (int) DB::table('curriculum_memberships')->where('curriculum_id', $secondCurriculum)->where('subject_id', $tenant['subject'])->value('id');
+        $this->delete(route('admin.curricula.memberships.destroy', [$secondCurriculum, $reusedMembership]))->assertRedirect();
+        $this->assertDatabaseHas('subjects', ['id' => $tenant['subject'], 'school_id' => $tenant['school']]);
+        $this->assertDatabaseHas('curriculum_memberships', ['id' => $tenant['member'], 'curriculum_id' => $tenant['curriculum']]);
+    }
+
     public function test_academic_delete_buttons_open_one_labeled_modal_with_exact_record_and_safe_retention_details(): void
     {
         $tenant = $this->tenants[1];
@@ -279,10 +350,10 @@ class CourseOfferingAdministrationTest extends TestCase
             libxml_use_internal_errors($previous);
             $xpath = new \DOMXPath($dom);
             $this->assertSame(0, $xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
-            if ($name === 'curriculum-draft' || $name === 'curriculum-approved') {
-                foreach (['admin.course_offerings.create', 'admin.subject.setup', 'admin.programme_years.store'] as $route) {
-                    $this->assertSame(0, $xpath->query('//*[@id="page-print-area"]//a[starts-with(@href,"'.route($route).'")]')->length);
-                }
+            if ($name === 'curriculum-approved') {
+                $allocationLink = $xpath->query('//*[@id="page-print-area"]//a[starts-with(@href,"'.route('admin.course_offerings.create').'") and normalize-space(.)="Create Course Allocation"]');
+                $this->assertSame(1, $allocationLink->length, 'Approved curriculum should carry its context into the allocation action.');
+                $this->assertNotFalse(strpos($allocationLink->item(0)->getAttribute('class'), 'curriculum-no-print'));
             }
             if (getenv('PIIE_CAPTURE_PROGRAMME_WORKSPACE') === '1') {
                 $directory = base_path('output/programme-workspace-browser');
@@ -297,7 +368,7 @@ class CourseOfferingAdministrationTest extends TestCase
         $tenant = $this->tenants[1];
         $id = $tenant['curriculum'];
         $this->actingAs($this->staff(1, [], ['role_id' => 2]));
-        $ownerPage = $this->get(route('admin.curricula.show', $id))->assertOk()->assertSee('Owner curriculum controls');
+        $ownerPage = $this->get(route('admin.curricula.show', $id))->assertOk()->assertSee('Manage Curriculum');
         if (getenv('PIIE_CAPTURE_PROGRAMME_WORKSPACE') === '1') {
             file_put_contents(base_path('output/programme-workspace-browser/curriculum-owner-approved.html'), $ownerPage->getContent());
         }
@@ -326,7 +397,7 @@ class CourseOfferingAdministrationTest extends TestCase
     {
         $tenant = $this->tenants[1];
         $this->actingAs($this->staff(1, ['academic.curriculum.view', 'academic.curriculum.manage', 'academic.curriculum.approve']));
-        $this->get(route('admin.curricula.show', $tenant['curriculum']))->assertOk()->assertDontSee('Owner curriculum controls');
+        $this->get(route('admin.curricula.show', $tenant['curriculum']))->assertOk()->assertSee('Manage Curriculum')->assertDontSee('Owner action');
         $this->post(route('admin.curricula.owner_status', $tenant['curriculum']), ['status' => 'draft', 'reason' => 'Not an owner'])->assertForbidden();
         $this->assertDatabaseHas('curricula', ['id' => $tenant['curriculum'], 'status' => 'approved']);
         try {
