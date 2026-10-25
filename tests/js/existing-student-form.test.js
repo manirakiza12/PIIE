@@ -16,21 +16,25 @@ function formMarkup() {
       <div id="cohort-context" role="status"></div>
       <script type="application/json" id="cohort-entry-year-map">{"10|20":["2026/27"],"11|21":["2027/28"]}</script>
       <input type="checkbox" id="record_fees" checked>
+      <p id="finance-optional-copy">Optional — leave unchecked to add the student without an invoice.</p>
+      <div id="finance-safeguard-copy">Recorded payments reduce the balance. Prior-payment claims, awards, and waivers need Finance approval.</div>
+      <details id="billing-help"><summary>How billing works</summary><p>The programme Fee Structure sets the amount; Academic Year supplies study context.</p></details>
       <div id="existing_student_fee_fields">
         <div class="row">
           <select id="fee_session_id">
-            <option value="">Choose</option><option value="40" data-academic-year-id="30" selected>Session A</option><option value="41" data-academic-year-id="31">Session B</option>
+            <option value="">Choose a Finance Session for this academic year</option><option value="40" data-academic-year-id="30" selected>Session A</option><option value="41" data-academic-year-id="31">Session B</option>
           </select>
-          <div id="fee-session-context-message" hidden></div>
+          <div id="fee-session-context-message" hidden><span id="fee-session-context-text"></span><a id="fee-session-manager-link" href="/admin/session_manager" hidden>Session Manager</a><span id="fee-session-context-suffix"></span></div>
           <select id="fee_structure_id">
             <option value="">Choose fee</option><option value="50" data-name="Fee A" data-fee-type="tuition" data-per-semester="1" data-programme-id="10" data-session-id="40" data-session-academic-year-id="30" data-amount="1500000.00" selected>Fee A · Tuition · UGX 1,500,000 · Per semester</option><option value="51" data-name="Fee B" data-fee-type="tuition" data-per-semester="1" data-programme-id="11" data-session-id="41" data-session-academic-year-id="31" data-amount="600000.00">Fee B · Tuition · UGX 600,000 · Per semester</option><option value="52" data-name="Registration" data-fee-type="registration" data-per-semester="0" data-programme-id="10" data-session-id="" data-amount="100000.00">Registration</option>
           </select>
           <div id="fee-structure-context-message" hidden></div>
-          <output id="selected-fee-amount" data-currency="UGX"></output>
-          <div id="fee-billing-basis"></div>
+          <output id="selected-fee-amount" data-currency="UGX">Choose a fee to view its amount</output>
           <output id="invoice-period-summary"></output>
-          <output id="remaining-fee-balance"></output>
+          <label for="received_payment_amount">Confirmed amount received</label>
           <input id="received_payment_amount" value="0">
+          <label for="remaining-fee-balance">Remaining balance</label>
+          <output id="remaining-fee-balance">Choose a fee to calculate</output>
           <div id="received-payment-context-message" hidden></div>
           <div id="received_payment_details" hidden><input id="received_payment_reference"></div>
           <input id="prior_paid_amount" value="0">
@@ -52,7 +56,7 @@ function buildForm() {
   return dom;
 }
 
-test('fee sessions are filtered by academic year and a stale session and fee type are cleared', () => {
+test('Finance copy is concise and fee sessions and fees follow the selected academic context', () => {
   const dom = buildForm();
   const document = dom.window.document;
   const year = document.getElementById('fee_academic_year_id');
@@ -67,9 +71,14 @@ test('fee sessions are filtered by academic year and a stale session and fee typ
   assert.equal(fee.options[2].hidden, true);
   assert.match(document.getElementById('selected-fee-amount').textContent, /1,500,000/);
   assert.match(document.getElementById('remaining-fee-balance').textContent, /1,500,000/);
-  assert.match(document.getElementById('selected-fee-amount').textContent, /Tuition/);
-  assert.match(document.getElementById('fee-billing-basis').textContent, /Per semester.*full configured amount.*no multiplier/);
+  assert.equal(document.getElementById('selected-fee-amount').textContent, 'Programme fee: UGX 1,500,000.00 per semester (Tuition · Fee A).');
   assert.match(document.getElementById('invoice-period-summary').textContent, /2026\/27.*Session A/);
+  assert.equal(document.getElementById('finance-optional-copy').textContent, 'Optional — leave unchecked to add the student without an invoice.');
+  assert.equal(document.getElementById('finance-safeguard-copy').textContent, 'Recorded payments reduce the balance. Prior-payment claims, awards, and waivers need Finance approval.');
+  assert.equal(document.querySelector('#billing-help summary').textContent, 'How billing works');
+  assert.equal(document.getElementById('billing-help').open, false, 'Detailed billing guidance stays collapsed until requested');
+  assert.equal(document.querySelector('label[for="received_payment_amount"]').textContent, 'Confirmed amount received');
+  assert.equal(document.querySelector('label[for="remaining-fee-balance"]').textContent, 'Remaining balance');
 
   const received = document.getElementById('received_payment_amount');
   const balance = document.getElementById('remaining-fee-balance');
@@ -87,9 +96,11 @@ test('fee sessions are filtered by academic year and a stale session and fee typ
   assert.equal(session.value, '', 'A session from another academic year cannot remain selected');
   assert.equal(session.options[1].hidden, true);
   assert.equal(session.options[2].hidden, false);
-  assert.match(document.getElementById('fee-session-context-message').textContent, /previous session belongs to another year/);
+  assert.equal(document.getElementById('fee-session-context-message').hidden, false, 'A cleared stale session leaves an actionable warning');
+  assert.match(document.getElementById('fee-session-context-text').textContent, /That Finance Session belongs to another year/);
+  assert.equal(document.getElementById('fee-session-manager-link').hidden, true, 'The Session Manager link only appears when no session is linked');
   assert.equal(fee.value, '', 'A fee restricted to the old session cannot remain selected');
-  assert.match(document.getElementById('selected-fee-amount').textContent, /Select a Fee type/);
+  assert.match(document.getElementById('selected-fee-amount').textContent, /Choose a fee/);
   dom.window.close();
 });
 
@@ -111,11 +122,12 @@ test('programme and intake changes refresh fee-type and cohort-year context inde
   programme.value = '11';
   programme.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   assert.equal(fee.value, '', 'A programme restricted fee is cleared when the programme changes');
+  assert.equal(document.getElementById('fee-structure-context-message').textContent, 'That fee does not match the selected programme and Finance Session. Choose a matching fee.');
   assert.equal(fee.options[1].hidden, true);
   assert.equal(fee.options[2].hidden, false, 'The new programme and selected session fee is refreshed');
   fee.value = '51';
   fee.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-  assert.match(document.getElementById('selected-fee-amount').textContent, /600,000/, 'Selecting a programme Fee Structure displays its configured amount');
+  assert.match(document.getElementById('selected-fee-amount').textContent, /600,000.*per semester/, 'Selecting a programme Fee Structure displays its configured amount and semester basis');
   assert.match(document.getElementById('remaining-fee-balance').textContent, /600,000/);
   assert.match(context.textContent, /No configured cohort links/);
 
@@ -194,14 +206,14 @@ test('an academic year with no Finance Session explains setup, keeps programme f
   assert.equal(session.value, '');
   assert.equal(session.disabled, true);
   const fee = document.getElementById('fee_structure_id');
-  assert.match(document.getElementById('fee-session-context-message').textContent, /No Finance Session is linked.*create or edit a Finance Session.*Session Manager/);
+  assert.equal(document.getElementById('fee-session-context-message').textContent, 'No Finance Session is linked to this year. Link one in Session Manager to create the invoice.');
+  assert.equal(document.getElementById('fee-session-manager-link').hidden, false, 'The warning provides a direct Session Manager link');
   assert.equal(fee.disabled, false, 'A missing accounting period does not disable programme Fee Structure selection');
   assert.equal(fee.options[3].hidden, false, 'A non-semester programme fee remains visible independently of the missing session');
   fee.value = '52';
   fee.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-  assert.match(document.getElementById('selected-fee-amount').textContent, /Registration.*100,000/);
-  assert.match(document.getElementById('fee-billing-basis').textContent, /Not charged per semester/);
-  assert.match(document.getElementById('invoice-period-summary').textContent, /No Finance Session is linked/);
+  assert.equal(document.getElementById('selected-fee-amount').textContent, 'Programme fee: UGX 100,000.00 as configured (Registration · Registration).');
+  assert.equal(document.getElementById('invoice-period-summary').textContent, '');
   const submit = new dom.window.Event('submit', { bubbles: true, cancelable: true });
   form.dispatchEvent(submit);
   assert.equal(submit.defaultPrevented, true, 'Finance cannot submit an invoice without a session for the selected year');
