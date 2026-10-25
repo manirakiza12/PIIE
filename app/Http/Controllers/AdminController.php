@@ -2202,34 +2202,13 @@ class AdminController extends Controller
                 ->where(fn ($query) => $query->whereNull('session_id')->orWhere('session_id', $session->id))
                 ->where(fn ($query) => $query->whereNull('programme_id')->orWhere('programme_id', $data['programme_id'] ?? null))
                 ->firstOrFail();
-            if (StudentFeeManager::where('school_id', $schoolId)->where('student_id', $student->id)
-                ->where('fee_structure_id', $structure->id)->where('session_id', $session->id)->exists()) {
-                throw ValidationException::withMessages(['fee_structure_id' => 'An invoice already exists for this student, fee and study period. Open that invoice to record the prior payment.']);
-            }
-
-            $configuredFeeMinor = \App\Support\Payments\DecimalAmount::minorUnits($structure->amount);
-            if ($configuredFeeMinor === null || $configuredFeeMinor !== $feeAmountMinor) {
-                throw ValidationException::withMessages(['fee_structure_id' => 'The configured programme fee changed. Reload the form and try again.']);
-            }
-            $configuredFee = \App\Support\Payments\DecimalAmount::decimal($configuredFeeMinor);
-            $invoice = StudentFeeManager::create([
-                'title' => $structure->name . ' — ' . $session->session_title, 'amount' => $configuredFee, 'discounted_price' => 0, 'total_amount' => $configuredFee,
-                'class_id' => 0, 'programme_id' => $data['programme_id'] ?? null, 'student_id' => $student->id,
-                'fee_structure_id' => $structure->id, 'parent_id' => $student->parent_id, 'payment_method' => 'unpaid',
-                'paid_amount' => 0, 'status' => 'unpaid', 'school_id' => $schoolId, 'session_id' => $session->id,
-                'timestamp' => strtotime(date('d-M-Y')),
-            ]);
-
-            if ($receivedPaymentMinor > 0) {
-                app(\App\Support\Payments\ManualStudentTuitionPayment::class)->record(auth()->user(), (int) $invoice->id, [
-                    'amount' => \App\Support\Payments\DecimalAmount::decimal($receivedPaymentMinor),
-                    'paid_on' => $request->input('received_payment_on'),
-                    'method' => $request->input('received_payment_method'),
-                    'reference' => $request->input('received_payment_reference'),
-                    'reason' => $request->input('received_payment_reason'),
-                ]);
-            }
-
+            $confirmedPayment = $receivedPaymentMinor > 0 ? [
+                'amount' => \App\Support\Payments\DecimalAmount::decimal($receivedPaymentMinor),
+                'paid_on' => $request->input('received_payment_on'), 'method' => $request->input('received_payment_method'),
+                'reference' => $request->input('received_payment_reference'), 'reason' => $request->input('received_payment_reason'),
+            ] : null;
+            $invoice = app(\App\Support\Billing\ExistingStudentInvoiceSetup::class)
+                ->create(auth()->user(), $student, $session, $structure, $feeAmountMinor, $confirmedPayment);
             $priorPayment = $priorMinor > 0 ? [
                 'amount' => \App\Support\Payments\DecimalAmount::decimal($priorMinor),
                 'paid_on' => $request->input('prior_paid_on'), 'method' => $request->input('prior_payment_method'),
@@ -2322,11 +2301,92 @@ class AdminController extends Controller
         return view('admin.student.edit_student', $view_data);
     }
 
+    public function studentInvoiceSetup(Request $request, $id)
+    {
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.invoices'), 403);
+        $student = $this->findStudentOrFail($id);
+        $profile = StudentProfile::where('user_id', $student->id)->where('school_id', $student->school_id)->first();
+        $school = School::findOrFail($student->school_id);
+        $yearId = (int) ($request->input('fee_academic_year_id') ?: ($school->current_academic_year_id ?? 0));
+        $academicYears = AcademicYear::where('school_id', $student->school_id)->orderByDesc('start_date')->get();
+        $year = $academicYears->firstWhere('id', $yearId);
+        $sessions = $year ? Session::where('school_id', $student->school_id)->where('academic_year_id', $year->id)->orderByDesc('id')->get() : collect();
+        $programme = $profile?->programme_id
+            ? Programme::where('school_id', $student->school_id)->whereKey($profile->programme_id)->first()
+            : null;
+        $structures = $programme ? FeeStructure::where('school_id', $student->school_id)->where('is_mandatory', 1)
+            ->whereNull('class_id')->where(fn ($q) => $q->whereNull('programme_id')->orWhere('programme_id', $programme->id))
+            ->orderBy('name')->get() : collect();
+        $invoices = StudentFeeManager::where('school_id', $student->school_id)->where('student_id', $student->id)->orderByDesc('id')->get();
+        $area = match ((int) $request->user()->role_id) { 4 => 'accountant', 11 => 'bursar', default => 'admin' };
+
+        return view('admin.student.invoice_setup', compact('student', 'profile', 'programme', 'academicYears', 'year', 'sessions', 'structures', 'invoices', 'area'));
+    }
+
+    public function studentInvoiceCreate(Request $request, $id)
+    {
+        $actor = $request->user();
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($actor, 'finance.invoices'), 403);
+        $canRecordPayment = app(\App\Support\Permissions\PermissionService::class)->allows($actor, 'finance.payments');
+        $student = $this->findStudentOrFail($id);
+        $schoolId = (int) $student->school_id;
+        $request->validate([
+            'fee_academic_year_id' => ['required', 'integer', Rule::exists('academic_years', 'id')->where('school_id', $schoolId)],
+            'fee_session_id' => ['required', 'integer', Rule::exists('sessions', 'id')->where('school_id', $schoolId)->where('academic_year_id', (int) $request->input('fee_academic_year_id'))],
+            'fee_structure_id' => ['required', 'integer', Rule::exists('fee_structures', 'id')->where('school_id', $schoolId)],
+            'received_payment_amount' => ['nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
+        ]);
+        $profile = StudentProfile::where('user_id', $student->id)->where('school_id', $schoolId)->first();
+        if (! $profile?->programme_id || ! Programme::where('school_id', $schoolId)->whereKey($profile->programme_id)->exists()) {
+            throw ValidationException::withMessages(['fee_structure_id' => 'Complete the student’s programme details before setting up an invoice.']);
+        }
+        $session = Session::where('school_id', $schoolId)->whereKey((int) $request->input('fee_session_id'))
+            ->where('academic_year_id', (int) $request->input('fee_academic_year_id'))->firstOrFail();
+        $structure = FeeStructure::where('school_id', $schoolId)->whereKey((int) $request->input('fee_structure_id'))
+            ->where('is_mandatory', 1)->whereNull('class_id')
+            ->where(fn ($q) => $q->whereNull('session_id')->orWhere('session_id', $session->id))
+            ->where(fn ($q) => $q->whereNull('programme_id')->orWhere('programme_id', $profile->programme_id))->first();
+        if (! $structure) throw ValidationException::withMessages(['fee_structure_id' => 'Choose a mandatory Fee Structure configured for this programme and Finance Session.']);
+        $feeMinor = \App\Support\Payments\DecimalAmount::minorUnits($structure->amount);
+        $paymentMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('received_payment_amount', '0')) ?? 0;
+        if ($feeMinor === null || $feeMinor <= 0 || $paymentMinor < 0 || $paymentMinor > $feeMinor) {
+            throw ValidationException::withMessages(['received_payment_amount' => 'The confirmed payment must be zero or within the configured programme fee.']);
+        }
+        if ($paymentMinor > 0) {
+            abort_unless($canRecordPayment, 403);
+            $request->validate([
+                'received_payment_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+                'received_payment_method' => ['required', 'in:cash,bank_transfer,mobile_money,card,cheque,other'],
+                'received_payment_reference' => ['required', 'string', 'max:150'],
+                'received_payment_reason' => ['required', 'string', 'min:10', 'max:500'],
+            ]);
+        }
+
+        try {
+            $confirmedPayment = $paymentMinor > 0 ? [
+                'amount' => \App\Support\Payments\DecimalAmount::decimal($paymentMinor),
+                'paid_on' => $request->input('received_payment_on'), 'method' => $request->input('received_payment_method'),
+                'reference' => $request->input('received_payment_reference'), 'reason' => $request->input('received_payment_reason'),
+            ] : null;
+            $invoice = app(\App\Support\Billing\ExistingStudentInvoiceSetup::class)
+                ->create($actor, $student, $session, $structure, $feeMinor, $confirmedPayment);
+        } catch (QueryException $exception) {
+            report($exception);
+            return redirect()->back()->withInput()->with('error', 'Invoice setup failed. No invoice or payment was saved.');
+        }
+        $area = match ((int) $actor->role_id) { 4 => 'accountant', 11 => 'bursar', default => 'admin' };
+        return redirect()->route($area . '.student.invoice_setup', $student->id)->with('message', 'Invoice created successfully. Remaining balance: ' . school_currency(($feeMinor - $paymentMinor) / 100) . '.');
+    }
+
     public function studentUpdate(Request $request, $id)
     {
         $data = $request->all();
         $profileOnly = academic_education_level((int) auth()->user()->school_id) === 'tertiary';
-        if ($profileOnly) {
+        // The current form sends placement controls only when its explicit
+        // checkbox enables them. Keep accepting a supplied class_id as an
+        // intentional placement update for existing callers of this route.
+        $updatePlacement = ! $profileOnly && ($request->boolean('update_placement') || $request->filled('class_id'));
+        if (! $updatePlacement) {
             unset($data['class_id'], $data['section_id'], $data['session_id'], $data['department_id']);
         }
 
@@ -2340,6 +2400,8 @@ class AdminController extends Controller
 
         $request->validate([
             'name'  => 'required|max:255',
+            'first_name' => 'nullable|string|max:100',
+            'last_name' => 'nullable|string|max:100',
             'email' => 'required|email|max:255',
             'programme_id'     => 'nullable|exists:programmes,id,school_id,' . auth()->user()->school_id,
             'intake_session_id' => 'nullable|exists:intake_sessions,id,school_id,' . auth()->user()->school_id,
@@ -2351,13 +2413,18 @@ class AdminController extends Controller
             'next_of_kin_contact'  => 'nullable|max:30',
             'status'            => 'nullable|in:active,suspended,graduated,withdrawn,deferred',
             'additional_photo'  => 'nullable|mimes:jpg,jpeg,png|max:4096',
-            'class_id'          => $profileOnly ? 'exclude' : 'required|integer|exists:classes,id',
-            'section_id'        => $profileOnly ? 'exclude' : 'nullable|integer|exists:sections,id',
-            'session_id'        => $profileOnly ? 'exclude' : 'nullable|integer|exists:sessions,id',
-            'department_id'     => $profileOnly ? 'exclude' : 'nullable|integer|exists:departments,id',
+            'update_placement'  => ['nullable', 'boolean'],
+            'class_id'          => $updatePlacement ? 'required|integer|exists:classes,id' : 'exclude',
+            'section_id'        => $updatePlacement ? 'nullable|integer|exists:sections,id' : 'exclude',
+            'session_id'        => $updatePlacement ? 'nullable|integer|exists:sessions,id' : 'exclude',
+            'department_id'     => $updatePlacement ? 'nullable|integer|exists:departments,id' : 'exclude',
         ]);
 
-        if (! $profileOnly) {
+        if (! empty($data['first_name']) && ! empty($data['last_name'])) {
+            $data['name'] = trim($data['first_name'] . ' ' . $data['last_name']);
+        }
+
+        if ($updatePlacement) {
             $this->validateStudentAcademicScope($data);
         }
 
@@ -2401,25 +2468,31 @@ class AdminController extends Controller
                 'email'            => $data['email'],
                 'user_information' => $data['user_information'],
             ]);
+            if (Schema::hasColumn('users', 'first_name') && ! empty($data['first_name'])) $user->first_name = $data['first_name'];
+            if (Schema::hasColumn('users', 'last_name') && ! empty($data['last_name'])) $user->last_name = $data['last_name'];
+            if ((Schema::hasColumn('users', 'first_name') && ! empty($data['first_name']))
+                || (Schema::hasColumn('users', 'last_name') && ! empty($data['last_name']))) $user->save();
         }
 
-        if (! $profileOnly) {
-            // Class-based schools retain their class assignment workflow.
-            $schoolId = auth()->user()->school_id;
-            $runningSession = $data['session_id'] ?? get_school_settings($schoolId)->value('running_session')
-                ?: (Session::where('school_id', $schoolId)->where('status', 1)->value('id') ?? Session::value('id') ?? 1);
-            $previousEnrollment = Enrollment::where('user_id', $id)->where('school_id', $schoolId)->first();
-            $previousPlacement = $previousEnrollment ? StatusChangeAudit::placement($previousEnrollment) : null;
-            $enrollment = Enrollment::updateOrCreate(
-                ['user_id' => $id, 'school_id' => $schoolId],
-                [
-                    'class_id' => (int) $data['class_id'],
-                    'section_id' => (int) ($data['section_id'] ?? 0),
-                    'department_id' => (int) ($data['department_id'] ?? 0),
-                    'session_id' => (int) ($runningSession ?? 0),
-                ]
-            );
-            StatusChangeAudit::enrollment($enrollment, $previousPlacement, 'Student record edit');
+        if ($updatePlacement) {
+            DB::transaction(function () use ($data, $id): void {
+                // Class-based schools retain their class assignment workflow.
+                $schoolId = (int) auth()->user()->school_id;
+                $runningSession = $data['session_id'] ?? get_school_settings($schoolId)->value('running_session')
+                    ?: (Session::where('school_id', $schoolId)->where('status', 1)->value('id') ?? Session::value('id') ?? 1);
+                $previousEnrollment = Enrollment::where('user_id', $id)->where('school_id', $schoolId)->lockForUpdate()->first();
+                $previousPlacement = $previousEnrollment ? StatusChangeAudit::placement($previousEnrollment) : null;
+                $enrollment = Enrollment::updateOrCreate(
+                    ['user_id' => $id, 'school_id' => $schoolId],
+                    [
+                        'class_id' => (int) $data['class_id'],
+                        'section_id' => (int) ($data['section_id'] ?? 0),
+                        'department_id' => (int) ($data['department_id'] ?? 0),
+                        'session_id' => (int) ($runningSession ?? 0),
+                    ]
+                );
+                StatusChangeAudit::enrollment($enrollment, $previousPlacement, 'Student record edit');
+            });
         }
 
         $additionalImageName = null;
@@ -2428,8 +2501,11 @@ class AdminController extends Controller
             $request->file('additional_photo')->move(public_path('assets/uploads/user-images/'), $additionalImageName);
         }
 
+        $existingStudentProfile = StudentProfile::where('user_id', $id)->where('school_id', auth()->user()->school_id)->first();
         $profileData = [
             'school_id'               => auth()->user()->school_id,
+            'first_name'              => ! empty($data['first_name']) ? $data['first_name'] : ($existingStudentProfile?->first_name ?? $student->first_name),
+            'last_name'               => ! empty($data['last_name']) ? $data['last_name'] : ($existingStudentProfile?->last_name ?? $student->last_name),
             'programme_id'            => $data['programme_id'] ?? null,
             'intake_session_id'       => $data['intake_session_id'] ?? null,
             'year_of_study'           => $data['year_of_study'] ?? null,

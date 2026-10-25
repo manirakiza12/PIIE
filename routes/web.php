@@ -675,6 +675,8 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
     Route::get('admin/student/id_card/{id}', 'studentIdCardGenerate')->name('admin.student.id_card');
     Route::get('admin/student/edit/{id}', 'studentEditModal')->name('admin.student_edit_modal');
     Route::post('admin/student/{id}', 'studentUpdate')->name('admin.student.update');
+    Route::get('admin/student/{id}/invoice/setup', [AdminController::class, 'studentInvoiceSetup'])->name('admin.student.invoice_setup');
+    Route::post('admin/student/{id}/invoice', [AdminController::class, 'studentInvoiceCreate'])->name('admin.student.invoice_create');
     Route::delete('admin/student/delete/{id}', 'studentDelete')->name('admin.student.delete');
     Route::get('admin/student/student_profile/{id}', 'studentProfile')->name('admin.student.student_profile');
     Route::get('admin/student/export-excel', 'studentListExportExcel')->name('admin.student.export_excel')->middleware('admin_permission');
@@ -1580,6 +1582,8 @@ Route::controller(AccountantController::class)->middleware('accountant', 'auth')
 
     //Fee manager routes
     Route::get('accountant/student_fee_manager', 'studentFeeManagerList')->name('accountant.fee_manager.list');
+    Route::get('accountant/students/{id}/invoice/setup', [AdminController::class, 'studentInvoiceSetup'])->name('accountant.student.invoice_setup');
+    Route::post('accountant/students/{id}/invoice', [AdminController::class, 'studentInvoiceCreate'])->name('accountant.student.invoice_create');
     Route::get('accountant/student_fee_manager/export/{date_from}/{date_to}/{selected_class}/{selected_status}', 'feeManagerExport')->name('accountant.fee_manager.export');
     Route::get('accountant/student_fee_manager/pdf_print/{date_from}/{date_to}/{selected_class}/{selected_status}', 'feeManagerExportPdfPrint')->name('accountant.fee_manager.pdf_print');
     Route::get('accountant/fee_manager_create/{value}', 'createFeeManager')->name('accountant.fee_manager.open_modal');
@@ -1643,6 +1647,8 @@ Route::controller(AccountantController::class)->middleware('accountant', 'auth')
 Route::controller(AccountantController::class)->middleware('bursar', 'auth')->group(function () {
     Route::get('bursar/dashboard', 'accountantDashboard')->name('bursar.dashboard')->middleware('role_id');
     Route::get('bursar/student_fee_manager', 'studentFeeManagerList')->name('bursar.fee_manager.list');
+    Route::get('bursar/students/{id}/invoice/setup', [AdminController::class, 'studentInvoiceSetup'])->name('bursar.student.invoice_setup');
+    Route::post('bursar/students/{id}/invoice', [AdminController::class, 'studentInvoiceCreate'])->name('bursar.student.invoice_create');
     Route::get('bursar/student_fee_manager/export/{date_from}/{date_to}/{selected_class}/{selected_status}', 'feeManagerExport')->name('bursar.fee_manager.export');
     Route::get('bursar/student_fee_manager/pdf_print/{date_from}/{date_to}/{selected_class}/{selected_status}', 'feeManagerExportPdfPrint')->name('bursar.fee_manager.pdf_print');
     Route::get('bursar/fee_manager_create/{value}', 'createFeeManager')->name('bursar.fee_manager.open_modal');

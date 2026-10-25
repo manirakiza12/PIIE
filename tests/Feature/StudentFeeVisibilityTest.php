@@ -186,10 +186,14 @@ class StudentFeeVisibilityTest extends TestCase
         $this->assertSame(0, $this->summary($new, ['fee_search' => $new->code])->fee_summary['balance']);
         $this->get(route('admin.fee_manager.list', ['fee_search' => $existing->code]))->assertOk()
             ->assertViewHas('feeStudents', fn ($rows) => $rows->count() === 1 && $rows->first()->sessionInvoices->isEmpty())
-            ->assertSee('Needs invoice for this session')->assertDontSee('Fully settled');
+            ->assertSee('Needs invoice for this session')->assertDontSee('Fully settled')
+            ->assertSee(route('admin.student.invoice_setup', ['id' => $existing->id]));
+        $this->assertSame(0, StudentFeeManager::where('student_id', $existing->id)->count(), 'Viewing Fee Manager never creates an invoice.');
         $accountant = User::create(['school_id' => $this->school, 'role_id' => 4, 'name' => 'Finance', 'email' => 'finance@test.test']);
         $this->actingAs($accountant)->get(route('accountant.fee_manager.list', ['fee_search' => $new->code, 'fee_session_id' => $this->session]))
             ->assertOk()->assertSee('Fully settled')->assertSee(route('accountant.tuition_payments.show', StudentFeeManager::first()->id));
+        $this->get(route('accountant.fee_manager.list', ['fee_search' => $existing->code, 'fee_session_id' => $this->session]))
+            ->assertOk()->assertSee(route('accountant.student.invoice_setup', ['id' => $existing->id]));
     }
 
     public function test_multiple_invoices_are_not_multiplied_by_payment_or_award_history(): void
