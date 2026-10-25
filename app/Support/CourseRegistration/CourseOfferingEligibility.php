@@ -130,6 +130,7 @@ class CourseOfferingEligibility
                 $join->on('st.id', '=', 'm.curriculum_stage_id')->where('st.school_id', '=', $schoolId);
             })
             ->where('x.school_id', $schoolId)->where('x.course_offering_id', $offering->id)
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('st.archived_at'))
             ->where('x.curriculum_id', $assignment->curriculum_id)->where('m.curriculum_id', $assignment->curriculum_id)
             ->where('x.subject_id', $offering->subject_id)->where('m.subject_id', $offering->subject_id)
             ->get(['m.id', 'm.curriculum_stage_id', 'm.period_type', 'm.period_sequence', 'st.label as stage_label']);

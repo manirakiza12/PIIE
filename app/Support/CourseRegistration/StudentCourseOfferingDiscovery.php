@@ -95,6 +95,9 @@ class StudentCourseOfferingDiscovery
             ->join('curriculum_memberships as m', function ($join) use ($schoolId): void {
                 $join->on('m.id', '=', 'x.curriculum_membership_id')->on('m.school_id', '=', 'x.school_id');
             })
+            ->leftJoin('curriculum_stages as stage', function ($join) use ($schoolId): void {
+                $join->on('stage.id', '=', 'm.curriculum_stage_id')->on('stage.school_id', '=', 'm.school_id');
+            })
             ->join('subjects as s', function ($join) use ($schoolId): void {
                 $join->on('s.id', '=', 'o.subject_id')->on('s.school_id', '=', 'o.school_id');
             })
@@ -105,6 +108,7 @@ class StudentCourseOfferingDiscovery
                 $join->on('ap.id', '=', 'o.academic_period_id')->on('ap.school_id', '=', 'o.school_id');
             })
             ->where('x.school_id', $schoolId)->where('x.curriculum_id', $curriculum->id)
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('stage.archived_at'))
             ->where('o.school_id', $schoolId)->where('o.status', 'open')
             ->where('o.academic_year_id', $year->id)->where('o.academic_period_id', $period->id)
             ->where('ap.academic_year_id', $year->id)

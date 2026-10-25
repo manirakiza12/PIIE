@@ -63,6 +63,7 @@ class DirectAcademicPlacementController extends Controller
         $years = AcademicYear::where('school_id', $schoolId)->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")->orderByDesc('start_date')->get(['id', 'label', 'status', 'start_date', 'end_date']);
         $curricula = Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with('programme')->orderByDesc('created_at')->get(['id', 'programme_id', 'version']);
         $stages = CurriculumStage::where('curriculum_stages.school_id', $schoolId)
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('curriculum_stages.archived_at'))
             ->join('curricula', function ($join) use ($schoolId): void {
                 $join->on('curricula.id', '=', 'curriculum_stages.curriculum_id')->where('curricula.school_id', $schoolId)->where('curricula.status', 'approved');
             })->orderBy('curriculum_stages.sequence')->get(['curriculum_stages.id', 'curriculum_stages.curriculum_id', 'curriculum_stages.label', 'curriculum_stages.sequence']);

@@ -640,6 +640,13 @@ class CourseOfferingService
         if ((int) $membership->subject_id !== (int) $offering->subject_id) {
             throw new DomainException('This Study Plan entry is for a different Course Unit.');
         }
+        $archivedStage = Schema::hasColumn('curriculum_stages', 'archived_at')
+            && \App\Models\CurriculumStage::where('school_id', $offering->school_id)
+            ->where('curriculum_id', $membership->curriculum_id)
+            ->whereNotNull('archived_at')->whereKey($membership->curriculum_stage_id)->exists();
+        if ($archivedStage) {
+            throw new DomainException('An archived Programme Year cannot be used for a new Course Allocation link.');
+        }
         $curriculum = Curriculum::where('school_id', $offering->school_id)->whereKey($membership->curriculum_id)->first();
         if (! $curriculum || $curriculum->status !== 'approved') {
             throw new DomainException('Only an approved Study Plan may be linked to this Course Allocation.');

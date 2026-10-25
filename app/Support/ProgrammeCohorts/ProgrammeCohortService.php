@@ -248,6 +248,7 @@ class ProgrammeCohortService
                 throw new DomainException('Academic placement requires an active Programme Cohort.');
             }
             $stage = CurriculumStage::where('school_id', $schoolId)
+                ->when(\Illuminate\Support\Facades\Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($q) => $q->whereNull('archived_at'))
                 ->where('curriculum_id', $cohort->curriculum_id)->whereKey($stageId)->first();
             if (! $stage) {
                 $this->fail('entry_curriculum_stage_id', 'Select an Entry Stage from this Programme Study Plan.');

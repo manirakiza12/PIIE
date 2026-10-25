@@ -9,8 +9,10 @@ use App\Models\CurriculumStage;
 use App\Models\Programme;
 use App\Models\Subject;
 use App\Support\Curriculum\CurriculumFoundationService;
+use App\Support\Curriculum\CurriculumOwnerAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class CurriculumController extends Controller
@@ -136,7 +138,9 @@ class CurriculumController extends Controller
         $curriculum = $this->tenantCurriculum($request, $id);
         $curriculum->load([
             'programme.department', 'effectiveAcademicYear',
+            'stages' => fn ($query) => $query->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($stageQuery) => $stageQuery->whereNull('archived_at')),
             'stages.memberships.subject',
+            'memberships' => fn ($query) => $query->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($membershipQuery) => $membershipQuery->whereHas('stage', fn ($stageQuery) => $stageQuery->whereNull('archived_at'))),
             'memberships.stage', 'memberships.subject', 'memberships.prerequisites.subject',
         ]);
         $schoolId = (int) $request->user()->school_id;
@@ -169,7 +173,7 @@ class CurriculumController extends Controller
     {
         $curriculum = $this->tenantCurriculum($request, $id);
         $data = $request->validate(['label' => ['required', 'string', 'max:100'], 'sequence' => ['required', 'integer', 'min:1', 'max:65535']]);
-        $this->curricula->addStage($curriculum, $data['label'], (int) $data['sequence']);
+        $this->mutateStage($request, $curriculum, fn () => $this->curricula->addStage($curriculum, $data['label'], (int) $data['sequence']));
         $request->session()->forget('errors');
         return back()->with('success', 'Programme Year added.');
     }
@@ -179,7 +183,7 @@ class CurriculumController extends Controller
         $curriculum = $this->tenantCurriculum($request, $id);
         $stage = $this->tenantStage($curriculum, $stageId);
         $data = $request->validate(['label' => ['required', 'string', 'max:100'], 'sequence' => ['required', 'integer', 'min:1', 'max:65535']]);
-        $this->curricula->updateStage($curriculum, $stage, $data['label'], (int) $data['sequence']);
+        $this->mutateStage($request, $curriculum, fn () => $this->curricula->updateStage($curriculum, $stage, $data['label'], (int) $data['sequence']));
         return back()->with('success', 'Programme Year updated.');
     }
 
@@ -188,15 +192,23 @@ class CurriculumController extends Controller
         $curriculum = $this->tenantCurriculum($request, $id);
         $stage = $this->tenantStage($curriculum, $stageId);
         $data = $request->validate(['direction' => ['required', Rule::in(['up', 'down'])]]);
-        $this->curricula->moveStage($curriculum, $stage, $data['direction']);
+        $this->mutateStage($request, $curriculum, fn () => $this->curricula->moveStage($curriculum, $stage, $data['direction']));
         return back()->with('success', 'Programme Year order updated.');
     }
 
     public function destroyStage(Request $request, int $id, int $stageId)
     {
         $curriculum = $this->tenantCurriculum($request, $id);
-        $this->curricula->removeStage($curriculum, $this->tenantStage($curriculum, $stageId));
-        return back()->with('success', 'Programme Year removed.');
+        $stage = $this->tenantStage($curriculum, $stageId);
+        $phrase = $stage->label.' — '.($curriculum->programme?->name ?? 'Programme').' — '.$curriculum->version;
+        $request->validate(['confirmation' => ['required', 'string', Rule::in([$phrase])]]);
+        $result = null;
+        $this->mutateStage($request, $curriculum, function () use ($curriculum, $stage, &$result): void {
+            $result = $this->curricula->removeStage($curriculum, $stage);
+        });
+        return back()->with('success', $result['outcome'] === 'archived'
+            ? 'Programme Year archived because historical records reference it; the records were preserved.'
+            : 'Programme Year and its owned placements and prerequisite links were removed. Shared Course Units and history were preserved.');
     }
 
     public function searchSubjects(Request $request, int $id)
@@ -311,9 +323,29 @@ class CurriculumController extends Controller
         return Curriculum::where('school_id', (int) $request->user()->school_id)->findOrFail($id);
     }
 
+    private function mutateStage(Request $request, Curriculum $curriculum, callable $mutation): void
+    {
+        DB::transaction(function () use ($request, $curriculum, $mutation): void {
+            $locked = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
+            $reopened = false;
+            if ($locked->status !== 'draft') {
+                abort_unless(CurriculumOwnerAccess::allows($request->user(), (int) $locked->school_id), 403);
+                $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
+                $this->curricula->ownerChangeStatus($locked, 'draft', $data['reason']);
+                $reopened = true;
+            }
+            $mutation();
+            if ($reopened) {
+                $request->session()->flash('curriculum_reopened', true);
+            }
+        });
+    }
+
     private function tenantStage(Curriculum $curriculum, int $id): CurriculumStage
     {
-        return CurriculumStage::where('school_id', $curriculum->school_id)->where('curriculum_id', $curriculum->id)->findOrFail($id);
+        return CurriculumStage::where('school_id', $curriculum->school_id)
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('archived_at'))
+            ->where('curriculum_id', $curriculum->id)->findOrFail($id);
     }
 
     private function tenantMembership(Curriculum $curriculum, int $id): CurriculumMembership
