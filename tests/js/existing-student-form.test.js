@@ -23,10 +23,14 @@ function formMarkup() {
           </select>
           <div id="fee-session-context-message" hidden></div>
           <select id="fee_structure_id">
-            <option value="">Choose fee</option><option value="50" data-programme-id="10" data-session-id="40" selected>Fee A</option><option value="51" data-programme-id="11" data-session-id="41">Fee B</option><option value="52" data-programme-id="" data-session-id="">General fee</option>
+            <option value="">Choose fee</option><option value="50" data-programme-id="10" data-session-id="40" data-amount="1500000.00" selected>Fee A</option><option value="51" data-programme-id="11" data-session-id="41" data-amount="600000.00">Fee B</option><option value="52" data-programme-id="" data-session-id="" data-amount="100000.00">General fee</option>
           </select>
           <div id="fee-structure-context-message" hidden></div>
-          <input id="actual_fee_amount">
+          <output id="selected-fee-amount" data-currency="UGX"></output>
+          <output id="remaining-fee-balance"></output>
+          <input id="received_payment_amount" value="0">
+          <div id="received-payment-context-message" hidden></div>
+          <div id="received_payment_details" hidden><input id="received_payment_reference"></div>
           <input id="prior_paid_amount" value="0">
         </div>
         <div id="prior_payment_details" hidden><input id="prior_paid_on"></div>
@@ -59,6 +63,18 @@ test('fee sessions are filtered by academic year and a stale session and fee typ
   assert.equal(session.options[2].hidden, true);
   assert.equal(fee.options[1].hidden, false);
   assert.equal(fee.options[2].hidden, true);
+  assert.match(document.getElementById('selected-fee-amount').textContent, /1,500,000/);
+  assert.match(document.getElementById('remaining-fee-balance').textContent, /1,500,000/);
+
+  const received = document.getElementById('received_payment_amount');
+  const balance = document.getElementById('remaining-fee-balance');
+  received.value = '250000';
+  received.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  assert.equal(document.getElementById('received_payment_details').hidden, false, 'Confirmed-payment details open for a positive amount');
+  assert.match(balance.textContent, /1,250,000/, 'Preview uses the configured programme fee less confirmed money');
+  received.value = '1600000';
+  received.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  assert.match(balance.textContent, /must not exceed/);
 
   year.value = '31';
   year.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
@@ -68,6 +84,7 @@ test('fee sessions are filtered by academic year and a stale session and fee typ
   assert.equal(session.options[2].hidden, false);
   assert.match(document.getElementById('fee-session-context-message').textContent, /previous session belongs to another year/);
   assert.equal(fee.value, '', 'A fee restricted to the old session cannot remain selected');
+  assert.match(document.getElementById('selected-fee-amount').textContent, /Select a Fee type/);
   dom.window.close();
 });
 
@@ -91,6 +108,10 @@ test('programme and intake changes refresh fee-type and cohort-year context inde
   assert.equal(fee.value, '', 'A programme restricted fee is cleared when the programme changes');
   assert.equal(fee.options[1].hidden, true);
   assert.equal(fee.options[2].hidden, false, 'The new programme and selected session fee is refreshed');
+  fee.value = '51';
+  fee.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  assert.match(document.getElementById('selected-fee-amount').textContent, /600,000/, 'Selecting a programme Fee Structure displays its configured amount');
+  assert.match(document.getElementById('remaining-fee-balance').textContent, /600,000/);
   assert.match(context.textContent, /No configured cohort links/);
 
   intake.value = '21';
@@ -116,14 +137,15 @@ test('finance remains optional and dependent review fields are disabled until se
   toggle.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   assert.equal(fields.hidden, true);
   assert.equal(session.disabled, true);
-  assert.equal(document.getElementById('actual_fee_amount').disabled, true);
+  assert.equal(document.getElementById('received_payment_amount').disabled, true);
+  assert.equal(document.getElementById('received_payment_reference').disabled, true);
   assert.equal(paymentDate.disabled, true);
 
   toggle.checked = true;
   toggle.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   assert.equal(fields.hidden, false);
   assert.equal(session.disabled, false);
-  assert.equal(document.getElementById('actual_fee_amount').disabled, false);
+  assert.equal(document.getElementById('received_payment_amount').disabled, false);
   assert.equal(paymentDate.disabled, true, 'Review details stay optional until a prior payment is entered');
   dom.window.close();
 });
@@ -146,7 +168,7 @@ test('Finance controls initialize after the current AJAX modal inserts its form'
   toggle.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   assert.equal(fields.hidden, false, 'Opening through AJAX and enabling Finance reveals its fields');
   assert.equal(session.disabled, false);
-  assert.equal(document.getElementById('actual_fee_amount').disabled, false);
+  assert.equal(document.getElementById('received_payment_amount').disabled, false);
   dom.window.close();
 });
 

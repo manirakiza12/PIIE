@@ -142,7 +142,7 @@
                     @error('record_fees')<div class="text-danger small mt-2" role="alert">{{ $message }}</div>@enderror
                     <p class="small text-muted mt-2 mb-0">Prior payments, awards, and waivers remain pending until Finance review.</p>
                     <div id="existing_student_fee_fields" @if(!old('record_fees')) hidden @endif>
-                        <div class="alert alert-light border" role="note">The agreed fee stays fully payable. Prior payments, awards, and waiver requests are stored for review and do not affect the balance or eligibility until an authorized reviewer confirms them.</div>
+                        <div class="alert alert-light border" role="note">The selected programme Fee Structure sets the invoice amount. Academic Year and Fee session place it in the right period. Unverified prior-payment claims, awards, and waivers do not reduce the balance or change eligibility.</div>
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="fee_session_id" class="form-label">Fee session <span class="text-danger" aria-hidden="true">*</span></label>
@@ -154,14 +154,14 @@
                                 </select>
                                 @error('fee_session_id')<div class="invalid-feedback" id="fee_session_id_error">{{ $message }}</div>@enderror
                                 <div class="form-text text-warning" id="fee-session-context-message" role="status" aria-live="polite" hidden></div>
-                                <div class="form-text" id="fee-session-help">Only legacy Finance sessions linked to the selected academic year are available. Academic semesters are separate records; invoices store a Finance session ID.</div>
+                                <div class="form-text" id="fee-session-help">This session places the invoice in its billing period. It does not determine the programme fee.</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="fee_structure_id" class="form-label">Fee type <span class="text-danger" aria-hidden="true">*</span></label>
                                 <select id="fee_structure_id" name="fee_structure_id" class="form-select @error('fee_structure_id') is-invalid @enderror" @if(!old('record_fees')) disabled @endif @if(old('record_fees')) required @endif>
                                     <option value="">Select a mandatory fee type</option>
                                     @foreach($feeStructures as $structure)
-                                        <option value="{{ $structure->id }}" data-programme-id="{{ $structure->programme_id ?? '' }}" data-session-id="{{ $structure->session_id ?? '' }}" @selected((string) old('fee_structure_id') === (string) $structure->id)>{{ $structure->name }} (standard {{ school_currency($structure->amount) }})</option>
+                                        <option value="{{ $structure->id }}" data-programme-id="{{ $structure->programme_id ?? '' }}" data-session-id="{{ $structure->session_id ?? '' }}" data-amount="{{ number_format((float) $structure->amount, 2, '.', '') }}" @selected((string) old('fee_structure_id') === (string) $structure->id)>{{ $structure->name }} ({{ school_currency($structure->amount) }})</option>
                                     @endforeach
                                 </select>
                                 @error('fee_structure_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -169,9 +169,48 @@
                                 @if($feeStructures->isEmpty())<div class="form-text text-danger">No mandatory institution or programme fee structures are configured. Finance must configure the correct fee before using this option.</div>@endif
                             </div>
                             <div class="col-md-6">
-                                <label for="actual_fee_amount" class="form-label">Student's agreed fee for this session ({{ school_currency() }}) <span class="text-danger" aria-hidden="true">*</span></label>
-                                <input id="actual_fee_amount" name="actual_fee_amount" type="number" min="0.01" step="0.01" class="form-control @error('actual_fee_amount') is-invalid @enderror" value="{{ old('actual_fee_amount') }}" @if(!old('record_fees')) disabled @endif @if(old('record_fees')) required @endif>
-                                @error('actual_fee_amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <label for="selected-fee-amount" class="form-label">Configured programme fee ({{ school_currency() }})</label>
+                                <output id="selected-fee-amount" class="form-control bg-light" aria-live="polite" data-currency="{{ school_currency() }}">Select a Fee type to view its amount</output>
+                                <div class="form-text">This configured amount is used to create the invoice.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="received_payment_amount" class="form-label">Confirmed payment received now ({{ school_currency() }}) <span class="text-muted small">Optional</span></label>
+                                <input id="received_payment_amount" name="received_payment_amount" type="number" min="0" step="0.01" class="form-control @error('received_payment_amount') is-invalid @enderror" value="{{ old('received_payment_amount', '0') }}" @if(!old('record_fees')) disabled @endif>
+                                @error('received_payment_amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <div class="form-text text-danger" id="received-payment-context-message" role="status" aria-live="polite" hidden></div>
+                                <div class="form-text">Enter money actually received and verified by an authorized Finance user.</div>
+                            </div>
+                            <div class="col-12 row g-3 mx-0 px-0" id="received_payment_details" @if(!old('record_fees') || (float) old('received_payment_amount', 0) <= 0) hidden @endif>
+                                <div class="col-md-6">
+                                    <label for="received_payment_on" class="form-label">Date received</label>
+                                    <input id="received_payment_on" name="received_payment_on" type="date" max="{{ date('Y-m-d') }}" class="form-control @error('received_payment_on') is-invalid @enderror" value="{{ old('received_payment_on', date('Y-m-d')) }}" @if(!old('record_fees') || (float) old('received_payment_amount', 0) <= 0) disabled @else required @endif>
+                                    @error('received_payment_on')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="received_payment_method" class="form-label">Payment method</label>
+                                    <select id="received_payment_method" name="received_payment_method" class="form-select @error('received_payment_method') is-invalid @enderror" @if(!old('record_fees') || (float) old('received_payment_amount', 0) <= 0) disabled @else required @endif>
+                                        <option value="">Select method</option>
+                                        @foreach(['cash' => 'Cash', 'bank_transfer' => 'Bank transfer', 'mobile_money' => 'Mobile money', 'card' => 'Card', 'cheque' => 'Cheque', 'other' => 'Other'] as $value => $label)
+                                            <option value="{{ $value }}" @selected(old('received_payment_method') === $value)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('received_payment_method')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="received_payment_reference" class="form-label">Receipt or transaction reference</label>
+                                    <input id="received_payment_reference" name="received_payment_reference" maxlength="150" class="form-control @error('received_payment_reference') is-invalid @enderror" value="{{ old('received_payment_reference') }}" @if(!old('record_fees') || (float) old('received_payment_amount', 0) <= 0) disabled @else required @endif>
+                                    @error('received_payment_reference')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="received_payment_reason" class="form-label">Verification note</label>
+                                    <textarea id="received_payment_reason" name="received_payment_reason" minlength="10" maxlength="500" class="form-control @error('received_payment_reason') is-invalid @enderror" @if(!old('record_fees') || (float) old('received_payment_amount', 0) <= 0) disabled @else required @endif>{{ old('received_payment_reason') }}</textarea>
+                                    @error('received_payment_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="remaining-fee-balance" class="form-label">Remaining balance preview ({{ school_currency() }})</label>
+                                <output id="remaining-fee-balance" class="form-control bg-light" aria-live="polite">Select a Fee type to calculate</output>
+                                <div class="form-text">The invoice and payment ledger are saved together; this preview alone does not post a payment.</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="prior_paid_amount" class="form-label">Prior payment to verify ({{ school_currency() }}) <span class="text-muted small">Optional</span></label>

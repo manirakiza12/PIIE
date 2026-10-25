@@ -2027,10 +2027,13 @@ class AdminController extends Controller
         $recordFees = $request->boolean('record_fees');
         $financialFields = ['fee_session_id', 'fee_structure_id', 'actual_fee_amount', 'prior_paid_amount',
             'prior_paid_on', 'prior_payment_method', 'prior_payment_reference', 'prior_payment_reason',
+            'received_payment_amount', 'received_payment_on', 'received_payment_method', 'received_payment_reference', 'received_payment_reason',
             'record_award', 'award_type', 'award_amount', 'award_reference', 'award_reason',
             'record_study_waiver', 'study_waiver_reason'];
         $priorMinor = 0;
         $awardMinor = 0;
+        $receivedPaymentMinor = 0;
+        $feeAmountMinor = 0;
         if ($recordFees) {
             abort_unless($canRecordExistingStudentFees, 403);
             $schoolId = (int) $request->user()->school_id;
@@ -2038,13 +2041,45 @@ class AdminController extends Controller
                 'fee_academic_year_id' => ['required', 'integer', Rule::exists('academic_years', 'id')->where('school_id', $schoolId)],
                 'fee_session_id' => ['required', 'integer', Rule::exists('sessions', 'id')->where('school_id', $schoolId)->where('academic_year_id', (int) $request->input('fee_academic_year_id'))],
                 'fee_structure_id' => ['required', 'integer', Rule::exists('fee_structures', 'id')->where('school_id', $schoolId)],
-                'actual_fee_amount' => ['required', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/', 'gt:0'],
+                'programme_id' => ['required', 'integer', Rule::exists('programmes', 'id')->where('school_id', $schoolId)],
+                'received_payment_amount' => ['nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
                 'prior_paid_amount' => ['nullable', 'string', 'regex:/\A[0-9]{1,12}(?:\.[0-9]{1,2})?\z/'],
             ]);
-            $amountMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('actual_fee_amount'));
+
+            $sessionId = (int) $request->input('fee_session_id');
+            $programmeId = (int) $request->input('programme_id');
+            $feeStructure = FeeStructure::where('school_id', $schoolId)->whereKey((int) $request->input('fee_structure_id'))
+                ->where('is_mandatory', 1)->whereNull('class_id')
+                ->where(fn ($query) => $query->whereNull('session_id')->orWhere('session_id', $sessionId))
+                ->where(fn ($query) => $query->whereNull('programme_id')->orWhere('programme_id', $programmeId))
+                ->first();
+            if (! $feeStructure) {
+                throw ValidationException::withMessages(['fee_structure_id' => 'Choose a mandatory fee structure available for this programme and fee session.']);
+            }
+
+            $feeAmountMinor = \App\Support\Payments\DecimalAmount::minorUnits($feeStructure->amount) ?? 0;
+            if ($feeAmountMinor <= 0) {
+                throw ValidationException::withMessages(['fee_structure_id' => 'The selected programme fee must have a positive configured amount.']);
+            }
+            $receivedPaymentMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('received_payment_amount', '0')) ?? 0;
             $priorMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('prior_paid_amount', '0'));
-            if ($amountMinor === null || $amountMinor <= 0 || $priorMinor === null || $priorMinor < 0 || $priorMinor > $amountMinor) {
-                throw ValidationException::withMessages(['prior_paid_amount' => 'Prior payments must be zero or less than or equal to the actual fee for this period.']);
+            if ($receivedPaymentMinor < 0 || $receivedPaymentMinor > $feeAmountMinor) {
+                throw ValidationException::withMessages(['received_payment_amount' => 'The confirmed payment cannot exceed the configured programme fee.']);
+            }
+            if ($priorMinor === null || $priorMinor < 0 || $priorMinor + $receivedPaymentMinor > $feeAmountMinor) {
+                throw ValidationException::withMessages(['prior_paid_amount' => 'Prior-payment claims must fit within the programme fee after any confirmed payment.']);
+            }
+            if ($receivedPaymentMinor > 0) {
+                abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'), 403);
+                $request->validate([
+                    'received_payment_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+                    'received_payment_method' => ['required', 'in:cash,bank_transfer,mobile_money,card,cheque,other'],
+                    'received_payment_reference' => ['required', 'string', 'max:150'],
+                    'received_payment_reason' => ['required', 'string', 'min:10', 'max:500'],
+                ]);
+            } elseif (collect(['received_payment_on', 'received_payment_method', 'received_payment_reference', 'received_payment_reason'])
+                ->contains(fn ($field) => $request->filled($field))) {
+                throw ValidationException::withMessages(['received_payment_amount' => 'Enter a positive confirmed-payment amount before adding its receipt details.']);
             }
             if ($priorMinor > 0) {
                 $request->validate([
@@ -2063,8 +2098,8 @@ class AdminController extends Controller
                     'award_reason' => ['required', 'string', 'min:10', 'max:500'],
                 ]);
                 $awardMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('award_amount')) ?? 0;
-                if ($awardMinor <= 0 || $priorMinor + $awardMinor > $amountMinor) {
-                    throw ValidationException::withMessages(['award_amount' => 'The award must be positive and fit within the fee after prior payments.']);
+                if ($awardMinor <= 0 || $priorMinor + $receivedPaymentMinor + $awardMinor > $feeAmountMinor) {
+                    throw ValidationException::withMessages(['award_amount' => 'The award must be positive and fit within the fee after any confirmed payment and pending prior-payment claim.']);
                 }
             } elseif (collect(['award_type', 'award_amount', 'award_reference', 'award_reason'])->contains(fn ($field) => $request->filled($field))) {
                 throw ValidationException::withMessages(['record_award' => 'Select the approved award option before submitting award details.']);
@@ -2156,7 +2191,7 @@ class AdminController extends Controller
         // Portal provisioning (user and profile only) is shared with
         // the CSV bulk import so a student added by hand and one added from a
         // spreadsheet end up with identical records.
-        $afterProvision = $recordFees ? function (User $student) use ($request, $data, $priorMinor, $awardMinor): void {
+        $afterProvision = $recordFees ? function (User $student) use ($request, $data, $priorMinor, $awardMinor, $receivedPaymentMinor, $feeAmountMinor): void {
             $schoolId = (int) auth()->user()->school_id;
             $session = Session::where('school_id', $schoolId)->whereKey((int) $request->input('fee_session_id'))->firstOrFail();
             $structure = FeeStructure::where('school_id', $schoolId)->whereKey((int) $request->input('fee_structure_id'))
@@ -2169,15 +2204,28 @@ class AdminController extends Controller
                 throw ValidationException::withMessages(['fee_structure_id' => 'An invoice already exists for this student, fee and study period. Open that invoice to record the prior payment.']);
             }
 
-            $actualFeeMinor = \App\Support\Payments\DecimalAmount::minorUnits($request->input('actual_fee_amount'));
-            $actualFee = \App\Support\Payments\DecimalAmount::decimal($actualFeeMinor);
+            $configuredFeeMinor = \App\Support\Payments\DecimalAmount::minorUnits($structure->amount);
+            if ($configuredFeeMinor === null || $configuredFeeMinor !== $feeAmountMinor) {
+                throw ValidationException::withMessages(['fee_structure_id' => 'The configured programme fee changed. Reload the form and try again.']);
+            }
+            $configuredFee = \App\Support\Payments\DecimalAmount::decimal($configuredFeeMinor);
             $invoice = StudentFeeManager::create([
-                'title' => $structure->name, 'amount' => $actualFee, 'discounted_price' => 0, 'total_amount' => $actualFee,
+                'title' => $structure->name, 'amount' => $configuredFee, 'discounted_price' => 0, 'total_amount' => $configuredFee,
                 'class_id' => 0, 'programme_id' => $data['programme_id'] ?? null, 'student_id' => $student->id,
                 'fee_structure_id' => $structure->id, 'parent_id' => $student->parent_id, 'payment_method' => 'unpaid',
                 'paid_amount' => 0, 'status' => 'unpaid', 'school_id' => $schoolId, 'session_id' => $session->id,
                 'timestamp' => strtotime(date('d-M-Y')),
             ]);
+
+            if ($receivedPaymentMinor > 0) {
+                app(\App\Support\Payments\ManualStudentTuitionPayment::class)->record(auth()->user(), (int) $invoice->id, [
+                    'amount' => \App\Support\Payments\DecimalAmount::decimal($receivedPaymentMinor),
+                    'paid_on' => $request->input('received_payment_on'),
+                    'method' => $request->input('received_payment_method'),
+                    'reference' => $request->input('received_payment_reference'),
+                    'reason' => $request->input('received_payment_reason'),
+                ]);
+            }
 
             $priorPayment = $priorMinor > 0 ? [
                 'amount' => \App\Support\Payments\DecimalAmount::decimal($priorMinor),
