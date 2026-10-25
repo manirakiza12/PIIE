@@ -17,18 +17,18 @@ $running_session = Session::where('school_id', auth()->user()->school_id)->find(
               class="d-flex justify-content-between align-items-center flex-wrap gr-15"
             >
                 <div class="d-flex flex-column">
-                    <h4>{{ get_phrase('Class-based Session Manager') }}</h4>
+                    <h4>{{ get_phrase('Finance and Class-based Sessions') }}</h4>
                     <ul class="d-flex align-items-center eBreadcrumb-2">
                         <li><a href="#">{{ get_phrase('Home') }}</a></li>
                         <li><a href="#">{{ get_phrase('Settings') }}</a></li>
-                        <li><a href="#">{{ get_phrase('Class-based Sessions') }}</a></li>
+                        <li><a href="#">{{ get_phrase('Finance Sessions') }}</a></li>
                     </ul>
                 </div>
                 <div class="export-btn-area">
                     @if(app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'academic.structure.manage'))
                         <a href="{{ route('admin.academic_structure.index') }}" class="export_btn me-2">{{ get_phrase('Academic Years & Periods') }}</a>
                     @endif
-                    <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.create.session') }}', '{{ get_phrase('Create Class-based Session') }}')"><i class="bi bi-plus"></i>{{ get_phrase('Add Class-based Session') }}</a>
+                    <a href="javascript:;" class="export_btn" onclick="rightModal('{{ route('admin.create.session') }}', '{{ get_phrase('Create Finance Session') }}')"><i class="bi bi-plus"></i>{{ get_phrase('Add Finance Session') }}</a>
                 </div>
             </div>
         </div>
@@ -46,6 +46,12 @@ $running_session = Session::where('school_id', auth()->user()->school_id)->find(
     {{ get_phrase('The active class-based session is used by existing class timetables and other class-based records. It is separate from the Academic Year and Term or Semester calendar used for course and programme planning. Activating a session here does not change that calendar selection; keep the dates aligned if your school uses both.') }}
     @if(app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'academic.structure.manage'))
         <a class="alert-link ms-1" href="{{ route('admin.academic_structure.index') }}">{{ get_phrase('Review Academic Years and Terms') }}</a>
+    @endif
+</div>
+<div class="alert alert-light border mt-3" role="note">
+    {{ get_phrase('Programme-fee invoices also require a Finance Session ID for invoice grouping, reporting, payment screens, and study-eligibility checks. Edit or create a session and link it to the Academic Year used for billing. A Fee Structure still determines the fee amount; Academic Year only supplies invoice context.') }}
+    @if(app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'finance.invoices'))
+        <a class="alert-link ms-1" href="{{ route('admin.academic_structure.index') }}">{{ get_phrase('Review Academic Years') }}</a>
     @endif
 </div>
 
@@ -77,7 +83,8 @@ $running_session = Session::where('school_id', auth()->user()->school_id)->find(
 						<table id="basic-table" class="table eTable">
 			                <thead>
 			                    <tr>
-			                        <th>{{ get_phrase('Session title') }}</th>
+			                        <th>{{ get_phrase('Finance Session / billing period') }}</th>
+			                        <th>{{ get_phrase('Invoice Academic Year') }}</th>
 			                        <th>{{ get_phrase('Status') }}</th>
 			                        <th class="text-center">{{ get_phrase('Options') }}</th>
 			                    </tr>
@@ -87,6 +94,7 @@ $running_session = Session::where('school_id', auth()->user()->school_id)->find(
 			                    foreach($sessions as $session):?>
 			                    <tr>
 			                        <td><strong>{{ $session['session_title'] }}</strong></td>
+                                    <td>{{ $session->academicYear?->label ?? get_phrase('Not linked') }}</td>
 			                        <td>
 			                            <?php if($session['status'] == 1): ?>
 			                                <span class="eBadge ebg-success">{{ get_phrase('Active') }}</span>

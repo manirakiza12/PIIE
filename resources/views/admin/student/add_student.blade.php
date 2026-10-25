@@ -105,7 +105,7 @@
                         <div class="form-text">Progression stage; Finance uses the Academic Year below.</div>
                     </div>
                     <div class="col-md-6">
-                        <label for="fee_academic_year_id" class="form-label">Academic Year for Finance <span class="text-muted small">Required for Finance setup</span></label>
+                        <label for="fee_academic_year_id" class="form-label">Academic Year (invoice context) <span class="text-muted small">Required for Finance setup</span></label>
                         <select id="fee_academic_year_id" name="fee_academic_year_id" class="form-select @error('fee_academic_year_id') is-invalid @enderror" aria-describedby="fee-academic-year-help fee_academic_year_id_error">
                             <option value="">Select an academic year</option>
                             @foreach($academicYears as $academicYear)
@@ -113,7 +113,7 @@
                             @endforeach
                         </select>
                         @error('fee_academic_year_id')<div class="invalid-feedback" id="fee_academic_year_id_error">{{ $message }}</div>@enderror
-                        <div class="form-text" id="fee-academic-year-help">Filters the fee sessions available for this invoice.</div>
+                        <div class="form-text" id="fee-academic-year-help">Sets the invoice’s academic context. The programme Fee Structure, not the year, determines the amount.</div>
                         @unless($hasConfiguredActiveAcademicYear ?? false)
                             <div class="small text-warning mt-1" id="active-year-message" role="status">No active Academic Year is configured. Select a year before setting up Finance.</div>
                         @endunless
@@ -142,26 +142,26 @@
                     @error('record_fees')<div class="text-danger small mt-2" role="alert">{{ $message }}</div>@enderror
                     <p class="small text-muted mt-2 mb-0">Prior payments, awards, and waivers remain pending until Finance review.</p>
                     <div id="existing_student_fee_fields" @if(!old('record_fees')) hidden @endif>
-                        <div class="alert alert-light border" role="note">The selected programme Fee Structure sets the invoice amount. Academic Year and Fee session place it in the right period. Unverified prior-payment claims, awards, and waivers do not reduce the balance or change eligibility.</div>
+                        <div class="alert alert-light border" role="note">The selected programme Fee Structure sets the fee type, amount, and billing basis. Academic Year and Finance Session supply invoice context. Unverified prior-payment claims, awards, and waivers do not reduce the balance or change eligibility.</div>
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label for="fee_session_id" class="form-label">Fee session <span class="text-danger" aria-hidden="true">*</span></label>
+                                <label for="fee_session_id" class="form-label">Finance Session / billing period <span class="text-danger" aria-hidden="true">*</span></label>
                                 <select id="fee_session_id" name="fee_session_id" class="form-select @error('fee_session_id') is-invalid @enderror" @if(!old('record_fees')) disabled @endif @if(old('record_fees')) required @endif aria-describedby="fee-session-help fee_session_id_error">
-                                    <option value="">Select a session in the academic year above</option>
+                                    <option value="">Select a Finance Session linked to the Academic Year above</option>
                                     @foreach($sessions as $session)
                                         <option value="{{ $session->id }}" data-academic-year-id="{{ $session->academic_year_id }}" @selected((string) old('fee_session_id', $defaultFeeSessionId) === (string) $session->id)>{{ $session->session_title }}</option>
                                     @endforeach
                                 </select>
                                 @error('fee_session_id')<div class="invalid-feedback" id="fee_session_id_error">{{ $message }}</div>@enderror
                                 <div class="form-text text-warning" id="fee-session-context-message" role="status" aria-live="polite" hidden></div>
-                                <div class="form-text" id="fee-session-help">This session places the invoice in its billing period. It does not determine the programme fee.</div>
+                                <div class="form-text" id="fee-session-help">Invoices require this legacy Finance Session ID for accounting reports, balances, payment flows, and study-eligibility checks. It is separate from the Academic Semester record. If no session is listed, <a href="{{ route('admin.settings.session_manager') }}" target="_blank" rel="noopener">create or edit one in Session Manager</a> and link it to this Academic Year.</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="fee_structure_id" class="form-label">Fee type <span class="text-danger" aria-hidden="true">*</span></label>
+                                <label for="fee_structure_id" class="form-label">Programme Fee Structure <span class="text-danger" aria-hidden="true">*</span></label>
                                 <select id="fee_structure_id" name="fee_structure_id" class="form-select @error('fee_structure_id') is-invalid @enderror" @if(!old('record_fees')) disabled @endif @if(old('record_fees')) required @endif>
-                                    <option value="">Select a mandatory fee type</option>
+                                    <option value="">Select a mandatory fee for the selected programme</option>
                                     @foreach($feeStructures as $structure)
-                                        <option value="{{ $structure->id }}" data-programme-id="{{ $structure->programme_id ?? '' }}" data-session-id="{{ $structure->session_id ?? '' }}" data-amount="{{ number_format((float) $structure->amount, 2, '.', '') }}" @selected((string) old('fee_structure_id') === (string) $structure->id)>{{ $structure->name }} ({{ school_currency($structure->amount) }})</option>
+                                        <option value="{{ $structure->id }}" data-name="{{ $structure->name }}" data-fee-type="{{ $structure->fee_type }}" data-programme-id="{{ $structure->programme_id ?? '' }}" data-session-id="{{ $structure->session_id ?? '' }}" data-session-academic-year-id="{{ optional($sessions->firstWhere('id', $structure->session_id))->academic_year_id ?? '' }}" data-amount="{{ number_format((float) $structure->amount, 2, '.', '') }}" data-per-semester="{{ (int) ($structure->per_semester ?? 0) }}" @selected((string) old('fee_structure_id') === (string) $structure->id)>{{ $structure->name }} · {{ ucfirst($structure->fee_type) }} · {{ school_currency($structure->amount) }} · {{ $structure->per_semester ? 'Per semester' : 'Not per semester' }}</option>
                                     @endforeach
                                 </select>
                                 @error('fee_structure_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -169,9 +169,11 @@
                                 @if($feeStructures->isEmpty())<div class="form-text text-danger">No mandatory institution or programme fee structures are configured. Finance must configure the correct fee before using this option.</div>@endif
                             </div>
                             <div class="col-md-6">
-                                <label for="selected-fee-amount" class="form-label">Configured programme fee ({{ school_currency() }})</label>
+                                <label for="selected-fee-amount" class="form-label">Configured Fee Structure amount ({{ school_currency() }})</label>
                                 <output id="selected-fee-amount" class="form-control bg-light" aria-live="polite" data-currency="{{ school_currency() }}">Select a Fee type to view its amount</output>
-                                <div class="form-text">This configured amount is used to create the invoice.</div>
+                                <div class="form-text" id="fee-billing-basis">The configured amount is used as listed; it is never calculated from the Academic Year.</div>
+                                <output id="invoice-period-summary" class="form-text d-block" aria-live="polite">Select an Academic Year and Finance Session to confirm the invoice period.</output>
+                                <div class="form-text">For a per-semester fee, the configured amount applies to this one selected Finance Session. The invoice stores the Finance Session ID; use a session title that identifies the billed semester. No semester multiplier is applied.</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="received_payment_amount" class="form-label">Confirmed payment received now ({{ school_currency() }}) <span class="text-muted small">Optional</span></label>

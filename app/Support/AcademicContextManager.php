@@ -6,7 +6,9 @@ use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
 use App\Models\School;
 use App\Models\Session;
+use App\Models\StudentFeeManager;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /** Validated tenant-local mutations for canonical current academic pointers. */
@@ -18,6 +20,14 @@ class AcademicContextManager
         $year = $yearId ? AcademicYear::query()->where('school_id', $schoolId)->find($yearId) : null;
         if ($yearId && ! $year) {
             throw ValidationException::withMessages(['academic_year_id' => 'The selected year is not available in this school.']);
+        }
+
+        if ((int) ($session->academic_year_id ?? 0) !== (int) ($year?->id ?? 0)
+            && Schema::hasTable('student_fee_managers')
+            && StudentFeeManager::query()->where('school_id', $schoolId)->where('session_id', $session->id)->exists()) {
+            throw ValidationException::withMessages([
+                'academic_year_id' => 'This Finance Session is already used by invoices. Its Academic Year cannot be changed without changing existing invoice and reporting context.',
+            ]);
         }
 
         $session->academic_year_id = $year?->id;

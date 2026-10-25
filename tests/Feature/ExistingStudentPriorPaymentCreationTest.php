@@ -72,7 +72,7 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         DB::table('sessions')->where('id', $this->period->id)->update(['academic_year_id' => $this->academicYearId]);
         $this->programme = Programme::create(['school_id' => $this->schoolId, 'name' => 'Diploma in Finance', 'code' => 'DF', 'is_active' => 1]);
         $this->structure = FeeStructure::create(['school_id' => $this->schoolId, 'name' => 'Tuition', 'fee_type' => 'tuition',
-            'amount' => 1500000, 'is_mandatory' => 1, 'class_id' => null, 'programme_id' => $this->programme->id, 'session_id' => $this->period->id]);
+            'amount' => 1500000, 'is_mandatory' => 1, 'per_semester' => 1, 'class_id' => null, 'programme_id' => $this->programme->id, 'session_id' => $this->period->id]);
     }
 
     private function payload(array $overrides = []): array
@@ -103,6 +103,8 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $this->assertTrue((bool) StudentProfile::where('user_id', $student->id)->value('was_existing_at_portal_creation'));
         $this->assertSame((int) $this->period->id, (int) $fee->session_id);
         $this->assertSame((int) $this->structure->id, (int) $fee->fee_structure_id);
+        $this->assertSame('Tuition — '.$this->period->session_title, $fee->title, 'The invoice title identifies its Finance billing period.');
+        $this->assertSame(1, (int) $this->structure->per_semester);
         $this->assertEquals(1500000, $fee->amount);
         $this->assertEquals(1500000, $fee->total_amount);
         $this->assertEquals(0, $fee->paid_amount);
@@ -273,7 +275,10 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
             ->assertDontSee('Next Step')
             ->assertDontSee('For a new student, complete an application')
             ->assertSee('fee_academic_year_id')
-            ->assertSee('Configured programme fee')
+            ->assertSee('Configured Fee Structure amount')
+            ->assertSee('Per semester')
+            ->assertSee('Finance Session / billing period')
+            ->assertSee('The programme Fee Structure, not the year, determines the amount.')
             ->assertSee('Confirmed payment received now')
             ->assertDontSee('name="actual_fee_amount"', false)
             ->assertSee('name="first_name"', false)
@@ -315,20 +320,53 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/<option value="'.$this->academicYearId.'"[^>]*selected>/', $response->getContent());
     }
 
-    public function test_finance_rejects_an_academic_year_without_a_linked_fee_session(): void
+    public function test_missing_finance_session_reports_accounting_setup_without_misidentifying_the_programme_fee(): void
     {
         $yearWithoutSessions = DB::table('academic_years')->insertGetId([
             'school_id' => $this->schoolId, 'label' => '2028/2029', 'start_date' => '2028-08-01', 'end_date' => '2029-07-31',
             'status' => 'planned', 'created_at' => now(), 'updated_at' => now(),
         ]);
+        $programmeFee = FeeStructure::create(['school_id' => $this->schoolId, 'name' => 'Programme Tuition', 'fee_type' => 'tuition',
+            'amount' => 1500000, 'is_mandatory' => 1, 'per_semester' => 1, 'class_id' => null,
+            'programme_id' => $this->programme->id, 'session_id' => null]);
 
         $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
             'fee_academic_year_id' => $yearWithoutSessions,
             'fee_session_id' => null,
-        ]))->assertSessionHasErrors('fee_session_id');
+            'fee_structure_id' => $programmeFee->id,
+        ]))->assertSessionHasErrors('fee_session_id')->assertSessionDoesntHaveErrors('fee_structure_id');
 
         $this->assertSame(0, User::where('email', 'continuing@example.test')->count());
         $this->assertSame(0, StudentFeeManager::count());
+    }
+
+    public function test_admin_can_link_a_finance_session_to_the_academic_year_needed_for_invoice_creation(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.create.session'), ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest'])
+            ->assertOk()->assertSee('academic_year_id')->assertSee('Academic Year for invoice context');
+
+        $this->actingAs($this->admin)->post(route('admin.session_manager.create'), [
+            'session_title' => '2028/29 Semester 1', 'academic_year_id' => $this->academicYearId,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $session = Session::where('school_id', $this->schoolId)->where('session_title', '2028/29 Semester 1')->sole();
+        $this->assertSame($this->academicYearId, (int) $session->academic_year_id);
+        $this->assertSame(1, Session::where('school_id', $this->schoolId)->where('academic_year_id', $this->academicYearId)->whereKey($session->id)->count());
+    }
+
+    public function test_semester_fee_uses_the_configured_amount_once_for_its_selected_finance_session(): void
+    {
+        $this->structure->update(['per_semester' => 1, 'amount' => 1500000]);
+        $this->actingAs($this->admin)->post(route('admin.student.create'), $this->payload([
+            'prior_paid_amount' => '0', 'received_payment_amount' => '0',
+        ]))->assertSessionHasNoErrors()->assertRedirect();
+
+        $student = User::where('email', 'continuing@example.test')->firstOrFail();
+        $invoice = StudentFeeManager::where('student_id', $student->id)->sole();
+        $this->assertEquals(1500000, $invoice->amount, 'A per-semester Fee Structure uses its configured amount for the selected billing session, with no year-based calculation or multiplier.');
+        $this->assertEquals(1500000, $invoice->total_amount);
+        $this->assertSame('Tuition — '.$this->period->session_title, $invoice->title);
+        $this->assertSame((int) $this->period->id, (int) $invoice->session_id);
     }
 
     public function test_finance_rejects_a_fee_session_outside_the_selected_academic_year(): void
