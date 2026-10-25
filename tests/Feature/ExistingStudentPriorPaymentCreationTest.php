@@ -546,4 +546,89 @@ class ExistingStudentPriorPaymentCreationTest extends TestCase
         $this->assertEquals(100000, $fee->fresh()->paid_amount);
         $this->assertSame(0, StudentFinancialSetupReview::where('fee_id', $fee->id)->count());
     }
+
+    public function test_existing_student_invoice_setup_uses_programme_fee_and_finance_session_without_mutating_student_history(): void
+    {
+        $student = User::factory()->create(['school_id' => $this->schoolId, 'role_id' => 7, 'name' => 'Incomplete Student',
+            'email' => 'incomplete.invoice@example.test', 'code' => 'KEEP-REG-22']);
+        StudentProfile::create(['school_id' => $this->schoolId, 'user_id' => $student->id, 'programme_id' => $this->programme->id]);
+        $enrollment = \App\Models\Enrollment::create(['user_id' => $student->id, 'school_id' => $this->schoolId,
+            'class_id' => 17, 'section_id' => 2, 'session_id' => $this->period->id, 'department_id' => 3]);
+        $password = $student->password;
+
+        $this->actingAs($this->admin)->get(route('admin.student.invoice_setup', $student->id))->assertOk()
+            ->assertSee('Programme Fee Structure')->assertSee('Finance Session')->assertSee('Per semester');
+        $this->assertSame(0, StudentFeeManager::where('student_id', $student->id)->count(), 'Viewing setup must not create an invoice.');
+
+        $payload = ['fee_academic_year_id' => $this->academicYearId, 'fee_session_id' => $this->period->id,
+            'fee_structure_id' => $this->structure->id, 'received_payment_amount' => '250000.00',
+            'received_payment_on' => now()->toDateString(), 'received_payment_method' => 'cash',
+            'received_payment_reference' => 'EXISTING-STUDENT-CASH-22', 'received_payment_reason' => 'Confirmed cash receipt received at the finance office.'];
+        $this->actingAs($this->admin)->post(route('admin.student.invoice_create', $student->id), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $invoice = StudentFeeManager::where('student_id', $student->id)->sole();
+        $payment = TuitionPayment::where('fee_id', $invoice->id)->sole();
+        $this->assertSame((int) $this->period->id, (int) $invoice->session_id);
+        $this->assertSame((int) $this->structure->id, (int) $invoice->fee_structure_id);
+        $this->assertSame((int) $this->programme->id, (int) $invoice->programme_id);
+        $this->assertEquals(1500000, $invoice->total_amount);
+        $this->assertEquals(250000, $invoice->paid_amount);
+        $this->assertEquals(1250000, $invoice->total_amount - $invoice->paid_amount);
+        $this->assertSame('paid', $payment->status);
+        $this->assertSame($password, $student->fresh()->password);
+        $this->assertSame('KEEP-REG-22', $student->fresh()->code);
+        $this->assertSame(
+            $enrollment->only(['class_id', 'section_id', 'session_id', 'department_id']),
+            $enrollment->fresh()->only(['class_id', 'section_id', 'session_id', 'department_id'])
+        );
+        $this->assertSame(0, DB::table('admissions')->where('applicant_id', $student->id)->count());
+
+        $this->actingAs($this->admin)->post(route('admin.student.invoice_create', $student->id), $payload)
+            ->assertSessionHasErrors('fee_structure_id');
+        $this->assertSame(1, StudentFeeManager::where('student_id', $student->id)->count());
+        $this->assertSame(1, TuitionPayment::where('fee_id', $invoice->id)->count());
+    }
+
+    public function test_existing_student_invoice_setup_enforces_permission_and_tenant_boundaries(): void
+    {
+        $student = User::factory()->create(['school_id' => $this->schoolId, 'role_id' => 7, 'email' => 'tenant.invoice@example.test']);
+        StudentProfile::create(['school_id' => $this->schoolId, 'user_id' => $student->id, 'programme_id' => $this->programme->id]);
+        $viewer = User::create(['school_id' => $this->schoolId, 'role_id' => 3, 'name' => 'Viewer', 'email' => 'invoice.viewer@example.test', 'account_status' => 'active']);
+        DB::table('user_permissions')->insert(['school_id' => $this->schoolId, 'user_id' => $viewer->id,
+            'permission' => 'finance.view', 'created_at' => now(), 'updated_at' => now()]);
+        $this->actingAs($viewer)->get(route('admin.student.invoice_setup', $student->id))->assertForbidden();
+        $this->actingAs($viewer)->post(route('admin.student.invoice_create', $student->id), [])->assertForbidden();
+
+        $foreignAdmin = $this->makeAdminUser($this->makeSchool());
+        $this->actingAs($foreignAdmin)->get(route('admin.student.invoice_setup', $student->id))->assertNotFound();
+        $this->actingAs($foreignAdmin)->post(route('admin.student.invoice_create', $student->id), [])->assertNotFound();
+        $this->assertSame(0, StudentFeeManager::where('student_id', $student->id)->count());
+    }
+
+    public function test_existing_student_edit_view_exposes_completion_fields_without_changing_registration_or_invoice_history(): void
+    {
+        $student = User::factory()->create(['school_id' => $this->schoolId, 'role_id' => 7, 'name' => 'Incomplete Student',
+            'email' => 'edit.incomplete@example.test', 'code' => 'KEEP-REG-EDIT']);
+        StudentProfile::create(['school_id' => $this->schoolId, 'user_id' => $student->id]);
+        $invoice = StudentFeeManager::create(['school_id' => $this->schoolId, 'student_id' => $student->id, 'title' => 'Historic invoice',
+            'amount' => 100, 'total_amount' => 100, 'paid_amount' => 0, 'class_id' => 0, 'session_id' => $this->period->id,
+            'payment_method' => 'unpaid', 'status' => 'unpaid', 'timestamp' => time()]);
+        $password = $student->password;
+        $this->actingAs($this->admin)->get(route('admin.student_edit_modal', $student->id))->assertOk()
+            ->assertSee('First name')->assertSee('Last name')->assertSee('Year of Study')->assertSee('Next of Kin Name')
+            ->assertSee('Leave unchecked to preserve the student’s current class');
+        $this->actingAs($this->admin)->post(route('admin.student.update', $student->id), [
+            'name' => 'Completed Student', 'first_name' => 'Completed', 'last_name' => 'Student', 'email' => $student->email,
+            'gender' => 'Female', 'birthday' => '2000-01-01', 'phone' => '0700000000', 'address' => 'Kampala',
+            'programme_id' => $this->programme->id, 'year_of_study' => 2, 'nationality' => 'Ugandan',
+            'next_of_kin_name' => 'Contact One', 'next_of_kin_contact' => '0700000001',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('KEEP-REG-EDIT', $student->fresh()->code);
+        $this->assertSame($password, $student->fresh()->password);
+        $this->assertSame('Completed Student', $student->fresh()->name);
+        $this->assertSame(2, (int) StudentProfile::where('user_id', $student->id)->value('year_of_study'));
+        $this->assertSame($invoice->id, StudentFeeManager::where('student_id', $student->id)->sole()->id);
+        $this->assertSame(0, DB::table('admissions')->where('applicant_id', $student->id)->count());
+    }
 }

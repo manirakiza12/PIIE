@@ -2,7 +2,7 @@
    
 @section('content')
 @include('shared.invoice_email_settings')
-@include('shared.student_fee_overview', ['feeArea' => 'accountant'])
+@include('shared.student_fee_overview', ['feeArea' => (int) auth()->user()->role_id === 11 ? 'bursar' : 'accountant'])
 <div class="mainSection-title">
     <div class="row">
 	    <div class="col-12">

@@ -33,16 +33,34 @@
             </div>
 
             <div class="fpb-7">
+                <label for="first_name" class="eForm-label">{{ get_phrase('First name') }} <small class="text-muted">Optional</small></label>
+                <input type="text" class="form-control eForm-control" value="{{ $user->first_name ?? '' }}" id="first_name" name="first_name" maxlength="100">
+            </div>
+
+            <div class="fpb-7">
+                <label for="last_name" class="eForm-label">{{ get_phrase('Last name') }} <small class="text-muted">Optional</small></label>
+                <input type="text" class="form-control eForm-control" value="{{ $user->last_name ?? '' }}" id="last_name" name="last_name" maxlength="100">
+                <small class="text-muted">When both are provided, these names update the displayed student name.</small>
+            </div>
+
+            <div class="fpb-7">
                 <label for="email" class="eForm-label">{{ get_phrase('Email') }}</label>
                 <input type="email" class="form-control eForm-control" value="{{ $user->email }}" id="email"
                     name = "email" required>
             </div>
 
             @if(academic_education_level(auth()->user()->school_id) !== 'tertiary')
+            <div class="fpb-7 col-12 border rounded p-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="update_placement" name="update_placement" value="1">
+                    <label class="form-check-label fw-semibold" for="update_placement">Also update class placement</label>
+                </div>
+                <small class="text-muted">Leave unchecked to preserve the student’s current class, section, department, and session placement.</small>
+            </div>
             <div class="fpb-7">
                 <label for="class_id" class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
                 <small class="text-muted d-block">{{ get_phrase('Students enrolled in this class can access matching class-targeted online exams.') }}</small>
-                <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove"
+                <select name="class_id" id="class_id" class="form-select eForm-select eChoice-multiple-with-remove placement-control"
                     required onchange="classWiseSection(this.value)">
                     <option value="">{{ get_phrase('Select a class') }}</option>
                     @foreach ($classes as $class)
@@ -55,7 +73,7 @@
 
             <div class="fpb-7">
                 <label for="section_id" class="eForm-label">{{ get_phrase('Class Section (optional)') }}</label>
-                <select name="section_id" id="section_id" class="form-select eForm-select eChoice-multiple-with-remove"
+                <select name="section_id" id="section_id" class="form-select eForm-select eChoice-multiple-with-remove placement-control"
                     >
                     <?php if($student_details['section_id'] !=""){
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             $sections = Section::get()->where('class_id', $student_details['class_id']); ?>
@@ -73,7 +91,7 @@
 
             <div class="fpb-7">
                 <label for="session_id" class="eForm-label">{{ academic_term('session', auth()->user()->school_id) }}</label>
-                <select name="session_id" id="session_id" class="form-select eForm-select">
+                <select name="session_id" id="session_id" class="form-select eForm-select placement-control">
                     <option value="">{{ get_phrase('Use current running session') }}</option>
                     @foreach($sessions as $session)<option value="{{ $session->id }}" {{ (int)($student_details['session_id'] ?? 0) === (int)$session->id ? 'selected' : '' }}>{{ $session->name ?? $session->session_title ?? ('Session '.$session->id) }}</option>@endforeach
                 </select>
@@ -81,7 +99,7 @@
             @if($departments->count())
             <div class="fpb-7">
                 <label for="department_id" class="eForm-label">{{ get_phrase('Department (optional)') }}</label>
-                <select name="department_id" id="department_id" class="form-select eForm-select">
+                <select name="department_id" id="department_id" class="form-select eForm-select placement-control">
                     <option value="">{{ get_phrase('No department') }}</option>
                     @foreach($departments as $department)<option value="{{ $department->id }}" {{ (int)($student_details['department_id'] ?? 0) === (int)$department->id ? 'selected' : '' }}>{{ $department->name }}</option>@endforeach
                 </select>
@@ -248,6 +266,16 @@
             }
         });
     }
+
+    (function () {
+        const toggle = document.getElementById('update_placement');
+        if (!toggle) return;
+        const syncPlacementFields = () => document.querySelectorAll('.placement-control').forEach((field) => {
+            field.disabled = !toggle.checked;
+        });
+        toggle.addEventListener('change', syncPlacementFields);
+        syncPlacementFields();
+    })();
 
     function classWiseSection(classId) {
         let url = "{{ route('admin.class_wise_sections', ['id' => ':classId']) }}";

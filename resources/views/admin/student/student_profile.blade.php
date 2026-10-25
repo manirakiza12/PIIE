@@ -44,6 +44,9 @@
 
 <section class="profile">
     <div class="container">
+        @if(auth()->user()->hasPermission('finance.invoices'))
+        <div class="d-flex justify-content-end mb-3"><a class="btn btn-primary" href="{{ route('admin.student.invoice_setup', ['id' => $student_details['user_id']]) }}">Set up invoice</a></div>
+        @endif
         <div class="row">
             <div class="col-lg-4">
                 <div class="profile_img">

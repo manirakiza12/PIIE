@@ -92,7 +92,7 @@ class StudentClassAssignmentTest extends TestCase
         $this->assertSame(0, Enrollment::where('user_id', $student->id)->count(), 'Precondition: student starts with no Enrollment row.');
 
         $response = $this->actingAs($admin)
-            ->post(route('admin.student.update', ['id' => $student->id]), $this->updatePayload($classId, $sectionId));
+            ->post(route('admin.student.update', ['id' => $student->id]), $this->updatePayload($classId, $sectionId) + ['update_placement' => 1]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('enrollment', [
@@ -124,7 +124,7 @@ class StudentClassAssignmentTest extends TestCase
 
         $this->actingAs($admin)->post(route('admin.student.update', ['id' => $student->id]), array_merge(
             $this->updatePayload($newClassId, $sectionId),
-            ['email' => 'reassign.student@example.com']
+            ['email' => 'reassign.student@example.com', 'update_placement' => 1]
         ));
 
         $this->assertSame(1, Enrollment::where('user_id', $student->id)->count(), 'Must update in place, not create a second row.');
@@ -132,5 +132,26 @@ class StudentClassAssignmentTest extends TestCase
             'user_id' => $student->id,
             'class_id' => $newClassId,
         ]);
+    }
+
+    public function test_ordinary_student_profile_edit_preserves_existing_placement_even_if_old_form_values_are_posted(): void
+    {
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $oldClass = $this->makeClass($schoolId, ['name' => 'Current Class']);
+        $otherClass = $this->makeClass($schoolId, ['name' => 'Unselected Class']);
+        $student = User::create(['name' => 'Existing Student', 'email' => 'existing.profile@example.test',
+            'password' => bcrypt('preserve-this-password'), 'code' => 'REG-KEEP-1', 'role_id' => 7, 'school_id' => $schoolId]);
+        Enrollment::create(['user_id' => $student->id, 'school_id' => $schoolId, 'class_id' => $oldClass,
+            'section_id' => 0, 'session_id' => 1, 'department_id' => 0]);
+        $before = Enrollment::where('user_id', $student->id)->firstOrFail()->getRawOriginal();
+        $password = $student->password;
+        $this->actingAs($admin)->post(route('admin.student.update', $student->id), array_merge(
+            $this->updatePayload($otherClass, 0), ['email' => $student->email, 'name' => 'Corrected Name']
+        ))->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame($before, Enrollment::where('user_id', $student->id)->firstOrFail()->getRawOriginal());
+        $this->assertSame($password, $student->fresh()->password);
+        $this->assertSame('REG-KEEP-1', $student->fresh()->code);
+        $this->assertSame('Corrected Name', $student->fresh()->name);
     }
 }

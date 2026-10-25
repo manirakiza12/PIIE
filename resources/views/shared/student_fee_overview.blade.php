@@ -18,7 +18,7 @@
         @php($summary = $feeStudent->fee_summary)
         <tr><td>{{ $feeStudent->name }}<br>{{ $feeStudent->code }}<br><small>{{ $feeStudent->email }} · ID {{ $feeStudent->id }}</small></td>
         @if($feeStudent->sessionInvoices->isEmpty())
-            <td colspan="6">Needs invoice for this session — amount due not yet established.</td><td>Use the existing invoice setup after checking this student's account. No invoice is created by viewing this page.</td>
+            <td colspan="6">Needs invoice for this session — amount due not yet established.</td><td><a class="btn btn-sm btn-primary" href="{{ route($feeArea . '.student.invoice_setup', ['id' => $feeStudent->id, 'fee_academic_year_id' => optional($feeSessions->firstWhere('id', $feeSessionId))->academic_year_id]) }}">Set up invoice for {{ $feeStudent->name }}</a></td>
         @else
             <td>{{ school_currency($summary['base'] / 100) }}<br><small>Discount: {{ school_currency($summary['discount'] / 100) }}</small></td>
             <td>{{ school_currency($summary['awards'] / 100) }}</td><td>{{ school_currency($summary['fee'] / 100) }}</td>

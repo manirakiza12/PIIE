@@ -268,8 +268,11 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                               </li>
 
                               <li>
-                                <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.student_edit_modal', ['id' => $student->id]) }}', 'Edit Student')">{{ get_phrase('Edit') }}</a>
+                                <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.student_edit_modal', ['id' => $student->id]) }}', 'Edit / Complete details')">{{ get_phrase('Edit / Complete details') }}</a>
                               </li>
+                              @if(auth()->user()->hasPermission('finance.invoices'))
+                              <li><a class="dropdown-item" href="{{ route('admin.student.invoice_setup', ['id' => $student->id]) }}">{{ get_phrase('Set up invoice') }}</a></li>
+                              @endif
                               @if(auth()->user()->hasPermission('students.delete'))
                               <li>
                                 <button class="dropdown-item text-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteStudent{{ $student->id }}">{{ get_phrase('Permanently delete') }}</button>
