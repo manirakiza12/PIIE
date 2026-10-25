@@ -130,7 +130,7 @@ class CurriculumController extends Controller
             isset($data['effective_academic_year_id']) ? (int) $data['effective_academic_year_id'] : null
         );
 
-        return redirect()->route('admin.curricula.show', $curriculum->id)->with('success', 'Draft Programme Study Plan created.');
+        return redirect()->route('admin.curricula.show', $curriculum->id)->with('success', 'Draft Programme Curriculum created.')->with('curriculum_next_step', 'years');
     }
 
     public function show(Request $request, int $id)
@@ -149,9 +149,23 @@ class CurriculumController extends Controller
         $academicYears = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label', 'start_date', 'end_date']);
         $canManage = $request->user()->hasPermission('academic.curriculum.manage');
         $canApprove = $request->user()->hasPermission('academic.curriculum.approve');
-        $reviewBlockers = array_values($this->curricula->approvalBlockers($curriculum));
+        $approvalBlockerMap = $this->curricula->approvalBlockers($curriculum);
+        $reviewBlockers = array_values($approvalBlockerMap);
+        $stageCount = $curriculum->stages->count();
+        $membershipCount = $curriculum->memberships->count();
+        $totalCredits = (float) $curriculum->memberships->sum('credits');
+        $detailsReady = ! array_intersect(['programme_id', 'version', 'effective_academic_year_id'], array_keys($approvalBlockerMap));
+        $unitBlockerKeys = array_filter(array_keys($approvalBlockerMap), fn ($key) => preg_match('/^(memberships|stage_|subject_|classification_|credits_|period_|duplicate_subjects|prerequisite_)/', $key) === 1);
+        $unitsReady = $membershipCount > 0 && $unitBlockerKeys === [];
+        $nextStep = match (true) {
+            $curriculum->status === 'approved' => 'allocation',
+            $stageCount === 0 => 'years',
+            $membershipCount === 0 => 'units',
+            $reviewBlockers !== [] => 'blockers',
+            default => 'review',
+        };
 
-        return view('admin.curricula.show', compact('curriculum', 'academicYears', 'calendarPattern', 'canManage', 'canApprove', 'reviewBlockers'));
+        return view('admin.curricula.show', compact('curriculum', 'academicYears', 'calendarPattern', 'canManage', 'canApprove', 'reviewBlockers', 'stageCount', 'membershipCount', 'totalCredits', 'nextStep', 'detailsReady', 'unitsReady'));
     }
 
     public function update(Request $request, int $id)
@@ -231,16 +245,23 @@ class CurriculumController extends Controller
             'curriculum_stage_id' => ['required', 'integer'],
             'subject_ids' => ['required', 'array', 'min:1', 'max:100'],
             'subject_ids.*' => ['required', 'integer'],
+            'classification' => ['required', Rule::in(CurriculumMembership::CLASSIFICATIONS)],
+            'credits' => ['required', 'numeric', 'min:0', 'max:9999.99', 'regex:/^\d+(?:\.\d{1,2})?$/'],
+            'period_type' => ['nullable', Rule::in(['semester', 'term'])],
+            'period_sequence' => ['nullable', 'integer', 'min:1', 'max:65535'],
+            'sequence' => ['required', 'integer', 'min:0', 'max:65535'],
         ]);
         $stage = $this->tenantStage($curriculum, (int) $data['curriculum_stage_id']);
         DB::transaction(function () use ($curriculum, $stage, $data): void {
             foreach (array_unique(array_map('intval', $data['subject_ids'])) as $subjectId) {
                 $this->curricula->addMembership($curriculum, $subjectId, (int) $stage->id, [
-                    'classification' => 'compulsory', 'credits' => '0.00', 'sequence' => 0,
+                    'classification' => $data['classification'], 'credits' => $data['credits'], 'sequence' => (int) $data['sequence'],
+                    'period_type' => $data['period_sequence'] ? ($data['period_type'] ?: null) : null,
+                    'period_sequence' => $data['period_sequence'] ?? null,
                 ]);
             }
         });
-        return back()->with('success', 'Course Unit(s) added as draft memberships. Set placement and credits before review.');
+        return back()->with('success', 'Course Unit placement added to this draft curriculum.')->with('curriculum_next_step', 'placement');
     }
 
     public function updateMembership(Request $request, int $id, int $membershipId)

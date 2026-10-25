@@ -128,7 +128,9 @@ class CourseOfferingController extends Controller
         $subjects = Subject::where('school_id', $schoolId)->orderBy('name')->get();
         $years = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get();
         $periods = AcademicPeriod::where('school_id', $schoolId)->when($request->filled('year_id'), fn ($q) => $q->where('academic_year_id', $request->integer('year_id')))->orderBy('sequence')->get();
-        $curricula = Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with(['programme', 'memberships.subject', 'memberships.stage'])->orderBy('version')->get();
+        $curricula = Curriculum::where('school_id', $schoolId)->where('status', 'approved')
+            ->when($request->filled('curriculum_id'), fn ($query) => $query->whereKey($request->integer('curriculum_id')))
+            ->with(['programme', 'memberships.subject', 'memberships.stage'])->orderBy('version')->get();
         $tenantConfiguration = app(\App\Support\TenantConfiguration::class);
         $tenant = \App\Models\School::query()->find($schoolId);
         $tenantDisplay = $tenantConfiguration->resolve($tenant, $request->user());

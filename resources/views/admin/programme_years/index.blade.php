@@ -5,7 +5,7 @@
     $editableCurricula = $isOwner ? $curricula : $curricula->where('status', 'draft');
 @endphp
 <div class="mainSection-title"><h4>{{ get_phrase('Programme Years') }}</h4><p class="text-muted">Define study-year levels within a Programme Curriculum, such as Year 1 or Foundation Year. Academic Years are dated calendar records; Semester or Term is a separate period on each Course Unit placement.</p></div>
-@if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+@if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}@if(session('programme_year_next_course_units')) <a class="alert-link ms-2" href="{{ route('admin.curriculum_units.index', ['curriculum_id' => session('programme_year_next_course_units')]) }}#course-units">Next: Add Course Units</a>@endif</div>@endif
 @if(session('curriculum_reopened'))<div class="alert alert-info">Your owner change reopened the curriculum as Draft. Approve it again when all corrections are complete.</div>@endif
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 <section class="eSection-wrap mb-3">

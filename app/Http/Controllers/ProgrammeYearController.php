@@ -49,7 +49,8 @@ class ProgrammeYearController extends Controller
         $curriculum = Curriculum::where('school_id', $request->user()->school_id)->findOrFail($data['curriculum_id']);
         $this->mutate($request, $curriculum, fn () => $this->curricula->addStage($curriculum, $data['label'], (int) $data['sequence']));
         $request->session()->forget('errors');
-        return back()->with('success', 'Programme Year created.');
+        return back()->with('success', 'Programme Year created.')
+            ->with('programme_year_next_course_units', $curriculum->id);
     }
 
     public function show(Request $request, int $id)
