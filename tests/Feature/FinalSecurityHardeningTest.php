@@ -500,8 +500,11 @@ class FinalSecurityHardeningTest extends TestCase
         ]);
 
         $log = AuditLog::where('record_type', \App\Models\Enrollment::class)->where('record_id', $this->A['enroll'])->latest('id')->firstOrFail();
+        $this->assertSame($admin->id, (int) $log->user_id);
+        $this->assertSame($this->A['school'], (int) $log->school_id);
         $this->assertEquals($this->A['class'], $log->old_values['class_id']);
         $this->assertEquals($classA2, $log->new_values['class_id']);
+        $this->assertEquals($student->id, $log->new_values['student_id']);
     }
 
     public function test_retired_school_fee_offline_routes_never_write_records(): void

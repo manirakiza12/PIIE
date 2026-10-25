@@ -2382,7 +2382,10 @@ class AdminController extends Controller
     {
         $data = $request->all();
         $profileOnly = academic_education_level((int) auth()->user()->school_id) === 'tertiary';
-        $updatePlacement = ! $profileOnly && $request->boolean('update_placement');
+        // The current form sends placement controls only when its explicit
+        // checkbox enables them. Keep accepting a supplied class_id as an
+        // intentional placement update for existing callers of this route.
+        $updatePlacement = ! $profileOnly && ($request->boolean('update_placement') || $request->filled('class_id'));
         if (! $updatePlacement) {
             unset($data['class_id'], $data['section_id'], $data['session_id'], $data['department_id']);
         }
@@ -2472,22 +2475,24 @@ class AdminController extends Controller
         }
 
         if ($updatePlacement) {
-            // Class-based schools retain their class assignment workflow.
-            $schoolId = auth()->user()->school_id;
-            $runningSession = $data['session_id'] ?? get_school_settings($schoolId)->value('running_session')
-                ?: (Session::where('school_id', $schoolId)->where('status', 1)->value('id') ?? Session::value('id') ?? 1);
-            $previousEnrollment = Enrollment::where('user_id', $id)->where('school_id', $schoolId)->first();
-            $previousPlacement = $previousEnrollment ? StatusChangeAudit::placement($previousEnrollment) : null;
-            $enrollment = Enrollment::updateOrCreate(
-                ['user_id' => $id, 'school_id' => $schoolId],
-                [
-                    'class_id' => (int) $data['class_id'],
-                    'section_id' => (int) ($data['section_id'] ?? 0),
-                    'department_id' => (int) ($data['department_id'] ?? 0),
-                    'session_id' => (int) ($runningSession ?? 0),
-                ]
-            );
-            StatusChangeAudit::enrollment($enrollment, $previousPlacement, 'Student record edit');
+            DB::transaction(function () use ($data, $id): void {
+                // Class-based schools retain their class assignment workflow.
+                $schoolId = (int) auth()->user()->school_id;
+                $runningSession = $data['session_id'] ?? get_school_settings($schoolId)->value('running_session')
+                    ?: (Session::where('school_id', $schoolId)->where('status', 1)->value('id') ?? Session::value('id') ?? 1);
+                $previousEnrollment = Enrollment::where('user_id', $id)->where('school_id', $schoolId)->lockForUpdate()->first();
+                $previousPlacement = $previousEnrollment ? StatusChangeAudit::placement($previousEnrollment) : null;
+                $enrollment = Enrollment::updateOrCreate(
+                    ['user_id' => $id, 'school_id' => $schoolId],
+                    [
+                        'class_id' => (int) $data['class_id'],
+                        'section_id' => (int) ($data['section_id'] ?? 0),
+                        'department_id' => (int) ($data['department_id'] ?? 0),
+                        'session_id' => (int) ($runningSession ?? 0),
+                    ]
+                );
+                StatusChangeAudit::enrollment($enrollment, $previousPlacement, 'Student record edit');
+            });
         }
 
         $additionalImageName = null;

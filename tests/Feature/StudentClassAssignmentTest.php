@@ -134,20 +134,21 @@ class StudentClassAssignmentTest extends TestCase
         ]);
     }
 
-    public function test_ordinary_student_profile_edit_preserves_existing_placement_even_if_old_form_values_are_posted(): void
+    public function test_ordinary_student_profile_edit_preserves_existing_placement(): void
     {
         $schoolId = $this->makeSchool();
         $admin = $this->makeAdminUser($schoolId);
         $oldClass = $this->makeClass($schoolId, ['name' => 'Current Class']);
-        $otherClass = $this->makeClass($schoolId, ['name' => 'Unselected Class']);
         $student = User::create(['name' => 'Existing Student', 'email' => 'existing.profile@example.test',
             'password' => bcrypt('preserve-this-password'), 'code' => 'REG-KEEP-1', 'role_id' => 7, 'school_id' => $schoolId]);
         Enrollment::create(['user_id' => $student->id, 'school_id' => $schoolId, 'class_id' => $oldClass,
             'section_id' => 0, 'session_id' => 1, 'department_id' => 0]);
         $before = Enrollment::where('user_id', $student->id)->firstOrFail()->getRawOriginal();
         $password = $student->password;
+        $payload = $this->updatePayload($oldClass, 0);
+        unset($payload['class_id'], $payload['section_id']); // Disabled controls are omitted by a normal profile edit.
         $this->actingAs($admin)->post(route('admin.student.update', $student->id), array_merge(
-            $this->updatePayload($otherClass, 0), ['email' => $student->email, 'name' => 'Corrected Name']
+            $payload, ['email' => $student->email, 'name' => 'Corrected Name']
         ))->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame($before, Enrollment::where('user_id', $student->id)->firstOrFail()->getRawOriginal());
         $this->assertSame($password, $student->fresh()->password);
