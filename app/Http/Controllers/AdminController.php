@@ -6069,9 +6069,11 @@ class AdminController extends Controller
     public function sessionManager()
     {
         $schoolId = (int) auth()->user()->school_id;
-        $sessions = Session::where('school_id', $schoolId)
-            ->with(['academicYear' => fn ($query) => $query->where('school_id', $schoolId)])
-            ->get();
+        $sessions = Session::where('school_id', $schoolId);
+        if (Schema::hasTable('academic_years')) {
+            $sessions->with(['academicYear' => fn ($query) => $query->where('school_id', $schoolId)]);
+        }
+        $sessions = $sessions->get();
         return view('admin.session.session_manager', ['sessions' => $sessions]);
     }
 
@@ -6105,7 +6107,9 @@ class AdminController extends Controller
 
     public function createSession()
     {
-        $academicYears = AcademicYear::where('school_id', auth()->user()->school_id)->orderByDesc('start_date')->get();
+        $academicYears = Schema::hasTable('academic_years')
+            ? AcademicYear::where('school_id', auth()->user()->school_id)->orderByDesc('start_date')->get()
+            : collect();
         return view('admin.session.create', compact('academicYears'));
     }
 
@@ -6133,7 +6137,9 @@ class AdminController extends Controller
     public function editSession($id = '')
     {
         $session = Session::where('school_id', auth()->user()->school_id)->findOrFail($id);
-        $academicYears = AcademicYear::where('school_id', auth()->user()->school_id)->orderByDesc('start_date')->get();
+        $academicYears = Schema::hasTable('academic_years')
+            ? AcademicYear::where('school_id', auth()->user()->school_id)->orderByDesc('start_date')->get()
+            : collect();
         return view('admin.session.edit', compact('session', 'academicYears'));
     }
 
