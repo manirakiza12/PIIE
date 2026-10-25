@@ -18,15 +18,15 @@
     $blockerAction = $blockerTarget === '#manage-curriculum' ? 'Review curriculum details' : ($blockerTarget === '#review' ? 'Review blockers' : 'Fix Course Unit placements');
 @endphp
 <style>
-    .curriculum-hero { background:linear-gradient(125deg,#f4f8ff,#fff 70%); border:1px solid #dce6f3; border-radius:14px; padding:1.5rem; }
+    .curriculum-hero { min-width:0; max-width:100%; box-sizing:border-box; background:linear-gradient(125deg,#f4f8ff,#fff 70%); border:1px solid #dce6f3; border-radius:14px; padding:1.5rem; }
     .curriculum-progress { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; }
-    .curriculum-step { border:1px solid #dfe5ed; border-radius:10px; padding:.75rem; background:#fff; color:#64748b; }
+    .curriculum-step { min-width:0; overflow-wrap:anywhere; border:1px solid #dfe5ed; border-radius:10px; padding:.75rem; background:#fff; color:#64748b; }
     .curriculum-step.is-done { border-color:#a7d7bd; color:#146c43; background:#f2fbf6; }
     .curriculum-step.is-current { border:2px solid #2864c5; color:#174ea6; background:#f3f7ff; }
     .curriculum-summary { min-height:108px; border:1px solid #e4e9f0; border-radius:12px; padding:1rem; background:#fff; }
     .curriculum-summary strong { display:block; font-size:1.65rem; line-height:1.2; color:#1e293b; }
     .curriculum-table th { white-space:nowrap; }
-    @media(max-width:650px) { .curriculum-progress { grid-template-columns:1fr 1fr; } .curriculum-hero { padding:1rem; } }
+    @media(max-width:650px) { .curriculum-progress { min-width:0; grid-template-columns:minmax(0,1fr); } .curriculum-hero { width:100%; max-width:min(350px, calc(100vw - 40px)); padding:1rem; } }
     @media print { .curriculum-no-print { display:none!important; } }
 </style>
 <header class="mainSection-title" id="overview">
