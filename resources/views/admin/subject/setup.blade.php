@@ -1,37 +1,31 @@
 @extends('admin.navigation')
-@section('content')
-<style>
-@media (max-width: 575.98px) {
-    .home-header { height: auto; min-height: 64px; }
-    .home-header > .row { flex-wrap: nowrap; margin: 0; }
-    .home-header > .row > .col-auto { padding: 0; }
-    .home-header > .row > .col-auto.d-flex { align-items: center; gap: 4px; max-width: calc(100% - 28px); }
-    .home-header .adminTable-action { margin: 0 !important; }
-    .home-header #defaultDropdown { padding: 0; }
-    .home-header #defaultDropdown > .text-start { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0 !important; }
-}
-</style>
-<div class="mainSection-title"><h4>{{ get_phrase(request('view') === '1' ? 'View Course Unit' : (isset($subject) ? ($isHigherEducation ? 'Edit Course Unit' : 'Edit Subject / Course Unit') : ($isHigherEducation ? 'Add Course Unit' : 'Add Subject / Course Unit'))) }}</h4></div>
-@if($isHigherEducation)
-<div class="alert alert-info" role="note"><strong>Academic Year and Semester:</strong> A Course Unit is a reusable catalogue record. Choose the dated teaching year and semester in the Course Allocation module.
 
-</div>
-@endif
-@if($errors->any())<div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
-<div class="eSection-wrap mt-3">
-    <p class="text-muted">{{ institution_name() }}</p>
-    @if(request('view') === '1')<h5>View Course Unit</h5><fieldset disabled>@include($formView)</fieldset>@else @include($formView) @endif
-</div>
-@if(isset($subject) && $unitSetup)
-    <div class="eSection-wrap mt-3"><h5>{{ get_phrase('Existing Curriculum placements') }}</h5>
-        @foreach($unitSetup['plans'] as $plan)
-            @foreach($plan->memberships->where('subject_id', $subject->id) as $placement)
-                <div class="d-flex justify-content-between flex-wrap gap-2 border-bottom py-2">
-                    <span>{{ $plan->programme->name }} — {{ $plan->version }} · {{ $placement->stage->label }} · {{ $placement->credits }} {{ get_phrase('credits') }}</span>
-                    @if(request('view') !== '1')<form method="POST" action="{{ route('admin.curricula.memberships.destroy', [$plan->id, $placement->id]) }}" onsubmit="return confirm('Remove this draft placement and its prerequisite links? The Course Unit will be preserved.');">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">{{ get_phrase('Remove placement') }}</button></form>@endif
-                </div>
-            @endforeach
-        @endforeach
+@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">@endsection
+@section('content')
+<div class="curriculum-workspace">
+    <div class="mainSection-title">
+        <div>
+            <h4>{{ get_phrase(request('view') === '1' ? 'View Course Unit' : (isset($subject) ? ($isHigherEducation ? 'Edit Course Unit' : 'Edit Subject / Course Unit') : ($isHigherEducation ? 'Add Course Unit' : 'Add Subject / Course Unit'))) }}</h4>
+            <p class="text-muted mt-1 mb-0">{{ get_phrase(isset($subject) ? 'Edit shared Course Unit catalogue details' : 'Create a reusable Course Unit catalogue record') }}</p>
+        </div>
     </div>
-@endif
+
+    @if(($isHigherEducation || $isMixed) && !isset($subject))
+        <div class="alert alert-info" role="note">
+            <strong>{{ get_phrase('Reusable Course Unit') }}</strong>
+            <span class="ms-1">{{ get_phrase('Catalogue details can be reused in multiple curricula; placement settings belong to each curriculum separately.') }}</span>
+        </div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+    @endif
+
+    <div class="eSection-wrap mt-3">
+        @if(request('view') === '1')
+            <h5>{{ get_phrase('View Course Unit') }}</h5><fieldset disabled>@include($formView)</fieldset>
+        @else
+            @include($formView)
+        @endif
+    </div>
+</div>
 @endsection

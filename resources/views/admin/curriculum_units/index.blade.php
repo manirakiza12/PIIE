@@ -1,5 +1,7 @@
 @extends('admin.navigation')
+@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">@endsection
 @section('content')
+<div class="curriculum-workspace">
 <div class="mainSection-title"><h4>Course Units</h4><p class="text-muted">Manage course-unit placements, credits and prerequisites for a Programme Curriculum. Catalogue editing requires separate permission.</p></div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
@@ -14,4 +16,5 @@
 @if(!$isDraft && !auth()->user()->hasPermission('academic.curriculum.manage'))<div class="alert alert-info">This curriculum is read-only for your account.</div>@endif
 @include('admin.curriculum_units.placements')
 @endisset
+</div>
 @endsection

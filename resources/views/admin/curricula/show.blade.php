@@ -1,6 +1,8 @@
 @extends('admin.navigation')
 
+@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">@endsection
 @section('content')
+<div class="curriculum-workspace">
 @php
     $courseUnitLabel = app(\App\Support\TenantConfiguration::class)->terminology($curriculum->school)['course_unit'] ?? 'Course Unit';
     $periodLabel = $calendarPattern === 'semester' ? 'Semester' : 'Term';
@@ -164,4 +166,5 @@ document.addEventListener('DOMContentLoaded', function () {
     if (window.location.hash === '#manage-curriculum') document.getElementById('manage-curriculum')?.setAttribute('open', 'open');
 });
 </script>
+</div>
 @endsection

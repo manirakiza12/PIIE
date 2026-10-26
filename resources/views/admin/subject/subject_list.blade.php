@@ -1,6 +1,8 @@
 @extends('admin.navigation')
 
+@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">@endsection
 @section('content')
+<div class="curriculum-workspace">
 @php
     $pageLabel = $isHigherEducation ? 'Course Units' : ($isMixed ? 'Subjects / Course Units' : 'Subjects');
     $createLabel = $isHigherEducation ? 'Create Course Unit' : ($isMixed ? 'Create Subject / Course Unit' : 'Create Subject');
@@ -116,7 +118,7 @@
                                 <div class="adminTable-action">
                                     <button type="button" class="eBtn eBtn-black dropdown-toggle table-action-btn-2" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ get_phrase('Actions for') }} {{ $subject->name }}">{{ get_phrase('Actions') }}</button>
                                     <ul class="dropdown-menu dropdown-menu-end eDropdown-menu-2 eDropdown-table-action">
-                                        <li><a class="dropdown-item" href="{{ ($isHigherEducation || $isMixed) ? route('admin.subject.setup', ['id' => $subject->id] + request()->only('curriculum_id')) : 'javascript:;' }}" @if(!$isHigherEducation && !$isMixed) onclick="rightModal('{{ route('admin.edit.subject', ['id' => $subject->id]) }}', '{{ get_phrase('Edit Subject') }}')" @endif>{{ get_phrase('Edit') }}</a></li>
+                                        <li><a class="dropdown-item" href="{{ ($isHigherEducation || $isMixed) ? route('admin.subject.setup', ['id' => $subject->id] + request()->only('curriculum_id')) : 'javascript:;' }}" @if(!$isHigherEducation && !$isMixed) onclick="rightModal('{{ route('admin.edit.subject', ['id' => $subject->id, 'modal' => 1]) }}', '{{ get_phrase('Edit Subject') }}')" @endif>{{ get_phrase('Edit') }}</a></li>
                                         @if($isHigherEducation || $isMixed)<li><a class="dropdown-item" href="{{ route('admin.subject.setup', ['id' => $subject->id, 'view' => '1']) }}">View</a></li>@endif
                                         <li><a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.subject.delete', ['id' => $subject->id]) }}', 'undefined');">{{ get_phrase('Delete') }}</a></li>
                                     </ul>
@@ -145,5 +147,6 @@
             @endif
         </div>
     @endif
+</div>
 </div>
 @endsection

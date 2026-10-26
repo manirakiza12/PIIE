@@ -1,5 +1,7 @@
 @extends('admin.navigation')
+@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">@endsection
 @section('content')
+<div class="curriculum-workspace">
 @php
     $isOwner = \App\Support\Curriculum\CurriculumOwnerAccess::allows(auth()->user(), (int) auth()->user()->school_id);
     $editableCurricula = $isOwner ? $curricula : $curricula->where('status', 'draft');
@@ -52,4 +54,5 @@
     @empty<p class="text-muted">No Programme Years found.</p>@endforelse
     {{ $years->links() }}
 </section>
+</div>
 @endsection
