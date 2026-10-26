@@ -1,0 +1,70 @@
+/* PIIE curriculum screens use the existing Ekattor 8 brand tokens. */
+.curriculum-workspace {
+    --curriculum-primary: var(--piie-blue, #1466ae);
+    --curriculum-primary-hover: #0d568f;
+    --curriculum-accent: var(--piie-orange, #f15f23);
+    --curriculum-ink: #172b4d;
+    --curriculum-muted: #5d6b7d;
+    --curriculum-line: #dce3eb;
+    --curriculum-surface: #fff;
+    color: var(--curriculum-ink);
+    font-size: 15px;
+}
+
+.curriculum-workspace .mainSection-title { margin-bottom: 1.25rem; border-left: 3px solid var(--curriculum-accent); padding-left: .8rem; }
+.curriculum-workspace .mainSection-title h4,
+.curriculum-workspace h5,
+.curriculum-workspace h6 { color: var(--curriculum-ink); font-weight: 700; letter-spacing: -.01em; }
+.curriculum-workspace .eSection-wrap,
+.curriculum-workspace section.border,
+.curriculum-workspace details.border {
+    border-color: var(--curriculum-line) !important;
+    border-radius: .75rem !important;
+    background: var(--curriculum-surface);
+}
+.curriculum-workspace .eSection-wrap { padding: 1.25rem; }
+.curriculum-workspace .form-label,
+.curriculum-workspace label { color: var(--curriculum-ink); font-size: .9rem; font-weight: 650; margin-bottom: .4rem; }
+.curriculum-workspace .form-control,
+.curriculum-workspace .form-select { min-height: 2.65rem; border-color: #c8d2de; border-radius: .5rem; color: var(--curriculum-ink); }
+.curriculum-workspace .form-control:focus,
+.curriculum-workspace .form-select:focus,
+.curriculum-workspace .btn:focus-visible,
+.curriculum-workspace a:focus-visible {
+    border-color: var(--curriculum-primary) !important;
+    outline: 3px solid rgba(20, 102, 174, .28);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 .15rem rgba(20, 102, 174, .18);
+}
+.curriculum-workspace a:not(.btn):not(.dropdown-item) { color: var(--curriculum-primary); text-underline-offset: .15em; }
+.curriculum-workspace .btn-primary,
+.curriculum-workspace .eBtn-primary,
+.curriculum-workspace .btn-form.eBtn-primary {
+    background: var(--curriculum-primary);
+    border-color: var(--curriculum-primary);
+    color: #fff;
+    font-weight: 650;
+}
+.curriculum-workspace .btn-primary:hover,
+.curriculum-workspace .eBtn-primary:hover,
+.curriculum-workspace .btn-form.eBtn-primary:hover { background: var(--curriculum-primary-hover); border-color: var(--curriculum-primary-hover); color: #fff; }
+.curriculum-workspace .curriculum-step.is-active,
+.curriculum-workspace [aria-current="step"] { border-color: var(--curriculum-primary); color: var(--curriculum-primary); }
+.curriculum-workspace .curriculum-step.is-current { border-color: var(--curriculum-primary); color: var(--curriculum-primary); background: #edf5fb; }
+.curriculum-workspace .curriculum-accent { border-left: 3px solid var(--curriculum-accent); padding-left: .75rem; }
+.curriculum-workspace .alert { border-radius: .6rem; }
+.curriculum-workspace .alert-success { color: #146c43; background: #d1e7dd; border-color: #a3cfbb; }
+.curriculum-workspace .alert-warning { color: #664d03; background: #fff3cd; border-color: #ffecb5; }
+.curriculum-workspace .alert-danger { color: #842029; background: #f8d7da; border-color: #f1aeb5; }
+.curriculum-workspace .text-muted,
+.curriculum-workspace .form-text { color: var(--curriculum-muted) !important; }
+.curriculum-workspace .table thead th { color: var(--curriculum-ink); font-weight: 700; }
+.curriculum-workspace .btn { min-height: 2.35rem; border-radius: .45rem; font-weight: 600; }
+
+@media (max-width: 767.98px) {
+    .curriculum-workspace .eSection-wrap { padding: 1rem; }
+    .curriculum-workspace .mainSection-title { align-items: flex-start !important; }
+    .curriculum-workspace .mainSection-title .d-flex { gap: .75rem !important; }
+    .curriculum-workspace .btn { max-width: 100%; white-space: normal; }
+    .curriculum-workspace .table-responsive { border-radius: .55rem; }
+}

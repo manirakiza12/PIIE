@@ -4085,7 +4085,11 @@ class AdminController extends Controller
 
     public function courseUnitSetup(?int $id = null)
     {
-        $form = $id === null ? $this->createSubject() : $this->editSubject($id);
+        if ($id !== null) {
+            return $this->editSubject(request(), $id);
+        }
+
+        $form = $this->createSubject();
         return view('admin.subject.setup', $form->getData() + ['formView' => $form->name()]);
     }
 
@@ -4139,7 +4143,7 @@ class AdminController extends Controller
         return redirect()->route('admin.subject_list')->with('message', get_phrase('Course Unit or Subject created successfully.'));
     }
 
-    public function editSubject($id)
+    public function editSubject(Request $request, $id)
     {
         $schoolId = (int) auth()->user()->school_id;
         $educationLevel = academic_education_level($schoolId);
@@ -4150,7 +4154,17 @@ class AdminController extends Controller
         $programmes = Programme::where('school_id', $schoolId)
             ->where(fn ($q) => $q->where('is_active', 1)->orWhere('id', $subject->programme_id))->orderBy('name')->get();
         $unitSetup = ($isHigherEducation || $isMixed) ? app(\App\Support\Curriculum\CourseUnitSetup::class)->formData($subject) : null;
-        return view('admin.subject.edit_subject', compact('subject', 'classes', 'programmes', 'isHigherEducation', 'isMixed', 'unitSetup'));
+        $view = $request->boolean('modal') ? 'admin.subject.edit_subject' : 'admin.subject.setup';
+        $formView = 'admin.subject.edit_subject';
+        $curriculumId = $request->query('curriculum_id');
+        $curriculumStageId = $request->query('curriculum_stage_id');
+        if ($curriculumId !== null) {
+            $curriculum = \App\Models\Curriculum::where('school_id', $schoolId)->findOrFail($curriculumId);
+            if ($curriculumStageId !== null) {
+                \App\Models\CurriculumStage::where('school_id', $schoolId)->where('curriculum_id', $curriculum->id)->findOrFail($curriculumStageId);
+            }
+        }
+        return view($view, compact('subject', 'classes', 'programmes', 'isHigherEducation', 'isMixed', 'unitSetup', 'formView', 'curriculumId', 'curriculumStageId'));
     }
 
     public function subjectUpdate(Request $request, $id)
@@ -4179,9 +4193,8 @@ class AdminController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $subject, $subject_data): void {
+            DB::transaction(function () use ($subject, $subject_data): void {
                 $subject->update($subject_data);
-                app(\App\Support\Curriculum\CourseUnitSetup::class)->savePlacement($request, $subject);
             });
         } catch (\Illuminate\Database\QueryException $e) {
             if ($e->getCode() == 23000) {
@@ -4192,7 +4205,17 @@ class AdminController extends Controller
             return redirect()->back()->with('error', get_phrase('The catalogue record could not be saved. Check the Programme or Class selection and try again.'))->withInput();
         }
 
-        return redirect()->route('admin.subject_list')->with('message', get_phrase('Course Unit or Subject updated successfully.'));
+        if ($request->filled('curriculum_id')) {
+            $curriculum = \App\Models\Curriculum::where('school_id', $schoolId)->find($request->input('curriculum_id'));
+            if ($curriculum) {
+                $stageId = $request->input('curriculum_stage_id');
+                $stage = $stageId ? \App\Models\CurriculumStage::where('school_id', $schoolId)->where('curriculum_id', $curriculum->id)->find($stageId) : null;
+                $anchor = $stage ? '#curriculum-year-'.$stage->id : '#course-units';
+                return redirect()->to(route('admin.curricula.show', $curriculum->id).$anchor)->with('success', get_phrase('Course Unit updated. Its shared catalogue details are used by every curriculum placement.'));
+            }
+        }
+
+        return redirect()->route('admin.subject_list', $request->only(['programme_id', 'search']))->with('message', get_phrase('Course Unit or Subject updated successfully.'));
     }
 
     private function subjectCatalogueRules(int $schoolId, bool $isHigherEducation, bool $isMixed, ?int $ignoreId = null): array

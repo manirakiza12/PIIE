@@ -67,7 +67,11 @@ class CourseUnitSetupTest extends TestCase
         $this->assertSame($this->programme, (int)$unit->programme_id);
         $this->assertSame('3.50', $membership->credits);
         $this->assertNull($unit->credits); // No second source of Study Plan credit values.
-        $this->post(route('admin.subject.update', $unit->id), $this->payload(['name' => 'Revised Business', 'placement_credits' => '4.00']))->assertSessionHasNoErrors();
+        $this->post(route('admin.subject.update', $unit->id), $this->payload(['name' => 'Revised Business']))->assertSessionHasNoErrors();
+        $this->put(route('admin.curricula.memberships.update', [$this->plan->id, $membership->id]), [
+            'curriculum_stage_id' => $this->stage, 'classification' => 'compulsory', 'credits' => '4.00',
+            'period_type' => 'semester', 'period_sequence' => 1, 'sequence' => 0,
+        ])->assertSessionHasNoErrors();
         $this->assertSame('4.00', $membership->fresh()->credits);
         $this->assertSame('Revised Business', $unit->fresh()->name);
         $this->assertSame(1, Subject::count());
@@ -80,10 +84,9 @@ class CourseUnitSetupTest extends TestCase
         $payload = $this->payload(['placement_prerequisites' => [$required->id]]);
         $this->post(route('admin.create.subject'), $payload)->assertSessionHasNoErrors();
         $unit = Subject::where('code', 'BBA101')->firstOrFail();
-        $this->post(route('admin.subject.update', $unit->id), $payload)->assertSessionHasNoErrors();
         $this->assertSame(1, DB::table('curriculum_prerequisites')->count());
         $this->assertSame((int)$required->id, (int) DB::table('curriculum_prerequisites')->value('prerequisite_membership_id'));
-        $this->post(route('admin.subject.update', $unit->id), $this->payload(['placement_prerequisites' => []]))->assertSessionHasNoErrors();
+        $this->delete(route('admin.curricula.prerequisites.destroy', $this->plan->id), ['membership_id' => CurriculumMembership::where('subject_id', $unit->id)->value('id'), 'prerequisite_membership_id' => $required->id])->assertSessionHasNoErrors();
         $this->assertSame(0, DB::table('curriculum_prerequisites')->count());
         $this->assertSame(2, Subject::count());
     }
@@ -98,13 +101,18 @@ class CourseUnitSetupTest extends TestCase
         }
     }
 
-    public function test_approved_plan_cannot_be_changed_and_catalogue_edit_is_rolled_back(): void
+    public function test_catalogue_edit_does_not_mutate_approved_curriculum_placement(): void
     {
         $membership = $this->existingPlacement('BBA101');
         $unit = $membership->subject;
         DB::table('curricula')->where('id', $this->plan->id)->update(['status' => 'approved']);
-        $this->post(route('admin.subject.update', $unit->id), $this->payload(['name' => 'Must roll back']))->assertSessionHasErrors('curriculum');
-        $this->assertSame('Existing BBA101', $unit->fresh()->name);
+        $this->post(route('admin.subject.update', $unit->id), ['name' => 'Shared catalogue change', 'code' => 'BBA101', 'programme_id' => $this->programme])->assertSessionHasNoErrors();
+        $this->assertSame('Shared catalogue change', $unit->fresh()->name);
+        $this->post(route('admin.subject.update', $unit->id), [
+            'name' => 'Shared catalogue change 2', 'code' => 'BBA101', 'programme_id' => $this->programme,
+            'placement_curriculum_id' => $this->plan->id, 'placement_stage_id' => $this->stage, 'placement_credits' => '8.00',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('Shared catalogue change 2', $unit->fresh()->name);
         $this->assertSame('2.00', $membership->fresh()->credits);
     }
 
@@ -113,7 +121,12 @@ class CourseUnitSetupTest extends TestCase
         $first = $this->existingPlacement('BBA101');
         $second = $this->existingPlacement('BBA102');
         app(CurriculumFoundationService::class)->addPrerequisite($this->plan, (int)$second->id, (int)$first->id);
-        $this->post(route('admin.subject.update', $first->subject_id), $this->payload(['name' => 'Must roll back', 'placement_prerequisites' => [$second->id]]))->assertSessionHasErrors();
+        try {
+            app(CurriculumFoundationService::class)->addPrerequisite($this->plan, (int) $first->id, (int) $second->id);
+            $this->fail('A prerequisite cycle was accepted.');
+        } catch (\Illuminate\Validation\ValidationException) {
+            // The placement service rejects the cycle before changing graph state.
+        }
         $this->assertSame('Existing BBA101', $first->subject->fresh()->name);
         $this->assertSame(1, DB::table('curriculum_prerequisites')->count());
     }
@@ -123,7 +136,7 @@ class CourseUnitSetupTest extends TestCase
         $first = $this->existingPlacement('BBA101');
         $otherPlan = $this->plan->replicate(); $otherPlan->version = 'Next draft'; $otherPlan->save();
         $otherStage = DB::table('curriculum_stages')->insertGetId(['school_id' => $this->school, 'curriculum_id' => $otherPlan->id, 'label' => 'Other stage', 'sequence' => 1]);
-        $this->post(route('admin.subject.update', $first->subject_id), $this->payload(['placement_curriculum_id' => $otherPlan->id, 'placement_stage_id' => $otherStage]))->assertSessionHasNoErrors();
+        app(CurriculumFoundationService::class)->addMembership($otherPlan, (int) $first->subject_id, (int) $otherStage, ['classification' => 'compulsory', 'credits' => '7.00', 'sequence' => 0]);
         $this->assertSame(2, CurriculumMembership::count());
         $this->assertSame('2.00', $first->fresh()->credits);
         $this->post(route('admin.subject.update', $first->subject_id), ['name' => 'Catalogue edit', 'code' => 'BBA101', 'programme_id' => $this->programme])->assertSessionHasNoErrors();
@@ -154,16 +167,49 @@ class CourseUnitSetupTest extends TestCase
     {
         $member = $this->existingPlacement('BBA101');
         DB::table('programmes')->where('id', $this->programme)->update(['is_active' => 0]);
-        $response = $this->get(route('admin.subject.setup', $member->subject_id));
-        $response->assertOk()->assertSee('Business Administration')->assertSee('Foundation year')->assertSee('2026 plan')->assertSee('placement_credits')->assertSee('placement_prerequisites[]', false);
+        $response = $this->get(route('admin.edit.subject', ['id' => $member->subject_id, 'curriculum_id' => $this->plan->id, 'curriculum_stage_id' => $this->stage]));
+        $response->assertOk()->assertSee('class="sidebar"', false)->assertSee('curriculum-workspace.css')->assertSee('Edit Course Unit')->assertSee('Shared catalogue details')->assertSee('Changes here may affect other curricula')->assertSee('Return to Curriculum Placement')->assertDontSee('placement_credits')->assertDontSee('placement_prerequisites[]', false);
         $response->assertSee('value="'.$this->programme.'" selected', false);
         if (getenv('PIIE_CAPTURE_UNIT_FORM') === '1') {
             file_put_contents(base_path('output/course-unit-setup-preview.html'), $response->getContent());
         }
         $this->get(route('admin.subject_list', ['curriculum_id' => $this->plan->id]))->assertOk()->assertSee('subject-picker-form', false);
+        $direct = $this->get(route('admin.edit.subject', $member->subject_id));
+        $direct->assertOk()->assertSee('class="sidebar"', false)->assertSee('Edit Course Unit')->assertSee('Shared catalogue details')->assertDontSee('placement_credits');
+        $modal = $this->get(route('admin.edit.subject', ['id' => $member->subject_id, 'modal' => 1]));
+        $modal->assertOk()->assertSee('ajaxForm')->assertDontSee('class="sidebar"', false);
         $this->get(route('admin.curricula.show', $this->plan->id))->assertOk()
             ->assertDontSee('Edit Course Unit setup')->assertDontSee('name="credits"', false)
             ->assertDontSee('id="subject-picker-form"', false)->assertDontSee('name="prerequisite_membership_id"', false);
+    }
+
+    public function test_catalogue_edit_preserves_curriculum_context_on_validation_save_and_cancel(): void
+    {
+        $placement = $this->existingPlacement('BBA101');
+        $other = $this->existingPlacement('BBA102');
+        $otherPlan = $this->plan->replicate(); $otherPlan->version = 'Second curriculum'; $otherPlan->save();
+        $otherStage = DB::table('curriculum_stages')->insertGetId(['school_id' => $this->school, 'curriculum_id' => $otherPlan->id, 'label' => 'Year 1', 'sequence' => 1]);
+        $secondPlacement = app(CurriculumFoundationService::class)->addMembership($otherPlan, (int) $placement->subject_id, $otherStage, ['classification' => 'compulsory', 'credits' => '5.00', 'sequence' => 0]);
+
+        $editUrl = route('admin.edit.subject', ['id' => $placement->subject_id, 'curriculum_id' => $this->plan->id, 'curriculum_stage_id' => $this->stage]);
+        $returnUrl = route('admin.curricula.show', $this->plan->id).'#curriculum-year-'.$this->stage;
+        $this->get($editUrl)->assertOk()->assertSee($returnUrl, false);
+        $this->from($editUrl)->post(route('admin.subject.update', ['id' => $placement->subject_id, 'curriculum_id' => $this->plan->id, 'curriculum_stage_id' => $this->stage]), [
+            'name' => '', 'code' => 'BBA101', 'programme_id' => $this->programme,
+            'curriculum_id' => (string) $this->plan->id, 'curriculum_stage_id' => (string) $this->stage,
+        ])->assertRedirect($editUrl)->assertSessionHasErrors('name')
+            ->assertSessionHas('_old_input.curriculum_id', (string) $this->plan->id)
+            ->assertSessionHas('_old_input.curriculum_stage_id', (string) $this->stage);
+
+        $this->post(route('admin.subject.update', ['id' => $placement->subject_id, 'curriculum_id' => $this->plan->id, 'curriculum_stage_id' => $this->stage]), [
+            'name' => 'Reused Across Curricula', 'code' => 'BBA101', 'programme_id' => $this->programme,
+            'curriculum_id' => (string) $this->plan->id, 'curriculum_stage_id' => (string) $this->stage,
+        ])->assertSessionHasNoErrors()->assertRedirect($returnUrl);
+        $this->assertSame('Reused Across Curricula', $placement->subject->fresh()->name);
+        $this->assertSame($placement->subject_id, $secondPlacement->fresh()->subject_id);
+        $this->assertSame('2.00', $placement->fresh()->credits);
+        $this->assertSame('5.00', $secondPlacement->fresh()->credits);
+        $this->assertSame(2, CurriculumMembership::where('subject_id', $placement->subject_id)->count());
     }
 
     public function test_form_explains_year_selection_and_preserves_catalogue_and_placement_data(): void
@@ -173,14 +219,13 @@ class CourseUnitSetupTest extends TestCase
         $member = $this->existingPlacement('BBA102');
         $before = $member->getAttributes();
         $response = $this->get(route('admin.subject.setup', $member->subject_id))->assertOk()
-            ->assertSee('Curriculum applies from Academic Year')->assertSee('2026\/2027', false)->assertSee('data-curriculum-year',false)
-            ->assertDontSee('Schedule this Course Unit')->assertDontSee('Setup help and next steps');
-        $doc = new \DOMDocument(); @$doc->loadHTML($response->getContent()); $xpath = new \DOMXPath($doc);
-        $this->assertSame(0,$xpath->query('//aside[@aria-label="Academic workflow guidance"]')->length);
-        $this->assertSame(1,$xpath->query('//input[@id="unit-curriculum-academic-year" and @readonly and not(@name)]')->length);
-        $this->assertSame(0,$xpath->query('//li[@class="nav-links-li"]//a[contains(@href,"programme-cohorts")]')->length);
+            ->assertSee('Shared catalogue details')->assertSee('Changes here may affect other curricula')
+            ->assertDontSee('Curriculum applies from Academic Year')->assertDontSee('placement_credits');
+        $create = $this->get(route('admin.subject.setup'))->assertOk()
+            ->assertSee('Curriculum applies from Academic Year')->assertSee('data-curriculum-year', false)
+            ->assertSee('placement_credits');
         $this->assertEquals($before,$member->fresh()->getAttributes());
-        $view = $this->get(route('admin.subject.setup', ['id' => $member->subject_id, 'view' => '1']))->assertOk()->assertSee('View Course Unit');
+        $view = $this->get(route('admin.subject.setup', ['id' => $member->subject_id, 'view' => '1']))->assertOk()->assertSee('View Course Unit')->assertSee('class="sidebar"', false);
         $viewDoc = new \DOMDocument(); @$viewDoc->loadHTML($view->getContent());
         $this->assertGreaterThanOrEqual(1, (new \DOMXPath($viewDoc))->query('//fieldset[@disabled]')->length);
         $view->assertDontSee('Remove placement');

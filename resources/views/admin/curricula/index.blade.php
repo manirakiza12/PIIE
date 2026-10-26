@@ -1,6 +1,8 @@
 @extends('admin.navigation')
 
+@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">@endsection
 @section('content')
+<div class="curriculum-workspace">
 <div class="mainSection-title">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div><h4>{{ get_phrase('Programme Curriculum') }}</h4><ul class="d-flex align-items-center eBreadcrumb-2"><li>{{ get_phrase('Academics') }}</li><li>{{ get_phrase('Programmes') }}</li></ul></div>
@@ -60,4 +62,5 @@
     {{ $curriculumRows->links() }}
 </div>
 @include('shared.academic_delete_modal')
+</div>
 @endsection
