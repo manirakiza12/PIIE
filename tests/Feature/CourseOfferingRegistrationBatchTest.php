@@ -478,7 +478,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentA']->id, 'status' => 'confirmed']);
         $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentAlready']->id, 'status' => 'registered']);
         $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
-        $this->assertStringContainsString('No invoice is recorded', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
+        $this->assertStringContainsString('20%', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
         $count = DB::table('course_registrations')->count();
         $this->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
             'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1], 'confirm_now' => 1,
