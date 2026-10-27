@@ -695,7 +695,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         $this->assertSame((int) $this->offering->id, (int) $exam->course_offering_id);
     }
 
-    public function test_retired_class_exams_are_absent_from_the_tertiary_exam_list(): void
+    public function test_historical_class_exams_remain_accessible_without_reviving_class_selectors(): void
     {
         $classId = $this->makeClass(1);
 
@@ -714,8 +714,9 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringNotContainsString('A legacy class paper', $html);
-        $this->assertStringNotContainsString('Class 1', $html);
+        $this->assertStringContainsString('A legacy class paper', $html);
+        $this->assertStringContainsString('Class 1', $html, 'Historical targeting remains readable.');
+        $this->assertStringNotContainsString('name="class_id"', $html, 'Retired class selectors must not return.');
     }
 
     public function test_the_Quizzes_and_Exams_tab_NAMES_the_course_and_the_term(): void

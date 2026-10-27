@@ -1791,6 +1791,7 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
 
     public function test_a_k12_assignment_keeps_its_own_single_form_and_gains_no_questions(): void
     {
+        DB::table('schools')->where('id', $this->school)->update(['school_type' => 'k12', 'education_level' => 'secondary']);
         $k12 = $this->k12Assignment(['title' => 'K12 Homework']);
 
         $this->assertNull($k12->course_offering_id);

@@ -24,7 +24,7 @@ class OnlineExamStudentFrontendTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootSecondaryOnlineExamTestSchema();
     }
 
     // ── instructions() ───────────────────────────────────────────────────
@@ -377,8 +377,10 @@ class OnlineExamStudentFrontendTest extends TestCase
         $response = $this->actingAs($student)->get(route('student.online_exam.take', $examId));
 
         $response->assertStatus(200);
-        $response->assertSee('id="q' . $questionId . 'b" data-question-id="' . $questionId . '" data-answer-type="option"
-                                       checked', false);
+        $this->assertMatchesRegularExpression(
+            '/<input\b(?=[^>]*id="q'.$questionId.'b")(?=[^>]*data-question-id="'.$questionId.'")(?=[^>]*data-answer-type="option")(?=[^>]*\bchecked\b)[^>]*>/s',
+            $response->getContent()
+        );
     }
 
     public function test_an_essay_answer_text_is_pre_filled_on_resume(): void

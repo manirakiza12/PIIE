@@ -1549,6 +1549,7 @@ class CourseOfferingExamTest extends TestCase
 
     public function test_the_legacy_K12_exam_flow_is_UNTOUCHED(): void
     {
+        $this->useSecondarySchool();
         // No Allocation, a real class, a real enrolment: exactly the shape the engine
         // served before this feature existed.
         $classId = $this->makeClass(1);

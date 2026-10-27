@@ -183,6 +183,10 @@ class UpdateOnlineExamRequest extends FormRequest
             if (!$user || !$this->exam) {
                 return;
             }
+            if ($this->exam->class_id && academic_education_level((int) $user->school_id) === 'tertiary') {
+                $validator->errors()->add('exam', 'Historical class-targeted exams cannot be retargeted. Create a Course Allocation exam.');
+            }
+
             if (academic_education_level((int) $user->school_id) === 'tertiary' && $this->filled('class_id')) {
                 $validator->errors()->add('class_id', 'Class targeting is unavailable. Use course registrations or a Programme.');
             }

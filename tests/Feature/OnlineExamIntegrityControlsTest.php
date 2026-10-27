@@ -19,32 +19,31 @@ use Tests\TestCase;
 class OnlineExamIntegrityControlsTest extends TestCase
 {
     use OnlineExamTestHelper;
+    use \Tests\Feature\Support\CourseOfferingExamFixture;
 
     private int $examId;
     private int $studentId;
     private int $lecturerId;
-    private int $classId;
+    private \App\Models\CourseOffering $offering;
     private int $questionId;
     private int $submissionId;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootCourseOfferingExamSchema();
 
         $this->studentId = (int) $this->makeUser(7, 1, 'active', 'Kyeyune Amos')->id;
-        $this->classId = $this->makeClass(1);
-        $subjectId = $this->makeSubject(1, $this->classId);
-        $this->enrollStudent($this->studentId, 1, $this->classId);
 
         $this->lecturerId = (int) $this->makeUser(3, 1, 'active', 'Daniel Okello')->id;
-        \Illuminate\Support\Facades\DB::table('teacher_permissions')->insert([
-            'class_id' => $this->classId, 'section_id' => 1, 'school_id' => 1,
-            'teacher_id' => $this->lecturerId, 'marks' => 1, 'attendance' => 1, 'updated_at' => now(),
-        ]);
+        $this->offering = $this->makeOffering();
+        $this->allocateLecturer($this->offering, \App\Models\User::findOrFail($this->lecturerId));
+        $this->confirmStudent($this->offering, \App\Models\User::findOrFail($this->studentId));
+        $subjectId = $this->offering->subject_id;
+
 
         $this->examId = $this->makeExam([
-            'title' => 'Integrity verification', 'subject_id' => $subjectId, 'class_id' => $this->classId,
+            'title' => 'Integrity verification', 'subject_id' => $subjectId, 'class_id' => null, 'course_offering_id' => $this->offering->id,
             'created_by' => $this->lecturerId, 'creator_id' => $this->lecturerId,
         ]);
 
@@ -382,11 +381,11 @@ class OnlineExamIntegrityControlsTest extends TestCase
 
     public function test_an_unknown_accommodation_is_refused_by_the_exam_form(): void
     {
-        $classId = $this->classId;
+        $offeringId = $this->offering->id;
 
         $response = $this->actingAs(\App\Models\User::find($this->lecturerId))->post(route('teacher.online_exams.store'), [
             'title' => 'Rejected adjustment',
-            'class_id' => $classId,
+            'class_id' => null, 'course_offering_id' => $offeringId,
             'duration_mins' => 30,
             'total_marks' => 20,
             'pass_mark' => 10,

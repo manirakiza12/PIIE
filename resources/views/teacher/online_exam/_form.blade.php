@@ -49,6 +49,9 @@
 
 <form method="POST" action="{{ $targetRoute }}" class="row g-3">
     @csrf
+    @if($programmeExams && !$isEdit && $offerings->isEmpty())
+        <div class="col-md-12 alert alert-info">{{ get_phrase('No Course Allocations are assigned to you. Ask your administrator to allocate a course before creating an exam.') }}</div>
+    @endif
     @if($isEdit)
         @method('PUT')
     @endif

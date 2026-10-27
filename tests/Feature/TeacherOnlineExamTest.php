@@ -15,7 +15,7 @@ class TeacherOnlineExamTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootSecondaryOnlineExamTestSchema();
 
         DB::table('global_settings')->where('key', 'role_perm_3')->delete();
         DB::table('global_settings')->insert([

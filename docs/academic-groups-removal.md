@@ -12,6 +12,8 @@ Tertiary exam creation uses Course Allocations for lecturers. Class selectors ar
 
 The student directory does not show historical class/section enrollment for tertiary students. Historical group links do not prevent correction of otherwise unused academic placements; ended placements and course registration history remain protected.
 
+Existing online-exam history and in-progress legacy attempts remain available under their original tenant, permission, deadline and publication checks. New tertiary class-targeted delivery remains blocked. See [exam compatibility and policy decisions](online-exam-retirement-compatibility.md).
+
 ## Verification
 
 Regression coverage includes retired endpoint redirects and mutation rejection, placement-based eligibility, selected-student registration, teacher workspace/navigation, and course exam creation. Blade templates must compile successfully. Tests use in-memory SQLite and a temporary test encryption key.

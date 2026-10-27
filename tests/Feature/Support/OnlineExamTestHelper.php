@@ -10,6 +10,19 @@ use Illuminate\Database\Schema\Blueprint;
 
 trait OnlineExamTestHelper
 {
+    protected function useSecondarySchool(int $schoolId = 1): void
+    {
+        DB::table('schools')->where('id', $schoolId)->update([
+            'school_type' => 'k12', 'education_level' => 'secondary',
+        ]);
+    }
+
+    protected function bootSecondaryOnlineExamTestSchema(): void
+    {
+        $this->bootOnlineExamTestSchema();
+        $this->useSecondarySchool();
+    }
+
     protected function bootOnlineExamTestSchema(): void
     {
         Config::set('database.default', 'sqlite');

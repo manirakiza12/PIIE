@@ -37,7 +37,9 @@
                 </div>
             @endif
 
-            @unless($withinWindow)
+            @if($retiredClassTarget ?? false)
+                <div class="alert alert-info">{{ get_phrase('This historical exam is closed to new attempts. Your existing records remain available.') }}</div>
+            @elseif(!$withinWindow)
                 <div class="alert alert-warning">
                     <i class="bi bi-clock-history"></i>
                     @if($exam->start_datetime && now()->lt($exam->start_datetime))
@@ -48,7 +50,7 @@
                 </div>
             @endif
 
-            @if($withinWindow)
+            @if($withinWindow && !($retiredClassTarget ?? false))
                 @if($exam->instructions)
                     <div class="alert alert-info">
                         <strong>{{ get_phrase('Instructions') }}:</strong>

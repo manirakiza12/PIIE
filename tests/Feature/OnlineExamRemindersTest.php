@@ -22,7 +22,7 @@ class OnlineExamRemindersTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootSecondaryOnlineExamTestSchema();
     }
 
     public function test_reminder_command_sends_once_per_window_and_records_a_dedupe_row(): void

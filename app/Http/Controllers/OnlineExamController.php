@@ -17,6 +17,7 @@ use App\Models\QuestionTag;
 use App\Models\Programme;
 use App\Models\Session;
 use App\Models\Subject;
+use App\Models\User;
 use App\Models\TeacherPermission;
 use App\Models\TeacherProgrammeAssignment;
 use App\Http\Requests\OnlineExam\CameraReadinessRequest;
@@ -2252,6 +2253,7 @@ class OnlineExamController extends Controller
             'exam' => $exam,
             'attemptsUsed' => $attemptsUsed,
             'questionCount' => OnlineExamQuestion::forExam($exam->id)->count(),
+            'retiredClassTarget' => $exam->class_id && academic_education_level($this->school_id) === 'tertiary',
             'withinWindow' => $this->withinExamWindow($exam),
         ]);
     }
@@ -2289,6 +2291,10 @@ class OnlineExamController extends Controller
     {
         $exam = $this->findStudentExamOrFail((int) $id);
         $this->authorize('sit', $exam);
+
+        // Retirement permits resuming an existing attempt, never a new class-targeted attempt.
+        abort_if($exam->class_id && academic_education_level($this->school_id) === 'tertiary',
+            410, 'Class-targeted exams are retired. Existing attempts can be resumed.');
 
         $submission = DB::transaction(function () use ($request, $exam) {
             $lockedExam = OnlineExam::whereKey($exam->id)->lockForUpdate()->firstOrFail();
@@ -3999,8 +4005,6 @@ public function heartbeat($submissionId)
 
     private function teacherAssignedClassIds(int $teacherId): array
     {
-        if (academic_education_level((int) $this->school_id) === 'tertiary') return [];
-
         return TeacherPermission::where('teacher_id', $teacherId)
             ->where('school_id', $this->school_id)
             ->pluck('class_id')
@@ -4013,6 +4017,13 @@ public function heartbeat($submissionId)
 
     private function teacherAssignableSubjects(int $teacherId, array $assignedClassIds)
     {
+        if (academic_education_level((int) $this->school_id) === 'tertiary') {
+            return Subject::where('school_id', $this->school_id)
+                ->whereIn('id', app(CourseOfferingExamAccess::class)
+                    ->teachableOfferings(User::findOrFail($teacherId))->pluck('subject_id'))
+                ->orderBy('name')->get();
+        }
+
         $programmeIds = Schema::hasTable('teacher_programme_assignments')
             ? TeacherProgrammeAssignment::where('teacher_id', $teacherId)
                 ->where('school_id', $this->school_id)
@@ -4229,10 +4240,6 @@ public function heartbeat($submissionId)
      */
     private function applyTeacherOwnershipScope($query, $user, array $assignedClassIds, bool $canEditAll): void
     {
-        if (academic_education_level((int) $user->school_id) === 'tertiary') {
-            $query->whereNotNull('course_offering_id');
-        }
-
         if ($canEditAll) {
             return;
         }
@@ -4324,11 +4331,9 @@ public function heartbeat($submissionId)
 
     private function teacherQuestionBankQuery($user, array $assignedClassIds)
     {
-        $assignedSubjectIds = empty($assignedClassIds)
-            ? collect()
-            : Subject::where('school_id', $this->school_id)
-                ->whereIn('class_id', $assignedClassIds)
-                ->pluck('id');
+        $assignedSubjectIds = academic_education_level((int) $this->school_id) === 'tertiary'
+            ? $this->teacherAssignableSubjects((int) $user->id, $assignedClassIds)->pluck('id')
+            : Subject::where('school_id', $this->school_id)->whereIn('class_id', $assignedClassIds)->pluck('id');
 
         return QuestionBank::forSchool($this->school_id)
             ->where(function ($query) use ($user, $assignedSubjectIds) {

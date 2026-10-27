@@ -190,6 +190,7 @@ class OnlineExamCreatePageTest extends TestCase
 
     public function test_the_create_page_shows_a_MESSAGE_rather_than_an_empty_select(): void
     {
+        $this->useSecondarySchool();
         $html = $this->actingAs($this->lecturer())
             ->get(route('teacher.online_exams.create'))
             ->assertOk()
@@ -217,6 +218,7 @@ class OnlineExamCreatePageTest extends TestCase
 
     public function test_the_create_page_carries_EVERY_existing_field(): void
     {
+        $this->useSecondarySchool();
         $html = $this->actingAs($this->lecturer())
             ->get(route('teacher.online_exams.create'))
             ->assertOk()

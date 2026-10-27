@@ -30,41 +30,35 @@ use Tests\TestCase;
 class OnlineExamAnswerPersistenceTest extends TestCase
 {
     use OnlineExamTestHelper;
+    use \Tests\Feature\Support\CourseOfferingExamFixture;
 
     private int $examId;
     private int $studentId;
     private int $lecturerId;
-    private int $classId;
+    private \App\Models\CourseOffering $offering;
     private int $submissionId;
     private array $questionIds = [];
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootCourseOfferingExamSchema();
 
         $this->studentId = (int) $this->makeUser(7, 1, 'active', 'Kyeyune Amos')->id;
-        $this->classId = $this->makeClass(1);
-        $subjectId = $this->makeSubject(1, $this->classId);
-        $this->enrollStudent($this->studentId, 1, $this->classId);
 
         // A lecturer assigned to this class, so the marking assertions below exercise
         // persistence rather than the permission engine.
         $this->lecturerId = (int) $this->makeUser(3, 1, 'active', 'Daniel Okello')->id;
-        DB::table('teacher_permissions')->insert([
-            'class_id' => $this->classId,
-            'section_id' => 1,
-            'school_id' => 1,
-            'teacher_id' => $this->lecturerId,
-            'marks' => 1,
-            'attendance' => 1,
-            'updated_at' => now(),
-        ]);
+        $this->offering = $this->makeOffering();
+        $this->allocateLecturer($this->offering, \App\Models\User::findOrFail($this->lecturerId));
+        $this->confirmStudent($this->offering, \App\Models\User::findOrFail($this->studentId));
+        $subjectId = $this->offering->subject_id;
+
 
         $this->examId = $this->makeExam([
             'title' => 'Answer Persistence Verification',
             'subject_id' => $subjectId,
-            'class_id' => $this->classId,
+            'class_id' => null, 'course_offering_id' => $this->offering->id,
             'total_marks' => 20,
             'pass_mark' => 10,
             'duration_mins' => 30,
@@ -195,7 +189,7 @@ class OnlineExamAnswerPersistenceTest extends TestCase
     {
         return $this->makeExam([
             'title' => 'Authoring Verification',
-            'class_id' => $this->classId,
+            'class_id' => null, 'course_offering_id' => $this->offering->id,
             'created_by' => $this->lecturerId,
             'creator_id' => $this->lecturerId,
         ]);
@@ -226,13 +220,14 @@ class OnlineExamAnswerPersistenceTest extends TestCase
                 'marks' => 5,
             ]);
 
-        $response->assertSessionHasNoErrors();
+        $response->assertRedirect()->assertSessionHasNoErrors();
 
         $stored = DB::table('online_exam_questions')
             ->where('online_exam_id', $draftExamId)
             ->where('type', 'essay')
             ->value('question');
 
+        $this->assertIsString($stored, 'Authoring must persist question text before inspecting it.');
         $this->assertStringContainsString('opportunity cost', $stored);
         $this->assertStringNotContainsString('<script', $stored);
     }

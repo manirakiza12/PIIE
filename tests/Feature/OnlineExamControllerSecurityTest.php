@@ -13,7 +13,7 @@ class OnlineExamControllerSecurityTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootSecondaryOnlineExamTestSchema();
     }
 
     public function test_student_cannot_inject_score_or_passed_fields_on_submit(): void
