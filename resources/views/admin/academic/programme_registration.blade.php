@@ -33,7 +33,7 @@
     </form>
     @if($programme && $curricula->isEmpty())<div class="alert alert-warning mt-3">This programme needs an approved curriculum with its Programme Years and course units before registration. @if($permissions->allows(auth()->user(), 'academic.curriculum.view'))<a href="{{ route('admin.curricula.index', ['programme_id' => $programme->id]) }}">Set up this programme curriculum</a>@else Ask the academic office to approve its curriculum.@endif</div>@endif
     @if($selectedStudent && !$programme)<div class="alert alert-warning mt-3">This student has no Programme recorded on the profile or active academic placement. Next step: complete the student profile and governed academic placement before checking course eligibility.</div>@endif
-    @if(!)@unless($programme && $curricula->isEmpty())<p class="text-muted mt-4">Choose a programme, Programme Year and semester / term above to continue.</p>@endunless @else
+    @if(!$ready)@unless($programme && $curricula->isEmpty())<p class="text-muted mt-4">Choose a programme, Programme Year and semester / term above to continue.</p>@endunless @else
     <hr>
     @if(session('programme_placement_results'))<div class="alert alert-info" role="status">@foreach(session('programme_placement_results') as $result)<p class="mb-1">{{ $result['student'] }}: {{ $result['message'] }}</p>@endforeach</div>@endif
     <h5>{{ $programme->code }} · {{ $curriculum->version }} · {{ $stage->label }} · {{ $year->label }} · {{ $period->label }}</h5>
