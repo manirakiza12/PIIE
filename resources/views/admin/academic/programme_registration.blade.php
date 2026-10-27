@@ -3,6 +3,7 @@
 @php
     $permissions = app(\App\Support\Permissions\PermissionService::class);
     $canManage = $permissions->allows(auth()->user(), 'academic.course_registration.manage');
+    $canPlace = $permissions->allows(auth()->user(), 'academic.programme_cohort.membership');
     $canConfirm = $permissions->allows(auth()->user(), 'academic.course_registration.confirm');
     $filters = ['programme_id' => $programme?->id, 'curriculum_id' => $curriculum?->id, 'stage_id' => $stage?->id, 'academic_year_id' => $year?->id, 'period_id' => $period?->id];
     if ($selectedStudent) $filters['student_id'] = $selectedStudent->id;

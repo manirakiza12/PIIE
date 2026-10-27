@@ -24,7 +24,7 @@ class StudentRegistrationConfirmationEligibility
             $required = number_format($finance['required_minor'] / 100, 2);
             $paid = number_format($finance['paid_minor'] / 100, 2);
             $shortfall = number_format($finance['shortfall_minor'] / 100, 2);
-            return "Verified payments cover {$paid}; the existing requirement is {$required} (20% of current-session invoices), leaving {$shortfall}. Pending payments and prior-payment claims do not count. Next step: Finance confirms a payment, or an authorised staff member approves a study waiver.";
+            return "Verified payments cover {$paid}; at least 20% of current-session invoices ({$required}) is required, leaving {$shortfall}. Pending payments and prior-payment claims do not count. Next step: Finance confirms a payment, or an authorised staff member approves a study waiver.";
         }
         if (! $finance['fully_covered']) {
             return 'The current-session invoice total is zero without an approved fee award. Next step: Finance must review the Fee Structure or approve the applicable award.';
