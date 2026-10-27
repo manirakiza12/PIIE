@@ -187,7 +187,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $source = str_replace(["@extends('admin.navigation')", "@section('content')", '@endsection'], '', file_get_contents(resource_path('views/admin/academic/programme_registration.blade.php')));
         $html = \Illuminate\Support\Facades\Blade::render($source, $data + ['errors' => new \Illuminate\Support\ViewErrorBag]);
         $this->assertStringContainsString('Student Course Registration', $html);
-        $this->assertStringContainsString('Year of study missing', $html);
+        $this->assertStringContainsString('No academic placement recorded for this year.', $html);
         $this->assertStringContainsString('Research Methods', $html);
         $this->assertStringNotContainsString('Set Year 1 for 2026', $html);
     }
@@ -260,7 +260,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
         $this->actingAs($viewer)->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Student Course Registration');
         $this->get(route('admin.course_registrations.index', $this->programmeFilters()))->assertOk()
-            ->assertSee('Year of study missing')->assertSee('Student Ineligible')->assertSee('Research Methods');
+            ->assertSee('No academic placement recorded for this year.')->assertSee('Student Ineligible')->assertSee('Research Methods');
     }
 
     public function test_programme_registration_can_register_multiple_courses_together(): void
@@ -343,7 +343,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $manager = User::factory()->create(['role_id' => 2, 'school_id' => $this->fixture['school'], 'account_status' => 'active']);
         $this->actingAs($manager)->post(route('admin.course_registrations.place'), $this->programmeFilters() + [
             'student_id' => $this->fixture['studentIneligible']->id,
-        ])->assertRedirect(route('admin.course_registrations.index', $this->programmeFilters()));
+        ])->assertRedirect(route('admin.course_registrations.index', $this->programmeFilters() + ['student_id' => $this->fixture['studentIneligible']->id]));
         $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id, 'entry_curriculum_stage_id' => 1, 'entry_academic_year_id' => 1]);
         $count = DB::table('student_curriculum_assignments')->count();
         $this->post(route('admin.course_registrations.place'), $this->programmeFilters() + [
@@ -430,7 +430,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id]);
         $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id]);
         $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
-        $this->assertStringContainsString('20%', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
+        $this->assertStringContainsString('No invoice is recorded', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
     }
 
     public function test_eager_loaded_course_unit_has_a_name(): void
@@ -447,7 +447,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->actingAs($admin)->get(route('admin.course_registrations.index', [
             'programme_id' => $this->fixture['programme'], 'student_search' => '20/U/TEST/001',
         ]))->assertOk()->assertSee('Student A')->assertDontSee('Student B')
-            ->assertSee('Register and confirm selected students')->assertSee('Find student by name or registration number');
+            ->assertSee('Register and confirm all eligible allocated units')->assertSee('Find student by name or registration number');
         $this->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
             'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1], 'student_search' => '20/U/TEST/001',
             'confirm_now' => 1,
@@ -478,7 +478,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentA']->id, 'status' => 'confirmed']);
         $this->assertDatabaseHas('course_registrations', ['student_id' => $this->fixture['studentAlready']->id, 'status' => 'registered']);
         $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
-        $this->assertStringContainsString('20%', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
+        $this->assertStringContainsString('No invoice is recorded', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
         $count = DB::table('course_registrations')->count();
         $this->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
             'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1], 'confirm_now' => 1,
