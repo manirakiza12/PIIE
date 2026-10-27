@@ -12,7 +12,7 @@
           <div class="d-flex flex-column">
             <h4>{{ academic_term('classes', auth()->user()->school_id) }}</h4>
             @if(academic_education_level(auth()->user()->school_id) === 'tertiary')
-            <p class="text-muted">Organise students into teaching groups and subgroups for attendance and exam eligibility. Programme Student Groups manage admissions-intake membership separately.</p>
+            <p class="text-muted">Manage school classes and sections.</p>
             @endif
             <ul class="d-flex align-items-center eBreadcrumb-2">
               <li><a href="#">{{ get_phrase('Home') }}</a></li>

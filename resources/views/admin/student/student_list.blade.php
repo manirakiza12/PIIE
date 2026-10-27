@@ -211,12 +211,14 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                             <div class="dAdmin_profile_name dAdmin_info_name">
                               <h4>{{ $student->name }}</h4>
                               <p>
-                                @if(!empty($student_details->class_name))
+                                @if(academic_education_level(auth()->user()->school_id) !== 'tertiary' && !empty($student_details->class_name))
                                 <span>{{ academic_term('class', auth()->user()->school_id) }}:</span> {{ $student_details->class_name }}
                                 <br>
                                 <span>{{ academic_term('section', auth()->user()->school_id) }}:</span> {{ $student_details->section_name }}
                                 @elseif(!empty($student_details->programme_name))
                                 <span>{{ academic_term('programme', auth()->user()->school_id) }}:</span> {{ $student_details->programme_name }}
+                                @elseif(academic_education_level(auth()->user()->school_id) === 'tertiary')
+                                <span>Programme:</span> {{ get_phrase('Placement pending') }}
                                 @else
                                 <span>{{ academic_term('class', auth()->user()->school_id) }}:</span>
                                  {{ get_phrase('Removed') }}

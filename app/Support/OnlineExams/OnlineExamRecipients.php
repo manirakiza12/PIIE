@@ -111,6 +111,8 @@ final class OnlineExamRecipients
         //
         // `class_id` NULL still means a school-wide paper, because nine live exams
         // rely on it. Nothing about that meaning is altered here.
+        if ($exam->class_id && academic_education_level((int) $exam->school_id) === 'tertiary') return [];
+
         if ($exam->class_id) {
             $query->whereExists(fn ($q) => $q->selectRaw('1')
                 ->from('enrollment')

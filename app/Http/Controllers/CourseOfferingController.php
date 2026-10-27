@@ -355,11 +355,8 @@ class CourseOfferingController extends Controller
         $schoolId = (int) $request->user()->school_id;
         $offering = $this->studentWorkspaceOffering($schoolId, $id);
         $permissions = app(\App\Support\Permissions\PermissionService::class);
-        $batch = app(\App\Support\CourseRegistration\CourseOfferingRegistrationBatch::class);
-        $cohorts = \Illuminate\Support\Facades\Schema::hasTable('programme_cohorts') ? $batch->relevantCohorts($offering) : collect();
-        $cohortId = $request->filled('cohort_id') && $cohorts->contains('id', $request->integer('cohort_id')) ? $request->integer('cohort_id') : null;
-        $review = $this->roster->review($offering, $cohortId, true);
-        $unfilteredReview = $cohortId === null ? $review : $this->roster->review($offering, null, true);
+        $review = $this->roster->review($offering, true);
+        $unfilteredReview = $review;
         $registered = $this->roster->registered($offering);
         $stageLabels = DB::table('course_offering_curriculum_memberships as x')
             ->join('curriculum_memberships as m', fn ($j) => $j->on('m.id', '=', 'x.curriculum_membership_id')->where('m.school_id', $schoolId))
@@ -371,8 +368,6 @@ class CourseOfferingController extends Controller
             'mode' => $mode,
             'students' => $mode === 'eligible' ? $review['eligible'] : $registered,
             'ineligible' => $review['ineligible'],
-            'cohorts' => $cohorts,
-            'cohortId' => $cohortId,
             'stageLabels' => $stageLabels,
             'counts' => [
                 'eligible' => $unfilteredReview['eligible']->count(),
@@ -420,20 +415,18 @@ class CourseOfferingController extends Controller
         $schoolId = (int) $request->user()->school_id;
         $offering = $this->tenantOffering($schoolId, $id);
         $data = $request->validate([
-            'mode' => ['required', Rule::in(['selected', 'cohort'])],
+            'mode' => ['required', Rule::in(['selected'])],
             'student_ids' => ['required_if:mode,selected', 'array', 'max:500'],
             'student_ids.*' => ['integer', 'min:1'],
-            'programme_cohort_id' => ['required_if:mode,cohort', 'nullable', 'integer', 'min:1'],
-        ], ['student_ids.required_if' => 'Select at least one eligible student to register.', 'programme_cohort_id.required_if' => 'Choose a Programme Cohort.']);
+            'programme_cohort_id' => ['prohibited'],
+        ], ['student_ids.required_if' => 'Select at least one eligible student to register.']);
         if ($offering->status !== CourseOffering::STATUS_OPEN) {
             return back()->withErrors(['registration' => 'Students can be registered only while the Course Allocation is open.']);
         }
         $batch = app(\App\Support\CourseRegistration\CourseOfferingRegistrationBatch::class);
-        $studentIds = $data['mode'] === 'cohort'
-            ? $batch->cohortStudentIds($offering, (int) $data['programme_cohort_id'])
-            : collect($data['student_ids']);
+        $studentIds = collect($data['student_ids']);
         if ($studentIds->isEmpty()) {
-            return back()->withErrors(['registration' => 'This Programme Cohort has no current members to review.']);
+            return back()->withErrors(['registration' => 'Select at least one student to register.']);
         }
 
         $summary = $batch->register($offering, $studentIds, (int) $request->user()->id);

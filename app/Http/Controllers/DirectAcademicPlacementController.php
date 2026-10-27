@@ -68,7 +68,7 @@ class DirectAcademicPlacementController extends Controller
                 $join->on('curricula.id', '=', 'curriculum_stages.curriculum_id')->where('curricula.school_id', $schoolId)->where('curricula.status', 'approved');
             })->orderBy('curriculum_stages.sequence')->get(['curriculum_stages.id', 'curriculum_stages.curriculum_id', 'curriculum_stages.label', 'curriculum_stages.sequence']);
         $existing = $student ? StudentCurriculumAssignment::where('school_id', $schoolId)->where('student_id', $student->id)->whereNull('ended_at')->exists() : false;
-        if ($placement) $existing = $placement->ended_at !== null || $placement->programme_cohort_membership_id !== null || \Illuminate\Support\Facades\DB::table('course_registrations')->where('school_id', $schoolId)->where('student_id', $studentId)->exists();
+        if ($placement) $existing = $placement->ended_at !== null || \Illuminate\Support\Facades\DB::table('course_registrations')->where('school_id', $schoolId)->where('student_id', $studentId)->exists();
         $studentStatuses = $this->studentStatuses($request);
         $selectedStatus = $student ? app(StudentPlacementDirectory::class)->query($schoolId)->where('u.id', $student->id)->first() : null;
         return view('admin.academic.direct_placement', compact('student', 'students', 'years', 'curricula', 'stages', 'existing', 'placement', 'studentStatuses', 'selectedStatus'));

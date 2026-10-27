@@ -3999,6 +3999,8 @@ public function heartbeat($submissionId)
 
     private function teacherAssignedClassIds(int $teacherId): array
     {
+        if (academic_education_level((int) $this->school_id) === 'tertiary') return [];
+
         return TeacherPermission::where('teacher_id', $teacherId)
             ->where('school_id', $this->school_id)
             ->pluck('class_id')
@@ -4227,6 +4229,10 @@ public function heartbeat($submissionId)
      */
     private function applyTeacherOwnershipScope($query, $user, array $assignedClassIds, bool $canEditAll): void
     {
+        if (academic_education_level((int) $user->school_id) === 'tertiary') {
+            $query->whereNotNull('course_offering_id');
+        }
+
         if ($canEditAll) {
             return;
         }

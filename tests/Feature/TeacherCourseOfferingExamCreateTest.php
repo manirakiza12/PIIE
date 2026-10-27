@@ -306,7 +306,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         );
     }
 
-    public function test_a_lecturer_with_NO_offering_and_NO_subject_still_gets_the_legacy_empty_state(): void
+    public function test_a_lecturer_without_an_allocation_gets_course_assignment_guidance(): void
     {
         // The warning is for somebody with no academic assignment AT ALL. It is
         // narrowed, not deleted - a lecturer in that position still needs to be told
@@ -318,7 +318,8 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('No subjects are assigned to this teacher', $html);
+        $this->assertStringContainsString('An administrator must assign you to a Course Allocation', $html);
+        $this->assertStringNotContainsString('name="class_id"', $html);
         $this->assertStringNotContainsString('data-testid="exam-course-offering-select"', $html);
     }
 
@@ -562,6 +563,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
 
     public function test_a_LEGACY_exam_is_still_created_through_the_GENERIC_page(): void
     {
+        DB::table('schools')->where('id', 1)->update(['school_type' => 'k12', 'education_level' => 'secondary']);
         $classId = $this->makeClass(1);
         $subjectId = $this->makeSubject(1, $classId);
 
@@ -602,6 +604,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
 
     public function test_a_LEGACY_EXAM_edit_page_still_offers_the_LEGACY_selectors(): void
     {
+        DB::table('schools')->where('id', 1)->update(['school_type' => 'k12', 'education_level' => 'secondary']);
         $classId = $this->makeClass(1);
         $subjectId = $this->makeSubject(1, $classId);
 
@@ -692,7 +695,7 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         $this->assertSame((int) $this->offering->id, (int) $exam->course_offering_id);
     }
 
-    public function test_a_LEGACY_row_on_the_same_list_STILL_shows_its_CLASS(): void
+    public function test_retired_class_exams_are_absent_from_the_tertiary_exam_list(): void
     {
         $classId = $this->makeClass(1);
 
@@ -711,8 +714,8 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('A legacy class paper', $html);
-        $this->assertStringContainsString('Class 1', $html, 'a legacy row keeps its class name');
+        $this->assertStringNotContainsString('A legacy class paper', $html);
+        $this->assertStringNotContainsString('Class 1', $html);
     }
 
     public function test_the_Quizzes_and_Exams_tab_NAMES_the_course_and_the_term(): void

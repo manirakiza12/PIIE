@@ -139,7 +139,8 @@
 	        </li>
 			@endif
 
-			<li class="nav-links-li {{ request()->is('teacher/attendance*') || request()->is('teacher/routine') || request()->is('teacher/subject') || request()->is('teacher/gradebook') || request()->is('teacher/syllabus') ? 'showMenu':'' }}">
+			@if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
+<li class="nav-links-li {{ request()->is('teacher/attendance*') || request()->is('teacher/routine') || request()->is('teacher/subject') || request()->is('teacher/gradebook') || request()->is('teacher/syllabus') ? 'showMenu':'' }}">
 				<div class="iocn-link">
 					<a href="#">
 						<div class="sidebar_icon">
@@ -173,6 +174,7 @@
                     </li>
 				</ul>
 			</li>
+@endif
 
 			<li class="nav-links-li {{ request()->is('teacher/marks') || request()->is('teacher/offline_exam') ? 'showMenu':'' }}">
                 <div class="iocn-link">
@@ -201,12 +203,16 @@
 	                </span>
                 </div>
                 <ul class="sub-menu">
-                    <li>
+                    @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
+<li>
                         <a class="{{ (request()->is('teacher/marks')) ? 'active' : '' }}" href="{{ route('teacher.marks') }}"><span>{{ get_phrase('Marks') }}</span></a>
                     </li>
-                    <li>
+@endif
+                    @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
+<li>
                         <a class="{{ (request()->is('teacher/offline_exam')) ? 'active' : '' }}" href="{{ route('teacher.offline_exam') }}"><span>{{ get_phrase('Exam List') }}</span></a>
                     </li>
+@endif
                 </ul>
             </li>
 

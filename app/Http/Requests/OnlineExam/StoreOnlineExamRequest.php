@@ -233,6 +233,14 @@ class StoreOnlineExamRequest extends FormRequest
                 return;
             }
 
+            if (academic_education_level((int) $user->school_id) === 'tertiary' && (int) $user->role_id === 3 && ! $this->isCourseOfferingMode()) {
+                $validator->errors()->add('course_offering_id', 'Choose a Course Allocation for this exam.');
+            }
+
+            if (academic_education_level((int) $user->school_id) === 'tertiary' && $this->filled('class_id')) {
+                $validator->errors()->add('class_id', 'Class targeting is unavailable. Use course registrations or a Programme.');
+            }
+
             $duration = (int) $this->input('duration_mins');
             $start = strtotime((string) $this->input('start_datetime'));
             $end = strtotime((string) $this->input('end_datetime'));

@@ -1,9 +1,21 @@
-# Academic group navigation removal
+# Academic group retirement
 
-Teaching Groups and Programme Student Groups are no longer part of the tertiary academic setup navigation. Direct Student Placement remains between Course Units and Course Registrations so staff can assign an approved curriculum, Programme Year and entry Academic Year without creating a group.
+Teaching Groups are retired from tertiary workflows. Programme Student Groups are retired as an operational workspace. Existing database records remain intact for historical integrity; no production data is deleted.
 
-The workflow guide omits Teaching Groups. The tertiary examination guide explains course-registration eligibility rather than directing staff to class management. School class navigation and guidance are preserved for non-tertiary institutions.
+## Active workflow
 
-This is a navigation and guidance change, not database or module deletion. Existing class and cohort routes, records, historical references, permission checks and eligibility consistency checks remain intact. Legacy class-based attendance and timetable paths have not been converted by this change. Programme Student Groups were already absent from the main navigation.
+Students receive direct Programme Curriculum, Programme Year and Academic Year placement. Course Allocation eligibility and rosters use that placement, academic period, curriculum applicability and financial eligibility. Retired cohort membership, status and names no longer control registration or discovery. Group-based bulk registration is rejected; staff select individual eligible students.
 
-The complete programme workflow changes and their verification supersede the initial navigation-only change. See [Standalone programme workflow](programme-workspace-standalone-release.md) for the independent modules, CRUD, curriculum reuse, 275 targeted tests and responsive browser checks.
+Lecturers work through My Course Allocations for students, attendance, schedules, coursework and assessments. Tertiary navigation omits legacy class-based academic pages. Bookmarked legacy teaching-group screens redirect to Course Allocations, and their mutation/AJAX endpoints return HTTP 410 before executing the controller. Programme cohort screens redirect to direct placement, and cohort mutations return HTTP 410.
+
+Tertiary exam creation uses Course Allocations for lecturers. Class selectors are absent from exam forms, lists and monitoring, and class-targeting submissions are rejected. School classes remain available for primary/secondary institutions.
+
+The student directory does not show historical class/section enrollment for tertiary students. Historical group links do not prevent correction of otherwise unused academic placements; ended placements and course registration history remain protected.
+
+## Verification
+
+Regression coverage includes retired endpoint redirects and mutation rejection, placement-based eligibility, selected-student registration, teacher workspace/navigation, and course exam creation. Blade templates must compile successfully. Tests use in-memory SQLite and a temporary test encryption key.
+
+Latest checks: 76 placement/lecturer/exam/retirement tests and 24 bulk-registration tests passed (100 total). The retirement test was re-run after adding protection for the legacy assignment workspace. PHP syntax checks and Blade compilation passed.
+
+The broader run also identified an unrelated parallel-allocation checkbox assertion in CourseOfferingRegistrationBatchTest. StudentLearningPagesTest has separate fixture/schema and CSV Content-Type assertion failures. These are not reported as passing. Logs are under output/group-removal-verified.log, output/group-free-bulk-registration.log, output/academic-groups-final-tests.log and output/academic-groups-retirement-tests.log.

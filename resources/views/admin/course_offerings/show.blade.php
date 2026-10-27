@@ -30,7 +30,7 @@
     @if($canStartEarly)
     {{-- Governed early start: an audited, reasoned exception to date
          governance. It moves ONLY this Allocation's status. The Academic Period,
-         Curriculum, Programme Student Group, Academic Placement, registrations and
+         Curriculum, Academic Placement, registrations and
          lecturer allocation dates are all left exactly as they are. --}}
     <div class="alert alert-warning mb-3" role="status">
         <strong>{{ $periodLabel }} has not begun yet.</strong>

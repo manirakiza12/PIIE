@@ -91,21 +91,14 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertFalse(CourseRegistration::where('student_id', $this->fixture['studentIneligible']->id)->where('course_offering_id', 1)->exists());
     }
 
-    public function test_register_bulk_cohort_mode_registers_eligible_cohort_students(): void
+    public function test_retired_group_bulk_mode_is_rejected_without_registering_students(): void
     {
         $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage']);
-        $response = $this->actingAs($manager)->post(route('admin.course_offerings.registrations.bulk', 1), [
-            'mode' => 'cohort',
-            'programme_cohort_id' => 1,
-        ]);
-        $response->assertRedirect(route('admin.course_offerings.registrations', 1));
-        $summary = session('bulk_summary');
-        // Cohort membership covers studentA, studentB and studentAlready (already registered).
-        $this->assertSame(3, $summary['reviewed']);
-        $this->assertSame(2, $summary['registered']);
-        $this->assertSame(1, $summary['already']);
-        $this->assertSame('registered', CourseRegistration::where('student_id', $this->fixture['studentA']->id)->where('course_offering_id', 1)->value('status'));
-        $this->assertSame('registered', CourseRegistration::where('student_id', $this->fixture['studentB']->id)->where('course_offering_id', 1)->value('status'));
+        $before = CourseRegistration::count();
+        $this->actingAs($manager)->post(route('admin.course_offerings.registrations.bulk', 1), [
+            'mode' => 'cohort', 'programme_cohort_id' => 1,
+        ])->assertSessionHasErrors(['mode', 'programme_cohort_id']);
+        $this->assertSame($before, CourseRegistration::count());
     }
 
     public function test_individual_and_bulk_confirmation_apply_finance_gate(): void

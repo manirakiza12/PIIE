@@ -85,15 +85,6 @@ class CourseOfferingEligibility
             return CourseOfferingEligibilityResult::denied('placement_incomplete', 'Academic placement is incomplete: no Study Plan year has been recorded for this student.', $assignment);
         }
 
-        // Cohorts are an optional intake-management tool. A direct academic
-        // placement has no cohort membership and remains fully eligible.
-        $cohortResult = $assignment->programme_cohort_membership_id === null
-            ? null
-            : $this->cohortConsistency($schoolId, $studentId, $assignment);
-        if ($cohortResult) {
-            return $cohortResult;
-        }
-
         if ((int) $assignment->entry_academic_year_id !== $academicYearId) {
             $placedYear = DB::table('academic_years')->where('school_id', $schoolId)->where('id', $assignment->entry_academic_year_id)->value('label');
             return CourseOfferingEligibilityResult::denied('progression_not_recorded', "The student was placed in {$stage->label} for {$placedYear}; their Year of Study for {$year->label} has not been recorded yet.", $assignment);
@@ -164,25 +155,4 @@ class CourseOfferingEligibility
         return CourseOfferingEligibilityResult::eligible($assignment, $placement->curriculum, $membership);
     }
 
-    private function cohortConsistency(int $schoolId, int $studentId, StudentCurriculumAssignment $assignment): ?CourseOfferingEligibilityResult
-    {
-        $membership = $assignment->programme_cohort_membership_id === null ? null : DB::table('programme_cohort_memberships')
-            ->where('school_id', $schoolId)->where('student_id', $studentId)
-            ->where('id', $assignment->programme_cohort_membership_id)->first();
-        if (! $membership) {
-            return CourseOfferingEligibilityResult::denied('placement_incomplete', 'Academic placement is incomplete: the student\'s placement is not linked to a Programme Cohort.', $assignment);
-        }
-        if ($membership->ended_at !== null || $membership->status !== 'active') {
-            return CourseOfferingEligibilityResult::denied('cohort_not_current', 'The student\'s Programme Cohort membership is not currently active (it may be deferred, transferred, withdrawn or completed).', $assignment);
-        }
-        $cohort = DB::table('programme_cohorts')->where('school_id', $schoolId)->where('id', $membership->programme_cohort_id)->first();
-        if (! $cohort || $cohort->status !== 'active'
-            || (int) $cohort->programme_id !== (int) $assignment->programme_id
-            || (int) $cohort->curriculum_id !== (int) $assignment->curriculum_id
-            || (int) $cohort->entry_academic_year_id !== (int) $assignment->entry_academic_year_id) {
-            return CourseOfferingEligibilityResult::denied('cohort_mismatch', 'The student\'s Programme Cohort does not match the current academic placement.', $assignment);
-        }
-
-        return null;
-    }
 }

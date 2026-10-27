@@ -62,8 +62,8 @@ class StudentCurriculumAssignmentService
         $this->lockStudent($schoolId, (int) $placement->student_id);
         $actor = $this->administrativeActor($schoolId, $actorId);
         $placement = StudentCurriculumAssignment::where('school_id', $schoolId)->whereKey($id)->lockForUpdate()->firstOrFail();
-        if ($placement->ended_at || $placement->programme_cohort_membership_id !== null) {
-            throw new DomainException('Historical or group-linked placements cannot be edited or deleted here.');
+        if ($placement->ended_at) {
+            throw new DomainException('Historical placements cannot be edited or deleted here.');
         }
         if (\Illuminate\Support\Facades\Schema::hasTable('course_registrations') && DB::table('course_registrations')->where('school_id', $schoolId)->where('student_id', $placement->student_id)->exists()) {
             throw new DomainException('This student has course registration history. The placement is protected from editing and deletion.');

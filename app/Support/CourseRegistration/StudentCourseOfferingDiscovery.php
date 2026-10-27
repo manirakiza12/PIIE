@@ -128,7 +128,7 @@ class StudentCourseOfferingDiscovery
             ])->orderBy('s.name')->orderBy('o.reference');
 
         // Candidate rows are narrowed by the shared eligibility rule (Study Plan
-        // stage, period and cohort), which also resolves the single membership.
+        // stage and period), which also resolves the single membership.
         $rows = $candidateRows->get();
         $candidateOfferings = CourseOffering::query()->where('school_id', $schoolId)
             ->whereIn('id', $rows->pluck('offering_id')->unique()->all())->get()->keyBy('id');
@@ -179,7 +179,6 @@ class StudentCourseOfferingDiscovery
     {
         return match ($code) {
             'progression_not_recorded' => "Your Year of Study for {$yearLabel} has not been recorded yet. Contact the academic office.",
-            'cohort_not_current', 'cohort_mismatch' => 'Your Programme Cohort record needs review before you can register. Contact the academic office.',
             'placement_ended' => 'Your academic placement is no longer current. Contact the academic office.',
             default => 'Your academic placement is not complete yet. Contact the academic office.',
         };

@@ -566,7 +566,7 @@ foreach (['admin' => ['auth', 'admin', 'rbac'], 'librarian' => ['auth', 'librari
     });
 }
 
-Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->group(function () {
+Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac', \App\Http\Middleware\RetireAcademicGroups::class)->group(function () {
 
     Route::get('admin/dashboard', 'adminDashboard')->name('admin.dashboard')->middleware('role_id');
 
@@ -1072,7 +1072,7 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac')->
 // Higher-education Programme Cohort administration. Route permissions are
 // centrally mapped in the staff permission registry; tenant checks remain in
 // the controller and domain service.
-Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\ProgrammeCohortController::class)->group(function () {
+Route::middleware(['auth', 'admin', 'rbac', \App\Http\Middleware\RetireAcademicGroups::class])->controller(\App\Http\Controllers\ProgrammeCohortController::class)->group(function () {
     Route::get('admin/programme-cohorts', 'index')->name('admin.programme_cohorts.index');
     Route::get('admin/programme-cohorts/create', 'create')->name('admin.programme_cohorts.create');
     Route::post('admin/programme-cohorts', 'store')->name('admin.programme_cohorts.store');
@@ -1108,7 +1108,7 @@ Route::middleware('auth')->group(function () {
 //Teacher routes are here
 
 
-Route::controller(TeacherController::class)->middleware('teacher', 'auth')->group(function () {
+Route::controller(TeacherController::class)->middleware('teacher', 'auth', \App\Http\Middleware\RetireAcademicGroups::class)->group(function () {
 
     Route::get('teacher/dashboard', 'teacherDashboard')->name('teacher.dashboard')->middleware('role_id');
 
@@ -1547,9 +1547,9 @@ Route::controller(\App\Http\Controllers\ElectionController::class)->middleware('
 Route::controller(CommonController::class)->middleware('auth')->group(function () {
 
     //Filter object routes
-    Route::get('section/{id}', 'classWiseSections')->name('class_wise_sections');
-    Route::get('subjects/{id}', 'classWiseSubject')->name('class_wise_subject');
-    Route::get('students/{id}', 'classWiseStudents')->name('class_wise_student');
+    Route::get('section/{id}', 'classWiseSections')->middleware(\App\Http\Middleware\RetireAcademicGroups::class)->name('class_wise_sections');
+    Route::get('subjects/{id}', 'classWiseSubject')->middleware(\App\Http\Middleware\RetireAcademicGroups::class)->name('class_wise_subject');
+    Route::get('students/{id}', 'classWiseStudents')->middleware(\App\Http\Middleware\RetireAcademicGroups::class)->name('class_wise_student');
     Route::get('class/section/{id}', 'sectionWiseStudents')->name('section_wise_students');
     Route::get('class/section/student/{id}', 'studentWiseParent')->name('student_wise_parent');
 
@@ -2158,7 +2158,7 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'teacher')->g
 });
 
 // ΓöÇΓöÇ Assignments (admin/teacher) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-Route::controller(AssignmentController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
+Route::controller(AssignmentController::class)->middleware('auth', 'admin', 'rbac', \App\Http\Middleware\RetireAcademicGroups::class)->group(function () {
     Route::get('admin/assignments',                            'index')->name('admin.assignments.index');
     Route::get('admin/assignments/open_modal',                 'openModal')->name('admin.assignments.open_modal');
     Route::post('admin/assignments/store',                     'store')->name('admin.assignments.store');
@@ -2169,7 +2169,7 @@ Route::controller(AssignmentController::class)->middleware('auth', 'admin', 'rba
 });
 
 // ΓöÇΓöÇ Student Assignment routes ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-Route::controller(AssignmentController::class)->middleware('auth', 'student')->group(function () {
+Route::controller(AssignmentController::class)->middleware('auth', 'student', \App\Http\Middleware\RetireAcademicGroups::class)->group(function () {
     Route::get('student/assignments',                'studentList')->name('student.assignments.list');
     Route::get('student/assignments/{id}/modal',     'submitModal')->name('student.assignments.modal');
     Route::post('student/assignments/{id}/submit',   'studentSubmit')->name('student.assignments.submit');

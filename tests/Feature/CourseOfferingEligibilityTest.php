@@ -182,7 +182,7 @@ class CourseOfferingEligibilityTest extends TestCase
         app(CourseRegistrationService::class)->registerStudentForOffering($this->school, $foreign->id, self::O_YEAR1);
     }
 
-    public function test_current_valid_cohort_and_placement_is_eligible_and_mismatched_cohort_is_blocked(): void
+    public function test_registration_uses_placement_independently_of_retired_group_records(): void
     {
         $this->assertSame('eligible', $this->evaluate(self::O_YEAR1, $this->placedStudent(stage: 1))->code);
 
@@ -190,8 +190,7 @@ class CourseOfferingEligibilityTest extends TestCase
         $membershipId = (int) DB::table('student_curriculum_assignments')->where('student_id', $mismatch->id)->value('programme_cohort_membership_id');
         DB::table('programme_cohort_memberships')->where('id', $membershipId)->update(['programme_cohort_id' => 2]);
         $result = $this->evaluate(self::O_YEAR1, $mismatch);
-        $this->assertSame('cohort_mismatch', $result->code);
-        $this->assertSame("The student's Programme Cohort does not match the current academic placement.", $result->message);
+        $this->assertSame('eligible', $result->code);
 
         $unlinked = $this->placedStudent(stage: 1);
         DB::table('student_curriculum_assignments')->where('student_id', $unlinked->id)->update(['programme_cohort_membership_id' => null]);
@@ -203,15 +202,15 @@ class CourseOfferingEligibilityTest extends TestCase
         $this->assertSame('Academic placement is incomplete: no Study Plan year has been recorded for this student.', $this->evaluate(self::O_YEAR1, $noStage)->message);
     }
 
-    public function test_historical_or_non_current_cohort_membership_does_not_grant_eligibility(): void
+    public function test_retired_membership_status_does_not_override_current_placement(): void
     {
         foreach (['transferred' => now(), 'withdrawn' => now(), 'completed' => now(), 'deferred' => null] as $status => $endedAt) {
             $student = $this->placedStudent(stage: 1);
             $membershipId = (int) DB::table('student_curriculum_assignments')->where('student_id', $student->id)->value('programme_cohort_membership_id');
             DB::table('programme_cohort_memberships')->where('id', $membershipId)->update(['status' => $status, 'ended_at' => $endedAt]);
 
-            $this->assertSame('cohort_not_current', $this->evaluate(self::O_YEAR1, $student)->code, $status);
-            $this->assertFalse($this->roster(self::O_YEAR1)->contains('id', $student->id), $status);
+            $this->assertSame('eligible', $this->evaluate(self::O_YEAR1, $student)->code, $status);
+            $this->assertTrue($this->roster(self::O_YEAR1)->contains('id', $student->id), $status);
         }
 
         $endedPlacement = $this->placedStudent(stage: 1);
@@ -228,12 +227,12 @@ class CourseOfferingEligibilityTest extends TestCase
         $this->assertTrue($this->evaluate(self::O_YEAR1, $student)->eligible);
         $this->assertSame('stage_mismatch', $this->evaluate(self::O_YEAR3, $student)->code);
 
-        // A placement still linked to a transferred membership grants nothing even if a newer membership exists.
+        // Retired membership records have no effect on a current placement.
         $stale = $this->placedStudent(stage: 1);
         $old = (int) DB::table('student_curriculum_assignments')->where('student_id', $stale->id)->value('programme_cohort_membership_id');
         DB::table('programme_cohort_memberships')->where('id', $old)->update(['status' => 'transferred', 'ended_at' => now()]);
         DB::table('programme_cohort_memberships')->insert(['school_id' => $this->school, 'student_id' => $stale->id, 'programme_cohort_id' => 1, 'status' => 'active', 'started_at' => now()]);
-        $this->assertSame('cohort_not_current', $this->evaluate(self::O_YEAR1, $stale)->code);
+        $this->assertSame('eligible', $this->evaluate(self::O_YEAR1, $stale)->code);
     }
 
     public function test_eligible_student_roster_uses_the_same_rule(): void
@@ -259,7 +258,7 @@ class CourseOfferingEligibilityTest extends TestCase
 
         $roster = app(CourseOfferingRoster::class);
         $this->assertTrue($roster->eligible($offering)->isEmpty());
-        $review = $roster->review($offering, null, true);
+        $review = $roster->review($offering, true);
         $ids = $review['eligible']->merge($review['ineligible'])->pluck('id')->all();
         $this->assertContains($student->id, $ids);
         $this->assertNotContains($registered->id, $ids);
@@ -306,10 +305,10 @@ class CourseOfferingEligibilityTest extends TestCase
         $membershipId = (int) DB::table('student_curriculum_assignments')->where('student_id', $deferred->id)->value('programme_cohort_membership_id');
         DB::table('programme_cohort_memberships')->where('id', $membershipId)->update(['status' => 'deferred']);
         $blocked = app(StudentCourseOfferingDiscovery::class)->discover($deferred);
-        $this->assertSame('placement_incomplete', $blocked['state']);
-        $this->assertTrue($blocked['offerings']->isEmpty());
+        $this->assertSame('ready', $blocked['state']);
+        $this->assertTrue($blocked['offerings']->isNotEmpty());
         $this->actingAs($deferred)->get(route('student.my_courses'))->assertOk()
-            ->assertSee('Your Programme Cohort record needs review')->assertDontSee('curriculum_membership_id');
+            ->assertDontSee('Programme Cohort record needs review');
     }
 
     public function test_duplicate_registration_protection_remains_intact(): void

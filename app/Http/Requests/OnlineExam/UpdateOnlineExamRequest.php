@@ -183,6 +183,10 @@ class UpdateOnlineExamRequest extends FormRequest
             if (!$user || !$this->exam) {
                 return;
             }
+            if (academic_education_level((int) $user->school_id) === 'tertiary' && $this->filled('class_id')) {
+                $validator->errors()->add('class_id', 'Class targeting is unavailable. Use course registrations or a Programme.');
+            }
+
 
             $duration = (int) $this->input('duration_mins');
             $start = strtotime((string) $this->input('start_datetime'));

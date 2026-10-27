@@ -62,6 +62,8 @@ class OnlineExamAuthorizer
 
     public function canManageExam(User $user, OnlineExam $exam): bool
     {
+        if ($exam->class_id && academic_education_level((int) $exam->school_id) === 'tertiary') return false;
+
         if (!$this->sameSchool($user, (int) $exam->school_id)) {
             return false;
         }
@@ -133,6 +135,8 @@ class OnlineExamAuthorizer
      */
     public function canTeachExam(User $user, OnlineExam $exam): bool
     {
+        if ($exam->class_id && academic_education_level((int) $exam->school_id) === 'tertiary') return false;
+
         if ((int) $user->role_id !== 3 || !$this->sameSchool($user, (int) $exam->school_id)) {
             return false;
         }

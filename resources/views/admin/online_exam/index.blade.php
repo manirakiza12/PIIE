@@ -18,7 +18,7 @@
 <div class="alert alert-secondary">
     <strong>{{ get_phrase('Exam eligibility setup') }}</strong>:
     @if(academic_education_level(auth()->user()->school_id) === 'tertiary')
-    {{ get_phrase('Assign the teaching team and confirm student course registrations before publishing course-based exams. Teaching Groups and Programme Student Groups are not required for course-based exams.') }}
+    {{ get_phrase('Assign the teaching team and confirm student course registrations before publishing course-based exams.') }}
     @else
     {{ get_phrase('Create classes, assign teachers, and place students into their class before publishing class-targeted exams.') }}
     <a class="ms-2" href="{{ route('admin.class_list') }}">{{ get_phrase('Manage Classes') }}</a>

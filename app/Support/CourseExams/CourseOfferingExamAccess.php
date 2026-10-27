@@ -418,7 +418,10 @@ class CourseOfferingExamAccess
      */
     public function applyStudentVisibility($query, int $studentId, int $schoolId)
     {
-        $classIds = Enrollment::where('user_id', $studentId)
+        if (academic_education_level($schoolId) === 'tertiary') {
+            $query->whereNull('class_id');
+        }
+        $classIds = academic_education_level($schoolId) === 'tertiary' ? [] : Enrollment::where('user_id', $studentId)
             ->where('school_id', $schoolId)
             ->pluck('class_id')
             ->filter()
