@@ -85,6 +85,17 @@ class StudentListHeiVisibilityTest extends TestCase
         $response->assertSee('Robert Ssenono');
     }
 
+    public function test_student_actions_link_to_the_selected_course_registration_workspace(): void
+    {
+        $schoolId = $this->makeSchool();
+        $admin = $this->makeAdminUser($schoolId);
+        $student = $this->makeHeiStudent($schoolId, ['name' => 'Registration Shortcut Student']);
+
+        $this->actingAs($admin)->get(route('admin.student', ['search' => $student->name]))
+            ->assertOk()->assertSee('Check eligibility / Register course units')
+            ->assertSee(route('admin.course_registrations.index', ['student_id' => $student->id]), false);
+    }
+
     public function test_the_hei_student_shows_their_programme_instead_of_removed(): void
     {
         $schoolId = $this->makeSchool();
