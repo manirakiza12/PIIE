@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\{DB, Schema};
 
 class StudentRegistrationConfirmationEligibility
 {
-    public function allows(User $student): bool { return $this->summary($student)['eligible']; }
+    public function allows(User $student, ?int $programmeId = null, bool $lock = false): bool { return $this->summary($student, $programmeId, $lock)['eligible']; }
 
     /** Plain-language explanation of the same fee gate used by registration and confirmation. */
     public function blocker(User $student, ?array $summary = null): string
@@ -33,7 +33,7 @@ class StudentRegistrationConfirmationEligibility
     }
 
     /** Current fee session only; a waiver never posts money or reduces debt. */
-    public function summary(User $student): array
+    public function summary(User $student, ?int $programmeId = null, bool $lock = false): array
     {
         $result = ['eligible' => false, 'waived' => false, 'session_id' => null, 'total_minor' => 0,
             'paid_minor' => 0, 'required_minor' => 0, 'shortfall_minor' => 0, 'invoice_count' => 0, 'waiver' => null, 'fully_covered' => false];
@@ -42,11 +42,16 @@ class StudentRegistrationConfirmationEligibility
         $sessionId = DB::table('schools')->where('id', $student->school_id)->value('running_session');
         if (! $sessionId) { return $result; }
         $result['session_id'] = (int) $sessionId;
+        $programmeId ??= Schema::hasColumn('student_profiles', 'programme_id')
+            ? DB::table('student_profiles')->where('school_id', $student->school_id)->where('user_id', $student->id)->value('programme_id') : null;
         $waiver = Schema::hasTable('student_fee_registration_waivers')
             ? StudentFeeRegistrationWaiver::where('school_id', $student->school_id)->where('student_id', $student->id)
-                ->where('session_id', $sessionId)->whereNull('revoked_at')->first() : null;
+                ->where('session_id', $sessionId)->whereNull('revoked_at')->when($lock, fn ($q) => $q->lockForUpdate())->first() : null;
         $invoices = StudentFeeManager::where('student_id', $student->id)->where('school_id', $student->school_id)
-            ->where('session_id', $sessionId)->get();
+            ->where('session_id', $sessionId)
+            ->when($programmeId !== null && Schema::hasColumn('student_fee_managers', 'programme_id'), fn ($q) => $q->where(fn ($q) => $q->whereNull('programme_id')->orWhere('programme_id', $programmeId)))
+            ->when($lock, fn ($q) => $q->lockForUpdate())
+            ->get();
         $result['invoice_count'] = $invoices->count();
         foreach ($invoices as $invoice) {
             $total = max(0, DecimalAmount::minorUnits($invoice->total_amount) ?? 0);

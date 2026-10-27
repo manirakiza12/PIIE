@@ -52,7 +52,7 @@
                 @if($allocations->count() === 1)
                     @php $allocation = $allocations->first(); @endphp
                     <span class="ms-2">Course Allocation: {{ \App\Support\CourseOffering\CourseOfferingService::statusLabel($allocation->status) }}</span>
-                    @if($allocation->status !== 'open')<div class="small text-muted">This allocation does not accept new registrations. Next step: the academic office can review or reopen it if appropriate.</div>@endif
+                    @if(!in_array($allocation->status, ['open', 'in_progress'], true))<div class="small text-muted">This allocation does not accept new registrations. Next step: the academic office can review it.</div>@endif
                 @elseif($allocations->count() > 1)
                     <div class="small text-warning">Multiple Course Allocations are linked to this unit for the selected period. Next step: ask the academic office to review them.</div>
                 @else
@@ -63,6 +63,7 @@
         </div></fieldset>
         @endif
     </form>
+    <div class="alert alert-info" role="status">Required course units enrol automatically once the student's active placement and verified fee eligibility are met, normally within one minute. No student selection or Register action is needed. Open and In Progress allocations in the current active semester qualify. Electives retain their existing course-choice process.</div>
     <h6>Students and eligibility</h6>
     <p class="text-muted">Admission creates the student account after the application is accepted and enrolled. Academic eligibility then comes from the student's active Programme placement and the selected curriculum year. Existing placements and registrations are preserved.</p>
     <div class="table-responsive"><table class="table align-middle"><caption class="visually-hidden">Programme students and their course registration status</caption><thead><tr><th><input type="checkbox" id="select-page" aria-label="Select all students on this page"></th><th>Student</th><th>Programme placement</th><th>Applicable course units and next steps</th></tr></thead><tbody>

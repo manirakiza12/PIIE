@@ -84,9 +84,9 @@ class CourseOfferingRoster
     }
 
     /** Administrator-facing reason why one student cannot be registered, or null when eligible. */
-    public function ineligibilityReason(CourseOffering $offering, int $studentId): ?string
+    public function ineligibilityReason(CourseOffering $offering, int $studentId, bool $automatic = false): ?string
     {
-        if ($offering->status !== CourseOffering::STATUS_OPEN) {
+        if (! in_array($offering->status, $automatic ? [CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS] : [CourseOffering::STATUS_OPEN], true)) {
             return 'This Course Allocation is not open for new registrations. Next step: the academic office can review or reopen it if appropriate.';
         }
         $result = $this->eligibility->evaluate($offering, $studentId);
