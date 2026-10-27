@@ -264,7 +264,28 @@
     @if($activePlacement)
         <div class="alert alert-info"><strong>Current placement:</strong> {{ $activePlacement->programme_name ?: 'Programme unavailable' }} · Curriculum {{ $activePlacement->curriculum_version ?: 'unavailable' }} · {{ $activePlacement->stage_label ?: 'Programme Year not recorded' }} · Entry year {{ $activePlacement->academic_year_label ?: 'unavailable' }}.<br>Placement history is retained. Course registrations protect this record from correction or deletion.</div>
         @if($canManagePlacement)<a class="btn btn-outline-primary" href="{{ route('admin.academic.placements.index', ['student_id' => $user->id]) }}">Review placement history</a>@endif
+    @elseif($placementHistoryCount > 0)
+        <div class="alert alert-warning">This student has {{ $placementHistoryCount }} historical placement record(s) and no current placement. Preserve the history and use the governed transfer or placement workflow.</div>
+        @if($canManagePlacement)<a class="btn btn-outline-primary" href="{{ route('admin.academic.placements.index', ['student_id' => $user->id]) }}">Review placement history</a>@endif
+    @elseif(!$canManagePlacement)
+        <p class="text-muted">An authorised academic placement administrator must record the Programme, approved curriculum, Programme Year and entry Academic Year.</p>
+    @elseif(!$studentProfile)
+        <div class="alert alert-warning">Save the student profile above first. A student needs an institution profile before academic placement can be recorded.</div>
+    @else
+        <form method="POST" action="{{ route('admin.academic.direct_placement.store') }}" class="border rounded p-3">
+            @csrf
+            <input type="hidden" name="student_id" value="{{ $user->id }}">
+            <div class="row g-3">
+                <div class="col-md-6"><label class="form-label" for="placement-curriculum">Approved Programme Curriculum</label><select id="placement-curriculum" name="curriculum_id" class="form-select" required><option value="">Choose curriculum</option>@foreach($placementCurricula as $item)<option value="{{ $item->id }}" @selected(old('curriculum_id', '') == $item->id)>{{ $item->programme?->code }} — {{ $item->programme?->name }} · v{{ $item->version }}</option>@endforeach</select></div>
+                <div class="col-md-6"><label class="form-label" for="placement-stage">Programme Year</label><select id="placement-stage" name="entry_curriculum_stage_id" class="form-select" required><option value="">Choose Programme Year</option>@foreach($placementStages as $stage)<option value="{{ $stage->id }}" data-curriculum="{{ $stage->curriculum_id }}" @selected(old('entry_curriculum_stage_id') == $stage->id)>{{ $stage->sequence }}. {{ $stage->label }}</option>@endforeach</select></div>
+                <div class="col-md-6"><label class="form-label" for="placement-year">Entry Academic Year</label><select id="placement-year" name="academic_year_id" class="form-select" required><option value="">Choose academic year</option>@foreach($placementYears as $year)<option value="{{ $year->id }}" @selected(old('academic_year_id', $placementYears->firstWhere('status', 'active')?->id) == $year->id)>{{ $year->label }}{{ $year->status === 'active' ? ' (Current)' : '' }}</option>@endforeach</select></div>
+            </div>
+            @if($placementCurricula->isEmpty())<p class="text-warning mt-3 mb-0">No approved Programme Curriculum is available. Next step: approve a curriculum before placing the student.</p>@else<button class="btn btn-outline-primary mt-3">Save academic placement</button>@endif
+            <p class="small text-muted mt-3 mb-0">This records placement only. It does not create course registrations or change payment history.</p>
+        </form>
     @endif
+</section>
+@endif
 <script type="text/javascript">
     "use strict";
     if (window.jQuery) {
@@ -277,26 +298,12 @@
 
     (function () {
         const toggle = document.getElementById('update_placement');
-        if (toggle) {
-            const syncPlacementFields = () => document.querySelectorAll('.placement-control').forEach((field) => {
-                field.disabled = !toggle.checked;
-            });
-            toggle.addEventListener('change', syncPlacementFields);
-            syncPlacementFields();
-        }
-        const curriculum = document.getElementById('placement-curriculum');
-        const stage = document.getElementById('placement-stage');
-        if (!curriculum || !stage) return;
-        const filterPlacementStages = () => {
-            [...stage.options].forEach((option) => {
-                if (!option.dataset.curriculum) return;
-                option.hidden = curriculum.value !== '' && option.dataset.curriculum !== curriculum.value;
-                option.disabled = option.hidden;
-                if (option.disabled && option.selected) stage.value = '';
-            });
-        };
-        curriculum.addEventListener('change', filterPlacementStages);
-        filterPlacementStages();
+        if (!toggle) return;
+        const syncPlacementFields = () => document.querySelectorAll('.placement-control').forEach((field) => {
+            field.disabled = !toggle.checked;
+        });
+        toggle.addEventListener('change', syncPlacementFields);
+        syncPlacementFields();
     })();
 
     function classWiseSection(classId) {
@@ -326,51 +333,6 @@
     }
 </script>
 
-
-    @elseif($placementHistoryCount > 0)
-        <div class="alert alert-warning">This student has {{ $placementHistoryCount }} historical placement record(s) and no current placement. Preserve the history and use the governed transfer or placement workflow.</div>
-        @if($canManagePlacement)<a class="btn btn-outline-primary" href="{{ route('admin.academic.placements.index', ['student_id' => $user->id]) }}">Review placement history</a>@endif
-    @elseif(!$canManagePlacement)
-        <p class="text-muted">An authorised academic placement administrator must record the Programme, approved curriculum, Programme Year and entry Academic Year.</p>
-    @elseif(!$studentProfile)
-        <div class="alert alert-warning">Save the student profile above first. A student needs an institution profile before academic placement can be recorded.</div>
-    @else
-        <form method="POST" action="{{ route('admin.academic.direct_placement.store') }}" class="border rounded p-3">
-            @csrf
-            <input type="hidden" name="student_id" value="{{ $user->id }}">
-            <div class="row g-3">
-                <div class="col-md-6"><label class="form-label" for="placement-curriculum">Approved Programme Curriculum</label>
-                    <select id="placement-curriculum" name="curriculum_id" class="form-select" required>
-                        <option value="">Choose curriculum</option>
-                        @foreach($placementCurricula as $item)
-                            <option value="{{ $item->id }}" @selected(old('curriculum_id', '') == $item->id)>{{ $item->programme?->code }} — {{ $item->programme?->name }} · v{{ $item->version }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-md-6"><label class="form-label" for="placement-stage">Programme Year</label>
-                    <select id="placement-stage" name="entry_curriculum_stage_id" class="form-select" required>
-                        <option value="">Choose Programme Year</option>
-                        @foreach($placementStages as $stage)
-                            <option value="{{ $stage->id }}" data-curriculum="{{ $stage->curriculum_id }}" @selected(old('entry_curriculum_stage_id') == $stage->id)>{{ $stage->sequence }}. {{ $stage->label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-md-6"><label class="form-label" for="placement-year">Entry Academic Year</label>
-                    <select id="placement-year" name="academic_year_id" class="form-select" required>
-                        <option value="">Choose academic year</option>
-                        @foreach($placementYears as $year)
-                            <option value="{{ $year->id }}" @selected(old('academic_year_id', $placementYears->firstWhere('status', 'active')?->id) == $year->id)>{{ $year->label }}{{ $year->status === 'active' ? ' (Current)' : '' }}</option>
-                        @endforeach
-                    </select>
-                </div>
-            </div>
-            @if($placementCurricula->isEmpty())<p class="text-warning mt-3 mb-0">No approved Programme Curriculum is available. Next step: approve a curriculum before placing the student.</p>
-            @else<button class="btn btn-outline-primary mt-3">Save academic placement</button>@endif
-            <p class="small text-muted mt-3 mb-0">This records placement only. It does not create course registrations or change payment history.</p>
-        </form>
-    @endif
-</section>
-@endif
 <script type="text/javascript">
     "use strict";
 

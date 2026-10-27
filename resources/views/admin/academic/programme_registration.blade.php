@@ -80,13 +80,20 @@
         @endif</td>
         <td>
         @php
-            $studentCells = collect($cells[$student->id] ?? []);
-            $readyCount = $studentCells->where('ready', true)->count();
-            $registeredCount = $studentCells->filter(fn ($cell) => $cell['registration'] && $cell['registration']->status === 'registered')->count();
-            $confirmedCount = $studentCells->filter(fn ($cell) => $cell['registration'] && $cell['registration']->status === 'confirmed')->count();
-            $attentionCount = $studentCells->filter(fn ($cell) => $cell['reason'] !== null || $cell['registration']?->status === 'dropped')->count();
+            $studentCells = $cells[$student->id] ?? [];
+            $readyCount = $registeredCount = $confirmedCount = $attentionCount = 0;
+            foreach ($studentCells as $studentCell) {
+                if ($studentCell['ready']) $readyCount++;
+                if (($studentCell['registration']->status ?? null) === 'registered') $registeredCount++;
+                if (($studentCell['registration']->status ?? null) === 'confirmed') $confirmedCount++;
+                if ($studentCell['reason'] !== null || ($studentCell['registration']->status ?? null) === 'dropped') $attentionCount++;
+            }
         @endphp
-        @if($curriculumUnits->isNotEmpty())<details><summary>{{ $readyCount }} ready to register · {{ $registeredCount }} awaiting confirmation · {{ $confirmedCount }} confirmed @if($attentionCount) · {{ $attentionCount }} need review @endif</summary><div class="mt-2">@endif
+        @if($curriculumUnits->isNotEmpty())
+            <details>
+                <summary>{{ $readyCount }} ready to register · {{ $registeredCount }} awaiting confirmation · {{ $confirmedCount }} confirmed @if($attentionCount) · {{ $attentionCount }} need review @endif</summary>
+                <div class="mt-2">
+        @endif
         @forelse($curriculumUnits as $unit)
             @php $cell = $cells[$student->id][$unit->membership_id]; @endphp
             <div class="mb-2"><strong>{{ $unit->name }}</strong>:
