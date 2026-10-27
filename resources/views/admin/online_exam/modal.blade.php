@@ -39,7 +39,8 @@
                 </div>
             </div>
 
-            <div class="fpb-7 mt-2"><label class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
+            @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
+<div class="fpb-7 mt-2"><label class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
                 <select class="form-control eForm-control" name="class_id" {{ $structureLocked ? 'disabled' : '' }}>
                     <option value="">{{ get_phrase('All classes') }}</option>
                     @foreach($classes as $c)
@@ -48,6 +49,7 @@
                 </select>
                 @if($structureLocked)<input type="hidden" name="class_id" value="{{ $exam->class_id }}">@endif
             </div>
+@endif
 
             <div class="row mt-2">
                 <div class="col-6 fpb-7"><label class="eForm-label">{{ academic_term('programme', auth()->user()->school_id) }}</label>

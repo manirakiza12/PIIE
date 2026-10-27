@@ -5,7 +5,9 @@
        $class_wise_attandance = array();
        $total_student = 0;
        $todays_total_attandance = 0;
-       $all_classes = DB::table('classes')->where('school_id', auth()->user()->school_id)->get();
+       $all_classes = academic_education_level((int) auth()->user()->school_id) === 'tertiary'
+           ? collect()
+           : DB::table('classes')->where('school_id', auth()->user()->school_id)->get();
        $currently_session_id = DB::table('sessions')->where('status', 1)->value('id');
    
        foreach($all_classes as $class){

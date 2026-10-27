@@ -43,32 +43,27 @@ use Tests\TestCase;
 class OnlineExamQuestionEditorFormTest extends TestCase
 {
     use OnlineExamTestHelper;
+    use \Tests\Feature\Support\CourseOfferingExamFixture;
 
     private int $lecturerId;
-    private int $classId;
+    private \App\Models\CourseOffering $offering;
     private int $examId;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootCourseOfferingExamSchema();
 
-        $this->classId = $this->makeClass(1);
         $this->lecturerId = (int) $this->makeUser(3, 1, 'active', 'Daniel Okello')->id;
+        $this->offering = $this->makeOffering();
+        $this->allocateLecturer($this->offering, \App\Models\User::findOrFail($this->lecturerId));
+        $subjectId = $this->offering->subject_id;
 
-        DB::table('teacher_permissions')->insert([
-            'class_id' => $this->classId,
-            'section_id' => 1,
-            'school_id' => 1,
-            'teacher_id' => $this->lecturerId,
-            'marks' => 1,
-            'attendance' => 1,
-            'updated_at' => now(),
-        ]);
+
 
         $this->examId = $this->makeExam([
             'title' => 'final test',
-            'class_id' => $this->classId,
+            'class_id' => null, 'course_offering_id' => $this->offering->id,
             'created_by' => $this->lecturerId,
             'creator_id' => $this->lecturerId,
         ]);
@@ -257,7 +252,7 @@ class OnlineExamQuestionEditorFormTest extends TestCase
             ['question' => $typed, 'type' => 'short_answer', 'marks' => 5]
         );
 
-        $response->assertSessionHasNoErrors();
+        $response->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame(1, DB::table('online_exam_questions')->where('online_exam_id', $this->examId)->count());
 

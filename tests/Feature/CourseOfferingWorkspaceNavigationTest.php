@@ -447,11 +447,8 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
 
         // SCOPED TO THE WORKSPACE NAVIGATION, NOT THE WHOLE PAGE.
         //
-        // PIIE has a real, working, site-wide `teacher/gradebook` page linked from
-        // the main sidebar. That link is a genuine feature and must keep working -
-        // it is a different thing entirely from the Course Allocation workspace tab
-        // that never had an engine behind it. Asserting on the whole document
-        // conflated the two and failed on a page that is working correctly.
+        // First assert the per-course navigation contract; separately assert
+        // that tertiary navigation omits the retired class gradebook.
         $this->assertNotFalse(
             strpos($html, 'data-testid="offering-workspace-nav"'),
             'the workspace navigation must be present for this assertion to mean anything'
@@ -474,8 +471,8 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
             );
         }
 
-        // And the sidebar's real gradebook is untouched by any of this.
-        $this->assertStringContainsString('/teacher/gradebook', $html);
+        // Tertiary navigation no longer links to the retired class gradebook.
+        $this->assertStringNotContainsString('/teacher/gradebook', $html);
     }
 
     public function test_the_legend_no_longer_claims_assignments_is_unbuilt(): void
@@ -566,6 +563,7 @@ class CourseOfferingWorkspaceNavigationTest extends TestCase
 
     public function test_the_legacy_k12_assignment_screens_are_unchanged(): void
     {
+        DB::table('schools')->where('id', $this->school)->update(['school_type' => 'k12', 'education_level' => 'secondary']);
         // The workspace navigation is a Course Allocation surface. A legacy K12
         // assignment is not inside a Course Allocation, so the composer resolves no
         // offering and the partial must render nothing at all - not a broken

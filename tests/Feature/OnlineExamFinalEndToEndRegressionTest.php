@@ -25,11 +25,9 @@ use Tests\TestCase;
  * WHY THIS FILE IS SEPARATE FROM THE ACCEPTANCE TEST
  *
  * `OnlineExamAcceptanceWorkflowTest` already walks authoring to published result,
- * but on a CLASS-scoped paper and with the paper published directly by an admin.
- * This suite differs in four ways that matter:
+ * with the paper published directly by an admin.
+ * This suite additionally checks:
  *
- *   - the paper is scoped to a COURSE OFFERING, so it is exercised through the
- *     offering branch of student visibility rather than the legacy class branch;
  *   - the LECTURER submits the paper for approval before an admin publishes it,
  *     which is the governance step the earlier test skipped;
  *   - the lecturer's MARKING QUEUE is checked for the student's exact words;
@@ -52,6 +50,7 @@ use Tests\TestCase;
 class OnlineExamFinalEndToEndRegressionTest extends TestCase
 {
     use OnlineExamTestHelper;
+    use \Tests\Feature\Support\CourseOfferingExamFixture;
 
     private const PAPER_TITLE = 'E2E VERIFICATION (DISPOSABLE) - Business Mathematics';
 
@@ -63,68 +62,31 @@ class OnlineExamFinalEndToEndRegressionTest extends TestCase
     private const SHORT = 'A = P(1 + r/n)^(nt)';
 
     private int $examId;
-    private int $offeringId;
     private int $studentId;
     private int $lecturerId;
     private int $adminId;
-    private int $classId;
+    private \App\Models\CourseOffering $offering;
     private int $submissionId;
     private array $q = [];
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootCourseOfferingExamSchema();
 
         $this->studentId = (int) $this->makeUser(7, 1, 'active', 'Kyeyune Amos')->id;
         $this->lecturerId = (int) $this->makeUser(3, 1, 'active', 'Daniel Okello')->id;
+        $this->offering = $this->makeOffering();
+        $this->allocateLecturer($this->offering, \App\Models\User::findOrFail($this->lecturerId));
+        $this->confirmStudent($this->offering, \App\Models\User::findOrFail($this->studentId));
+        $subjectId = $this->offering->subject_id;
         $this->adminId = (int) $this->makeUser(2, 1, 'active', 'PIIE School Administrator')->id;
 
-        $this->classId = $this->makeClass(1);
-        $subjectId = $this->makeSubject(1, $this->classId);
-        $this->enrollStudent($this->studentId, 1, $this->classId);
-
-        DB::table('teacher_permissions')->insert([
-            'class_id' => $this->classId, 'section_id' => 1, 'school_id' => 1,
-            'teacher_id' => $this->lecturerId, 'marks' => 1, 'attendance' => 1, 'updated_at' => now(),
-        ]);
-
-        // The offering and calendar tables, so the ADMIN screens render.
-//
-// The admin review queue reads `course_offerings` without a `hasTable()` guard, so a
-// schema without it 500s on the one screen an examiner must be able to open. Built
-// here - with the academic calendar that `course_offerings` in turn un-guards - rather
-// than left out to dodge the error. No offering-scoped PAPER is created; see the
-// scoping note below.
-$this->buildOfferingTables();
-
-        // A DRAFT, UNPUBLISHED paper.
-        //
-        // SCOPING, STATED PLAINLY RATHER THAN PAPERED OVER.
-        //
-        // This paper is CLASS-scoped, not offering-scoped, and that is a consequence
-        // of the isolated schema rather than a preference.
-        //
-        // An offering-scoped paper resolves "may this lecturer act on it" through
-        // OnlineExamAuthorizer::teachesCourseOffering() -> resolveForLecturer() ->
-        // canLecturerManage(), which reads tables the shared test schema does not
-        // build and this suite would have to reconstruct wholesale. Asserting the chain
-        // against a hand-made approximation of that stack would be testing the
-        // approximation, not the product.
-        //
-        // So the governed chain below runs on the class-scoped path, which is the same
-        // engine end to end - authoring, approval, sitting, autosave, marking, handover,
-        // publication - and the OFFERING-specific rules are covered separately by
-        // test_offering_scoped_papers_follow_the_registration_rule, which needs only
-        // the offering and registration tables and asserts the visibility rule itself.
-        //
-        // The offering path end to end must be verified in a browser against the real
-        // database. That limitation is reported, not hidden.
+        // A draft tertiary paper governed by lecturer allocation and confirmed registration.
         $this->examId = $this->makeExam([
             'title' => self::PAPER_TITLE,
             'subject_id' => $subjectId,
-            'class_id' => $this->classId,
-            'course_offering_id' => null,
+            'class_id' => null, 'course_offering_id' => $this->offering->id,
             'total_marks' => 20,
             'pass_mark' => 10,
             'duration_mins' => 30,
@@ -136,91 +98,6 @@ $this->buildOfferingTables();
             'start_datetime' => now()->subHour(),
             'end_datetime' => now()->addHours(3),
         ]);
-    }
-
-    /**
-     * The two offering tables this suite needs and the shared schema does not build.
-     *
-     * Built here rather than in `OnlineExamTestHelper` so every other online-exam
-     * suite keeps the schema it is written against. Only the columns the visibility
-     * rule actually reads are declared.
-     */
-    private function buildOfferingTables(): void
-    {
-        if (! Schema::hasTable('course_offerings')) {
-            Schema::create('course_offerings', function ($table) {
-                $table->increments('id');
-                $table->unsignedBigInteger('school_id')->index();
-                $table->unsignedBigInteger('subject_id')->nullable();
-                $table->unsignedBigInteger('academic_year_id')->nullable();
-                $table->unsignedBigInteger('academic_period_id')->nullable();
-                $table->string('reference')->nullable();
-                $table->string('status')->nullable();
-                $table->timestamps();
-            });
-        }
-
-        if (! Schema::hasTable('course_registrations')) {
-            Schema::create('course_registrations', function ($table) {
-                $table->increments('id');
-                $table->unsignedBigInteger('school_id')->index();
-                $table->unsignedBigInteger('student_id')->index();
-                $table->unsignedBigInteger('course_offering_id')->nullable()->index();
-                $table->string('status')->nullable();
-                $table->timestamps();
-            });
-        }
-
-        // Marker allocation. On an offering-scoped paper the notification recipients
-        // are the offering's markers, and `canTeachExam()` is asked before anyone is
-        // told anything. The author is only a recipient because they can still act on
-        // their own paper - so the allocation is what makes the chain complete, and
-        // omitting it would test a paper nobody is entitled to mark.
-        if (! Schema::hasTable('course_offering_lecturer_allocations')) {
-            Schema::create('course_offering_lecturer_allocations', function ($table) {
-                $table->increments('id');
-                $table->unsignedBigInteger('school_id')->index();
-                $table->unsignedBigInteger('course_offering_id')->index();
-                $table->unsignedBigInteger('user_id')->index();
-                $table->string('role')->nullable();
-                $table->string('status')->nullable();
-                $table->date('starts_on')->nullable();
-                $table->date('ends_on')->nullable();
-                $table->timestamps();
-            });
-        }
-
-        // The academic calendar.
-        //
-        // Present only because creating `course_offerings` above UNGUARDS code that
-        // reads the calendar, which is otherwise protected by `Schema::hasTable()`.
-        // Without these, the admin's publish redirect lands on a view that raises
-        // "no such table: academic_years". That is a property of the isolated schema,
-        // not a defect in the application: on a real database the tables are there.
-        if (! Schema::hasTable('academic_years')) {
-            Schema::create('academic_years', function ($table) {
-                $table->increments('id');
-                $table->unsignedBigInteger('school_id')->index();
-                $table->string('name')->nullable();
-                $table->date('starts_on')->nullable();
-                $table->date('ends_on')->nullable();
-                $table->string('status')->nullable();
-                $table->timestamps();
-            });
-        }
-
-        if (! Schema::hasTable('academic_periods')) {
-            Schema::create('academic_periods', function ($table) {
-                $table->increments('id');
-                $table->unsignedBigInteger('school_id')->index();
-                $table->unsignedBigInteger('academic_year_id')->index();
-                $table->string('name')->nullable();
-                $table->date('starts_on')->nullable();
-                $table->date('ends_on')->nullable();
-                $table->string('status')->nullable();
-                $table->timestamps();
-            });
-        }
     }
 
     private function lecturer(): self
@@ -269,10 +146,9 @@ $this->buildOfferingTables();
         // identifiable and safe to remove.
         $exam = DB::table('online_exams')->where('id', $this->examId)->first();
         $this->assertSame(self::PAPER_TITLE, $exam->title);
-        // The paper is class-scoped; see the setUp note for why, and for what the offering
-        // path covers instead.
-        $this->assertSame($this->classId, (int) $exam->class_id);
-        $this->assertNull($exam->course_offering_id);
+        // Tertiary delivery is governed by the Course Allocation, never a legacy class.
+        $this->assertNull($exam->class_id);
+        $this->assertSame($this->offering->id, (int) $exam->course_offering_id);
         $this->assertSame(0, (int) $exam->is_published);
         $this->assertSame('draft', $exam->workflow_state);
     }
@@ -402,7 +278,7 @@ $this->buildOfferingTables();
         $this->publishThePaper();
 
         // A real student - role 7, the same role the rest of the suite uses - who is
-        // simply not enrolled in this class. Using another role would bounce them in
+        // simply not registered on this Course Allocation. Using another role would bounce them in
         // middleware and prove nothing about visibility.
         $stranger = (int) $this->makeUser(7, 1, 'active', 'Not Registered')->id;
 
@@ -428,61 +304,19 @@ $this->buildOfferingTables();
      *
      * Asserted directly on the query, which is the single definition both the exam
      * list and "open this exam" use. This is what makes offering #5 behave correctly
-     * in production without reconstructing the whole Course Allocation authorisation
-     * stack that the rest of the suite would need for it.
+     * in production in addition to the full Course Allocation workflow exercised by this suite.
      */
     public function test_offering_scoped_papers_follow_the_registration_rule(): void
     {
-        $this->buildOfferingTables();
-
-        $offeringId = (int) DB::table('course_offerings')->insertGetId([
-            'school_id' => 1,
-            'subject_id' => DB::table('online_exams')->where('id', $this->examId)->value('subject_id'),
-            'reference' => 'BBIT1103-2026-S1',
-            'status' => 'active',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $offeringExamId = $this->makeExam([
-            'title' => 'OFFERING PAPER',
-            'class_id' => null,
-            'course_offering_id' => $offeringId,
-            'is_published' => 1,
-            'workflow_state' => 'published',
-            'created_by' => $this->lecturerId,
-            'creator_id' => $this->lecturerId,
-        ]);
-
+        DB::table('online_exams')->where('id', $this->examId)->update(['is_published' => 1, 'workflow_state' => 'published']);
+        $unregistered = $this->makeUser(7, 1, 'active', 'Unregistered Student');
         $access = app(\App\Support\CourseExams\CourseOfferingExamAccess::class);
         $base = \App\Models\OnlineExam::forSchool(1)->published();
-
-        // Registered on nothing: the offering branch is an impossible predicate, so
-        // nothing is visible. Deliberately expressed as "sees nothing" rather than
-        // "sees all", because the failure mode of getting this wrong is over-exposure.
-        $unregistered = $this->makeUser(7, 1, 'active', 'Unregistered Student');
-        $this->assertSame(
-            0,
-            $access->applyStudentVisibility(clone $base, (int) $unregistered->id, 1)->count(),
-            'a student registered on nothing must see no offering paper'
-        );
-
-        // Confirmed on it: exactly the offering paper, and nothing else.
-        DB::table('course_registrations')->insert([
-            'school_id' => 1,
-            'student_id' => $this->studentId,
-            'course_offering_id' => $offeringId,
-            'status' => \App\Models\CourseRegistration::STATUS_CONFIRMED,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $ids = $access->applyStudentVisibility(clone $base, $this->studentId, 1)->pluck('id')->all();
-
-        $this->assertContains($offeringExamId, $ids,
-            'a student confirmed on the offering must see its paper');
-        $this->assertNotContains($this->examId, $ids,
-            'the class paper must NOT appear through the offering branch');
+        $this->assertSame([], $access->applyStudentVisibility(clone $base, $unregistered->id, 1)->pluck('id')->all());
+        $this->assertSame([$this->examId], $access->applyStudentVisibility(clone $base, $this->studentId, 1)->pluck('id')->all());
+        // A retired class paper does not become visible through a Course Allocation registration.
+        $legacy = $this->makeExam(['class_id' => $this->makeClass(1)]);
+        $this->assertNotContains($legacy, $access->applyStudentVisibility(clone $base, $this->studentId, 1)->pluck('id')->all());
     }
 
     private function cardFor(string $html, int $questionId): string
@@ -922,7 +756,7 @@ $this->buildOfferingTables();
         // is the student role the rest of the suite uses; any other role would bounce
         // them in middleware and prove nothing about who owns an attempt.
         $other = (int) $this->makeUser(7, 1, 'active', 'Someone Else')->id;
-        $this->enrollStudent($other, 1, $this->classId);
+        $this->confirmStudent($this->offering, \App\Models\User::findOrFail($other));
 
         $this->actingAs(\App\Models\User::find($other));
 
@@ -1080,22 +914,22 @@ $this->student()->postJson(route('student.online_exam.save_answer', $this->submi
             'option_a' => 'A = P(1 + r/n)^(nt)', 'option_b' => 'A = Prt',
             'option_c' => 'A = P + rt', 'option_d' => 'A = P(1 + r)^t',
             'correct_ans' => 'a', 'marks' => 5,
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->lecturer()->post(route('teacher.online_exams.questions.store', $this->examId), [
             'question' => '<p>Demand falls as price rises.</p>',
             'type' => 'true_false', 'correct_answer_tf' => 'true', 'marks' => 5,
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->lecturer()->post(route('teacher.online_exams.questions.store', $this->examId), [
             'question' => '<p>Explain, with a worked example, how a <strong>price ceiling</strong> affects a market.</p>',
             'type' => 'essay', 'marks' => 5,
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->lecturer()->post(route('teacher.online_exams.questions.store', $this->examId), [
             'question' => '<p>State the compound interest formula.</p>',
             'type' => 'short_answer', 'marks' => 5,
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->resolveQuestionIds();
     }
@@ -1113,6 +947,11 @@ $this->student()->postJson(route('student.online_exam.save_answer', $this->submi
             ->where('online_exam_id', $this->examId)
             ->get()
             ->keyBy('type');
+
+        $this->assertCount(4, $byType, 'Authoring must persist all four question types before resolving ids.');
+        foreach (['mcq', 'true_false', 'essay', 'short'] as $type) {
+            $this->assertTrue($byType->has($type), "Missing persisted question type: {$type}");
+        }
 
         $this->q = [
             'mcq' => $byType['mcq']->id,

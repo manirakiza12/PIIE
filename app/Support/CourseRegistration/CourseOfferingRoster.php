@@ -24,11 +24,10 @@ class CourseOfferingRoster
     }
 
     /**
-     * Unregistered students with a current placement in, or current membership of a
-     * cohort following, a Study Plan linked to this Allocation — split by the shared
+     * Unregistered students with a current placement in a Study Plan linked to this Allocation — split by the shared
      * eligibility rule. Ineligible students carry an administrator-readable reason.
      */
-    public function review(CourseOffering $offering, ?int $cohortId = null, bool $includeClosed = false): array
+    public function review(CourseOffering $offering, bool $includeClosed = false): array
     {
         $empty = ['eligible' => collect(), 'ineligible' => collect()];
         $schoolId = (int) $offering->school_id;
@@ -44,20 +43,9 @@ class CourseOfferingRoster
 
         $alreadyRegistered = CourseRegistration::query()->where('school_id', $schoolId)
             ->where('course_offering_id', $offering->id)->pluck('student_id')->map(fn ($id) => (int) $id)->flip();
-        $currentMemberships = ! Schema::hasTable('programme_cohort_memberships') ? collect() : DB::table('programme_cohort_memberships as pcm')
-            ->join('programme_cohorts as pc', function ($join) use ($schoolId): void {
-                $join->on('pc.id', '=', 'pcm.programme_cohort_id')->where('pc.school_id', '=', $schoolId);
-            })
-            ->where('pcm.school_id', $schoolId)->whereNull('pcm.ended_at')->whereIn('pcm.status', ['active', 'deferred'])
-            ->get(['pcm.student_id', 'pcm.programme_cohort_id', 'pc.name as cohort_name', 'pc.curriculum_id'])
-            ->keyBy(fn ($row) => (int) $row->student_id);
         $candidateIds = DB::table('student_curriculum_assignments')->where('school_id', $schoolId)
             ->whereNull('ended_at')->whereIn('curriculum_id', $linkedStudyPlans)->pluck('student_id')
-            ->merge($currentMemberships->filter(fn ($row) => $linkedStudyPlans->contains($row->curriculum_id))->keys())
             ->map(fn ($id) => (int) $id)->unique();
-        if ($cohortId !== null) {
-            $candidateIds = $candidateIds->filter(fn ($id) => (int) ($currentMemberships->get($id)?->programme_cohort_id) === $cohortId);
-        }
         $students = User::query()->where('school_id', $schoolId)->where('role_id', 7)->whereIn('id', $candidateIds->all())
             ->where(fn ($q) => $q->whereNull('account_status')->orWhere('account_status', '!=', 'disable'))
             ->with(['studentProfile' => fn ($q) => $q->where('school_id', $schoolId)])
@@ -65,11 +53,10 @@ class CourseOfferingRoster
             ->reject(fn (User $student) => $alreadyRegistered->has((int) $student->id));
         $stageLabels = DB::table('curriculum_stages')->where('school_id', $schoolId)->pluck('label', 'id');
 
-        $reviewed = $students->map(function (User $student) use ($offering, $schoolId, $currentMemberships, $stageLabels): User {
+        $reviewed = $students->map(function (User $student) use ($offering, $schoolId, $stageLabels): User {
             $result = $this->eligibility->evaluate($offering, (int) $student->id);
             $financeEligible = $this->financialEligibility->allows($student);
             $activeWaiver = $this->feeWaivers->activeFor($student);
-            $student->setAttribute('roster_cohort', $currentMemberships->get((int) $student->id)?->cohort_name);
             $stageId = $result->assignment?->entry_curriculum_stage_id;
             $student->setAttribute('roster_stage', $stageId ? $stageLabels->get($stageId) : null);
             $student->setAttribute('roster_fee_waived', (bool) $activeWaiver);

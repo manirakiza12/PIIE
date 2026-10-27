@@ -15,7 +15,7 @@ class OnlineExamBatch2DSetupTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootSecondaryOnlineExamTestSchema();
 
         DB::table('global_settings')->updateOrInsert(
             ['key' => 'role_perm_3'],

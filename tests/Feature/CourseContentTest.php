@@ -1379,11 +1379,9 @@ class CourseContentTest extends TestCase
         //
         // ASSERTED ON THE NAV, NOT ON THE WHOLE PAGE.
         //
-        // The site-wide sidebar links to a real `/teacher/gradebook`, and it must
-        // keep doing so - removing a per-course tab must not have taken the working
-        // page with it. Scanning the rendered page for the word would fail on that
-        // link and would be testing the wrong thing: what matters is which tabs the
-        // workspace offers, and the nav is what decides that.
+        // Workspace tabs and the institution sidebar are separate contracts.
+        // Tertiary gradebooks now live in Course Allocations, so the retired
+        // class gradebook must be absent from the sidebar as well.
         $tabs = app(\App\Support\CourseOffering\WorkspaceNav::class)->tabs(
             request(), $this->offering, true, null
         );
@@ -1405,8 +1403,8 @@ class CourseContentTest extends TestCase
             }
         }
 
-        // And the site-wide gradebook link is genuinely still there.
-        $this->assertStringContainsString('/teacher/gradebook', $content);
+        // Tertiary navigation no longer links to the retired class gradebook.
+        $this->assertStringNotContainsString('/teacher/gradebook', $content);
     }
 
     public function test_built_content_pages_are_reachable_from_the_workspace_navigation(): void

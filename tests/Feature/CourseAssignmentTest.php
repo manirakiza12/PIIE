@@ -249,6 +249,7 @@ class CourseAssignmentTest extends TestCase
 
     public function test_a_k12_student_cannot_submit_to_a_hei_assignment_through_the_legacy_route(): void
     {
+        DB::table('schools')->where('id', $this->school)->update(['school_type' => 'k12', 'education_level' => 'secondary']);
         $hei = $this->publishedAssignment(['title' => 'HEI only']);
 
         // The legacy submit route. A K12 student reaching a HEI assignment here

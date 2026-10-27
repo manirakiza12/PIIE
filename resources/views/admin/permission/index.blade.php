@@ -3,7 +3,7 @@
 @section('content')
 @php
     $tertiaryGroups = academic_education_level(auth()->user()->school_id) === 'tertiary';
-    $wholeGroupLabel = $tertiaryGroups ? 'Whole Teaching Group (no subgroup)' : 'Whole class (no section)';
+    $wholeGroupLabel = 'Whole class (no section)';
 @endphp
 <div class="mainSection-title">
     <div class="row">
@@ -26,11 +26,11 @@
 @if($tertiaryGroups)
 <div class="alert alert-info" role="note">
     <strong>Assign lecturers to a course unit:</strong> Open Course Registrations, select its Academic Year and Semester, then View ? Teaching Team.
-    <p class="mb-0 mt-1">The controls below grant marks and attendance access across a Teaching Group or Programme. These access settings remain available for the workflows that use them.</p>
+    <p class="mb-0 mt-1">The controls below grant marks and attendance access for a Programme. These access settings remain available for the workflows that use them.</p>
     @if(auth()->user()->hasPermission('academic.course_offering.view'))<a class="alert-link" href="{{ route('admin.course_offerings.index') }}">Open Course Registrations</a>@endif
 </div>
 @endif
-<!-- Existing teaching-group permissions remain separate from programme access. -->
+@unless($tertiaryGroups)
 <details open class="mb-3"><summary class="fw-bold mb-3">{{ academic_term('class', auth()->user()->school_id) }} {{ get_phrase('Access') }}</summary>
 <div class="row">
     <div class="col-10 offset-md-1">
@@ -83,19 +83,20 @@
 </div>
 <div class="row mt-3"><div class="col-10 offset-md-1"><div class="alert alert-info mb-0">
     @if($tertiaryGroups)
-    Lecturer access here follows the assigned Teaching Group and its Course Units. Select a Teaching Group and Subgroup, or choose Whole Teaching Group, then enable Marks or Attendance as required.
+    Manage lecturer access through the Course Allocation teaching team.
     @else
     {{ get_phrase('Teacher/Lecturer subject access is derived from the assigned class and its Subjects/Courses. Select a class, choose Whole class (no section) when sections are not used, then enable Marks for the teacher.') }}
     @endif
 </div></div></div>
 </details>
+@endunless
 
 @if($programmes->count() > 0)
 <details class="mb-3" @if(request()->filled('programme_id')) open @endif><summary class="fw-bold mb-3">{{ get_phrase('Programme Access') }}</summary>
 <div class="row mt-4">
     <div class="col-10 offset-md-1">
         <div class="eSection-wrap-2">
-            <p class="text-muted">{{ get_phrase('Assign marks and attendance access for a whole programme. This is separate from teaching-group access above.') }}</p>
+            <p class="text-muted">{{ get_phrase('Assign marks and attendance access for a whole programme.') }}</p>
             <form method="GET" class="d-block ajaxForm">
                 <div class="row mt-3">
 

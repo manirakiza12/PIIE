@@ -11,21 +11,7 @@ use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Support\StaffModuleTestHelper;
 use Tests\TestCase;
 
-/**
- * HTTP regression for GET /admin/programme-cohorts/{id}.
- *
- * That page returned 500 for every visitor. The cause was a Blade COMPILE
- * error, not the data: "eligible students@if(...)" in
- * admin/programme_cohorts/show.blade.php. Blade's statement pattern begins with
- * \B@, so a directive glued to a preceding word character is emitted as literal
- * text, while its @endif still compiles. The surplus endif closed the enclosing
- * @if early and orphaned the next @elseif, so the compiled template was invalid
- * PHP and the page failed to render no matter what the cohort contained.
- *
- * These tests exercise the page end to end so the same class of break is caught
- * here, and they pin the tenant, authorisation and academic-placement behaviour
- * the page depends on. BladeTemplateIntegrityTest covers the compile step itself.
- */
+/** Retired cohort URLs preserve data and lead authorised staff to direct placement. */
 class ProgrammeCohortDetailPageTest extends TestCase
 {
     use StaffModuleTestHelper;
@@ -144,120 +130,50 @@ class ProgrammeCohortDetailPageTest extends TestCase
     }
 
     // A. The exact page that 500'd must now return 200.
-    public function test_authorised_admin_can_open_a_programme_cohort_detail_page(): void
+    public function test_retired_detail_redirects_to_direct_placement_without_deleting_history(): void
     {
         $cohort = $this->cohort();
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.programme_cohorts.show', $cohort->id))
-            ->assertOk()
-            ->assertSee('BBIT September 2026 Cohort')
-            ->assertSee('BBIT-SEP-2026')
-            ->assertSee('BBIT')
-            ->assertSee('2026 September Intake')
-            ->assertSee('2026/2027')
-            ->assertSee('2026-V1');
+        $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
+            ->assertRedirect(route('admin.academic.direct_placement'));
+        $this->assertDatabaseHas('programme_cohorts', ['id' => $cohort->id]);
     }
 
     // B. Memberships render.
-    public function test_existing_cohort_memberships_render(): void
+    public function test_retirement_preserves_existing_memberships(): void
     {
         $cohort = $this->cohort();
         $membership = $this->addMember($cohort, ['name' => 'Kyeyune Amos', 'email' => 'kyeyune@example.test']);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.programme_cohorts.show', $cohort->id))
-            ->assertOk()
-            ->assertSee('Kyeyune Amos')
-            ->assertSee('Students / Members')
-            ->assertViewHas('memberships', fn ($paginator) => $paginator->total() === 1);
-
-        $this->assertSame(1, DB::table('programme_cohort_memberships')->where('id', $membership)->count());
+        $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
+            ->assertRedirect(route('admin.academic.direct_placement'));
+        $this->assertDatabaseHas('programme_cohort_memberships', ['id' => $membership]);
     }
 
     // C. Academic placement information renders, and the banner reflects it.
-    public function test_academic_placement_information_renders(): void
+    public function test_retired_group_placement_redirects_to_direct_placement(): void
     {
         $cohort = $this->cohort();
-        $student = User::factory()->create([
-            'name' => 'Placed Student', 'email' => 'placed@example.test', 'role_id' => 7,
-            'school_id' => $this->school, 'account_status' => 'active',
-        ]);
-        DB::table('student_profiles')->insert([
-            'user_id' => $student->id, 'school_id' => $this->school, 'programme_id' => $this->programme,
-            'intake_session_id' => $this->intake, 'year_of_study' => 1, 'status' => 'active',
-        ]);
-        $membership = DB::table('programme_cohort_memberships')->insertGetId([
-            'school_id' => $this->school, 'student_id' => $student->id, 'programme_cohort_id' => $cohort->id,
-            'admission_id' => null, 'admission_reference' => null, 'status' => 'active',
-            'started_at' => now(), 'ended_at' => null, 'assigned_by' => $this->admin->id,
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $this->place($cohort, $membership, (int) $student->id);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.programme_cohorts.show', $cohort->id))
-            ->assertOk()
-            ->assertSee('All current students have Academic Placement recorded.')
-            ->assertDontSee('Academic Placement Pending');
+        $this->actingAs($this->admin)->get(route('admin.programme_cohorts.placement.index', $cohort->id))
+            ->assertRedirect(route('admin.academic.direct_placement'));
     }
 
     // D. Optional / null related data must not 500.
-    public function test_optional_and_null_related_data_does_not_produce_a_500(): void
+    public function test_all_retired_lifecycle_states_redirect_safely(): void
     {
-        $cohort = $this->cohort([
-            'expected_completion_date' => null,   // no expected completion
-            'created_by' => $this->admin->id,
-        ]);
-        // A member with no Academic Placement, no admission provenance, and a
-        // null year of study: every optional value the view touches is absent.
-        $student = User::factory()->create([
-            'name' => 'Bare Minimum Student', 'email' => 'bare@example.test', 'role_id' => 7,
-            'school_id' => $this->school, 'account_status' => 'active',
-        ]);
-        DB::table('student_profiles')->insert([
-            'user_id' => $student->id, 'school_id' => $this->school, 'programme_id' => null,
-            'intake_session_id' => null, 'year_of_study' => null, 'status' => 'active',
-        ]);
-        DB::table('programme_cohort_memberships')->insert([
-            'school_id' => $this->school, 'student_id' => $student->id, 'programme_cohort_id' => $cohort->id,
-            'admission_id' => null, 'admission_reference' => null, 'status' => 'active',
-            'started_at' => now(), 'ended_at' => null, 'assigned_by' => $this->admin->id,
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.programme_cohorts.show', $cohort->id))
-            ->assertOk()
-            // The pending-placement state is stated in words, not crashed on.
-            ->assertSee('Academic Placement Pending')
-            ->assertSee('Bare Minimum Student');
-
-        // And a draft cohort, which renders a different branch of the same chain.
-        $draft = $this->cohort(['code' => 'BBIT-DRAFT', 'status' => 'draft']);
-        $this->actingAs($this->admin)
-            ->get(route('admin.programme_cohorts.show', $draft->id))
-            ->assertOk()
-            ->assertSee('A draft is not yet operational.');
+        foreach (['draft', 'active', 'completed', 'cancelled'] as $status) {
+            $cohort = $this->cohort(['code' => 'RETIRED-'.$status, 'status' => $status]);
+            $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
+                ->assertRedirect(route('admin.academic.direct_placement'));
+        }
     }
 
     // E. Cross-tenant isolation.
     public function test_a_cross_tenant_cohort_cannot_be_opened(): void
     {
-        $foreignProgramme = $this->makeProgramme($this->otherSchool, 'P2', 'Other Programme');
-        $foreign = DB::table('programme_cohorts')->insertGetId([
-            'school_id' => $this->otherSchool, 'programme_id' => $foreignProgramme,
-            'intake_session_id' => $this->intake, 'entry_academic_year_id' => $this->year,
-            'curriculum_id' => $this->plan, 'name' => 'Foreign Cohort', 'code' => 'FOR-1',
-            'status' => 'active', 'expected_completion_date' => null, 'created_by' => $this->admin->id,
-        ]);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.programme_cohorts.show', $foreign))
-            ->assertNotFound();
-
-        $this->assertSame(1, DB::table('programme_cohorts')->where('id', $foreign)->count(),
-            'the foreign cohort is untouched');
+        $cohort = $this->cohort();
+        DB::table('programme_cohorts')->where('id', $cohort->id)->update(['school_id' => $this->otherSchool]);
+        $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
+            ->assertRedirect(route('admin.academic.direct_placement'))->assertDontSee($cohort->name);
+        $this->assertDatabaseHas('programme_cohorts', ['id' => $cohort->id, 'school_id' => $this->otherSchool]);
     }
 
     // F. Authorisation is unchanged.
@@ -283,15 +199,20 @@ class ProgrammeCohortDetailPageTest extends TestCase
     }
 
     // G. The list still works.
-    public function test_the_programme_cohort_list_still_works(): void
+    public function test_retired_cohort_list_redirects_to_direct_placement(): void
+    {
+        $this->cohort();
+        $this->actingAs($this->admin)->get(route('admin.programme_cohorts.index'))
+            ->assertRedirect(route('admin.academic.direct_placement'));
+    }
+
+    public function test_retired_mutations_leave_history_unchanged(): void
     {
         $cohort = $this->cohort();
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.programme_cohorts.index'))
-            ->assertOk()
-            ->assertSee('BBIT September 2026 Cohort')
-            ->assertSee('BBIT-SEP-2026');
+        $this->actingAs($this->admin)->post(route('admin.programme_cohorts.lifecycle', $cohort->id), ['status' => 'completed'])->assertStatus(410);
+        $this->post(route('admin.programme_cohorts.members.store', $cohort->id), ['student_id' => 999])->assertStatus(410);
+        $this->assertDatabaseHas('programme_cohorts', ['id' => $cohort->id, 'status' => 'active']);
+        $this->assertSame(0, DB::table('programme_cohort_memberships')->count());
     }
 
     private function makeProgramme(int $schoolId, string $code, string $name): int

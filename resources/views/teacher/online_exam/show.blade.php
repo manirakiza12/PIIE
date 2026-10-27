@@ -28,7 +28,9 @@
     <div class="row">
         <div class="col-md-6">
             <p><strong>{{ academic_term('subject', auth()->user()->school_id) }}:</strong> {{ optional($exam->subject)->name ?? '—' }}</p>
+            @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
             <p><strong>{{ academic_term('class', auth()->user()->school_id) }}:</strong> {{ optional($exam->classRoom)->name ?? '—' }}</p>
+            @endif
             <p><strong>{{ get_phrase('Workflow') }}:</strong> <span class="badge bg-secondary">{{ $workflowLabel }}</span></p>
             <p><strong>{{ get_phrase('Lifecycle') }}:</strong> <span class="badge bg-info">{{ $lifecycleLabel }}</span></p>
         </div>

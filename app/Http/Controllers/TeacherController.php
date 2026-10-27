@@ -314,7 +314,9 @@ class TeacherController extends Controller
     public function list_of_syllabus(Request $request)
     {
         $data = $request->all();
-        $permissions = TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
+        $permissions = academic_education_level((int) auth()->user()->school_id) === 'tertiary'
+            ? []
+            : TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
         $permitted_classes = array();
 
         foreach ($permissions  as  $key => $distinct_class) {
@@ -370,7 +372,9 @@ class TeacherController extends Controller
     {
         $data = $request->all();
 
-        $permissions = TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
+        $permissions = academic_education_level((int) auth()->user()->school_id) === 'tertiary'
+            ? []
+            : TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
         $classes = array();
 
         foreach ($permissions  as  $key => $distinct_class) {
@@ -590,7 +594,9 @@ class TeacherController extends Controller
 
     public function dailyAttendance()
     {
-        $permissions = TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
+        $permissions = academic_education_level((int) auth()->user()->school_id) === 'tertiary'
+            ? []
+            : TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
         $classes = array();
 
         foreach ($permissions  as  $key => $distinct_class) {
@@ -632,7 +638,9 @@ class TeacherController extends Controller
 
         $no_of_users = DailyAttendances::where(['class_id' => $data['class_id'], 'section_id' => $data['section_id'], 'school_id' => auth()->user()->school_id, 'session_id' => $active_session])->distinct()->count('student_id');
 
-        $permissions = TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
+        $permissions = academic_education_level((int) auth()->user()->school_id) === 'tertiary'
+            ? []
+            : TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
         $classes = array();
 
         foreach ($permissions  as  $key => $distinct_class) {
@@ -650,7 +658,9 @@ class TeacherController extends Controller
 
     public function takeAttendance()
     {
-        $permissions = TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
+        $permissions = academic_education_level((int) auth()->user()->school_id) === 'tertiary'
+            ? []
+            : TeacherPermission::where('teacher_id', auth()->user()->id)->select('class_id')->distinct()->get()->toArray();
         $classes = array();
 
         foreach ($permissions  as  $key => $distinct_class) {

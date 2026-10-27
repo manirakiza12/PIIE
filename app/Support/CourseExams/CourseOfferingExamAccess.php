@@ -384,41 +384,16 @@ class CourseOfferingExamAccess
     }
 
     /**
-     * The ONE student visibility rule, for the exam list and for opening one exam.
-     *
-     * ── THE HAZARD THIS EXISTS TO CLOSE ─────────────────────────────────────
-     *
-     * The original rule was: match an exam if `class_id` is NULL **or** one of the
-     * student's classes, likewise for `programme_id` and `session_id`. The NULL
-     * arms are what make school-wide papers work, and they are also why a legacy
-     * exam with no class is visible to EVERY student in the institution.
-     *
-     * That behaviour is pre-existing and is preserved exactly - the brief forbids
-     * changing working legacy delivery, and nine live exams depend on it. It is
-     * reported, not silently rewritten.
-     *
-     * What could not be preserved is that rule's application to a Course Allocation
-     * assessment. An Allocation assessment is created with `class_id`, `programme_id`
-     * and `session_id` all NULL - the brief forbids faking higher-education
-     * delivery through the legacy Class/Section graph, and populating them would
-     * not be a harmless placeholder: it would enrol every student of that class
-     * into the assessment, bypassing the confirmed Course Registration that is the
-     * only legitimate higher-education eligibility test.
-     *
-     * So a NULL-armed legacy rule applied to an Allocation assessment would make it
-     * sit-able by the whole school. The two cases are therefore separated, and an
-     * Allocation assessment is reachable only by a student confirmed on THAT
-     * Allocation:
-     *
-     *   (A) course_offering_id IS NOT NULL  -> confirmed registration on it
-     *   (B) course_offering_id IS NULL      -> the original rule, unchanged
-     *
-     * This only ever NARROWS what is visible. For all nine existing exams the
-     * column is NULL, so branch (B) applies with byte-identical conditions.
+     * Course Allocation papers require confirmed registration. Secondary legacy
+     * papers keep their class/programme/session rules. Tertiary students cannot
+     * start retired class papers, but their own legacy submissions remain visible
+     * for history and completion, even after old enrolment links are removed.
+     * The history exception never applies to Course Allocation papers.
      */
     public function applyStudentVisibility($query, int $studentId, int $schoolId)
     {
-        $classIds = Enrollment::where('user_id', $studentId)
+        $tertiary = academic_education_level($schoolId) === 'tertiary';
+        $classIds = $tertiary ? [] : Enrollment::where('user_id', $studentId)
             ->where('school_id', $schoolId)
             ->pluck('class_id')
             ->filter()
@@ -454,7 +429,7 @@ class CourseOfferingExamAccess
         $offeringColumnExists = Schema::hasColumn('online_exams', 'course_offering_id');
 
         return $query->where(function ($q) use (
-            $classIds, $sessionIds, $programmeId, $confirmedOfferingIds, $offeringColumnExists
+            $classIds, $sessionIds, $programmeId, $confirmedOfferingIds, $offeringColumnExists, $studentId, $schoolId, $tertiary
         ) {
             // (A) a Course Allocation assessment this student is confirmed on
             if ($offeringColumnExists) {
@@ -473,25 +448,39 @@ class CourseOfferingExamAccess
                 });
             }
 
-            // (B) a legacy Class/Section assessment - the original rule, verbatim
-            $q->orWhere(function ($legacy) use ($classIds, $sessionIds, $programmeId, $offeringColumnExists) {
+            // (B) Legacy targeting, plus owned tertiary history and in-progress attempts.
+            $q->orWhere(function ($legacy) use ($classIds, $sessionIds, $programmeId, $offeringColumnExists, $studentId, $schoolId, $tertiary) {
                 $legacy->when($offeringColumnExists, fn ($l) => $l->whereNull('course_offering_id'))
-                    ->where(function ($c) use ($classIds) {
-                        $c->whereNull('class_id');
-                        if ($classIds) {
-                            $c->orWhereIn('class_id', $classIds);
-                        }
-                    })
-                    ->where(function ($p) use ($programmeId) {
-                        $p->whereNull('programme_id');
-                        if ($programmeId) {
-                            $p->orWhere('programme_id', $programmeId);
-                        }
-                    })
-                    ->where(function ($s) use ($sessionIds) {
-                        $s->whereNull('session_id');
-                        if ($sessionIds) {
-                            $s->orWhereIn('session_id', $sessionIds);
+                    ->where(function ($target) use ($classIds, $sessionIds, $programmeId, $studentId, $schoolId, $tertiary) {
+                        $target->where(function ($eligible) use ($classIds, $sessionIds, $programmeId) {
+                            $eligible->where(function ($c) use ($classIds) {
+                                $c->whereNull('class_id');
+                                if ($classIds) {
+                                    $c->orWhereIn('class_id', $classIds);
+                                }
+                            })->where(function ($p) use ($programmeId) {
+                                $p->whereNull('programme_id');
+                                if ($programmeId) {
+                                    $p->orWhere('programme_id', $programmeId);
+                                }
+                            })->where(function ($s) use ($sessionIds) {
+                                $s->whereNull('session_id');
+                                if ($sessionIds) {
+                                    $s->orWhereIn('session_id', $sessionIds);
+                                }
+                            });
+                        });
+                        // An owned legacy attempt survives retired enrolment links. This grants no new attempt.
+                        if ($tertiary && Schema::hasTable('online_exam_submissions')) {
+                            $target->orWhere(function ($historical) use ($studentId, $schoolId) {
+                                $historical->whereNotNull('class_id')->whereExists(function ($attempt) use ($studentId, $schoolId) {
+                                    $attempt->selectRaw('1')->from('online_exam_submissions')
+                                        ->whereColumn('online_exam_submissions.online_exam_id', 'online_exams.id')
+                                        ->whereColumn('online_exam_submissions.school_id', 'online_exams.school_id')
+                                        ->where('online_exam_submissions.school_id', $schoolId)
+                                        ->where('online_exam_submissions.student_id', $studentId);
+                                });
+                            });
                         }
                     });
             });

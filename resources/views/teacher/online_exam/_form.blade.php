@@ -15,6 +15,7 @@
     // those values is refused on save. A control that cannot be used correctly
     // should not be on the page.
     $isOfferingMode = !empty($offering);
+    $programmeExams = academic_education_level((int) auth()->user()->school_id) === 'tertiary';
     $offerings = $offerings ?? collect();
     $targetRoute = $isEdit ? route('teacher.online_exams.update', $exam->id) : route('teacher.online_exams.store');
 @endphp
@@ -48,6 +49,9 @@
 
 <form method="POST" action="{{ $targetRoute }}" class="row g-3">
     @csrf
+    @if($programmeExams && !$isEdit && $offerings->isEmpty())
+        <div class="col-md-12 alert alert-info">{{ get_phrase('No Course Allocations are assigned to you. Ask your administrator to allocate a course before creating an exam.') }}</div>
+    @endif
     @if($isEdit)
         @method('PUT')
     @endif
@@ -105,7 +109,7 @@
             <div class="col-md-12">
                 <label class="eForm-label" for="exam_course_offering">{{ get_phrase('Course Allocation') }}</label>
                 <select class="form-select eForm-select" name="course_offering_id" id="exam_course_offering" data-testid="exam-course-offering-select">
-                    <option value="">{{ get_phrase('— Create a legacy class exam instead —') }}</option>
+                    <option value="">{{ $programmeExams ? get_phrase('Select Course Allocation') : get_phrase('Create a class exam') }}</option>
                     @foreach($offerings as $candidate)
                         <option value="{{ $candidate->id }}" {{ (string) old('course_offering_id', $selectedOfferingId ?? 0) === (string) $candidate->id ? 'selected' : '' }}>
                             {{ $candidate->subject?->name ?? (get_phrase('Course Allocation') . ' #' . $candidate->id) }}{{ $candidate->reference ? ' — ' . $candidate->reference : '' }}
@@ -118,6 +122,10 @@
             </div>
         @endif
 
+        @if($programmeExams && $offerings->isEmpty())
+            <div class="col-12"><div class="alert alert-info">An administrator must assign you to a Course Allocation before you can create an exam.</div></div>
+        @endif
+        @unless($programmeExams)
         @if($subjects->isEmpty() && $offerings->isEmpty())
             {{-- The warning is for a lecturer with NO academic assignment of any kind.
 
@@ -190,6 +198,7 @@
             </select>
             @if(!empty($structureLocked) && !empty($exam))<input type="hidden" name="session_id" value="{{ $exam->session_id }}">@endif
         </div>
+        @endunless
     @endif
 
     <div class="col-md-3">

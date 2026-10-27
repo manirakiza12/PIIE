@@ -439,6 +439,7 @@ class StudentController extends Controller
         $schoolId = (int) $student->school_id;
         $school = School::query()->whereKey($schoolId)->first();
         if (! $school) return 'configuration';
+        if (academic_education_level($schoolId) === 'tertiary') return 'hei';
         $structure = $school->academicStructure();
         if ($structure === 'class_based') return 'legacy';
         if ($structure === 'programme_based') return 'hei';

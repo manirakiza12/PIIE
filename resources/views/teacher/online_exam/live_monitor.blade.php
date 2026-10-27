@@ -14,7 +14,9 @@
             <tr>
                 <th>{{ get_phrase('Title') }}</th>
                 <th>{{ get_phrase('Subject') }}</th>
+                @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
                 <th>{{ academic_term('class', auth()->user()->school_id) }}</th>
+                @endif
                 <th>{{ get_phrase('Ends') }}</th>
                 <th>{{ get_phrase('Students Sitting Now') }}</th>
                 <th>{{ get_phrase('Actions') }}</th>
@@ -25,7 +27,9 @@
                 <tr>
                     <td>{{ $exam->title }}</td>
                     <td>{{ optional($exam->subject)->name ?? '—' }}</td>
+                @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
                     <td>{{ optional($exam->classRoom)->name ?? '—' }}</td>
+                @endif
                     <td>{{ optional($exam->end_datetime)->format('d M Y H:i') ?? '—' }}</td>
                     <td>
                         <span class="badge {{ $exam->in_progress_count > 0 ? 'bg-success' : 'bg-secondary' }}">{{ $exam->in_progress_count }}</span>
@@ -38,7 +42,7 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="text-center text-muted">{{ get_phrase('No exams are ongoing right now') }}</td></tr>
+                <tr><td colspan="{{ academic_education_level((int) auth()->user()->school_id) === 'tertiary' ? 5 : 6 }}" class="text-center text-muted">{{ get_phrase('No exams are ongoing right now') }}</td></tr>
             @endforelse
             </tbody>
         </table>
@@ -53,7 +57,9 @@
             <tr>
                 <th>{{ get_phrase('Title') }}</th>
                 <th>{{ get_phrase('Subject') }}</th>
+                @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
                 <th>{{ academic_term('class', auth()->user()->school_id) }}</th>
+                @endif
                 <th>{{ get_phrase('Starts') }}</th>
                 <th>{{ get_phrase('Starts In') }}</th>
                 <th>{{ get_phrase('Actions') }}</th>
@@ -64,7 +70,9 @@
                 <tr>
                     <td>{{ $exam->title }}</td>
                     <td>{{ optional($exam->subject)->name ?? '—' }}</td>
+                @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
                     <td>{{ optional($exam->classRoom)->name ?? '—' }}</td>
+                @endif
                     <td>{{ optional($exam->start_datetime)->format('d M Y H:i') ?? '—' }}</td>
                     <td>{{ $exam->start_datetime ? $exam->start_datetime->diffForHumans(null, true) : '—' }}</td>
                     <td>
@@ -72,7 +80,7 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="text-center text-muted">{{ get_phrase('No upcoming exams scheduled') }}</td></tr>
+                <tr><td colspan="{{ academic_education_level((int) auth()->user()->school_id) === 'tertiary' ? 5 : 6 }}" class="text-center text-muted">{{ get_phrase('No upcoming exams scheduled') }}</td></tr>
             @endforelse
             </tbody>
         </table>

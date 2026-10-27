@@ -142,7 +142,8 @@
                 @endforeach
             </select>
         </div>
-        <div class="col-md-2">
+        @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
+<div class="col-md-2">
             <label class="eForm-label">{{ academic_term('class', auth()->user()->school_id) }}</label>
             <select class="form-select eForm-select" name="class_id">
                 <option value="">{{ get_phrase('All Classes') }}</option>
@@ -151,6 +152,7 @@
                 @endforeach
             </select>
         </div>
+@endif
         <div class="col-md-2">
             <label class="eForm-label">{{ get_phrase('Workflow') }}</label>
             <select class="form-select eForm-select" name="workflow_state">

@@ -14,7 +14,7 @@ class OnlineExamAuthorizationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootSecondaryOnlineExamTestSchema();
     }
 
     public function test_admin_cannot_access_another_school_exam(): void

@@ -39,38 +39,37 @@ use Tests\TestCase;
 class OnlineExamAcceptanceWorkflowTest extends TestCase
 {
     use OnlineExamTestHelper;
+    use \Tests\Feature\Support\CourseOfferingExamFixture;
 
     private int $examId;
     private int $studentId;
     private int $lecturerId;
     private int $adminId;
-    private int $classId;
+    private \App\Models\CourseOffering $offering;
     private int $submissionId;
     private array $q = [];
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bootOnlineExamTestSchema();
+        $this->bootCourseOfferingExamSchema();
 
         $this->studentId = (int) $this->makeUser(7, 1, 'active', 'Kyeyune Amos')->id;
         $this->lecturerId = (int) $this->makeUser(3, 1, 'active', 'Daniel Okello')->id;
+        $this->offering = $this->makeOffering();
+        $this->allocateLecturer($this->offering, \App\Models\User::findOrFail($this->lecturerId));
+        $this->confirmStudent($this->offering, \App\Models\User::findOrFail($this->studentId));
+        $subjectId = $this->offering->subject_id;
         $this->adminId = (int) $this->makeUser(2, 1, 'active', 'PIIE School Administrator')->id;
 
-        $this->classId = $this->makeClass(1);
-        $subjectId = $this->makeSubject(1, $this->classId);
-        $this->enrollStudent($this->studentId, 1, $this->classId);
 
-        DB::table('teacher_permissions')->insert([
-            'class_id' => $this->classId, 'section_id' => 1, 'school_id' => 1,
-            'teacher_id' => $this->lecturerId, 'marks' => 1, 'attendance' => 1, 'updated_at' => now(),
-        ]);
+
 
         // A NEW paper, in draft. It is authored and approved through the real routes.
         $this->examId = $this->makeExam([
             'title' => 'Acceptance — Business Mathematics',
             'subject_id' => $subjectId,
-            'class_id' => $this->classId,
+            'class_id' => null, 'course_offering_id' => $this->offering->id,
             'total_marks' => 20,
             'pass_mark' => 10,
             'duration_mins' => 30,
@@ -129,25 +128,25 @@ class OnlineExamAcceptanceWorkflowTest extends TestCase
                 'type' => 'multiple_choice',
                 'option_a' => 'A = P(1 + r/n)^(nt)', 'option_b' => 'A = Prt', 'option_c' => 'A = P + rt', 'option_d' => 'A = P(1 + r)^t',
                 'correct_ans' => 'a', 'marks' => 5,
-            ])->assertSessionHasNoErrors();
+            ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->lecturer()
             ->post(route('teacher.online_exams.questions.store', $this->examId), [
                 'question' => '<p>Demand falls as price rises.</p>',
                 'type' => 'true_false', 'correct_answer_tf' => 'true', 'marks' => 5,
-            ])->assertSessionHasNoErrors();
+            ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->lecturer()
             ->post(route('teacher.online_exams.questions.store', $this->examId), [
                 'question' => '<p>Explain, with a worked example, how a <strong>price ceiling</strong> affects a market.</p>',
                 'type' => 'essay', 'marks' => 5,
-            ])->assertSessionHasNoErrors();
+            ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->lecturer()
             ->post(route('teacher.online_exams.questions.store', $this->examId), [
                 'question' => '<p>State the compound interest formula.</p>',
                 'type' => 'short_answer', 'marks' => 5,
-            ])->assertSessionHasNoErrors();
+            ])->assertRedirect()->assertSessionHasNoErrors();
 
         $rows = DB::table('online_exam_questions')->where('online_exam_id', $this->examId)
             ->orderBy('sort_order')->orderBy('id')->get();

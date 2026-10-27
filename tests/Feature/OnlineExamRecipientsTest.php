@@ -161,6 +161,7 @@ class OnlineExamRecipientsTest extends TestCase
 
     public function test_a_LEGACY_class_exam_still_uses_ENROLMENT(): void
     {
+        $this->useSecondarySchool();
         $classId = $this->makeClass(1);
 
         $inClass = $this->makeUser(7, 1, 'active', 'In The Class');

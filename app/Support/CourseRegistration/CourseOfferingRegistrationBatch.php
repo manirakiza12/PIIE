@@ -6,8 +6,8 @@ use App\Models\CourseOffering;
 use App\Models\CourseRegistration;
 use DomainException;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
@@ -27,30 +27,6 @@ class CourseOfferingRegistrationBatch
 
     public function __construct(private CourseRegistrationService $registrations)
     {
-    }
-
-    /** Current (active or deferred) members of a cohort relevant to this Allocation. */
-    public function cohortStudentIds(CourseOffering $offering, int $cohortId): Collection
-    {
-        $cohort = $this->relevantCohorts($offering)->firstWhere('id', $cohortId);
-        if (! $cohort) {
-            throw ValidationException::withMessages(['programme_cohort_id' => 'Choose an active Programme Cohort whose Study Plan is linked to this Course Allocation.']);
-        }
-
-        return DB::table('programme_cohort_memberships')
-            ->where('school_id', $offering->school_id)->where('programme_cohort_id', $cohortId)
-            ->whereNull('ended_at')->whereIn('status', ['active', 'deferred'])
-            ->pluck('student_id')->map(fn ($id) => (int) $id)->unique()->values();
-    }
-
-    /** Active Programme Cohorts in this tenant following a Study Plan linked to the Allocation. */
-    public function relevantCohorts(CourseOffering $offering): Collection
-    {
-        $studyPlans = DB::table('course_offering_curriculum_memberships')
-            ->where('school_id', $offering->school_id)->where('course_offering_id', $offering->id)->distinct()->pluck('curriculum_id');
-
-        return DB::table('programme_cohorts')->where('school_id', $offering->school_id)->where('status', 'active')
-            ->whereIn('curriculum_id', $studyPlans)->orderBy('name')->get(['id', 'name', 'code']);
     }
 
     public function register(CourseOffering $offering, iterable $studentIds, int $actorId): array
