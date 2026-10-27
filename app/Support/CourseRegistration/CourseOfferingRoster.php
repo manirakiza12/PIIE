@@ -55,7 +55,8 @@ class CourseOfferingRoster
 
         $reviewed = $students->map(function (User $student) use ($offering, $schoolId, $stageLabels): User {
             $result = $this->eligibility->evaluate($offering, (int) $student->id);
-            $financeEligible = $this->financialEligibility->allows($student);
+            $financeSummary = $this->financialEligibility->summary($student);
+            $financeEligible = $financeSummary['eligible'];
             $activeWaiver = $this->feeWaivers->activeFor($student);
             $stageId = $result->assignment?->entry_curriculum_stage_id;
             $student->setAttribute('roster_stage', $stageId ? $stageLabels->get($stageId) : null);
@@ -65,7 +66,7 @@ class CourseOfferingRoster
             $student->setAttribute('roster_eligible', $result->eligible && $financeEligible);
             $student->setAttribute('roster_reason', ! $result->eligible
                 ? $result->message
-                : ($financeEligible ? null : 'Pay at least 20% of the current academic-session fees before course registration.'));
+                : ($financeEligible ? null : $this->financialEligibility->blocker($student, $financeSummary)));
             if ($result->eligible) {
                 $curriculum = $result->curriculum;
                 $curriculum->setRelation('programme', Programme::query()->where('school_id', $schoolId)->whereKey($curriculum->programme_id)->first());
@@ -86,14 +87,14 @@ class CourseOfferingRoster
     public function ineligibilityReason(CourseOffering $offering, int $studentId): ?string
     {
         if ($offering->status !== CourseOffering::STATUS_OPEN) {
-            return 'Students can be registered only while the Course Allocation is open.';
+            return 'This Course Allocation is not open for new registrations. Next step: the academic office can review or reopen it if appropriate.';
         }
         $result = $this->eligibility->evaluate($offering, $studentId);
         if (! $result->eligible) return $result->message;
         $student = User::query()->where('school_id', $offering->school_id)->where('role_id', 7)->find($studentId);
-        return $student && $this->financialEligibility->allows($student)
-            ? null
-            : 'Pay at least 20% of the current academic-session fees, or obtain an authorised student waiver.';
+        if (! $student) return 'This student account could not be found in this institution.';
+        $finance = $this->financialEligibility->summary($student);
+        return $finance['eligible'] ? null : $this->financialEligibility->blocker($student, $finance);
     }
 
     public function registered(CourseOffering $offering)

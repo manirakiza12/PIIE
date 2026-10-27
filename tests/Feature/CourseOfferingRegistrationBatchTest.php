@@ -187,9 +187,30 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $source = str_replace(["@extends('admin.navigation')", "@section('content')", '@endsection'], '', file_get_contents(resource_path('views/admin/academic/programme_registration.blade.php')));
         $html = \Illuminate\Support\Facades\Blade::render($source, $data + ['errors' => new \Illuminate\Support\ViewErrorBag]);
         $this->assertStringContainsString('Student Course Registration', $html);
-        $this->assertStringContainsString('Year of study missing', $html);
+        $this->assertStringContainsString('No academic placement recorded for this year.', $html);
         $this->assertStringContainsString('Research Methods', $html);
         $this->assertStringNotContainsString('Set Year 1 for 2026', $html);
+    }
+
+    public function test_registration_fee_boundary_counts_only_verified_paid_amounts(): void
+    {
+        $eligibility = app(\App\Support\CourseRegistration\StudentRegistrationConfirmationEligibility::class);
+        $summary = $eligibility->summary($this->fixture['studentA']);
+        $this->assertTrue($summary['eligible']);
+        $this->assertSame(2000, $summary['required_minor']);
+        $this->assertSame(2000, $summary['paid_minor']);
+
+        DB::table('student_fee_managers')->where('student_id', $this->fixture['studentA']->id)
+            ->update(['paid_amount' => 19, 'status' => 'unpaid']);
+        $below = $eligibility->summary($this->fixture['studentA']);
+        $this->assertFalse($below['eligible']);
+        $this->assertSame(100, $below['shortfall_minor']);
+
+        DB::table('student_fee_managers')->where('student_id', $this->fixture['studentA']->id)
+            ->update(['paid_amount' => 100, 'status' => 'pending']);
+        $pending = $eligibility->summary($this->fixture['studentA']);
+        $this->assertFalse($pending['eligible'], 'A pending invoice or payment claim is not verified money received.');
+        $this->assertSame(0, $pending['paid_minor']);
     }
 
     public function test_programme_registration_registers_selected_students_and_reports_blockers(): void
@@ -204,12 +225,42 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id]);
     }
 
+    public function test_programme_workspace_lists_unallocated_curriculum_units_and_separates_allocation_from_registration_status(): void
+    {
+        $unitId = (int) DB::table('subjects')->insertGetId([
+            'name' => 'Additional Curriculum Unit', 'code' => 'BBIT1199', 'credits' => 3,
+            'course_type' => 'compulsory', 'pass_mark' => 50, 'programme_id' => $this->fixture['programme'],
+            'school_id' => $this->fixture['school'],
+        ]);
+        DB::table('curriculum_memberships')->insert([
+            'id' => 99, 'school_id' => $this->fixture['school'], 'curriculum_id' => 1, 'subject_id' => $unitId,
+            'curriculum_stage_id' => 1, 'period_type' => 'semester', 'period_sequence' => 1,
+            'classification' => 'compulsory', 'credits' => '3.00', 'sequence' => 2,
+        ]);
+        DB::table('course_offerings')->where('id', 1)->update(['status' => 'in_progress']);
+        $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
+
+        $this->actingAs($viewer)->get(route('admin.course_registrations.index', $this->programmeFilters()))
+            ->assertOk()->assertSee('Additional Curriculum Unit')->assertSee('Not allocated for this period')
+            ->assertSee('In progress')->assertSee('Registered — awaiting confirmation')
+            ->assertSee('ask the academic office to create the Course Allocation');
+    }
+
+    public function test_student_shortcut_opens_registration_with_that_student_selected(): void
+    {
+        $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
+
+        $this->actingAs($viewer)->get(route('admin.course_registrations.index', [
+            'student_id' => $this->fixture['studentA']->id,
+        ]))->assertOk()->assertSee('Student A')->assertDontSee('Student B');
+    }
+
     public function test_programme_workspace_http_page_renders_with_navigation(): void
     {
         $viewer = $this->staff($this->fixture['school'], ['academic.course_registration.view']);
         $this->actingAs($viewer)->get(route('admin.course_registrations.index'))->assertOk()->assertSee('Student Course Registration');
         $this->get(route('admin.course_registrations.index', $this->programmeFilters()))->assertOk()
-            ->assertSee('Year of study missing')->assertSee('Student Ineligible')->assertSee('Research Methods');
+            ->assertSee('No academic placement recorded for this year.')->assertSee('Student Ineligible')->assertSee('Research Methods');
     }
 
     public function test_programme_registration_can_register_multiple_courses_together(): void
@@ -221,6 +272,36 @@ class CourseOfferingRegistrationBatchTest extends TestCase
             'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1, 3],
         ])->assertRedirect();
         $this->assertCount(2, session('programme_registration_results'));
+        $this->assertSame(2, CourseRegistration::where('student_id', $this->fixture['studentA']->id)->count());
+    }
+
+    public function test_register_all_eligible_units_is_idempotent_for_the_selected_student(): void
+    {
+        $subject = (int) DB::table('subjects')->insertGetId([
+            'name' => 'Second Eligible Unit', 'code' => 'UNIT-2', 'credits' => 3, 'course_type' => 'compulsory',
+            'pass_mark' => 50, 'programme_id' => $this->fixture['programme'], 'school_id' => $this->fixture['school'],
+        ]);
+        DB::table('curriculum_memberships')->insert([
+            'id' => 99, 'school_id' => $this->fixture['school'], 'curriculum_id' => 1, 'subject_id' => $subject,
+            'curriculum_stage_id' => 1, 'period_type' => 'semester', 'period_sequence' => 1,
+            'classification' => 'compulsory', 'credits' => '3.00', 'sequence' => 2,
+        ]);
+        DB::table('course_offerings')->insert([
+            'id' => 3, 'school_id' => $this->fixture['school'], 'subject_id' => $subject,
+            'academic_year_id' => 1, 'academic_period_id' => 1, 'status' => 'open',
+        ]);
+        DB::table('course_offering_curriculum_memberships')->insert([
+            'school_id' => $this->fixture['school'], 'course_offering_id' => 3, 'curriculum_id' => 1,
+            'curriculum_membership_id' => 99, 'subject_id' => $subject,
+        ]);
+        $manager = $this->staff($this->fixture['school'], ['academic.course_registration.manage']);
+        $payload = $this->programmeFilters() + [
+            'student_ids' => [$this->fixture['studentA']->id], 'register_all_eligible' => 1,
+        ];
+
+        $this->actingAs($manager)->post(route('admin.course_registrations.register'), $payload)->assertRedirect();
+        $this->assertSame(2, CourseRegistration::where('student_id', $this->fixture['studentA']->id)->count());
+        $this->post(route('admin.course_registrations.register'), $payload)->assertRedirect();
         $this->assertSame(2, CourseRegistration::where('student_id', $this->fixture['studentA']->id)->count());
     }
 
@@ -262,7 +343,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $manager = User::factory()->create(['role_id' => 2, 'school_id' => $this->fixture['school'], 'account_status' => 'active']);
         $this->actingAs($manager)->post(route('admin.course_registrations.place'), $this->programmeFilters() + [
             'student_id' => $this->fixture['studentIneligible']->id,
-        ])->assertRedirect(route('admin.course_registrations.index', $this->programmeFilters()));
+        ])->assertRedirect(route('admin.course_registrations.index', $this->programmeFilters() + ['student_id' => $this->fixture['studentIneligible']->id]));
         $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id, 'entry_curriculum_stage_id' => 1, 'entry_academic_year_id' => 1]);
         $count = DB::table('student_curriculum_assignments')->count();
         $this->post(route('admin.course_registrations.place'), $this->programmeFilters() + [
@@ -349,7 +430,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->assertDatabaseHas('student_curriculum_assignments', ['student_id' => $this->fixture['studentIneligible']->id]);
         $this->assertDatabaseMissing('course_registrations', ['student_id' => $this->fixture['studentIneligible']->id]);
         $this->assertSame(1, session('programme_registration_results')[0]['summary']['skipped']);
-        $this->assertStringContainsString('20%', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
+        $this->assertStringContainsString('No invoice is recorded', session('programme_registration_results')[0]['summary']['details'][0]['reason']);
     }
 
     public function test_eager_loaded_course_unit_has_a_name(): void
@@ -366,7 +447,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->actingAs($admin)->get(route('admin.course_registrations.index', [
             'programme_id' => $this->fixture['programme'], 'student_search' => '20/U/TEST/001',
         ]))->assertOk()->assertSee('Student A')->assertDontSee('Student B')
-            ->assertSee('Register and confirm selected students')->assertSee('Find student by name or registration number');
+            ->assertSee('Register and confirm all eligible allocated units')->assertSee('Find student by name or registration number');
         $this->post(route('admin.course_registrations.register'), $this->programmeFilters() + [
             'student_ids' => [$this->fixture['studentA']->id], 'offering_ids' => [1], 'student_search' => '20/U/TEST/001',
             'confirm_now' => 1,

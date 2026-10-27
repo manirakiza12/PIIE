@@ -46,7 +46,8 @@ class StudentClassAssignmentTest extends TestCase
         $this->makeClass($school, ['name' => 'MPAM GROUP']);
         $student = User::factory()->create(['school_id' => $school, 'role_id' => 7]);
         $this->actingAs($admin)->get(route('admin.student_edit_modal', $student->id))
-            ->assertOk()->assertDontSee('MPAM GROUP')->assertDontSee('name="class_id"', false)
+            ->assertOk()->assertSee('Academic Programme placement')->assertDontSee('ajaxForm')
+            ->assertDontSee('MPAM GROUP')->assertDontSee('name="class_id"', false)
             ->assertDontSee('Students enrolled in this class can access matching class-targeted online exams.')
             ->assertDontSee('name="section_id"', false);
         $payload = $this->updatePayload(0, 0);

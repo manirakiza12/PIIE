@@ -270,7 +270,20 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                               </li>
 
                               <li>
-                                <a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.student_edit_modal', ['id' => $student->id]) }}', 'Edit / Complete details')">{{ get_phrase('Edit / Complete details') }}</a>
+                                <a class="dropdown-item" href="{{ route('admin.student_edit_modal', ['id' => $student->id]) }}">{{ get_phrase('Edit / Complete details') }}</a>
+                              </li>
+                              @php
+                                  $courseRegistrationPermissions = app(\App\Support\Permissions\PermissionService::class);
+                                  $canViewCourseRegistration = $courseRegistrationPermissions->allows(auth()->user(), 'academic.course_registration.view');
+                                  $canManageCourseRegistration = $courseRegistrationPermissions->allows(auth()->user(), 'academic.course_registration.manage');
+                              @endphp
+                              <li>
+                                  @if($canViewCourseRegistration)
+                                      <a class="dropdown-item" href="{{ route('admin.course_registrations.index', ['student_id' => $student->id]) }}">{{ $canManageCourseRegistration ? 'Check eligibility / Register course units' : 'Check course eligibility (view only)' }}</a>
+                                      @unless($canManageCourseRegistration)<span class="dropdown-item-text small text-muted">Registration requires academic course registration permission.</span>@endunless
+                                  @else
+                                      <span class="dropdown-item-text small text-muted" aria-disabled="true">Course eligibility is hidden: academic course registration view permission is required.</span>
+                                  @endif
                               </li>
                               @if(auth()->user()->hasPermission('finance.invoices'))
                               <li><a class="dropdown-item" href="{{ route('admin.student.invoice_setup', ['id' => $student->id]) }}">{{ get_phrase('Set up invoice') }}</a></li>

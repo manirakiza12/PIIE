@@ -2285,11 +2285,34 @@ class AdminController extends Controller
         $departments     = Department::where('school_id', auth()->user()->school_id)->orderBy('name')->get();
         $programmes      = Programme::where('school_id', auth()->user()->school_id)->where('is_active', 1)->orderBy('name')->get();
         $intakeSessions  = IntakeSession::where('school_id', auth()->user()->school_id)->orderByDesc('id')->get();
-        $studentProfile  = StudentProfile::where('user_id', $id)->first();
+        $studentProfile  = StudentProfile::where('user_id', $id)->where('school_id', $user->school_id)->first();
+        $schoolId = (int) $user->school_id;
+        $placementTablesReady = Schema::hasTable('student_curriculum_assignments') && Schema::hasTable('programmes')
+            && Schema::hasTable('curricula') && Schema::hasTable('curriculum_stages') && Schema::hasTable('academic_years');
+        $activePlacement = $placementTablesReady ? DB::table('student_curriculum_assignments as placement')
+            ->leftJoin('programmes as programme', function ($join) use ($schoolId): void { $join->on('programme.id', '=', 'placement.programme_id')->where('programme.school_id', $schoolId); })
+            ->leftJoin('curricula as curriculum', function ($join) use ($schoolId): void { $join->on('curriculum.id', '=', 'placement.curriculum_id')->where('curriculum.school_id', $schoolId); })
+            ->leftJoin('curriculum_stages as stage', function ($join) use ($schoolId): void { $join->on('stage.id', '=', 'placement.entry_curriculum_stage_id')->where('stage.school_id', $schoolId); })
+            ->leftJoin('academic_years as academic_year', function ($join) use ($schoolId): void { $join->on('academic_year.id', '=', 'placement.entry_academic_year_id')->where('academic_year.school_id', $schoolId); })
+            ->where('placement.school_id', $schoolId)->where('placement.student_id', $user->id)->whereNull('placement.ended_at')
+            ->select('placement.*', 'programme.name as programme_name', 'curriculum.version as curriculum_version', 'stage.label as stage_label', 'academic_year.label as academic_year_label')->first() : null;
+        $placementHistoryCount = Schema::hasTable('student_curriculum_assignments')
+            ? DB::table('student_curriculum_assignments')->where('school_id', $schoolId)->where('student_id', $user->id)->count() : 0;
+        $placementCurricula = Schema::hasTable('curricula')
+            ? Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with('programme')->orderByDesc('created_at')->get(['id', 'programme_id', 'version']) : collect();
+        $placementStages = Schema::hasTable('curriculum_stages') ? DB::table('curriculum_stages')->where('school_id', $schoolId)
+            ->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('archived_at'))
+            ->orderBy('sequence')->get(['id', 'curriculum_id', 'label', 'sequence']) : collect();
+        $placementYears = Schema::hasTable('academic_years')
+            ? AcademicYear::where('school_id', $schoolId)->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")->orderByDesc('start_date')->get(['id', 'label', 'status', 'start_date', 'end_date']) : collect();
+        $canManagePlacement = app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'academic.programme_cohort.membership');
         $view_data = [
             'user' => $user, 'student_details' => $student_details, 'classes' => $classes,
             'programmes' => $programmes, 'intakeSessions' => $intakeSessions, 'studentProfile' => $studentProfile,
-            'sessions' => $sessions, 'departments' => $departments,
+            'sessions' => $sessions, 'departments' => $departments, 'activePlacement' => $activePlacement,
+            'placementHistoryCount' => $placementHistoryCount, 'placementCurricula' => $placementCurricula,
+            'placementStages' => $placementStages, 'placementYears' => $placementYears,
+            'canManagePlacement' => $canManagePlacement, 'isModal' => $request->ajax(),
         ];
         if (! $request->ajax()) {
             return view('admin.common.modal_standalone_wrapper', [

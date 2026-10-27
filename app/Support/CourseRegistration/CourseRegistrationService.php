@@ -51,8 +51,9 @@ class CourseRegistrationService
         return DB::transaction(function () use ($schoolId, $studentId, $offeringId, $membershipId, $actorId): CourseRegistration {
             $student = $this->student($schoolId, $studentId, true);
             $this->assertActor($student, $actorId);
-            if (! $this->confirmationEligibility->allows($student)) {
-                throw new DomainException('Pay at least 20% of the current academic-session fees before registering for courses.');
+            $financeSummary = $this->confirmationEligibility->summary($student);
+            if (! $financeSummary['eligible']) {
+                throw new DomainException($this->confirmationEligibility->blocker($student, $financeSummary));
             }
             $offering = CourseOffering::where('school_id', $schoolId)->whereKey($offeringId)->first();
             if (! $offering) {
@@ -138,8 +139,11 @@ class CourseRegistrationService
             if ($offering->status !== CourseOffering::STATUS_OPEN) {
                 throw new DomainException('Registration confirmation is allowed only while the Course Allocation is open.');
             }
-            if (! $this->confirmationEligibility->allows($student)) {
-                throw ValidationException::withMessages(['registration' => 'Pay at least 20% of the current academic-session fees before confirming this Course Registration.']);
+            $financeSummary = $this->confirmationEligibility->summary($student);
+            if (! $financeSummary['eligible']) {
+                throw ValidationException::withMessages([
+                    'registration' => $this->confirmationEligibility->blocker($student, $financeSummary),
+                ]);
             }
 
             $registration->status = CourseRegistration::STATUS_CONFIRMED;
