@@ -97,43 +97,7 @@ class ApplicationFee
     {
         return DB::transaction(function () use ($admission) {
             $locked = Admission::whereKey($admission->id)->lockForUpdate()->firstOrFail();
-            $required = DecimalAmount::minorUnits(self::amountFor($locked));
-            if ($required !== null && $required <= 0) {
-                $status = Admission::FEE_WAIVED;
-            } else {
-                $currency = strtoupper(self::currencyFor($locked));
-                // Legacy rows without currency remain readable/countable. New
-                // online settlement always requires explicit matching currency.
-                $payments = $locked->payments()->where('school_id', $locked->school_id)->get()
-                    ->filter(fn ($p) => blank($p->currency) || strtoupper($p->currency) === $currency);
-                $paid = 0;
-                $seen = [];
-                foreach ($payments as $payment) {
-                    $amount = DecimalAmount::minorUnits($payment->amount);
-                    if ($payment->status !== ApplicationPayment::STATUS_PAID || $amount === null || $amount <= 0
-                        || ($payment->gateway_payload['classification'] ?? null) === 'REVERSED') {
-                        continue;
-                    }
-                    // Do not double-count historical online rows sharing a transaction.
-                    if (isset(self::SUPPORTED_GATEWAYS[$payment->method]) && filled($payment->gateway_txn_id)) {
-                        $key = $payment->method . ':' . $payment->gateway_txn_id;
-                        if (isset($seen[$key])) {
-                            continue;
-                        }
-                        $seen[$key] = true;
-                    }
-                    $paid += $amount;
-                }
-
-                if ($required !== null && $paid >= $required) {
-                    $status = Admission::FEE_PAID;
-                } elseif ($payments->contains(fn ($p) => $p->status === ApplicationPayment::STATUS_PENDING
-                    && (DecimalAmount::minorUnits($p->amount) ?? 0) > 0)) {
-                    $status = Admission::FEE_PENDING;
-                } else {
-                    $status = Admission::FEE_UNPAID;
-                }
-            }
+            $status = self::calculatedStatus($locked);
 
             if ($locked->fee_status !== $status) {
                 $locked->forceFill(['fee_status' => $status])->save();
@@ -142,6 +106,50 @@ class ApplicationFee
 
             return $status;
         });
+    }
+
+    /** Read-only ledger calculation, shared with automatic preparation. */
+    public static function calculatedStatus(Admission $admission): string
+    {
+        $required = DecimalAmount::minorUnits(self::amountFor($admission));
+        if ($required !== null && $required <= 0) {
+            $status = Admission::FEE_WAIVED;
+        } else {
+            $currency = strtoupper(self::currencyFor($admission));
+            // Legacy rows without currency remain readable/countable. New
+            // online settlement always requires explicit matching currency.
+            $payments = $admission->payments()->where('school_id', $admission->school_id)->get()
+                ->filter(fn ($p) => blank($p->currency) || strtoupper($p->currency) === $currency);
+            $paid = 0;
+            $seen = [];
+            foreach ($payments as $payment) {
+                $amount = DecimalAmount::minorUnits($payment->amount);
+                if ($payment->status !== ApplicationPayment::STATUS_PAID || $amount === null || $amount <= 0
+                    || ($payment->gateway_payload['classification'] ?? null) === 'REVERSED') {
+                    continue;
+                }
+                // Do not double-count historical online rows sharing a transaction.
+                if (isset(self::SUPPORTED_GATEWAYS[$payment->method]) && filled($payment->gateway_txn_id)) {
+                    $key = $payment->method . ':' . $payment->gateway_txn_id;
+                    if (isset($seen[$key])) {
+                        continue;
+                    }
+                    $seen[$key] = true;
+                }
+                $paid += $amount;
+            }
+
+            if ($required !== null && $paid >= $required) {
+                $status = Admission::FEE_PAID;
+            } elseif ($payments->contains(fn ($p) => $p->status === ApplicationPayment::STATUS_PENDING
+                && (DecimalAmount::minorUnits($p->amount) ?? 0) > 0)) {
+                $status = Admission::FEE_PENDING;
+            } else {
+                $status = Admission::FEE_UNPAID;
+            }
+        }
+
+        return $status;
     }
 
     /**
