@@ -58,6 +58,9 @@ class AcademicContextManager
                 'current_academic_year_id' => $year?->id,
                 'current_academic_period_id' => $period?->id,
             ]);
+            if ($period) {
+                app(\App\Support\CourseOffering\SemesterCourseOfferings::class)->reconcile($schoolId, (int) $period->id, true);
+            }
         });
     }
 
@@ -98,6 +101,9 @@ class AcademicContextManager
 
             $period->status = $toStatus;
             $period->save();
+            if ($toStatus === 'active') {
+                app(\App\Support\CourseOffering\SemesterCourseOfferings::class)->reconcile($schoolId, $periodId, true);
+            }
         });
     }
 

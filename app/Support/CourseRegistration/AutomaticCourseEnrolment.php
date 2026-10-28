@@ -33,7 +33,14 @@ final class AutomaticCourseEnrolment
             }
             $placement = $this->academic->placement($schoolId, $studentId, $yearId, true);
             if (! $placement->eligible) {
-                return [['result' => 'blocked', 'reason' => $placement->code]];
+                $profileProgrammeId = DB::table('student_profiles')->where('school_id', $schoolId)->where('user_id', $studentId)->value('programme_id');
+                $placementProgrammeId = $placement->assignment?->programme_id;
+                $codes = DB::table('programmes')->where('school_id', $schoolId)
+                    ->whereIn('id', array_filter([$profileProgrammeId, $placementProgrammeId]))->pluck('code', 'id');
+                return [['result' => 'blocked', 'reason' => $placement->code,
+                    'academic_year_id' => $yearId, 'academic_period_id' => $periodId,
+                    'profile_programme_code' => $codes->get($profileProgrammeId),
+                    'placement_programme_code' => $codes->get($placementProgrammeId)]];
             }
             if (Schema::hasColumn('curriculum_stages', 'archived_at') && DB::table('curriculum_stages')
                 ->where('school_id', $schoolId)->where('id', $placement->assignment->entry_curriculum_stage_id)->whereNotNull('archived_at')->exists()) {

@@ -243,7 +243,7 @@ class CourseOfferingRegistrationBatchTest extends TestCase
         $this->actingAs($viewer)->get(route('admin.course_registrations.index', $this->programmeFilters()))
             ->assertOk()->assertSee('Additional Curriculum Unit')->assertSee('Not allocated for this period')
             ->assertSee('In progress')->assertSee('Registered — awaiting confirmation')
-            ->assertSee('ask the academic office to create the Course Allocation');
+            ->assertSee('Required offerings are created automatically when the semester is opened');
     }
 
     public function test_student_shortcut_opens_registration_with_that_student_selected(): void

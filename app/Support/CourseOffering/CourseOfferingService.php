@@ -294,6 +294,35 @@ class CourseOfferingService
         });
     }
 
+    /** Semester opening may attach approved curriculum entries to an existing delivery. */
+    public function ensureSemesterApplicability(int $schoolId, int $offeringId, int $membershipId): bool
+    {
+        return DB::transaction(function () use ($schoolId, $offeringId, $membershipId): bool {
+            $offering = $this->offering($schoolId, $offeringId, false, true);
+            if (! in_array($offering->status, [CourseOffering::STATUS_DRAFT, CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true)) {
+                throw new DomainException('Completed and cancelled allocations cannot receive new semester links.');
+            }
+            $membership = $this->validateApplicability($offering, $membershipId);
+            if ($offering->applicability()->where('curriculum_membership_id', $membershipId)->exists()) {
+                return false;
+            }
+            if ($offering->status === CourseOffering::STATUS_DRAFT) {
+                $this->addApplicability($schoolId, $offeringId, $membershipId);
+            } else {
+                DB::table('course_offering_curriculum_memberships')->insert([
+                    'school_id' => $schoolId, 'course_offering_id' => $offeringId,
+                    'curriculum_id' => $membership->curriculum_id, 'curriculum_membership_id' => $membershipId,
+                    'subject_id' => $offering->subject_id, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                $this->audit('COURSE_OFFERING_SEMESTER_APPLICABILITY_ADDED', $offering, [], [
+                    'curriculum_id' => $membership->curriculum_id, 'curriculum_membership_id' => $membershipId,
+                    'subject_id' => $offering->subject_id, 'source' => 'semester_opening',
+                ]);
+            }
+            return true;
+        });
+    }
+
     public function open(int $schoolId, int $offeringId): CourseOffering
     {
         return $this->transition($schoolId, $offeringId, CourseOffering::STATUS_DRAFT, CourseOffering::STATUS_OPEN, function (CourseOffering $offering): void {
