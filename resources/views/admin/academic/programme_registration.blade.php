@@ -56,7 +56,7 @@
                 @elseif($allocations->count() > 1)
                     <div class="small text-warning">Multiple Course Allocations are linked to this unit for the selected period. Next step: ask the academic office to review them.</div>
                 @else
-                    <div class="small text-muted">Not allocated for this period. Next step: ask the academic office to create the Course Allocation.</div>
+                    <div class="small text-muted">Not allocated for this period. Required offerings are created automatically when the semester is opened. Electives retain their existing choice process.</div>
                 @endif
             </div>
         @endforeach

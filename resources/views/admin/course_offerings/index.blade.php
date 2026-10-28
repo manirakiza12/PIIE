@@ -4,7 +4,7 @@
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
             <h4>Course Allocation</h4>
-            <p class="text-muted mb-0">Allocate reusable {{ \Illuminate\Support\Str::plural($courseUnitLabel) }} and approved curricula to each Academic Year and {{ $periodLabel }}. Manage the teaching team inside each allocation. Register students from Student Course Registration.</p>
+            <p class="text-muted mb-0">Opening a {{ strtolower($periodLabel) }} creates required Course Allocations from approved curricula automatically. Eligible students enrol automatically. Manage teaching staff inside each allocation; missing lecturers do not block enrolment.</p>
         </div>
         @if(auth()->user()->hasPermission('academic.course_offering.manage'))
             <a class="eBtn eBtn-primary text-nowrap" href="{{ route('admin.course_offerings.create', request()->only('year_id','period_id')) }}">Create Course Allocation</a>
@@ -36,6 +36,7 @@
             <tbody>
                 @forelse($offerings as $offering)
                     <tr><td>{{ $offering->reference ?: '#'.$offering->id }}</td><td>{{ $offering->subject->code ? $offering->subject->code.' — ' : '' }}{{ $offering->subject->name }}</td><td>{{ $offering->academicYear->label }}</td><td>{{ $offering->academicPeriod->label }}</td><td>{{ $offering->applicability_summary ?: '—' }}</td><td><span class="badge bg-{{ $offering->status==='open'?'success':($offering->status==='draft'?'warning text-dark':($offering->status==='cancelled'?'secondary':'primary')) }}">{{ str_replace('_',' ',ucfirst($offering->status)) }}</span></td><td>{{ $offering->updated_at?->format('Y-m-d') }}</td><td><a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ route('admin.course_offerings.show',$offering->id) }}">View</a>
+@if($offering->lecturer_required)<div class="small text-warning mt-2" role="status">Lecturer required — students can enrol</div>@endif
 @if(auth()->user()->hasPermission('academic.course_offering.lecturer.view'))<a class="btn btn-sm btn-outline-secondary mt-2" href="{{ route('admin.course_offerings.lecturers.index', $offering->id) }}">Lecturers</a>@endif
 
 <div class="d-flex flex-wrap gap-2 mt-2" aria-label="Allocation actions">

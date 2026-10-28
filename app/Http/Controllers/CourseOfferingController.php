@@ -16,6 +16,7 @@ use App\Support\CourseOffering\CourseOfferingService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Throwable;
@@ -55,6 +56,11 @@ class CourseOfferingController extends Controller
         $pageOfferingIds = $offerings->getCollection()->pluck('id');
         if ($pageOfferingIds->isNotEmpty()) {
             $pageOfferings = $offerings->getCollection();
+            $today = now()->toDateString();
+            $staffedIds = Schema::hasTable('course_offering_lecturer_allocations') ? DB::table('course_offering_lecturer_allocations')->where('school_id', $schoolId)
+                ->whereIn('course_offering_id', $pageOfferingIds)->where('status', 'active')
+                ->whereDate('starts_on', '<=', $today)->where(fn ($q) => $q->whereNull('ends_on')->orWhereDate('ends_on', '>=', $today))
+                ->pluck('course_offering_id')->flip() : collect();
             $subjectById = Subject::where('school_id', $schoolId)
                 ->whereIn('id', $pageOfferings->pluck('subject_id')->unique())
                 ->get()->keyBy('id');
@@ -66,6 +72,7 @@ class CourseOfferingController extends Controller
                 ->get()->keyBy('id');
 
             foreach ($pageOfferings as $offering) {
+                $offering->setAttribute('lecturer_required', in_array($offering->status, ['open', 'in_progress'], true) && ! $staffedIds->has($offering->id));
                 $offering->setRelation('subject', $subjectById->get($offering->subject_id));
                 $offering->setRelation('academicYear', $yearById->get($offering->academic_year_id));
                 $offering->setRelation('academicPeriod', $periodById->get($offering->academic_period_id));

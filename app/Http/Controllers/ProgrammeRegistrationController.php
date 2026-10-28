@@ -127,7 +127,7 @@ class ProgrammeRegistrationController extends Controller
                     ? $registrations->get($student->id, collect())->firstWhere('course_offering_id', $offering->id)
                     : null;
                 $reason = match (true) {
-                    $allocations->isEmpty() => 'This unit is in the selected Programme Year and semester but has no Course Allocation yet. Next step: ask the academic office to allocate it.',
+                    $allocations->isEmpty() => 'This unit has no offering yet. Required offerings are created automatically when the semester is opened; elective choices follow the existing process.',
                     $allocations->count() > 1 => 'More than one Course Allocation is linked to this unit for the selected period. Next step: ask the academic office to review the allocations.',
                     $registration !== null => null,
                     default => $roster->ineligibilityReason($offering, (int) $student->id, true),

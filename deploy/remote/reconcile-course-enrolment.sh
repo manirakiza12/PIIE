@@ -18,10 +18,10 @@ echo 'Current-semester enrolment preview:'
 artisan courses:reconcile-enrolment --json
 echo 'Applying eligible current-semester registrations:'
 artisan courses:reconcile-enrolment --apply --json
-echo 'Verifying idempotence (no would_enrol rows expected):'
+echo 'Verifying idempotence (no pending offering or enrolment writes expected):'
 PREVIEW=$(artisan courses:reconcile-enrolment --json)
 printf '%s\n' "$PREVIEW"
-if printf '%s\n' "$PREVIEW" | grep -q '"result":"would_enrol"'; then
+if printf '%s\n' "$PREVIEW" | grep -Eq '"result":"would_(enrol|create|link|open)"'; then
   echo 'Eligibility changed or reconciliation is incomplete; review the preview.'
   exit 1
 fi

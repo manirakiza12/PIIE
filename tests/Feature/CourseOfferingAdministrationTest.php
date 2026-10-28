@@ -1272,7 +1272,7 @@ app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
 
         $empty = $this->get(route('admin.course_offerings.index'));
         $empty->assertOk()
-            ->assertSee('Allocate reusable Course Units and approved curricula to each Academic Year and Semester. Manage the teaching team inside each allocation. Register students from Student Course Registration.')
+            ->assertSee('Opening a semester creates required Course Allocations from approved curricula automatically. Eligible students enrol automatically.')
             ->assertSee('Create Course Allocation')
             ->assertSee('All Programme Curriculum')
             ->assertSee('Applicable Programme Curriculum')
@@ -1286,7 +1286,7 @@ app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
 
         DB::table('schools')->where('id', $tenant['school'])->update(['school_type' => 'k12', 'academic_calendar_pattern' => 'term']);
         $k12Label = $this->get(route('admin.course_offerings.index', ['search' => 'no-such-course-unit']));
-        $k12Label->assertOk()->assertSee('Academic Year and Term. Manage the teaching team inside each allocation. Register students from Student Course Registration.')
+        $k12Label->assertOk()->assertSee('Opening a term creates required Course Allocations from approved curricula automatically.')
             ->assertSee('<label class="form-label" for="offering-period">Term</label>', false);
     }
 
