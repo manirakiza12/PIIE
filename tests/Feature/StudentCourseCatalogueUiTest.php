@@ -41,6 +41,29 @@ class StudentCourseCatalogueUiTest extends TestCase
     use AdmissionsTestHelper;
     use CourseOfferingEligibilityFixture;
 
+    public function test_unit_cover_is_shown_and_missing_file_uses_card_fallback(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Schema::table('subjects', fn (Blueprint $table) => $table->string('cover_image_path')->nullable());
+        $offering = CourseOffering::where('school_id', $this->school)->whereKey(11)->firstOrFail();
+        $subject = \App\Models\Subject::findOrFail($offering->subject_id);
+        $request = \Illuminate\Http\Request::create('/', 'POST');
+        $request->files->set('cover_image', \Illuminate\Http\UploadedFile::fake()->image('unit.jpg', 320, 180));
+        app(\App\Support\Images\CourseUnitCoverImage::class)->save($request, $subject);
+        $row = (object) ['id' => 1, 'offering_id' => $offering->id, 'subject_name' => $subject->name];
+        $catalogue = new \App\Support\CourseRegistration\StudentCourseCatalogue(1);
+        $data = ['confirmed' => collect([$row])];
+        $this->assertTrue($catalogue->build($data)['sections']['confirmed']['cards'][0]['has_cover']);
+        $this->register(11, 111, 'confirmed');
+        $this->page()->assertSee(route('student.courses.cover', 11), false);
+        $this->page()->assertDontSee($subject->cover_image_path, false);
+        Storage::disk('local')->delete($subject->cover_image_path);
+        $this->assertFalse($catalogue->build($data)['sections']['confirmed']['cards'][0]['has_cover']);
+        $this->page()->assertDontSee(route('student.courses.cover', 11), false);
+        $this->page()->assertSee('sc-card__fallback', false);
+        $this->assertFalse($catalogue->build(['pending' => collect([$row])])['sections']['pending']['cards'][0]['has_cover']);
+    }
+
     private const COVER_PATH = 'course-covers/11/abcdef0123456789abcdef0123456789.jpg';
 
     private User $student;

@@ -231,3 +231,30 @@
     .sc-card__foot .btn,
     .sc-filters .btn { transition: none; }
 }
+/* Explicit states override inherited portal link colours. */
+.sc-card__foot .sc-assignment-action {
+    transition: none;
+    background: #FFFFFF;
+    color: #174A78;
+    border: 1px solid #174A78;
+}
+.sc-card__foot .sc-assignment-action:hover,
+.sc-card__foot .sc-assignment-action:focus,
+.sc-card__foot .sc-assignment-action:focus-visible {
+    background: #174A78;
+    color: #FFFFFF;
+    border-color: #174A78;
+}
+.sc-card__foot .sc-assignment-action:focus-visible {
+    outline: 3px solid #174A78;
+    outline-offset: 3px;
+}
+.sc-card__foot .sc-assignment-action:disabled,
+.sc-card__foot .sc-assignment-action[aria-disabled="true"] {
+    background: #F1F5F9;
+    color: #475569;
+    border-color: #64748B;
+    opacity: 1;
+    pointer-events: none;
+    cursor: default;
+}

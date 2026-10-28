@@ -192,6 +192,84 @@ class SubjectCatalogueAlignmentTest extends TestCase
         }
     }
 
+    public function test_course_unit_cover_can_be_created_replaced_and_removed_with_details(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $controller = app(AdminController::class);
+        $request = $this->authenticatedRequest(1, '/admin/subject', ['name' => 'Imaging', 'code' => 'IMG1', 'programme_id' => 10], 'POST');
+        $request->files->set('cover_image', \Illuminate\Http\UploadedFile::fake()->image('cover.jpg', 320, 180));
+        $controller->subjectCreate($request);
+        $subject = Subject::where('code', 'IMG1')->firstOrFail();
+        $first = $subject->cover_image_path;
+        $this->assertStringStartsWith('course-unit-covers/1/'.$subject->id.'/', $first);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($first);
+
+        $edit = $controller->editSubject($this->authenticatedRequest(1, '/admin/subject/'.$subject->id), $subject->id);
+        $this->assertSame($subject->id, $edit->getData()['subject']->id);
+        $request = $this->authenticatedRequest(1, '/admin/subject/'.$subject->id, ['name' => 'Updated Imaging', 'code' => 'IMG1', 'programme_id' => 10], 'POST');
+        $request->files->set('cover_image', \Illuminate\Http\UploadedFile::fake()->image('replacement.png', 320, 180));
+        $controller->subjectUpdate($request, $subject->id);
+        $second = $subject->fresh()->cover_image_path;
+        $this->assertNotSame($first, $second);
+        $this->assertSame('Updated Imaging', $subject->fresh()->name);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($first);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($second);
+        $controller->subjectUpdate($this->authenticatedRequest(1, '/admin/subject/'.$subject->id, [
+            'name' => 'Updated Imaging', 'code' => 'IMG1', 'programme_id' => 10, 'remove_cover_image' => 1,
+        ], 'POST'), $subject->id);
+        $this->assertNull($subject->fresh()->cover_image_path);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($second);
+    }
+
+    public function test_invalid_replacement_rolls_back_details_and_keeps_previous_cover(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $subject = Subject::create(['name' => 'Original', 'code' => 'SAFE1', 'school_id' => 1, 'programme_id' => 10]);
+        $request = $this->authenticatedRequest(1, '/', [], 'POST');
+        $request->files->set('cover_image', \Illuminate\Http\UploadedFile::fake()->image('valid.jpg'));
+        app(\App\Support\Images\CourseUnitCoverImage::class)->save($request, $subject);
+        $previous = $subject->cover_image_path;
+        // A real PNG renamed to .jpg passes Laravel's content MIME check, then
+        // the existing optimiser refuses the extension/content disagreement.
+        $png = \Illuminate\Http\UploadedFile::fake()->image('image.png');
+        $mismatch = new \Illuminate\Http\UploadedFile($png->getPathname(), 'renamed.jpg', 'image/jpeg', null, true);
+        $request = $this->authenticatedRequest(1, '/', ['name' => 'Must roll back', 'code' => 'SAFE1', 'programme_id' => 10], 'POST');
+        $request->files->set('cover_image', $mismatch);
+        try {
+            app(AdminController::class)->subjectUpdate($request, $subject->id);
+            $this->fail('Invalid replacement accepted.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('cover_image', $exception->errors());
+        }
+        $this->assertSame('Original', $subject->fresh()->name);
+        $this->assertSame($previous, $subject->fresh()->cover_image_path);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($previous);
+    }
+
+    public function test_invalid_cover_does_not_create_a_unit(): void
+    {
+        foreach ([\Illuminate\Http\UploadedFile::fake()->create('script.svg', 2, 'image/svg+xml'),
+            \Illuminate\Http\UploadedFile::fake()->create('fake.jpg', 2, 'text/plain'),
+            \Illuminate\Http\UploadedFile::fake()->image('large.png')->size(4097)] as $file) {
+            $request = $this->authenticatedRequest(1, '/admin/subject', ['name' => 'Invalid', 'code' => 'BAD1', 'programme_id' => 10], 'POST');
+            $request->files->set('cover_image', $file);
+            try {
+                app(AdminController::class)->subjectCreate($request);
+                $this->fail('Invalid cover accepted.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('cover_image', $exception->errors());
+            }
+        }
+        $this->assertSame(0, Subject::where('code', 'BAD1')->count());
+    }
+
+    public function test_course_unit_image_and_edit_are_tenant_scoped(): void
+    {
+        $subject = Subject::create(['name' => 'Private', 'code' => 'PRI1', 'school_id' => 1, 'programme_id' => 10]);
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        app(AdminController::class)->subjectCoverImage($this->authenticatedRequest(2, '/admin/subject/'.$subject->id.'/cover-image'), $subject->id);
+    }
+
     private function authenticatedRequest(int $userId, string $uri, array $data = [], string $method = 'GET'): Request
     {
         $user = User::findOrFail($userId);
@@ -255,6 +333,7 @@ class SubjectCatalogueAlignmentTest extends TestCase
             $table->unsignedBigInteger('school_id');
             $table->unsignedBigInteger('session_id')->nullable();
             $table->string('code', 30)->nullable();
+            $table->string('cover_image_path')->nullable();
             $table->unsignedBigInteger('programme_id')->nullable();
             $table->timestamps();
             $table->unique(['school_id', 'code']);

@@ -14,6 +14,7 @@
             <div class="piie-wrap">
                 <a href="{{ route('website.page', 'academic-programmes') }}">Back to programmes</a>
                 <h2>Programme information</h2>
+                <p>A Programme is your full qualification. Its subjects or modules are called Course Units and appear under My Courses in the student portal.</p>
                 <dl>
                     @foreach(['level' => 'Award', 'mode' => 'Study mode', 'duration' => 'Duration', 'code' => 'Programme code'] as $key => $label)
                         @if(! empty($card[$key]))

@@ -5,6 +5,7 @@
         @if($curriculumId ?? request()->query('curriculum_id'))<input type="hidden" name="curriculum_id" value="{{ $curriculumId ?? request()->query('curriculum_id') }}">@endif
         @if($curriculumStageId ?? request()->query('curriculum_stage_id'))<input type="hidden" name="curriculum_stage_id" value="{{ $curriculumStageId ?? request()->query('curriculum_stage_id') }}">@endif
         <div class="form-row">
+            @include('admin.subject.cover_fields')
             @if($isHigherEducation)
                 <div class="mb-3">
                     <label for="programme_id_on_edit" class="eForm-label">{{ get_phrase('Programme') }} <span class="text-danger" aria-hidden="true">*</span></label>

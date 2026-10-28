@@ -410,6 +410,12 @@ class StudentCourseAssignmentController extends Controller
         app(\App\Support\CourseOffering\CourseCoverImage::class)
             ->assertMayView($student, $offering);
 
+        $subject = \App\Models\Subject::where('school_id', $student->school_id)->find($offering->subject_id);
+        $unitCover = app(\App\Support\Images\CourseUnitCoverImage::class);
+        if ($unitCover->exists($subject)) {
+            return $unitCover->response($subject);
+        }
+
         if (! $offering->cover_image_path) {
             abort(404);
         }

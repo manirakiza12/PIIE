@@ -807,6 +807,7 @@ Route::controller(AdminController::class)->middleware('admin', 'auth', 'rbac', \
     Route::get('admin/promote/{promotion_data}', 'promote')->name('admin.promotion.promote');
 
     //Subject routes
+    Route::get('admin/subject/{id}/cover-image', 'subjectCoverImage')->whereNumber('id')->name('admin.subject.cover');
     Route::get('admin/subject', 'subjectList')->name('admin.subject_list')->middleware('admin_permission');
     Route::get('admin/subject_create', 'createSubject')->name('admin.subject.open_modal');
     Route::get('admin/course-unit/setup/{id?}', 'courseUnitSetup')->whereNumber('id')->name('admin.subject.setup');
