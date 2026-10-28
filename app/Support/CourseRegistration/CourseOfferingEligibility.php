@@ -15,9 +15,8 @@ use Illuminate\Support\Facades\DB;
  *
  * Governed academic placement (StudentCurriculumAssignment) is authoritative:
  * Programme, Study Plan, the explicitly recorded Study Plan Stage and the
- * Academic Year that stage was recorded for. A cohort membership, when one
- * exists, must still be current and agree with the placement; it is a
- * consistency check, never a prerequisite or substitute for placement.
+ * Academic Year that stage was recorded for. Historical group membership
+ * does not control eligibility.
  *
  * Progression is not inferred: a placement's stage governs only its entry
  * Academic Year. Later years need a recorded progression (not yet modelled),

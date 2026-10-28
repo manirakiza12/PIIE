@@ -251,6 +251,11 @@ jobs:
         run: |
           python3 deploy/check-public-assets.py https://piie.ac.ug
 
+      - name: Reconcile eligible current-semester course enrolment
+        if: ${{ inputs.mode == 'activate' }}
+        run: |
+          ssh piie-prod "bash $REMOTE_BASE/bin/reconcile-course-enrolment.sh '$SHA'"
+
       - name: Remove key material
         if: always()
         run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts ~/.ssh/config

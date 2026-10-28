@@ -28,6 +28,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('applications:retry-notifications')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('invoices:retry-emails')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('messages:send-reminders')->everyMinute()->withoutOverlapping();
+        $schedule->command('courses:reconcile-enrolment --apply')->everyMinute()->withoutOverlapping();
 
         // Close applications left unpaid after their intake's application period
         // ended. Daily shortly after midnight, and only once the intake is fully

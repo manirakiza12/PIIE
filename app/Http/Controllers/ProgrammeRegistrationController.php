@@ -130,7 +130,7 @@ class ProgrammeRegistrationController extends Controller
                     $allocations->isEmpty() => 'This unit is in the selected Programme Year and semester but has no Course Allocation yet. Next step: ask the academic office to allocate it.',
                     $allocations->count() > 1 => 'More than one Course Allocation is linked to this unit for the selected period. Next step: ask the academic office to review the allocations.',
                     $registration !== null => null,
-                    default => $roster->ineligibilityReason($offering, (int) $student->id),
+                    default => $roster->ineligibilityReason($offering, (int) $student->id, true),
                 };
                 $cells[$student->id][$unit->membership_id] = [
                     'offering' => $offering, 'allocations' => $allocations, 'registration' => $registration,
