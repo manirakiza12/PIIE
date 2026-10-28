@@ -90,6 +90,8 @@ class ApplicationWorkflow
     private static function atomic(Admission $admission, callable $operation): bool
     {
         return DB::transaction(function () use ($admission, $operation) {
+            // Preparation retries take school -> application locks in this order.
+            DB::table('schools')->where('id', $admission->school_id)->lockForUpdate()->firstOrFail();
             $locked = Admission::whereKey($admission->id)->where('school_id', $admission->school_id)->lockForUpdate()->firstOrFail();
             $result = $operation($locked);
             $admission->refresh();
@@ -282,6 +284,16 @@ class ApplicationWorkflow
 
         if ($newStatus === Admission::STATUS_ENROLLED) AdmissionLetterDocument::issue($admission);
         ApplicantNotifier::statusChanged($admission, $fromStatus);
+
+        if ($newStatus === Admission::STATUS_ACCEPTED && \App\Support\Automation\AcceptedStudentSetup::available()) {
+            try {
+                app(\App\Support\Automation\AcceptedStudentSetup::class)->run((int) $admission->school_id, (int) $admission->id);
+            } catch (\Throwable $exception) {
+                report($exception);
+                \App\Support\Automation\AutomationExceptions::block((int) $admission->school_id, 'accepted_student', (int) $admission->id,
+                    'preparation_failed', 'ICT must inspect the application log and retry account preparation. No partial preparation was committed.', 'ICT / Admissions');
+            }
+        }
 
         return true;
     }

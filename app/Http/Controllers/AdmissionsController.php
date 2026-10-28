@@ -147,6 +147,10 @@ class AdmissionsController extends Controller
         $feePaid   = (float) $admission->payments->whereIn('status', [ApplicationPayment::STATUS_PAID, ApplicationPayment::STATUS_WAIVED])->sum('amount');
 
         return view('admin.admissions.review', [
+            'automationExceptions' => \App\Support\Automation\AcceptedStudentSetup::available()
+                ? DB::table('automation_exceptions')->where('school_id', $this->school_id)
+                    ->where('subject_id', $admission->id)->whereIn('workflow', ['accepted_student', 'mandatory_invoice'])->whereNull('resolved_at')->get()
+                : collect(),
             'admission'         => $admission,
             'docChecklist'      => ApplicationDocuments::checklist($admission),
             'timeline'          => $admission->statusEvents()->orderBy('created_at')->orderBy('id')->get(),
@@ -620,6 +624,7 @@ class AdmissionsController extends Controller
         ]);
 
         return DB::transaction(function () use ($admission, $request, $validated) {
+        DB::table('schools')->where('id', $this->school_id)->lockForUpdate()->firstOrFail();
         $admission = Admission::whereKey($admission->id)->where('school_id', $this->school_id)->lockForUpdate()->firstOrFail();
 
         $admission->load(['programme', 'intakeSession']);
@@ -946,6 +951,10 @@ class AdmissionsController extends Controller
             'intake_session_id' => $admission->intake_session_id,
             'nationality'       => $admission->nationality,
             'applicant_id'      => $admission->applicant_id,
+            // Acceptance-created accounts must never have their later profile
+            // or billing silently rewritten by the legacy enrolment retry.
+            'preserve_existing_profile' => (bool) $admission->automation_student_id,
+            'prepare_invoices' => ! $admission->automation_student_id,
         ]);
 
         if ($result['error'] === 'email_taken_by_non_student') {

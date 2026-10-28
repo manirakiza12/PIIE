@@ -23,6 +23,54 @@ use Illuminate\Support\Facades\DB;
 class StudentFeeInvoiceGenerator
 {
     /**
+     * Conservative automatic path. Finance's mandatory Fee Structures are the
+     * authority; catalogue tuition amounts and payment claims are not fees.
+     * Returns a human-owned blocker before creating any invoice if ambiguous.
+     */
+    public static function prepareMandatoryForStudent(User $student): array
+    {
+        return DB::transaction(function () use ($student) {
+            $schoolId = (int) $student->school_id;
+            $school = DB::table('schools')->where('id', $schoolId)->lockForUpdate()->firstOrFail();
+            $student = User::whereKey($student->id)->where('school_id', $schoolId)->lockForUpdate()->firstOrFail();
+            $blocked = fn ($code, $message) => ['created' => [], 'code' => $code, 'message' => $message];
+            if ((int) $student->role_id !== 7 || $student->account_status === 'disable') {
+                return $blocked('student_inactive', 'Admissions must confirm an active student account.');
+            }
+            $profile = StudentProfile::where('school_id', $schoolId)->where('user_id', $student->id)->lockForUpdate()->first();
+            if (! $profile?->programme_id || ! DB::table('programmes')->where('school_id', $schoolId)->where('id', $profile->programme_id)->where('is_active', 1)->exists()) {
+                return $blocked('programme_missing', 'Admissions must confirm the student programme; Finance must not infer it.');
+            }
+            $session = DB::table('sessions')->where('school_id', $schoolId)->where('id', $school->running_session)->where('status', 1)->lockForUpdate()->first();
+            if (! $session || (! empty($session->academic_year_id) && (int) $session->academic_year_id !== (int) ($school->current_academic_year_id ?? 0))) {
+                return $blocked('finance_session_invalid', 'Finance must select an active Finance Session in this institution matching the current academic year.');
+            }
+            $fees = FeeStructure::where('school_id', $schoolId)->where('is_mandatory', 1)->whereNull('class_id')
+                ->where(fn ($q) => $q->whereNull('programme_id')->orWhere('programme_id', $profile->programme_id))
+                ->where(fn ($q) => $q->whereNull('session_id')->orWhere('session_id', $session->id))->lockForUpdate()->get();
+            if ($fees->isEmpty()) {
+                return $blocked('mandatory_fee_missing', 'Finance must configure the approved mandatory programme fee for this Finance Session.');
+            }
+            foreach ($fees as $fee) {
+                if ($fee->per_semester) {
+                    return $blocked('semester_billing_ambiguous', 'Finance must explicitly prepare semester fees: no approved semester-to-invoice billing key is recorded.');
+                }
+                if ((\App\Support\Payments\DecimalAmount::minorUnits($fee->amount) ?? 0) <= 0 || trim((string) $fee->name) === '') {
+                    return $blocked('mandatory_fee_invalid', 'Finance must confirm a named mandatory fee with a positive approved amount. Zero fees require a Finance decision.');
+                }
+            }
+            $created = self::generateForStudent($student, (int) $profile->programme_id, $schoolId);
+            foreach ($created as $invoice) {
+                \App\Models\AuditLog::record('create', 'Student Fees', 'Mandatory invoice prepared automatically; no payment recorded.', [
+                    'school_id' => $schoolId, 'event_type' => 'DATA', 'record_type' => StudentFeeManager::class,
+                    'record_id' => $invoice->id, 'new_values' => ['source' => 'approved_mandatory_fee', 'fee_structure_id' => $invoice->fee_structure_id, 'session_id' => $session->id],
+                ]);
+            }
+            return ['created' => $created, 'code' => null, 'message' => null];
+        });
+    }
+
+    /**
      * Backfill a legacy student's current-session mandatory invoices from the
      * programme or class already assigned to their student record. This is
      * safe to call whenever the student opens Fee Manager: existing invoices
@@ -31,6 +79,16 @@ class StudentFeeInvoiceGenerator
     public static function ensureForStudent(User $student): array
     {
         $schoolId = (int) $student->school_id;
+        // Newly automated accounts must not bypass a queued Finance blocker by
+        // opening the older fee-manager backfill. Historical accounts retain it.
+        if (\App\Support\Automation\AcceptedStudentSetup::available()) {
+            $admissionId = DB::table('admissions')->where('school_id', $schoolId)
+                ->where('automation_student_id', $student->id)->value('id');
+            if ($admissionId) {
+                app(\App\Support\Automation\AcceptedStudentSetup::class)->run($schoolId, (int) $admissionId);
+                return [];
+            }
+        }
         $sessionId = DB::table('schools')->where('id', $schoolId)->value('running_session');
 
         if (! $schoolId || ! $sessionId) {
@@ -74,6 +132,7 @@ class StudentFeeInvoiceGenerator
 
         $feeStructures = FeeStructure::where('school_id', $schoolId)
             ->where('is_mandatory', 1)
+            ->whereNull('class_id')
             ->where(function ($q) use ($programmeId) {
                 $q->whereNull('programme_id')->orWhere('programme_id', $programmeId);
             })
