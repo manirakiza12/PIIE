@@ -10,6 +10,17 @@
     $blank = '—';
 @endphp
 
+@if(($automationExceptions ?? collect())->isNotEmpty())
+    <div class="alert alert-warning" role="status">
+        <strong>{{ get_phrase('Account or invoice preparation needs review') }}</strong>
+        <ul class="mb-0">
+            @foreach($automationExceptions as $exception)
+                <li>{{ $exception->reason }} <strong>{{ get_phrase('Responsible office') }}: {{ $exception->owner }}</strong></li>
+            @endforeach
+        </ul>
+    </div>
+@endif
+
 <div class="mainSection-title">
     <div class="row"><div class="col-12">
         <div class="d-flex justify-content-between align-items-start flex-wrap gr-15">

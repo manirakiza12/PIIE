@@ -54,6 +54,8 @@ class StudentProvisioningService
      *   intake_session_id?: int,
      *   nationality?: string,
      *   applicant_id?: int,
+     *   preserve_existing_profile?: bool,
+     *   prepare_invoices?: bool,
      * } $data
      *
      * @return array{
@@ -135,19 +137,22 @@ class StudentProvisioningService
                 );
             }
 
-            $profile = StudentProfile::updateOrCreate(
-                ['user_id' => $student->id],
-                [
-                    'school_id'         => $data['school_id'],
-                    'first_name'        => $data['first_name'] ?? null,
-                    'last_name'         => $data['last_name'] ?? null,
-                    'programme_id'      => $data['programme_id'] ?? null,
-                    'intake_session_id' => $data['intake_session_id'] ?? null,
-                    'nationality'       => $data['nationality'] ?? null,
-                ]
-            );
+            $profile = StudentProfile::where('user_id', $student->id)->first();
+            if (! $profile || empty($data['preserve_existing_profile'])) {
+                $profile = StudentProfile::updateOrCreate(
+                    ['user_id' => $student->id],
+                    [
+                        'school_id'         => $data['school_id'],
+                        'first_name'        => $data['first_name'] ?? null,
+                        'last_name'         => $data['last_name'] ?? null,
+                        'programme_id'      => $data['programme_id'] ?? null,
+                        'intake_session_id' => $data['intake_session_id'] ?? null,
+                        'nationality'       => $data['nationality'] ?? null,
+                    ]
+                );
+            }
 
-            if (! empty($data['programme_id'])) {
+            if (! empty($data['programme_id']) && ($data['prepare_invoices'] ?? true)) {
                 StudentFeeInvoiceGenerator::generateForStudent($student, $data['programme_id'], $data['school_id']);
             }
 
