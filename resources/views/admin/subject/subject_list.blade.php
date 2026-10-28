@@ -115,6 +115,7 @@
                                 <td>{{ $subject->classes->name ?? '—' }}</td>
                             @endif
                             <td class="text-end">
+                                @if($isHigherEducation || $isMixed)<a class="btn btn-sm btn-outline-primary mb-1" href="{{ route('admin.subject.setup', ['id' => $subject->id] + request()->only('curriculum_id')) }}">{{ get_phrase('Edit Course Unit') }}</a>@endif
                                 <div class="adminTable-action">
                                     <button type="button" class="eBtn eBtn-black dropdown-toggle table-action-btn-2" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ get_phrase('Actions for') }} {{ $subject->name }}">{{ get_phrase('Actions') }}</button>
                                     <ul class="dropdown-menu dropdown-menu-end eDropdown-menu-2 eDropdown-table-action">

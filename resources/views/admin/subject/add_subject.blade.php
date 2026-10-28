@@ -3,6 +3,7 @@
     <form method="POST" enctype="multipart/form-data" class="d-block ajaxForm" action="{{ route('admin.create.subject') }}">
         @csrf
         <div class="form-row">
+            @include('admin.subject.cover_fields')
             @if($isHigherEducation)
                 <div class="mb-3">
                     <label for="programme_id_on_create" class="eForm-label">{{ get_phrase('Programme') }} <span class="text-danger" aria-hidden="true">*</span></label>

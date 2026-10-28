@@ -312,8 +312,10 @@ final class StudentCourseCatalogue
         return CourseOffering::query()
             ->where('school_id', $this->schoolId)
             ->whereIn('id', $ids->all())
+            ->with(['subject' => fn ($query) => $query->where('school_id', $this->schoolId)])
             ->get()
-            ->filter(fn (CourseOffering $offering) => $covers->hasCover($offering))
+            ->filter(fn (CourseOffering $offering) => app(\App\Support\Images\CourseUnitCoverImage::class)->exists($offering->subject)
+                || ($covers->hasCover($offering) && \Illuminate\Support\Facades\Storage::disk('local')->exists($offering->cover_image_path)))
             ->mapWithKeys(fn (CourseOffering $offering) => [(int) $offering->id => true])
             ->all();
     }

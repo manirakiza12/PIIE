@@ -4153,6 +4153,7 @@ class AdminController extends Controller
             DB::transaction(function () use ($request, $subject_data): void {
                 $subject = Subject::create($subject_data);
                 app(\App\Support\Curriculum\CourseUnitSetup::class)->savePlacement($request, $subject);
+                app(\App\Support\Images\CourseUnitCoverImage::class)->save($request, $subject);
             });
         } catch (\Illuminate\Database\QueryException $e) {
             if ($e->getCode() == 23000) {
@@ -4216,8 +4217,10 @@ class AdminController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($subject, $subject_data): void {
+            DB::transaction(function () use ($request, $subject, $subject_data): void {
+                $subject = Subject::where('school_id', $subject->school_id)->lockForUpdate()->findOrFail($subject->id);
                 $subject->update($subject_data);
+                app(\App\Support\Images\CourseUnitCoverImage::class)->save($request, $subject);
             });
         } catch (\Illuminate\Database\QueryException $e) {
             if ($e->getCode() == 23000) {
@@ -4249,6 +4252,8 @@ class AdminController extends Controller
         }
 
         return [
+            'cover_image' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'prohibited_if:remove_cover_image,1'],
+            'remove_cover_image' => ['sometimes', 'boolean'],
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:30', 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $codeRule],
             'class_id' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('classes', 'id')->where('school_id', $schoolId)],
@@ -4278,6 +4283,12 @@ class AdminController extends Controller
                 'class_id' => get_phrase('Select exactly one catalogue association: a Class or a Programme.'),
             ]);
         }
+    }
+
+    public function subjectCoverImage(Request $request, int $id)
+    {
+        $subject = Subject::where('school_id', $request->user()->school_id)->findOrFail($id);
+        return app(\App\Support\Images\CourseUnitCoverImage::class)->response($subject);
     }
 
     public function subjectDelete($id)

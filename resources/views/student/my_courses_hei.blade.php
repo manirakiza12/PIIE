@@ -74,6 +74,7 @@
     <div class="row">
         <div class="col-12">
             <h4>{{ get_phrase('My Courses') }}</h4>
+            <p class="text-muted mb-1">{{ get_phrase('Course Units are the subjects or modules within your Programme. Your Course Allocations show when each unit is taught.') }}</p>
             <p class="text-muted mb-0">
                 @if($year && $period)
                     {{ $year->label }} &middot; {{ $period->label }}
@@ -295,7 +296,7 @@
                                             <a href="{{ route('student.courses.content', $card['offering_id']) }}"
                                                class="eBtn eBtn-primary w-100">{{ get_phrase('Open Course') }}</a>
                                             <a href="{{ route('student.courses.assignments.index', $card['offering_id']) }}"
-                                               class="eBtn eBtn-sm w-100">{{ get_phrase('Assignments') }}</a>
+                                               class="eBtn eBtn-sm sc-assignment-action w-100">{{ get_phrase('Assignments') }}</a>
                                             @break
 
                                         @default
