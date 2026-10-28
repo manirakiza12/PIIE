@@ -322,4 +322,21 @@ class SafeAcceptedStudentAutomationTest extends TestCase
         $this->assertDatabaseHas('automation_exceptions', ['code' => 'profile_requires_review']);
         $this->assertSame(0, StudentFeeManager::count());
     }
+
+    public function test_inactive_profile_is_not_reactivated_or_invoiced_when_finance_setup_arrives(): void
+    {
+        $admission = $this->accepted();
+        $this->runSetup($admission);
+        $profile = StudentProfile::firstOrFail();
+        $profile->update(['status' => 'inactive']);
+        $before = $profile->fresh()->getAttributes();
+        $this->fee($admission);
+        $this->runSetup($admission);
+        $this->assertSame($before, $profile->fresh()->getAttributes());
+        $this->assertSame(0, StudentFeeManager::count());
+        $this->assertDatabaseHas('automation_exceptions', ['code' => 'profile_requires_review']);
+        $billing = \App\Support\StudentFeeInvoiceGenerator::prepareMandatoryForStudent(User::findOrFail($profile->user_id));
+        $this->assertSame('profile_inactive', $billing['code']);
+        $this->assertSame(0, StudentFeeManager::count());
+    }
 }

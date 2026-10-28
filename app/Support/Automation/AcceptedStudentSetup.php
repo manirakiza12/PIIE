@@ -62,8 +62,9 @@ final class AcceptedStudentSetup
                 return;
             }
             $profile = $student ? StudentProfile::where('user_id', $student->id)->lockForUpdate()->first() : null;
-            if ($profile && ((int) $profile->school_id !== $schoolId || (int) $profile->programme_id !== (int) $admission->programme_id || (int) $profile->intake_session_id !== (int) $admission->intake_session_id)) {
-                $block('profile_requires_review', 'Registrar must resolve the existing programme/intake profile. Automation never performs a transfer or overwrites academic history.');
+            if ($profile && ((int) $profile->school_id !== $schoolId || $profile->status !== 'active'
+                || (int) $profile->programme_id !== (int) $admission->programme_id || (int) $profile->intake_session_id !== (int) $admission->intake_session_id)) {
+                $block('profile_requires_review', 'Registrar must confirm an active profile with the approved programme/intake. Automation never reactivates students, performs a transfer or overwrites academic history.');
                 return;
             }
             try {

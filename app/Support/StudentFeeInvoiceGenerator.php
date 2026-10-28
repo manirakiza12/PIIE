@@ -38,6 +38,9 @@ class StudentFeeInvoiceGenerator
                 return $blocked('student_inactive', 'Admissions must confirm an active student account.');
             }
             $profile = StudentProfile::where('school_id', $schoolId)->where('user_id', $student->id)->lockForUpdate()->first();
+            if ($profile && $profile->status !== 'active') {
+                return $blocked('profile_inactive', 'Registrar must confirm an active student profile before automatic invoicing.');
+            }
             if (! $profile?->programme_id || ! DB::table('programmes')->where('school_id', $schoolId)->where('id', $profile->programme_id)->where('is_active', 1)->exists()) {
                 return $blocked('programme_missing', 'Admissions must confirm the student programme; Finance must not infer it.');
             }
