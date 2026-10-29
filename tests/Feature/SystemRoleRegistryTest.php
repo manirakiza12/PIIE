@@ -161,6 +161,9 @@ class SystemRoleRegistryTest extends TestCase
             'Support/CourseOffering/CourseOfferingLecturerAllocationService.php',
             'Support/CourseOffering/LecturerCourseOfferingAccess.php',   // SystemRole::TEACHER: lecturer identity
             'Support/CourseOffering/SystemTesterAccess.php',   // SystemRole::TEACHER: testing access requires Lecturer identity
+            // Neutral staff placement requires both explicit Registrar approval
+            // and existing placement permissions; no base-role grant is inferred.
+            'Support/Curriculum/StudentCurriculumAssignmentService.php',
             'Support/Staff/StaffProvisioningService.php',
             'admin/navigation.blade.php',
             'migrations/2026_09_27_000001_add_generic_staff_system_role.php',

@@ -94,6 +94,9 @@ return [
         'academic.departments' => $p('academic', 'Departments', 'Manage departments.'),
         'academic.sessions' => $p('academic', 'Academic sessions', 'Create sessions and change the running session.', true),
         'academic.programmes' => $p('academic', 'Programmes', 'Manage HEI programmes.'),
+        'academic.curriculum_assignment.view' => $p('academic', 'View curriculum assignment proposals', 'Review institution curriculum mappings, proposals and exceptions.'),
+        'academic.curriculum_assignment.manage' => $p('academic', 'Prepare curriculum assignment proposals', 'Draft explicit applicability mappings and ordinary-entry proposals.', true),
+        'academic.curriculum_assignment.approve' => $p('academic', 'Registrar curriculum assignment approval', 'Explicitly approve or revoke applicability mappings, review proposals and manually apply approved placement.', true),
         'academic.curriculum.view' => $p('academic', 'View Curricula', 'View Programme Curriculum versions and review summaries.'),
         'academic.curriculum.manage' => $p('academic', 'Manage Programme Curricula', 'Create versions, edit all lifecycle states, and delete a version with its owned academic records.'),
         'academic.curriculum.approve' => $p('academic', 'Approve and retire Curricula', 'Approve official Curricula and retire approved versions.', true),
@@ -358,6 +361,10 @@ return [
         'admin.programme_cohorts.lifecycle' => 'academic.programme_cohort.lifecycle',
         'admin.programme_cohorts.members.*' => 'academic.programme_cohort.membership',
         'admin.programme_cohorts.placement.*' => 'academic.programme_cohort.membership',
+        'admin.curriculum_assignment.index' => 'academic.curriculum_assignment.view',
+        'admin.curriculum_assignment.mapping.store' => 'academic.curriculum_assignment.manage',
+        'admin.curriculum_assignment.propose' => 'academic.curriculum_assignment.manage',
+        'admin.curriculum_assignment.*' => 'academic.curriculum_assignment.approve',
         'admin.academic.direct_placement' => 'academic.programme_cohort.membership',
         'admin.academic.placements.*' => 'academic.programme_cohort.membership',
         'admin.academic.direct_placement.store' => 'academic.programme_cohort.membership',
@@ -674,6 +681,8 @@ return [
     | added this way, so a dependency never escalates privilege.
     */
     'requires' => [
+        'academic.curriculum_assignment.manage' => ['academic.curriculum_assignment.view'],
+        'academic.curriculum_assignment.approve' => ['academic.curriculum_assignment.view'],
         'academic.curriculum.manage' => ['academic.curriculum.view'],
         'academic.curriculum.approve' => ['academic.curriculum.view'],
         'academic.programme_cohort.manage' => ['academic.programme_cohort.view'],

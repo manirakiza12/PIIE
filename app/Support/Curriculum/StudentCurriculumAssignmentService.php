@@ -356,7 +356,10 @@ class StudentCurriculumAssignmentService
     private function administrativeActor(int $schoolId, int $actorId): User
     {
         $actor = User::query()->whereKey($actorId)->where('school_id', $schoolId)->where('account_status', '!=', 'disable')->first();
-        if (! $actor || ! in_array((int) $actor->role_id, [1, 2, 11, 12, 13, 19], true)) {
+        if (! $actor || (! in_array((int) $actor->role_id, [1, 2, 11, 12, 13, 19], true)
+            && ! ((int) $actor->role_id === \App\Support\Roles\SystemRole::GENERIC_STAFF
+                && $actor->hasPermission('academic.curriculum_assignment.approve')
+                && $actor->hasPermission('academic.programme_cohort.membership')))) {
             throw new DomainException('Assignment actor must be an enabled same-tenant administrative User.');
         }
         return $actor;

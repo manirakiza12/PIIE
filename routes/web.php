@@ -2861,3 +2861,14 @@ Route::middleware(['auth', 'school_subscription'])->group(function () {
 });
 Route::get('staff/id-card/verify/{staff}', [\App\Http\Controllers\StaffIdCardController::class, 'verify'])
     ->whereNumber('staff')->middleware(['signed', 'throttle:60,1'])->name('staff.id_card.verify');
+
+// Controlled curriculum assignment: no scheduler, acceptance hook or GET writes.
+Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\CurriculumAssignmentProposalController::class)->group(function () {
+    Route::get('admin/curriculum-assignment', 'index')->name('admin.curriculum_assignment.index');
+    Route::post('admin/curriculum-assignment/mappings', 'storeMapping')->name('admin.curriculum_assignment.mapping.store');
+    Route::post('admin/curriculum-assignment/mappings/{id}/approve', 'approveMapping')->whereNumber('id')->name('admin.curriculum_assignment.mapping.approve');
+    Route::post('admin/curriculum-assignment/mappings/{id}/revoke', 'revokeMapping')->whereNumber('id')->name('admin.curriculum_assignment.mapping.revoke');
+    Route::post('admin/curriculum-assignment/proposals', 'propose')->name('admin.curriculum_assignment.propose');
+    Route::post('admin/curriculum-assignment/proposals/{id}/review', 'review')->whereNumber('id')->name('admin.curriculum_assignment.review');
+    Route::post('admin/curriculum-assignment/proposals/{id}/apply', 'apply')->whereNumber('id')->name('admin.curriculum_assignment.apply');
+});
