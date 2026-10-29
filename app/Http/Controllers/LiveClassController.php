@@ -2638,7 +2638,7 @@ class LiveClassController extends Controller
             . "{$sessionInfo}\n"
             . "Date: " . optional($liveClass->start_date)->format('Y-m-d') . "\n"
             . "Time: {$liveClass->start_time} - {$liveClass->end_time}\n"
-            . "Join Link: " . ($liveClass->meeting_url ?: 'TBD');
+            . "View Live Class: " . route('student.live_classes.show', $liveClass->id);
 
         $sessionId = (int) get_school_settings($this->school_id)->value('running_session');
         if ($sessionId === 0) {

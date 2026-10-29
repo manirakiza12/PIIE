@@ -20,7 +20,8 @@ class Kernel extends ConsoleKernel
         // Scheduler on Windows) — see App\Console\Commands\SendLiveClassReminders
         // for what breaks silently if that isn't set up, and how to test the
         // command directly without it.
-        $schedule->command('live-classes:send-reminders')->everyFiveMinutes();
+        $schedule->command('live-classes:send-reminders')->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command('live-classes:retry-emails')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('live-classes:refresh-google-links')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
         $schedule->command('online-exams:send-result-emails')->everyFiveMinutes();
         $schedule->command('online-exams:send-start-reminders')->everyFiveMinutes();

@@ -282,6 +282,30 @@ class LiveClassStudentExperienceTest extends TestCase
 
     // ══ STUDENT_DETAIL_PAGE: VIEW works before the join window ══
 
+    public function test_the_detail_date_and_time_use_the_same_institution_clock_at_midnight(): void
+    {
+        if (!Schema::hasColumn('schools', 'timezone')) {
+            Schema::table('schools', fn (Blueprint $t) => $t->string('timezone')->nullable());
+        }
+        DB::table('schools')->where('id', $this->school)->update(['timezone' => 'Africa/Nairobi']);
+        $start = now()->addDays(3)->startOfDay()->setTime(23, 30);
+        $class = $this->makeClass(['scheduled_at' => $start, 'ends_at' => $start->copy()->addHour(), 'start_date' => $start->toDateString()]);
+        $student = $this->makeStudent('Midnight Student', $this->offering);
+        $response = $this->actingAs($student)->get(route('student.live_classes.show', $class->id))->assertOk();
+        $response->assertSee($start->copy()->setTimezone('Africa/Nairobi')->format('d M Y'));
+        $response->assertSee($start->copy()->subMinutes(15)->setTimezone('Africa/Nairobi')->format('g:i A'));
+        $response->assertDontSee('https://meet.jit.si/', false);
+    }
+
+    public function test_the_documented_end_grace_period_has_consistent_join_text_and_backend_access(): void
+    {
+        $class = $this->makeClass(['scheduled_at' => now()->subHour(), 'ends_at' => now()->subMinute()]);
+        $student = $this->makeStudent('Grace Period Student', $this->offering);
+        $this->actingAs($student)->get(route('student.live_classes.show', $class->id))->assertOk()
+            ->assertSee(route('student.live_classes.join', $class->id), false)
+            ->assertSee('Joining remains available')->assertDontSee('joining is closed');
+    }
+
     public function test_a_confirmed_student_reaches_the_detail_page(): void
     {
         $class = $this->makeClass();

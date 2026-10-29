@@ -31,6 +31,11 @@ class LiveClassNotification extends Model
     /** The class was called off. One per class, however many times cancel is pressed. */
     public const TYPE_CANCELLED = 'cancelled';
 
+    public static function reminderKey(LiveClass $class, string $type): string
+    {
+        return (int) $class->schedule_revision > 0 ? $type.':'.$class->schedule_revision : $type;
+    }
+
     /** Prefix for a per-schedule key: re-sending at the same time is suppressed, a new time is not. */
     public const TYPE_RESCHEDULED_PREFIX = 'rescheduled:';
 

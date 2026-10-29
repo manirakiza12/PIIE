@@ -105,11 +105,29 @@ class LiveClassService
             // changed, not reproduce the link itself.
             $previousRecordingUrl = $liveClass->recording_url;
             $previousScheduledAt = $liveClass->scheduled_at?->copy();
+            $previousEndsAt = $liveClass->ends_at?->copy();
 
             $liveClass->fill($this->meetingAttributes($attributes));
+            $scheduleChanged = $liveClass->isDirty(['scheduled_at', 'ends_at']);
+            $detailsChanged = $liveClass->isDirty(['title', 'description', 'teacher_id', 'platform']);
+            // Additive migration permits a rolling code/schema upgrade. Never
+            // accept revision numbers from a request; increment under this lock.
+            if ($scheduleChanged && \Illuminate\Support\Facades\Schema::hasColumn('live_classes', 'schedule_revision')) {
+                $liveClass->schedule_revision = (int) $liveClass->schedule_revision + 1;
+            }
+            if (($scheduleChanged || $detailsChanged) && \Illuminate\Support\Facades\Schema::hasColumn('live_classes', 'notification_revision')) {
+                $liveClass->notification_revision = (int) $liveClass->notification_revision + 1;
+            }
             $liveClass->updated_by = $actor->id;
             $liveClass->save();
             $this->recordAudit('update', $liveClass, $before, $liveClass->only(['course_offering_id', 'subject_id', 'scheduled_at', 'ends_at', 'status']));
+
+            // In-app delivery and the edit commit together. Email is deferred
+            // until commit by the notifier, so a mail failure cannot undo class data.
+            $this->announceScheduleOrRecordingChange(
+                $liveClass->setRelation('courseOffering', $offering),
+                $previousScheduledAt, $previousRecordingUrl, $previousEndsAt, $detailsChanged
+            );
 
             return [
                 'live_class' => $liveClass->setRelation('courseOffering', $offering),
@@ -118,24 +136,14 @@ class LiveClassService
             ];
         });
 
-        $this->announceScheduleOrRecordingChange(
-            $outcome['live_class'],
-            $outcome['previous_scheduled_at'],
-            $outcome['previous_recording_url']
-        );
-
         return $outcome['live_class'];
     }
 
     /**
-     * Student-facing follow-up for a meeting edit, run AFTER the row has
-     * committed.
-     *
-     * Deliberately outside the transaction above. A notification is a courtesy,
-     * not part of the academic record: if delivery fails the Live Class must
-     * still stand, and putting it inside the transaction would let one bad
-     * mail address discard a lecturer's scheduled class. LiveClassNotifier
-     * already contains per-recipient failures internally.
+     * Student-facing follow-up for a meeting edit. In-app delivery shares the
+     * edit transaction, so a failed inbox write cannot leave a saved edit with
+     * an unretryable dedup claim. Optional email is deferred until commit and
+     * its transport failures do not undo a saved academic record.
      *
      * Both events are only meaningful when the time or the recording actually
      * changed, so an unchanged re-save stays silent - which is what stops a
@@ -144,7 +152,9 @@ class LiveClassService
     private function announceScheduleOrRecordingChange(
         LiveClass $liveClass,
         ?Carbon $previousScheduledAt,
-        ?string $previousRecordingUrl
+        ?string $previousRecordingUrl,
+        ?Carbon $previousEndsAt = null,
+        bool $detailsChanged = false
     ): void {
         $currentScheduledAt = $liveClass->scheduled_at?->copy();
 
@@ -152,8 +162,14 @@ class LiveClassService
             ? $currentScheduledAt !== null
             : (string) $previousScheduledAt !== (string) $currentScheduledAt;
 
+        $scheduleChanged = $scheduleChanged || (string) $previousEndsAt !== (string) $liveClass->ends_at;
+        if (!$liveClass->is_published || in_array($liveClass->status, [LiveClass::STATUS_DRAFT, LiveClass::STATUS_CANCELLED], true)) {
+            return;
+        }
         if ($scheduleChanged) {
             LiveClassNotifier::announceRescheduled($liveClass);
+        } elseif ($detailsChanged) {
+            LiveClassNotifier::announceUpdated($liveClass);
         }
 
         $recordingChanged = trim((string) $previousRecordingUrl) !== trim((string) $liveClass->recording_url)

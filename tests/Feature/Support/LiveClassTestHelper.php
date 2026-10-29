@@ -379,6 +379,10 @@ $table->timestamps();
 
     protected function enableSmtpSettings(): void
     {
+        if (!Schema::hasTable('live_class_email_deliveries')) {
+            $migration = require database_path('migrations/2026_10_29_150000_add_live_class_notification_revisions.php');
+            $migration->up();
+        }
         foreach ([
             'smtp_user' => 'noreply@example.test',
             'smtp_pass' => 'secret',

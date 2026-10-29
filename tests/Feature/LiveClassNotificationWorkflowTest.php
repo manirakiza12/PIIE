@@ -69,6 +69,7 @@ class LiveClassNotificationWorkflowTest extends TestCase
         DB::reconnect('sqlite');
         $this->bootAdmissionsTestSchema();
         $this->liveClassSchema();
+        (require database_path('migrations/2026_10_29_150000_add_live_class_notification_revisions.php'))->up();
         if (! Schema::hasColumn('users', 'staff_status')) {
             Schema::table('users', function (Blueprint $t): void {
                 $t->string('staff_status')->nullable();
@@ -382,6 +383,174 @@ class LiveClassNotificationWorkflowTest extends TestCase
      * the time in the browser produces a reschedule notice without any
      * controller-specific code.
      */
+    public function test_synthetic_scheduled_class_journey_releases_details_but_not_joining_access_early(): void
+    {
+        Mail::fake();
+        $student = $this->makeStudent('Eligible Journey Student', $this->school, $this->offering);
+        $unconfirmed = $this->makeStudent('Unconfirmed Journey Student', $this->school, $this->offering, 'registered');
+        $foreign = $this->makeStudent('Foreign Journey Student', $this->otherSchool, null);
+        $start = now()->addDays(3)->setTime(12, 0);
+        $this->actingAs($this->lecturer)->post(route('teacher.course_offerings.live_classes.store', $this->offering->id), [
+            'title' => 'Synthetic Scheduled Journey', 'description' => 'Bring course notes.',
+            'platform' => 'jitsi', 'type' => 'custom', 'meeting_url' => 'https://meet.jit.si/synthetic-private-room',
+            'start_date' => $start->toDateString(), 'start_time' => '12:00', 'end_time' => '13:00', 'is_published' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $class = LiveClass::where('title', 'Synthetic Scheduled Journey')->firstOrFail();
+        $this->assertSame([$student->id], $this->notifiedStudentIds('live_class_published'));
+        $this->assertStringNotContainsString('meet.jit.si', DB::table('user_notifications')->value('body'));
+        $this->actingAs($student)->get(route('student.live_classes.index'))->assertOk()->assertSee($class->title);
+        $this->get(route('student.live_classes.show', $class->id))->assertOk()->assertSee('Bring course notes.')
+            ->assertSee('Daniel Okello')->assertSee('Jitsi')->assertDontSee('synthetic-private-room');
+        foreach ([-901 => false, -900 => true, 0 => true, 4500 => true, 4501 => false] as $seconds => $allowed) {
+            Carbon::setTestNow($class->scheduled_at->copy()->addSeconds($seconds));
+            $response = $this->get(route('student.live_classes.join', $class->id));
+            if ($allowed) {
+                // Public Jitsi intentionally opens externally; signed private
+                // Jitsi hosting is covered by the provider-security suite.
+                $response->assertRedirect('https://meet.jit.si/synthetic-private-room');
+            } else {
+                $response->assertRedirect()->assertDontSee('synthetic-private-room');
+                $this->assertNotSame('https://meet.jit.si/synthetic-private-room', $response->headers->get('Location'));
+            }
+        }
+        foreach ([$unconfirmed, $foreign] as $outsider) {
+            $this->actingAs($outsider)->get(route('student.live_classes.show', $class->id))->assertNotFound();
+            $this->get(route('student.live_classes.join', $class->id))->assertDontSee('synthetic-private-room');
+        }
+    }
+
+    private function configureLiveClassMail(): void
+    {
+        foreach (['smtp_user' => 'noreply@example.test', 'smtp_pass' => 'synthetic', 'smtp_host' => 'smtp.example.test', 'smtp_port' => '587'] as $key => $value) {
+            DB::table('global_settings')->updateOrInsert(['key' => $key], ['value' => $value]);
+        }
+    }
+
+    public function test_failed_email_is_retried_without_duplicate_in_app_delivery(): void
+    {
+        $this->configureLiveClassMail();
+        $class = $this->makeClass();
+        $student = $this->makeStudent('Email Retry Student', $this->school, $this->offering);
+        Mail::shouldReceive('to')->once()->with($student->email)->andReturnSelf();
+        Mail::shouldReceive('send')->once()->andThrow(new \RuntimeException('Synthetic transport failure'));
+        Mail::shouldReceive('getDefaultDriver')->andReturn('array');
+        LiveClassNotifier::announcePublished($class);
+        $row = DB::table('live_class_email_deliveries')->first();
+        $this->assertSame(1, (int) $row->attempts);
+        $this->assertNull($row->sent_at);
+        $this->assertStringNotContainsString($student->email, $row->encrypted_message);
+        Mail::fake();
+        $this->artisan('live-classes:retry-emails')->assertExitCode(0);
+        Mail::assertNothingSent();
+        Carbon::setTestNow(now()->addMinutes(10));
+        $this->artisan('live-classes:retry-emails')->assertExitCode(0);
+        $this->artisan('live-classes:retry-emails')->assertExitCode(0);
+        LiveClassNotifier::announcePublished($class);
+        Mail::assertSent(\App\Mail\LiveClassReminderEmail::class, 1);
+        $this->assertSame(1, DB::table('user_notifications')->count());
+        $this->assertSame('[delivered]', DB::table('live_class_email_deliveries')->value('encrypted_message'));
+    }
+
+    public function test_retry_discards_email_when_registration_is_revoked(): void
+    {
+        $this->configureLiveClassMail();
+        $class = $this->makeClass();
+        $student = $this->makeStudent('Withdrawn Email Student', $this->school, $this->offering);
+        Mail::shouldReceive('to')->once()->andReturnSelf();
+        Mail::shouldReceive('send')->once()->andThrow(new \RuntimeException('Synthetic transport failure'));
+        Mail::shouldReceive('getDefaultDriver')->andReturn('array');
+        LiveClassNotifier::announcePublished($class);
+        DB::table('course_registrations')->where('student_id', $student->id)->delete();
+        Mail::fake();
+        Carbon::setTestNow(now()->addMinutes(10));
+        $this->artisan('live-classes:retry-emails')->assertExitCode(0);
+        Mail::assertNothingSent();
+        $this->assertNotNull(DB::table('live_class_email_deliveries')->value('discarded_at'));
+    }
+
+    public function test_overlapping_reminder_invocations_do_not_duplicate_in_app_delivery(): void
+    {
+        $this->makeClass(['scheduled_at' => now()->addDay(), 'ends_at' => now()->addDay()->addHour()]);
+        $this->makeStudent('Overlap Student', $this->school, $this->offering);
+        $overlapped = false;
+        DB::listen(function ($query) use (&$overlapped): void {
+            if (!$overlapped && str_starts_with(strtolower($query->sql), 'insert into "user_notifications"')) {
+                $overlapped = true;
+                \Illuminate\Support\Facades\Artisan::call('live-classes:send-reminders');
+            }
+        });
+        $this->artisan('live-classes:send-reminders')->assertExitCode(0);
+        $this->assertTrue($overlapped);
+        $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_reminder')->count());
+    }
+
+    public function test_an_in_app_delivery_failure_rolls_back_the_claim_and_can_be_retried(): void
+    {
+        $class = $this->makeClass();
+        $this->makeStudent('Retry Student', $this->school, $this->offering);
+        $fail = true;
+        DB::listen(function ($query) use (&$fail): void {
+            if ($fail && str_starts_with(strtolower($query->sql), 'insert into "user_notifications"')) {
+                $fail = false;
+                throw new \RuntimeException('Synthetic transient in-app delivery failure');
+            }
+        });
+        try {
+            LiveClassNotifier::announcePublished($class);
+            $this->fail('Expected synthetic failure');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Synthetic transient in-app delivery failure', $e->getMessage());
+        }
+        $this->assertSame(0, DB::table('user_notifications')->count());
+        $this->assertSame(0, LiveClassNotification::count());
+        LiveClassNotifier::announcePublished($class);
+        LiveClassNotifier::announcePublished($class);
+        $this->assertSame(1, DB::table('user_notifications')->count());
+    }
+
+    public function test_each_real_schedule_change_notifies_even_when_returning_to_an_old_time(): void
+    {
+        $class = $this->makeClass();
+        $this->makeStudent('Schedule Student', $this->school, $this->offering);
+        $service = app(\App\Support\LiveClasses\LiveClassService::class);
+        $first = $class->scheduled_at->copy()->addDay();
+        $second = $first->copy()->addDay();
+        foreach ([$first, $second, $first] as $start) {
+            $service->updateOfferingMeeting($this->lecturer, $class->id, [
+                'scheduled_at' => $start->toDateTimeString(), 'ends_at' => $start->copy()->addHour()->toDateTimeString(),
+            ]);
+        }
+        $this->assertSame(3, DB::table('user_notifications')->where('type', 'live_class_rescheduled')->count());
+    }
+
+    public function test_duration_and_visible_detail_changes_notify_but_an_unchanged_retry_does_not(): void
+    {
+        $class = $this->makeClass();
+        $this->makeStudent('Update Student', $this->school, $this->offering);
+        $service = app(\App\Support\LiveClasses\LiveClassService::class);
+        $service->updateOfferingMeeting($this->lecturer, $class->id, ['ends_at' => $class->ends_at->copy()->addHour()]);
+        $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_rescheduled')->count());
+        foreach ([1, 2] as $retry) {
+            $service->updateOfferingMeeting($this->lecturer, $class->id, ['description' => 'Bring the revised course notes.']);
+        }
+        $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_updated')->count());
+    }
+
+    public function test_reminders_are_issued_again_for_a_genuinely_rescheduled_class(): void
+    {
+        $class = $this->makeClass(['scheduled_at' => now()->addDay(), 'ends_at' => now()->addDay()->addHour()]);
+        $this->makeStudent('Reminder Student', $this->school, $this->offering);
+        $this->artisan('live-classes:send-reminders')->assertExitCode(0);
+        $this->assertSame(1, DB::table('user_notifications')->where('type', 'live_class_reminder')->count());
+        app(\App\Support\LiveClasses\LiveClassService::class)->updateOfferingMeeting($this->lecturer, $class->id, [
+            'scheduled_at' => now()->addDays(2), 'ends_at' => now()->addDays(2)->addHour(),
+        ]);
+        Carbon::setTestNow(now()->addDay());
+        $this->artisan('live-classes:send-reminders')->assertExitCode(0);
+        $this->artisan('live-classes:send-reminders')->assertExitCode(0);
+        $this->assertSame(2, DB::table('user_notifications')->where('type', 'live_class_reminder')->count());
+    }
+
     public function test_saving_a_changed_time_through_the_service_notifies_a_reschedule(): void
     {
         $liveClass = $this->makeClass();
