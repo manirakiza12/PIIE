@@ -20,7 +20,8 @@ class LiveClassPolicy
             return true;
         }
 
-        return $this->isStaff($user) && $this->hasMenuPermission($user, 'admin.live_classes');
+        return $this->hasAllocatedTeachingAccess($user)
+            || ($this->isStaff($user) && $this->hasMenuPermission($user, 'admin.live_classes'));
     }
 
     public function view(User $user, LiveClass $liveClass): bool
@@ -38,6 +39,9 @@ class LiveClassPolicy
 
     public function create(User $user): bool
     {
+        if ($this->hasAllocatedTeachingAccess($user)) {
+            return true;
+        }
         if ((int) $user->role_id === 7) {
             return false;
         }
@@ -107,6 +111,22 @@ class LiveClassPolicy
     {
         return in_array((int) $user->role_id, self::STAFF_ROLES, true)
             && $user->account_status !== 'disable';
+    }
+
+    /** A valid teaching appointment supplies access without a separate menu grant. */
+    private function hasAllocatedTeachingAccess(User $user): bool
+    {
+        if ((int) $user->role_id !== 3 || ! $this->isStaff($user)
+            || ! \Illuminate\Support\Facades\Schema::hasTable('course_offering_lecturer_allocations')) {
+            return false;
+        }
+        $offerings = \App\Models\CourseOffering::query()->where('school_id', $user->school_id)
+            ->whereIn('status', [\App\Models\CourseOffering::STATUS_OPEN, \App\Models\CourseOffering::STATUS_IN_PROGRESS])
+            ->whereHas('lecturerAllocations', fn ($query) => $query
+                ->where('school_id', $user->school_id)->where('user_id', $user->id)->where('status', 'active'))
+            ->get();
+        $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+        return $offerings->contains(fn ($offering) => $access->canLecturerCreateForOffering($user, $offering));
     }
 
     private function canManageAll(User $user): bool

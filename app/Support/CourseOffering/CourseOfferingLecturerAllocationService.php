@@ -17,6 +17,38 @@ use Illuminate\Support\Facades\Schema;
 
 class CourseOfferingLecturerAllocationService
 {
+    /** Assigning a lecturer also enables teaching when the assignment is eligible. */
+    public function assign(int $schoolId, int $offeringId, int $userId, string $role, string $startsOn, ?string $endsOn = null): CourseOfferingLecturerAllocation
+    {
+        return DB::transaction(function () use ($schoolId, $offeringId, $userId, $role, $startsOn, $endsOn) {
+            $allocation = $this->createPlanned($schoolId, $offeringId, $userId, $role, $startsOn, $endsOn);
+            return $this->canActivateAutomatically($schoolId, (int) $allocation->id)
+                ? $this->activate($schoolId, (int) $allocation->id)
+                : $allocation;
+        });
+    }
+
+    /** Read-only preflight; activate() repeats validation under the existing locks. */
+    public function canActivateAutomatically(int $schoolId, int $allocationId): bool
+    {
+        $allocation = $this->allocation($schoolId, $allocationId);
+        $offering = CourseOffering::where('school_id', $schoolId)->findOrFail($allocation->course_offering_id);
+        if ($allocation->status !== CourseOfferingLecturerAllocation::STATUS_PLANNED
+            || ! in_array($offering->status, [CourseOffering::STATUS_OPEN, CourseOffering::STATUS_IN_PROGRESS], true)
+            || ($allocation->ends_on && $allocation->ends_on->format('Y-m-d') < now()->toDateString())) {
+            return false;
+        }
+        try {
+            $dates = $this->validateAllocation($offering, (int) $allocation->user_id, $allocation->role,
+                $allocation->starts_on->format('Y-m-d'), $allocation->ends_on?->format('Y-m-d'), true);
+            $this->assertNoConflicts($offering, (int) $allocation->user_id, $allocation->role,
+                $dates['starts_on'], $dates['ends_on'], $allocationId);
+            return true;
+        } catch (DomainException) {
+            return false;
+        }
+    }
+
     public function deletePlanned(int $schoolId, int $allocationId): void
     {
         DB::transaction(function () use ($schoolId, $allocationId): void {

@@ -172,7 +172,11 @@ class LiveClassController extends Controller
             'filterPeriods' => $filterPeriods,
             'courseOfferingId' => $courseOfferingId,
             'academicPeriodId' => $academicPeriodId,
-            'meetNowOfferings' => $filterOfferings,
+            'meetNowOfferings' => $filterOfferings->filter(function ($offering) {
+                $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+                return $access->canAdminCreateForOffering(Auth::user(), $offering)
+                    || $access->canLecturerCreateForOffering(Auth::user(), $offering);
+            })->values(),
         ]);
     }
 
@@ -420,6 +424,17 @@ class LiveClassController extends Controller
         }
 
         $now = now();
+        // Authorize before creating an external calendar event or meeting.
+        $offering = null;
+        if ($requiresOffering) {
+            $offering = $this->tenantOfferingOrFail((int) $validated['course_offering_id']);
+            $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+            abort_unless(
+                $access->canAdminCreateForOffering(Auth::user(), $offering)
+                    || $access->canLecturerCreateForOffering(Auth::user(), $offering, $now),
+                403
+            );
+        }
         $endsAt = $now->copy()->addHour();
         $title = trim((string) ($validated['title'] ?? 'Instant Live Class ' . $now->format('H:i')));
         $meetNowResolution = $this->resolveMeeting(
@@ -427,7 +442,8 @@ class LiveClassController extends Controller
             $title,
             $now,
             $endsAt,
-            config('app.timezone', 'UTC')
+            config('app.timezone', 'UTC'),
+            requireOwnGoogleAccount: $requiresOffering
         );
         $meetingUrl = $meetNowResolution->url;
 
@@ -472,22 +488,15 @@ class LiveClassController extends Controller
         // and to every Attendance or notification rule that keys on the
         // Allocation. For a K12 institution the legacy behaviour is unchanged.
         if ($requiresOffering) {
-            $offeringId = (int) $request->input('course_offering_id');
-            $offering = $this->tenantOfferingOrFail($offeringId);
-            $access = app(\App\Support\LiveClasses\LiveClassAccessService::class);
-            abort_unless(
-                $access->canAdminCreateForOffering(Auth::user(), $offering)
-                    || $access->canLecturerCreateForOffering(Auth::user(), $offering, $now),
-                403
-            );
-
             // Build it through the same governed service the scheduled path
             // uses, so the Allocation context, the subject match and the
             // facilitator-allocation rules all apply identically.
             $liveClass = app(\App\Support\LiveClasses\LiveClassService::class)->createForOffering(
                 Auth::user(),
                 (int) $offering->id,
-                array_merge($payload, [
+                array_merge(\Illuminate\Support\Arr::except($payload, [
+                    'school_id', 'subject_id', 'class_id', 'programme_id', 'academic_session_id',
+                ]), [
                     'status' => LiveClass::STATUS_LIVE,
                     'is_published' => true,
                     'attendance_enabled' => false,

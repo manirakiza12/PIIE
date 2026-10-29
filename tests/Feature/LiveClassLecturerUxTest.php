@@ -624,6 +624,76 @@ class LiveClassLecturerUxTest extends TestCase
         $this->assertSame(0, LiveClass::count(), 'no academically orphaned meeting may be created');
     }
 
+    public function test_meet_now_choices_exclude_non_operational_teaching_assignments(): void
+    {
+        $future = $this->makeOffering('FUTURE-2026-S1');
+        $normal = $this->makeLecturer('Current Lecturer');
+        $this->allocate($this->offering, $normal);
+        $this->allocate($future, $normal, now()->addMonth()->toDateString());
+        $completed = $this->makeOffering('COMPLETED-2026-S1', 'completed');
+        $this->allocate($completed, $normal);
+
+        $response = $this->actingAs($normal)->get(route('teacher.live_classes.index'));
+        $response->assertOk();
+        $response->assertViewHas('meetNowOfferings', fn ($offerings) =>
+            $offerings->pluck('id')->all() === [$this->offering->id]);
+        // Historical and future allocations remain available to the list filters.
+        $response->assertViewHas('filterOfferings', fn ($offerings) => $offerings->count() === 3);
+    }
+
+    public function test_teaching_allocation_automatically_supplies_module_access_without_separate_grants(): void
+    {
+        DB::table('user_permissions')->where('user_id', $this->lecturer->id)->delete();
+        $this->lecturer->forceFill(['menu_permission' => json_encode(['teacher.dashboard'])])->save();
+        $this->lecturer->refresh();
+        $policy = app(\App\Policies\LiveClassPolicy::class);
+        $content = app(\App\Support\CourseContent\CourseContentAccess::class);
+        $assignments = app(\App\Support\Assignments\AssignmentAccess::class);
+        $live = app(\App\Support\LiveClasses\LiveClassAccessService::class);
+        $this->assertTrue($policy->viewAny($this->lecturer));
+        $this->assertTrue($policy->create($this->lecturer));
+        $this->assertTrue($content->canLecturerManage($this->lecturer, $this->offering));
+        $this->assertTrue($assignments->canLecturerManage($this->lecturer, $this->offering));
+        $this->assertTrue($live->canLecturerCreateForOffering($this->lecturer, $this->offering));
+        $this->actingAs($this->lecturer)->get(route('teacher.live_classes.index'))->assertOk();
+
+        $other = $this->makeOffering('UNASSIGNED-2026-S1');
+        $this->assertFalse($content->canLecturerManage($this->lecturer, $other));
+        $this->assertFalse($assignments->canLecturerManage($this->lecturer, $other));
+        $this->assertFalse($live->canLecturerCreateForOffering($this->lecturer, $other));
+
+        DB::table('course_offering_lecturer_allocations')->where('user_id', $this->lecturer->id)->update(['status' => 'cancelled']);
+        $this->assertFalse($policy->create($this->lecturer));
+        $this->assertFalse($content->canLecturerManage($this->lecturer, $this->offering));
+        $this->assertFalse($assignments->canLecturerManage($this->lecturer, $this->offering));
+        $this->assertFalse($live->canLecturerCreateForOffering($this->lecturer, $this->offering));
+    }
+
+    public function test_unauthorised_meet_now_is_rejected_before_google_resolution(): void
+    {
+        \Illuminate\Support\Facades\Http::fake();
+        $other = $this->makeOffering('OTHER-2026-S1');
+        $this->actingAs($this->lecturer)->post(route('teacher.live_classes.meet_now'), [
+            'platform' => 'google_meet', 'course_offering_id' => $other->id,
+        ])->assertForbidden();
+        \Illuminate\Support\Facades\Http::assertNothingSent();
+        $this->assertSame(0, LiveClass::count());
+    }
+
+    public function test_allocated_teacher_can_start_an_instant_meeting_without_extra_menu_grants(): void
+    {
+        $this->lecturer->forceFill(['menu_permission' => json_encode(['teacher.dashboard'])])->save();
+        $response = $this->actingAs($this->lecturer)->post(route('teacher.live_classes.meet_now'), [
+            'platform' => 'jitsi', 'course_offering_id' => $this->offering->id,
+        ]);
+        $class = LiveClass::first();
+        $response->assertRedirect(route('teacher.live_classes.join', $class?->id ?? 0));
+        $this->assertNotNull($class);
+        $this->assertSame($this->offering->id, $class->course_offering_id);
+        $this->assertSame($this->lecturer->id, $class->teacher_id);
+        $this->assertSame(LiveClass::STATUS_LIVE, $class->status);
+    }
+
     // ══ §14 SECURITY / AUTHORITY ══
 
     public function test_a_normal_future_lecturer_is_still_date_gated(): void

@@ -75,6 +75,55 @@ class CourseOfferingLecturerAllocationFoundationTest extends TestCase
         $this->assertDatabaseHas('course_offering_lecturer_allocations', ['id' => $active->id, 'status' => 'active']);
     }
 
+    public function test_assignment_automatically_activates_for_an_operational_course(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-06-15'));
+        DB::table('course_offerings')->where('id', $this->offerings[1])->update(['status' => 'open']);
+        $lecturer = $this->user(1, 501);
+        $allocation = $this->allocations->assign(1, $this->offerings[1], $lecturer->id, 'primary_lecturer', '2026-01-01');
+        $this->assertSame('active', $allocation->status);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'COURSE_OFFERING_LECTURER_ALLOCATION_ACTIVATED']);
+        $this->assertDomainFailure(fn () => $this->allocations->assign(2, $this->offerings[2], $lecturer->id, 'co_lecturer', '2026-01-01'));
+    }
+
+    public function test_automatic_activation_defers_draft_courses_on_leave_staff_and_expired_assignments(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-06-15'));
+        $draft = $this->allocations->assign(1, $this->offerings[1], $this->user(1, 502)->id, 'co_lecturer', '2026-01-01');
+        $this->assertSame('planned', $draft->status);
+        DB::table('course_offerings')->where('id', $this->offerings[1])->update(['status' => 'open']);
+        $leave = $this->allocations->assign(1, $this->offerings[1], $this->user(1, 503, ['staff_status' => 'on_leave'])->id, 'co_lecturer', '2026-01-01');
+        $expired = $this->allocations->assign(1, $this->offerings[1], $this->user(1, 504)->id, 'co_lecturer', '2026-01-01', '2026-01-02');
+        $this->assertSame('planned', $leave->status);
+        $this->assertSame('planned', $expired->status);
+        $this->assertFalse($this->allocations->canActivateAutomatically(1, $leave->id));
+        $this->assertFalse($this->allocations->canActivateAutomatically(1, $expired->id));
+        $this->artisan('academic:activate-teaching-allocations', ['--school' => 1])->assertSuccessful();
+        $this->assertSame('active', $draft->fresh()->status, 'Opening the course makes its existing plan eligible automatically');
+        $this->assertSame('planned', $leave->fresh()->status);
+        $this->assertSame('planned', $expired->fresh()->status);
+    }
+
+    public function test_scheduled_activation_repairs_existing_plans_with_tenant_scope_dry_run_and_idempotence(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-06-15'));
+        foreach ($this->offerings as $id) {
+            DB::table('course_offerings')->where('id', $id)->update(['status' => 'open']);
+        }
+        $one = $this->allocations->createPlanned(1, $this->offerings[1], $this->user(1, 505)->id, 'co_lecturer', '2026-01-01');
+        $two = $this->allocations->createPlanned(2, $this->offerings[2], $this->user(2, 506)->id, 'co_lecturer', '2026-01-01');
+        $auditCount = DB::table('audit_logs')->count();
+        $this->artisan('academic:activate-teaching-allocations', ['--school' => 1, '--dry-run' => true])->assertSuccessful();
+        $this->assertSame('planned', $one->fresh()->status);
+        $this->assertSame($auditCount, DB::table('audit_logs')->count());
+        $this->artisan('academic:activate-teaching-allocations', ['--school' => 1])->assertSuccessful();
+        $this->assertSame('active', $one->fresh()->status);
+        $this->assertSame('planned', $two->fresh()->status);
+        $auditCount = DB::table('audit_logs')->count();
+        $this->artisan('academic:activate-teaching-allocations', ['--school' => 1])->assertSuccessful();
+        $this->assertSame($auditCount, DB::table('audit_logs')->count());
+    }
+
     public function test_same_tenant_teacher_can_receive_each_controlled_role_and_profile_is_optional(): void
     {
         foreach (CourseOfferingLecturerAllocation::ROLES as $index => $role) {
