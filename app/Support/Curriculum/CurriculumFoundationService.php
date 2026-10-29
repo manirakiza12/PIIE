@@ -47,6 +47,10 @@ class CurriculumFoundationService
     {
         DB::transaction(function () use ($curriculum, $confirmation, $actorId): void {
             $locked = Curriculum::where('school_id', $curriculum->school_id)->whereKey($curriculum->id)->lockForUpdate()->firstOrFail();
+            if (Schema::hasTable('curriculum_applicability_mappings') && DB::table('curriculum_applicability_mappings')
+                ->where('school_id', $locked->school_id)->where('curriculum_id', $locked->id)->exists()) {
+                $this->fail('curriculum', 'This Curriculum has applicability approval history. Retain it for Registrar review; mappings and proposal provenance cannot be deleted with a version.');
+            }
             $reference = trim(($locked->programme?->code ?? '').' '.$locked->version);
             if (! in_array(trim($confirmation), ['DELETE', $reference], true)) $this->fail('confirm_deletion', 'Type DELETE or '.$reference.' to confirm deletion.');
             $this->deleteExclusiveCourseOfferings($locked, $actorId ?? (int) (auth()->id() ?? 0));

@@ -19,6 +19,7 @@
         [$showAcademicYears, $calendarLabel, 'admin.academic_structure.index', ['section'=>'semesters'], (request()->is('admin/academic-structure') && request('section') === 'semesters') || request()->is('admin/academic-structure/periods/*'), 'bi-calendar-week'],
         [$showLegacySessions, 'Class-based Sessions', 'admin.settings.session_manager', [], request()->is('admin/session_manager*'), 'bi-calendar'],
         [$menuAllows('admin.settings.school') && $navCan('admin.settings.academic'), 'Grading Scales', 'admin.settings.academic', [], request()->is('admin/settings/academic*'), 'bi-bar-chart'],
+        [$user->hasPermission('academic.curriculum_assignment.view'), 'Curriculum Assignment', 'admin.curriculum_assignment.index', [], request()->routeIs('admin.curriculum_assignment.*'), 'bi-person-check'],
         [$showStudyPlans, 'Programme Curriculum', 'admin.curricula.index', [], request()->is('admin/curricula*'), 'bi-list-check'],
         [$canSeeProgrammes && $menuAllows('admin.programme_years.index', 'admin.curricula.index') && $navCan('admin.programme_years.index'), 'Programme Years', 'admin.programme_years.index', [], request()->is('admin/programme-years*'), 'bi-list-ol'],
         [$showCourseUnits, academic_term('subjects', $user->school_id), 'admin.subject_list', [], request()->is('admin/subject*','admin/course-unit*'), 'bi-journal-bookmark'],
