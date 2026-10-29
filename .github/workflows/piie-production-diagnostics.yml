@@ -52,34 +52,7 @@ jobs:
           PIIE_SSH_HOST: ${{ secrets.PIIE_SSH_HOST }}
           PIIE_SSH_PORT: ${{ secrets.PIIE_SSH_PORT }}
           PIIE_SSH_USER: ${{ secrets.PIIE_SSH_USER }}
-        run: |
-          set -euo pipefail
-          umask 077
-          D="$RUNNER_TEMP/piie-diagnostics"
-          mkdir "$D"
-          [[ "$PIIE_SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
-          [[ "$PIIE_SSH_PORT" =~ ^[0-9]{1,5}$ ]]
-          [[ "$PIIE_SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
-          printf '%s\n' "$PIIE_SSH_KEY" > "$D/key"
-          printf '%s\n' "$PIIE_SSH_KNOWN_HOSTS" > "$D/known_hosts"
-          [ "$(ssh-keygen -lf "$D/key" | awk '{print $2}')" = 'SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM' ]
-          ssh-keygen -lf "$D/known_hosts" | awk '{print $2}' | grep -Fx 'SHA256:fR4AOOMWFR17JIX9k8ed4O7+N6IaH30zEtefkbx/UEI' >/dev/null
-          cat > "$D/config" <<EOF
-          Host piie-prod
-            HostName $PIIE_SSH_HOST
-            Port $PIIE_SSH_PORT
-            User $PIIE_SSH_USER
-            IdentityFile $D/key
-            UserKnownHostsFile $D/known_hosts
-            StrictHostKeyChecking yes
-            IdentitiesOnly yes
-            BatchMode yes
-            PasswordAuthentication no
-            ClearAllForwardings yes
-            PermitLocalCommand no
-            ControlMaster no
-            ConnectTimeout 15
-          EOF
+        run: bash deploy/diagnostics/prepare-ssh.sh
       - name: Execute fixed read-only diagnostic script
         run: |
           set -euo pipefail
