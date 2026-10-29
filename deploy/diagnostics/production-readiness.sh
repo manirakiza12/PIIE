@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Fixed Module 1 pre/post release inspection. No parameters or caller commands.
+# Fixed Live Classes pre/post release inspection. No parameters or caller commands.
 set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
-TARGET=ad5f0190e68d912a06923fc6ceba623883fb0732
-BASELINE=0b1924ca54ed89c72400d08a3e80476888b1e719
+# Baseline: protected activation 40868664451. Target: approved PR #127 merge.
+# Exact release identities; neither caller input nor arbitrary main is admitted.
+TARGET=452e21ac5d59ea582357914f2045d558816a1776
+BASELINE=67be85e70349287f58ffeb4bfaafabccb9e953ff
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
@@ -90,8 +92,8 @@ HEALTH_PY
 case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current link';; esac
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
-[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved Module 1 transition'
 echo "Active release SHA: $ACTIVE"
+[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved Live Classes transition'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'
 for container in piie-app piie-db; do
@@ -183,7 +185,8 @@ try {
     $pending = array_values(array_diff($files, $ran));
     if ($pending) throw new LogicException('Active release has pending migrations');
     $installed = in_array($module, $ran, true);
-    if (($sha === 'ad5f0190e68d912a06923fc6ceba623883fb0732') !== $installed) throw new LogicException('Module migration and active release disagree');
+    // Both approved releases include this already-deployed module and schema.
+    if (!$installed || !is_file($root.'/database/migrations/'.$module.'.php')) throw new LogicException('Required existing module migration missing');
     $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
     foreach (['curriculum_applicability_mappings','curriculum_assignment_proposals'] as $table) {
         if (in_array($table, $tables, true) !== $installed) throw new LogicException('Module table/migration collision');
@@ -205,13 +208,14 @@ try {
         $service = file_get_contents($root.'/app/Support/Curriculum/CurriculumAssignmentProposals.php');
         if (!str_contains($service, 'academic.programme_cohort.membership') || !str_contains($service, "authorize(\$actor, 'approve')")) throw new LogicException('Apply authority guard missing');
     }
-    echo json_encode(['database_read_only'=>true,'current_pending_migrations'=>$pending,'target_pending_migrations'=>$installed ? [] : [$module],'module_tables_present'=>$installed,'admissions_finance_schema_checks'=>'PASS','module_route_and_authority_source_checks'=>$installed ? 'PASS' : 'not active yet']).PHP_EOL;
+    echo json_encode(['database_read_only'=>true,'current_pending_migrations'=>$pending,'module_tables_present'=>$installed,'admissions_finance_schema_checks'=>'PASS','module_route_and_authority_source_checks'=>'PASS']).PHP_EOL;
     $routes = file_get_contents($root.'/routes/web.php');
     foreach (['student.live_classes.show','student.live_classes.join','live_classes.recording.access'] as $route) {
         if (!str_contains($routes, $route)) throw new LogicException('Live Class route missing');
     }
     $kernel = file_get_contents($root.'/app/Console/Kernel.php');
     $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
+    if (($sha === '452e21ac5d59ea582357914f2045d558816a1776') !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
     $commands = ['live-classes:send-reminders','live-classes:refresh-google-links'];
     if ($liveClassRetryInstalled) $commands[] = 'live-classes:retry-emails';
     foreach ($commands as $command) {
@@ -243,4 +247,4 @@ for path in /health / /login /applicant/login /careers; do
 done
 [ "$(curl --fail --silent --show-error --max-time 20 https://piie.ac.ug/health)" = PIIE-APP-OK ] || fail 'Application health body mismatch'
 [ "$(cat "$BASE/current/RELEASE_SHA")" = "$ACTIVE" ] || fail 'Release changed during inspection'
-echo "READINESS PASS: active=$ACTIVE; fixed Module 1 transition; no deployment or application writes performed"
+echo "READINESS PASS: active=$ACTIVE; approved Live Classes transition; no deployment or application writes performed"
