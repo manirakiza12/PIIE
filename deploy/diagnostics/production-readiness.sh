@@ -211,16 +211,22 @@ try {
         if (!str_contains($routes, $route)) throw new LogicException('Live Class route missing');
     }
     $kernel = file_get_contents($root.'/app/Console/Kernel.php');
-    foreach (['live-classes:send-reminders','live-classes:retry-emails','live-classes:refresh-google-links'] as $command) {
+    $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
+    $commands = ['live-classes:send-reminders','live-classes:refresh-google-links'];
+    if ($liveClassRetryInstalled) $commands[] = 'live-classes:retry-emails';
+    foreach ($commands as $command) {
         if (!str_contains($kernel, $command)) throw new LogicException('Live Class scheduled command missing');
     }
-    $pdo->query('SELECT schedule_revision, notification_revision FROM live_classes WHERE 1=0');
-    $outbox = $pdo->query('SELECT COUNT(*) AS total, SUM(sent_at IS NOT NULL) AS transport_accepted, SUM(sent_at IS NULL AND discarded_at IS NULL AND attempts >= 5) AS exhausted, SUM(sent_at IS NULL AND discarded_at IS NULL AND attempts < 5) AS pending FROM live_class_email_deliveries')->fetch(PDO::FETCH_ASSOC);
+    $outbox = null;
+    if ($liveClassRetryInstalled) {
+        $pdo->query('SELECT schedule_revision, notification_revision FROM live_classes WHERE 1=0');
+        $outbox = $pdo->query('SELECT COUNT(*) AS total, SUM(sent_at IS NOT NULL) AS transport_accepted, SUM(sent_at IS NULL AND discarded_at IS NULL AND attempts >= 5) AS exhausted, SUM(sent_at IS NULL AND discarded_at IS NULL AND attempts < 5) AS pending FROM live_class_email_deliveries')->fetch(PDO::FETCH_ASSOC);
+    }
     $smtp = $pdo->query("SELECT COUNT(*) FROM global_settings WHERE `key` IN ('smtp_user','smtp_pass','smtp_host','smtp_port') AND value IS NOT NULL AND value <> ''")->fetchColumn();
     $google = $pdo->query("SELECT enabled, (client_id IS NOT NULL AND client_id <> '' AND client_secret IS NOT NULL AND client_secret <> '') AS credentials_present, (verified_at IS NOT NULL) AS previously_verified FROM google_meet_settings WHERE id=1")->fetch(PDO::FETCH_ASSOC);
     $grants = $pdo->query("SELECT COUNT(*) FROM google_account_connections WHERE status='ok' AND refresh_token_ciphertext IS NOT NULL")->fetchColumn();
     $zones = $pdo->query('SELECT DISTINCT timezone FROM schools WHERE timezone IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN);
-    echo json_encode(['live_classes_read_only'=>true,'routes_and_scheduled_commands'=>'PASS','smtp_fields_present'=>(int)$smtp===4,'email_outbox'=>$outbox,'google_setup'=>$google ?: null,'google_grants_present'=>(int)$grants>0,'institution_timezones'=>$zones,'queue_connection'=>$env['QUEUE_CONNECTION'] ?? 'sync','jitsi_app_id_present'=>!empty($env['JITSI_APP_ID']),'provider_connectivity_tested'=>false,'real_student_delivery_tested'=>false]).PHP_EOL;
+    echo json_encode(['live_classes_read_only'=>true,'routes_and_scheduled_commands'=>'PASS','email_retry_migration_installed'=>$liveClassRetryInstalled,'smtp_fields_present'=>(int)$smtp===4,'email_outbox'=>$outbox,'google_setup'=>$google ?: null,'google_grants_present'=>(int)$grants>0,'institution_timezones'=>$zones,'queue_connection'=>$env['QUEUE_CONNECTION'] ?? 'sync','jitsi_app_id_present'=>!empty($env['JITSI_APP_ID']),'provider_connectivity_tested'=>false,'real_student_delivery_tested'=>false]).PHP_EOL;
 } catch (LogicException $e) {
     fwrite(STDERR, 'FAIL: '.$e->getMessage().PHP_EOL); exit(1);
 } catch (Throwable $e) {
