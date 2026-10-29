@@ -884,24 +884,16 @@ public function test_a_LECTURER_cannot_mark_or_see_a_submission_for_SOMEONE_ELSE
     }
 
     /**
-     * The AUTHOR must never be locked out of their own paper.
-     *
-     * The fix above tightened marking to "currently allocated", which would be a
-     * serious over-correction if it also caught the lecturer who wrote the exam:
-     * a course ends, the allocation ends with it, and the lecturer could no longer
-     * mark the work their students submitted in week six.
-     *
-     * It does not, because `canAccessExamAttempts()` offers `ownsExam()` FIRST and
-     * only asks `canTeachExam()` as the alternative route in. Asserted here by
-     * actually ending the allocation and then marking.
+     * Authorship must not extend a withdrawn teaching appointment. Keep the
+     * student's submitted work, but require a valid appointment for new marks.
      */
-    public function test_the_AUTHOR_can_still_mark_after_their_ALLOCATION_ends(): void
+    public function test_the_AUTHOR_cannot_mark_after_their_ALLOCATION_ends(): void
     {
         $lecturer = $this->lecturer();
         $allocationId = $this->allocateLecturer($this->offering(), $lecturer);
         $student = $this->studentA();
 
-        $set = $this->publishedExamWithQuestions('Author retains marking');
+        $set = $this->publishedExamWithQuestions('Author loses operational access');
         $submission = $this->startAttempt($set['exam'], $student);
         $this->saveAnswer($submission, $set['essay'], ['answer_text' => 'An answer.']);
         $this->actingAs($student)
@@ -909,6 +901,7 @@ public function test_a_LECTURER_cannot_mark_or_see_a_submission_for_SOMEONE_ELSE
             ->assertRedirect();
 
         $answer = OnlineExamAnswer::query()->where('question_id', $set['essay'])->firstOrFail();
+        $originalMark = $answer->awarded_marks;
 
         // The appointment is withdrawn. Updated through the table rather than the
         // relation, because that is how `allocateLecturer()` wrote it and a stale
@@ -929,13 +922,11 @@ public function test_a_LECTURER_cannot_mark_or_see_a_submission_for_SOMEONE_ELSE
                 'awarded_marks' => 4,
                 'teacher_comment' => 'Marked after the allocation ended.',
             ])
-            ->assertRedirect();
+            ->assertForbidden();
 
-        $this->assertEquals(
-            4.0,
-            (float) $answer->fresh()->awarded_marks,
-            'the author of a paper must still be able to mark it'
-        );
+        $this->assertEquals($originalMark, $answer->fresh()->awarded_marks);
+        $this->assertDatabaseHas('online_exam_submissions', ['id' => $submission->id]);
+        $this->assertDatabaseHas('online_exams', ['id' => $set['exam']->id]);
     }
 
     /**
