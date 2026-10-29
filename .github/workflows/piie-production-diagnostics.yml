@@ -1,0 +1,98 @@
+name: PIIE Production Diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+# Share the deployment lock, never inspect across an in-progress activation.
+concurrency:
+  group: piie-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Diagnostic main and CI gate
+    if: ${{ github.ref == 'refs/heads/main' && vars.PIIE_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Require exact main commit CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ]
+          MAIN=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)
+          [ "$GITHUB_SHA" = "$MAIN" ]
+          RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/piie-ci.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+          [ -n "$RUN" ] || { echo 'Exact main CI is required'; exit 1; }
+          echo "Verified main $GITHUB_SHA, CI run $RUN"
+
+  diagnose:
+    name: Protected read-only production diagnostics
+    needs: gate
+    if: ${{ github.ref == 'refs/heads/main' && vars.PIIE_DEPLOY_ENABLED == 'true' }}
+    environment: production
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Prepare ephemeral pinned SSH client
+        env:
+          PIIE_SSH_KEY: ${{ secrets.PIIE_SSH_KEY }}
+          PIIE_SSH_KNOWN_HOSTS: ${{ secrets.PIIE_SSH_KNOWN_HOSTS }}
+          PIIE_SSH_HOST: ${{ secrets.PIIE_SSH_HOST }}
+          PIIE_SSH_PORT: ${{ secrets.PIIE_SSH_PORT }}
+          PIIE_SSH_USER: ${{ secrets.PIIE_SSH_USER }}
+        run: |
+          set -euo pipefail
+          umask 077
+          D="$RUNNER_TEMP/piie-diagnostics"
+          mkdir "$D"
+          [[ "$PIIE_SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$PIIE_SSH_PORT" =~ ^[0-9]{1,5}$ ]]
+          [[ "$PIIE_SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          printf '%s\n' "$PIIE_SSH_KEY" > "$D/key"
+          printf '%s\n' "$PIIE_SSH_KNOWN_HOSTS" > "$D/known_hosts"
+          [ "$(ssh-keygen -lf "$D/key" | awk '{print $2}')" = 'SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM' ]
+          ssh-keygen -lf "$D/known_hosts" | awk '{print $2}' | grep -Fx 'SHA256:fR4AOOMWFR17JIX9k8ed4O7+N6IaH30zEtefkbx/UEI' >/dev/null
+          cat > "$D/config" <<EOF
+          Host piie-prod
+            HostName $PIIE_SSH_HOST
+            Port $PIIE_SSH_PORT
+            User $PIIE_SSH_USER
+            IdentityFile $D/key
+            UserKnownHostsFile $D/known_hosts
+            StrictHostKeyChecking yes
+            IdentitiesOnly yes
+            BatchMode yes
+            PasswordAuthentication no
+            ClearAllForwardings yes
+            PermitLocalCommand no
+            ControlMaster no
+            ConnectTimeout 15
+          EOF
+      - name: Execute fixed read-only diagnostic script
+        run: |
+          set -euo pipefail
+          # No inputs, remote uploads, command parameters, or deployment calls.
+          ssh -F "$RUNNER_TEMP/piie-diagnostics/config" -T piie-prod 'bash --noprofile --norc -se' < deploy/diagnostics/production-readiness.sh | tee production-diagnostics.log
+      - name: Retain sanitized diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: production-diagnostics-${{ github.run_id }}
+          path: production-diagnostics.log
+          retention-days: 14
+      - name: Remove ephemeral SSH client material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/piie-diagnostics/key" "$RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config"
