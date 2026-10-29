@@ -6,6 +6,9 @@ use App\Models\CourseOffering;
 use App\Models\LiveClass;
 use App\Models\User;
 use App\Support\CourseOffering\LecturerCourseOfferingAccess;
+use App\Support\Google\GoogleMeetSetup;
+use App\Support\Google\GoogleOAuthCredentials;
+use App\Support\Permissions\PermissionService;
 use App\Support\TenantConfiguration;
 
 /**
@@ -185,7 +188,7 @@ class LiveClassSchedulingContext
     public function platformOptions(User $user): array
     {
         $enabled = $this->enabledPlatforms();
-        $configured = $this->platformConfigurationStatus();
+        $configured = $this->platformConfigurationStatus($user);
 
         $candidates = [
             'google_meet' => [
@@ -316,13 +319,24 @@ class LiveClassSchedulingContext
         return $enabled ?: ['jitsi', 'google_meet', 'zoom'];
     }
 
-    private function platformConfigurationStatus(): array
+    private function platformConfigurationStatus(User $user): array
     {
+        // Lecturers connect their own calendars after choosing Google Meet.
+        // Requiring the legacy shared refresh token hides both the provider and
+        // the connection control, even when Super Admin saved valid credentials.
+        $googleConfigured = (int) $user->role_id === PermissionService::TEACHER
+            && GoogleOAuthCredentials::isConfigured();
+        if (! $googleConfigured) {
+            $googleConfigured = GoogleMeetSetup::settings()
+                ? GoogleMeetSetup::ready((int) $user->school_id)
+                : (string) config('services.google_meet.client_id') !== ''
+                    && (string) config('services.google_meet.client_secret') !== ''
+                    && (string) config('services.google_meet.refresh_token') !== '';
+        }
+
         return [
             'jitsi' => true,
-            'google_meet' => (string) config('services.google_meet.client_id') !== ''
-                && (string) config('services.google_meet.client_secret') !== ''
-                && (string) config('services.google_meet.refresh_token') !== '',
+            'google_meet' => $googleConfigured,
             'zoom' => (string) config('services.zoom.account_id') !== ''
                 && (string) config('services.zoom.client_id') !== ''
                 && (string) config('services.zoom.client_secret') !== '',

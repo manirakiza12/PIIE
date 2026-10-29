@@ -46,6 +46,29 @@ class GoogleMeetPlatformSchedulingTest extends TestCase
         ]);
     }
 
+    public function test_lecturers_can_select_database_configured_google_meet_before_connecting_their_calendar(): void
+    {
+        config(['services.google_meet.client_id'=>'','services.google_meet.client_secret'=>'','services.google_meet.refresh_token'=>'']);
+        GoogleMeetSetting::find(1)->update(['platform_user_id'=>null]);
+        $lecturer = User::create(['name'=>'Lecturer','email'=>'lecturer@example.test','role_id'=>3,'school_id'=>1,'account_status'=>'active']);
+        $options = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class)->platformOptions($lecturer);
+        $this->assertArrayHasKey('google_meet', $options);
+        $this->assertTrue($options['google_meet']['auto_creates']);
+        Http::assertNothingSent();
+    }
+
+    public function test_scheduling_options_respect_disabled_setup_and_institution_calendar_scope(): void
+    {
+        $scheduling = app(\App\Support\LiveClasses\LiveClassSchedulingContext::class);
+        $this->assertArrayHasKey('google_meet', $scheduling->platformOptions($this->admin));
+        $this->admin->school_id = 2;
+        $this->assertArrayNotHasKey('google_meet', $scheduling->platformOptions($this->admin));
+        GoogleMeetSetting::find(1)->update(['enabled'=>false]);
+        config(['services.google_meet.client_id'=>'legacy','services.google_meet.client_secret'=>'legacy','services.google_meet.refresh_token'=>'legacy']);
+        $lecturer = User::create(['name'=>'Lecturer','email'=>'disabled@example.test','role_id'=>3,'school_id'=>1,'account_status'=>'active']);
+        $this->assertArrayNotHasKey('google_meet', $scheduling->platformOptions($lecturer));
+    }
+
     public function test_connected_platform_creates_a_google_meet_without_environment_credentials(): void
     {
         config(['services.google_meet.client_id'=>'','services.google_meet.client_secret'=>'','services.google_meet.refresh_token'=>'']);
