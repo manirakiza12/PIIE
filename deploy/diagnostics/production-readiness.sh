@@ -7,11 +7,12 @@ TARGET=ad5f0190e68d912a06923fc6ceba623883fb0732
 BASELINE=0b1924ca54ed89c72400d08a3e80476888b1e719
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
-# This collects evidence only; it never overrides the Docker health gate below.
+# Only the documented exec/seccomp incompatibility can use the existing separate
+# client health check. Unknown failures or failed database queries remain fatal.
 database_health_evidence() (
   summary=$(cat <<'HEALTH_PY'
 # HEALTH_SUMMARY_BEGIN
-import json, sys
+import datetime, json, re, sys, time
 try:
     data = json.load(sys.stdin)
     checks = []
@@ -30,20 +31,40 @@ try:
             category = "database_connection_failure"
         elif "permission denied" in text:
             category = "probe_permission_failure"
-        checks.append({"exit_code": int(entry.get("ExitCode", -1)), "category": category})
+        try:
+            stamp = re.sub(r"(\.\d{6})\d+", r"\1", str(entry.get("End", "")))
+            end = datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            if end.tzinfo is None:
+                raise ValueError("missing timezone")
+            age = int(time.time() - end.timestamp())
+        except (ValueError, TypeError):
+            age = -1
+        signature = "setssb requires libseccomp" in text and ("seccomp filter" in text or "oci runtime exec failed" in text)
+        checks.append({"exit_code": int(entry.get("ExitCode", -1)), "category": category,
+            "age_seconds": age, "documented_exec_failure": signature})
     command = " ".join(data.get("test") or []).lower()
     probe = "mariadb_builtin" if "healthcheck.sh" in command else "admin_ping" if "mysqladmin" in command or "mariadb-admin" in command else "custom"
+    compatible = (data.get("health", {}).get("Status") == "unhealthy" and probe == "mariadb_builtin"
+        and not data.get("oom_killed") and not data.get("restarting") and data.get("restart_count") == 0
+        and len(checks) == 3 and all(c["exit_code"] == -1 and c["documented_exec_failure"]
+            and c["category"] == "runtime_seccomp_failure" and 0 <= c["age_seconds"] <= 300 for c in checks))
     print(json.dumps({"database_health_evidence": True, "probe_type": probe,
         "oom_killed": bool(data.get("oom_killed")), "restart_count": int(data.get("restart_count", 0)),
-        "recent_checks": checks}))
+        "recent_checks": checks, "compatible_client_required": compatible}))
 except Exception:
     print("FAIL: database health metadata could not be summarized", file=sys.stderr)
     sys.exit(1)
 # HEALTH_SUMMARY_END
 HEALTH_PY
 )
-  docker inspect --format '{"health":{{json .State.Health}},"test":{{json .Config.Healthcheck.Test}},"oom_killed":{{json .State.OOMKilled}},"restart_count":{{json .RestartCount}}}' piie-db 2>/dev/null |
-    python3 -c "$summary" || echo 'Database health metadata summary unavailable'
+  compatible=0
+  if evidence=$(docker inspect --format '{"health":{{json .State.Health}},"test":{{json .Config.Healthcheck.Test}},"oom_killed":{{json .State.OOMKilled}},"restarting":{{json .State.Restarting}},"restart_count":{{json .RestartCount}}}' piie-db 2>/dev/null |
+    python3 -c "$summary"); then
+    printf '%s\n' "$evidence"
+    if printf '%s\n' "$evidence" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("compatible_client_required") is True else 1)'; then compatible=1; fi
+  else
+    echo 'Database health metadata summary unavailable'
+  fi
   # Existing deployment preflight uses this same independent client/network.
   # Its only SQL is SELECT 1; credentials remain in a private remote temp file.
   db_env=$(mktemp)
@@ -52,14 +73,17 @@ HEALTH_PY
   if ! docker inspect piie-db --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null |
     grep -E '^MARIADB_ROOT_PASSWORD=' > "$db_env"; then
     echo 'Independent database read-only probe: unavailable (credential metadata missing)'
-    exit 0
+    exit 1
   fi
   if docker run --rm --pull=never --read-only --cap-drop=ALL --security-opt no-new-privileges \
     --network piie-stack_private --env-file "$db_env" --entrypoint sh mariadb:11.4 -ec \
     'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb --connect-timeout=5 --host=piie-db --user=root --batch --skip-column-names -e "SELECT 1" | grep -qx 1' >/dev/null 2>&1; then
     echo 'Independent database read-only SELECT 1: PASS'
+    [ "$compatible" = 1 ] || exit 1
+    echo 'Database service health verified by existing compatible client; documented Docker exec/seccomp probe failure retained in evidence'
   else
     echo 'Independent database read-only SELECT 1: FAIL (details withheld)'
+    exit 1
   fi
 )
 [ "$(id -u)" = 0 ] || fail 'Verified VPS administrator required'
@@ -74,7 +98,10 @@ for container in piie-app piie-db; do
   [ "$(docker inspect -f '{{.State.Running}}' "$container")" = true ] || fail "$container is not running"
   health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}' "$container")
   if [ "$health" != healthy ] && [ "$health" != not_configured ]; then
-    if [ "$container" = piie-db ]; then database_health_evidence || echo 'Database failure evidence collection incomplete'; fi
+    if [ "$container" = piie-db ] && database_health_evidence; then
+      echo 'Container piie-db: running; Docker health=unhealthy (documented probe execution failure); independent service health=PASS'
+      continue
+    fi
     fail "$container health is $health"
   fi
   echo "Container $container: running; health=$health"
