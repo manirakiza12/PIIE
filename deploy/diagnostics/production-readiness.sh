@@ -7,6 +7,8 @@ BASE=/home/piie/deployments/piie
 # Exact release identities; neither caller input nor arbitrary main is admitted.
 TARGET=452e21ac5d59ea582357914f2045d558816a1776
 BASELINE=67be85e70349287f58ffeb4bfaafabccb9e953ff
+# Verified learning release: protected production deployment 40926044964.
+LEARNING_RELEASE=7838f3c534d3a08fc38d3ef838bba925e2ddca43
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
@@ -93,7 +95,7 @@ case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
 echo "Active release SHA: $ACTIVE"
-[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved Live Classes transition'
+[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || [ "$ACTIVE" = "$LEARNING_RELEASE" ] || fail 'Live release is outside the approved Live Classes transition'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'
 for container in piie-app piie-db; do
@@ -215,7 +217,7 @@ try {
     }
     $kernel = file_get_contents($root.'/app/Console/Kernel.php');
     $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
-    if (($sha === '452e21ac5d59ea582357914f2045d558816a1776') !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
+    if (in_array($sha, ['452e21ac5d59ea582357914f2045d558816a1776', '7838f3c534d3a08fc38d3ef838bba925e2ddca43'], true) !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
     $commands = ['live-classes:send-reminders','live-classes:refresh-google-links'];
     if ($liveClassRetryInstalled) $commands[] = 'live-classes:retry-emails';
     foreach ($commands as $command) {
