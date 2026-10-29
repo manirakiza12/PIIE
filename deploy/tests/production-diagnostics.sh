@@ -33,6 +33,10 @@ set -euo pipefail
 printf '%s\n' "$*" >> "$DOCKER_LOG"
 case "$1" in
   inspect)
+    if [ "${2:-}" = piie-db ] && [ "${3:-}" = --format ]; then
+      echo 'MARIADB_ROOT_PASSWORD=synthetic-fixture'
+      exit 0
+    fi
     case "$3" in
       *Config.Healthcheck.Test*) python3 - <<'PY'
 import datetime, json, os
@@ -41,7 +45,6 @@ entry = {"ExitCode": -1, "Output": text, "End": datetime.datetime.now(datetime.t
 print(json.dumps({"health":{"Status":"unhealthy","Log":[entry,entry,entry]},"test":["CMD","healthcheck.sh"],"oom_killed":False,"restarting":False,"restart_count":0}))
 PY
         ;;
-      *Config.Env*) echo 'MARIADB_ROOT_PASSWORD=synthetic-fixture';;
       *State.Running*) [ "${BAD_CONTAINER:-0}" = 0 ] && echo true || echo false;;
       *State.Health*) if { [ "${BAD_DB_HEALTH:-0}" = 1 ] || [ "${DB_PROBE_RUNTIME:-0}" = 1 ]; } && [ "$4" = piie-db ]; then echo unhealthy; else echo healthy; fi;;
       *Mounts*) echo "$FIXTURE_BASE:/srv/piie";;
