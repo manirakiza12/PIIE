@@ -231,6 +231,10 @@ try {
     $grants = $pdo->query("SELECT COUNT(*) FROM google_account_connections WHERE status='ok' AND refresh_token_ciphertext IS NOT NULL")->fetchColumn();
     $zones = $pdo->query('SELECT DISTINCT timezone FROM schools WHERE timezone IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN);
     echo json_encode(['live_classes_read_only'=>true,'routes_and_scheduled_commands'=>'PASS','email_retry_migration_installed'=>$liveClassRetryInstalled,'smtp_fields_present'=>(int)$smtp===4,'email_outbox'=>$outbox,'google_setup'=>$google ?: null,'google_grants_present'=>(int)$grants>0,'institution_timezones'=>$zones,'queue_connection'=>$env['QUEUE_CONNECTION'] ?? 'sync','jitsi_app_id_present'=>!empty($env['JITSI_APP_ID']),'provider_connectivity_tested'=>false,'real_student_delivery_tested'=>false]).PHP_EOL;
+    // Communication access incident: metadata only, never message content or credentials.
+    $communicationAccess = $pdo->query("SELECT role_id, account_status, staff_status, force_password_change, COUNT(*) AS accounts FROM users WHERE role_id=3 GROUP BY role_id,account_status,staff_status,force_password_change")->fetchAll(PDO::FETCH_ASSOC);
+    $reportedThread = $pdo->query('SELECT t.id AS thread_id, u.id AS user_id, u.role_id, u.account_status, u.staff_status, u.force_password_change, (u.school_id=t.school_id) AS same_school FROM message_thrades t JOIN users u ON u.id=t.sender_id OR u.id=t.reciver_id WHERE t.id=6')->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['communication_access_read_only'=>true,'lecturer_account_states'=>$communicationAccess,'reported_thread_participant_states'=>$reportedThread]).PHP_EOL;
     // Fixed reference-course metadata, inside the existing read-only transaction.
     $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
     if ($course) {
