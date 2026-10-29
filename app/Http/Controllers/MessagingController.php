@@ -57,8 +57,8 @@ final class MessagingController extends Controller
         }
         $contacts = User::where('school_id', $actor->school_id)->where('id', '!=', $actor->id)
             ->when(!$this->messages->staff($actor), fn ($q) => $q->whereNotIn('role_id', [1, 6, 7, 8, 9, 11, 12]))
-            ->where('name', 'like', '%'.$search.'%')->orderBy('name')->limit(100)->get()
-            ->filter(fn ($user) => $this->messages->pairAllowed($actor, $user) && !$this->messages->blocked($actor, $user))->take(30);
+            ->where('name', 'like', '%'.$search.'%')->orderBy('name')->cursor()
+            ->filter(fn ($user) => $this->messages->pairAllowed($actor, $user) && !$this->messages->blocked($actor, $user))->take(30)->collect();
         return view('messaging.index', compact('conversations', 'contacts', 'search', 'archive'));
     }
 

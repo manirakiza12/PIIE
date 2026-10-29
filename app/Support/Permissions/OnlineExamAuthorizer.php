@@ -62,6 +62,11 @@ class OnlineExamAuthorizer
 
     public function canManageExam(User $user, OnlineExam $exam): bool
     {
+        // Authorship preserves history, but never extends a teaching appointment.
+        if ((int) $user->role_id === 3 && $exam->course_offering_id !== null
+            && !$this->teachesCourseOffering($user, $exam)) {
+            return false;
+        }
         if (!$this->sameSchool($user, (int) $exam->school_id)) {
             return false;
         }
@@ -124,9 +129,8 @@ class OnlineExamAuthorizer
      *
      *   - LEGACY exams (`course_offering_id` NULL) reach none of this and keep the
      *     original rules below, character for character.
-     *   - The exam's AUTHOR is unaffected: `canAccessExamAttempts()` answers
-     *     `ownsExam()` first, so a lecturer who created the paper can still mark it
-     *     after being deallocated.
+     *   - Course Offering authors also need a current appointment for teaching
+     *     operations. Legacy exam ownership rules remain unchanged.
      *   - An ADMINISTRATOR never enters this method - it is role 3 only.
      *   - Fail CLOSED: no allocation table, or an Allocation that cannot be loaded,
      *     answers `false`.
@@ -221,6 +225,10 @@ class OnlineExamAuthorizer
             return false;
         }
 
+        if ((int) $user->role_id === 3 && $exam->course_offering_id !== null) {
+            return $this->teachesCourseOffering($user, $exam);
+        }
+
         if ($this->can($user, 'edit_all_online_exams')) {
             return true;
         }
@@ -274,6 +282,12 @@ class OnlineExamAuthorizer
 
         $submission = $answer->submission;
         if (!$submission) {
+            return false;
+        }
+
+        $exam = $submission->exam;
+        if ((int) $user->role_id === 3 && $exam && $exam->course_offering_id !== null
+            && !$this->teachesCourseOffering($user, $exam)) {
             return false;
         }
 
