@@ -51,8 +51,10 @@ class LiveClassLifecycle
         $now ??= now();
         $class->loadMissing(['teacher', 'subject', 'courseOffering']);
 
-        $startsAt = $class->scheduled_at?->copy();
-        $endsAt = $class->ends_at?->copy();
+        $tenant = $class->school_id ? \App\Models\School::find($class->school_id) : null;
+        $zone = app(\App\Support\TenantTimezone::class)->effective($viewer, $tenant);
+        $startsAt = $class->scheduled_at?->copy()->setTimezone($zone);
+        $endsAt = $class->ends_at?->copy()->setTimezone($zone);
         $opensAt = $startsAt?->copy()->subMinutes(self::JOIN_LEAD_MINUTES);
         $closesAt = $endsAt?->copy()->addMinutes(self::JOIN_LEAD_MINUTES);
 
@@ -224,7 +226,9 @@ class LiveClassLifecycle
             ),
             // Never say it finished, and never blame the student. The truth is
             // that nobody closed it out, and that is the lecturer's to resolve.
-            'not_concluded' => get_phrase('The scheduled time for this Live Class has passed. Your lecturer has not yet confirmed whether it took place, and joining is closed.'),
+            'not_concluded' => $lifecycle['canJoin']
+                ? str_replace(':time', $time($lifecycle['joinClosesAt']), get_phrase('The scheduled end has passed. Joining remains available until :time unless your lecturer concludes the class.'))
+                : get_phrase('The scheduled time for this Live Class has passed. Your lecturer has not yet confirmed whether it took place, and joining is closed.'),
             default => get_phrase('This Live Class is scheduled.'),
         };
     }

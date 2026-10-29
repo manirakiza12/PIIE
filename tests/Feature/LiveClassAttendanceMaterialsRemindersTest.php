@@ -13,6 +13,7 @@ use App\Support\LiveClasses\LiveClassNotifier;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 use Tests\Feature\Support\LiveClassTestHelper;
 use Tests\TestCase;
 
@@ -396,6 +397,8 @@ class LiveClassAttendanceMaterialsRemindersTest extends TestCase
         $this->enroll($student->id, $schoolId, ['class_id' => $classId]);
 
         $liveClass = $this->makeLiveClass($schoolId, ['class_id' => $classId]);
+        $liveClass->meeting_url = 'https://meet.jit.si/private-legacy-reminder-room';
+        $liveClass->save();
 
         $sent = LiveClassNotifier::sendReminder($liveClass, LiveClassNotification::TYPE_REMINDER_1H);
 
@@ -404,6 +407,9 @@ class LiveClassAttendanceMaterialsRemindersTest extends TestCase
             return $mail->hasTo('student@example.test');
         });
         $this->assertDatabaseHas('noticeboard', ['school_id' => $schoolId]);
+        $notice = DB::table('noticeboard')->where('school_id', $schoolId)->value('notice');
+        $this->assertStringNotContainsString('private-legacy-reminder-room', $notice);
+        $this->assertStringContainsString(route('student.live_classes.show', $liveClass->id), $notice);
     }
 
     public function test_send_reminder_does_not_email_when_smtp_is_not_configured(): void

@@ -72,7 +72,7 @@
                 <div class="col-md-6"><strong>{{ get_phrase('Lecturer') }}:</strong> {{ optional($liveClass->teacher)->name ?: '—' }}</div>
                 <div class="col-md-6">
                     <strong>{{ get_phrase('Date') }}:</strong>
-                    {{ optional($liveClass->start_date)->format('d M Y') ?: '—' }}
+                    {{ $display->localStart()?->format('d M Y') ?: '—' }}
                 </div>
                 <div class="col-md-6">
                     <strong>{{ get_phrase('Time') }}:</strong>
