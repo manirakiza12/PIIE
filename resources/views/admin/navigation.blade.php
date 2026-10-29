@@ -398,7 +398,7 @@
             <!-- ACADEMIC                                      -->
             <!-- Direct entries use the institution's academic vocabulary. -->
             <!-- ============================================ -->
-            @if($showAcademicStructureAny || $showTeachingAny || $showAssessmentAny || $navCan('admin.department_list') || $navCan('admin.settings.academic') || ($navCan('admin.reports.index') && $menuAllows('admin.reports')))
+            @if($navCan('admin.curriculum_assignment.index') || $showAcademicStructureAny || $showTeachingAny || $showAssessmentAny || $navCan('admin.department_list') || $navCan('admin.settings.academic') || ($navCan('admin.reports.index') && $menuAllows('admin.reports')))
             <li class="nav-section-header">ACADEMIC</li>
             @endif
 

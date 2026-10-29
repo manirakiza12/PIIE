@@ -42,7 +42,7 @@
     $setupRoutes = ['admin.department.schools_faculties', 'admin.department.departments', 'admin.programmes.index', 'admin.academic_structure.index', 'admin.settings.session_manager', 'admin.settings.academic', 'admin.curricula.index', 'admin.programme_years.index', 'admin.subject_list', 'admin.curriculum_units.index'];
     $groups = [
         'Academic setup' => array_values(array_filter($academicLinks, fn ($link) => $link[0] && in_array($link[2], $setupRoutes, true))),
-        'Teaching & learning' => array_values(array_filter($academicLinks, fn ($link) => $link[0] && in_array($link[2], ['admin.course_offerings.index','admin.lecturer_assignments.index','admin.teacher.permission','admin.course_registrations.index','admin.academic.placements.index','admin.routine','admin.live_classes.index','admin.daily_attendance','admin.assignments.index','admin.class_list']) && !in_array($link[2], $setupRoutes, true))),
+        'Teaching & learning' => array_values(array_filter($academicLinks, fn ($link) => $link[0] && in_array($link[2], ['admin.course_offerings.index','admin.lecturer_assignments.index','admin.teacher.permission','admin.course_registrations.index','admin.curriculum_assignment.index','admin.academic.placements.index','admin.routine','admin.live_classes.index','admin.daily_attendance','admin.assignments.index','admin.class_list']) && !in_array($link[2], $setupRoutes, true))),
         'Exams & assessments' => array_values(array_filter($academicLinks, fn ($link) => $link[0] && in_array($link[2], ['admin.question_bank.index','admin.online_exams.index','admin.gradebook']))),
         'Academic reports' => array_values(array_filter($academicLinks, fn ($link) => $link[0] && $link[2] === 'admin.reports.index')),
     ];

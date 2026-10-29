@@ -332,4 +332,13 @@ class CurriculumAssignmentProposalTest extends TestCase
         $this->assertSame($before, DB::table('curriculum_assignment_proposals')->get()->toJson());
         $this->assertDatabaseCount('student_curriculum_assignments', 0);
     }
+
+    public function test_view_only_delegate_can_discover_the_screen_without_mutation_controls(): void
+    {
+        $viewer = User::factory()->create(['school_id' => $this->school, 'role_id' => 20, 'account_status' => 'active']);
+        DB::table('user_permissions')->insert(['school_id' => $this->school, 'user_id' => $viewer->id, 'permission' => 'academic.curriculum_assignment.view']);
+        $this->actingAs($viewer)->get(route('admin.curriculum_assignment.index'))->assertOk()
+            ->assertSee('href="'.route('admin.curriculum_assignment.index').'"', false)->assertDontSee('Save draft mapping');
+        $this->assertDatabaseCount('curriculum_applicability_mappings', 0);
+    }
 }
