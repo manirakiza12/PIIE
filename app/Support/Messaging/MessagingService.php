@@ -53,7 +53,8 @@ final class MessagingService
         sort($roles);
         if ($roles !== [3, 7]) return true;
         $school = School::find($actor->school_id);
-        if (!$school || $school->academicStructure() === 'class_based') return true;
+        if (!$school) return false;
+        if ($school->academicStructure() === 'class_based') return true;
 
         $lecturer = (int) $actor->role_id === 3 ? $actor : $other;
         $student = (int) $actor->role_id === 7 ? $actor : $other;

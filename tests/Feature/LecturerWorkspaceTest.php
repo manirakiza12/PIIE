@@ -92,6 +92,11 @@ class LecturerWorkspaceTest extends TestCase
             $thread = \App\Models\MessageThrade::firstOrFail();
             $this->postJson(route('messaging.send', $thread->id), ['message' => 'Course question', 'client_message_id' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
             $this->assertDatabaseHas('user_notifications', ['user_id' => $this->lecturerA->id, 'type' => 'portal_message']);
+            $this->actingAs($this->lecturerA)->postJson(route('messaging.send', $thread->id),
+                ['message' => 'Lecturer response', 'client_message_id' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
+            $this->actingAs($this->lecturerB)->getJson(route('messaging.poll', $thread->id))->assertNotFound();
+            $this->postJson(route('messaging.start'), ['recipient_id' => $student->id])->assertForbidden();
+            $this->actingAs($student);
             foreach ([['starts_on' => '2027-01-01'], ['ends_on' => '2026-09-01'], ['status' => 'cancelled']] as $change) {
                 DB::table('course_offering_lecturer_allocations')->where('course_offering_id', $course->id)->update(array_merge(['starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'active'], $change));
                 $this->assertFalse($messages->pairAllowed($student, $this->lecturerA));
