@@ -6,6 +6,62 @@ BASE=/home/piie/deployments/piie
 TARGET=ad5f0190e68d912a06923fc6ceba623883fb0732
 BASELINE=0b1924ca54ed89c72400d08a3e80476888b1e719
 fail() { echo "FAIL: $*" >&2; exit 1; }
+# Explain a failed database probe without printing Docker command/env/log values.
+# This collects evidence only; it never overrides the Docker health gate below.
+database_health_evidence() (
+  summary=$(cat <<'HEALTH_PY'
+# HEALTH_SUMMARY_BEGIN
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    checks = []
+    for entry in (data.get("health", {}).get("Log") or [])[-3:]:
+        text = str(entry.get("Output", "")).lower()
+        category = "unclassified"
+        if "seccomp" in text or "setssb" in text:
+            category = "runtime_seccomp_failure"
+        elif "setns" in text or "oci runtime exec failed" in text:
+            category = "runtime_exec_failure"
+        elif "executable file not found" in text or "command not found" in text:
+            category = "probe_executable_missing"
+        elif "access denied" in text or "authentication" in text:
+            category = "database_authentication_failure"
+        elif "connection refused" in text or "can\u0027t connect" in text or "timed out" in text:
+            category = "database_connection_failure"
+        elif "permission denied" in text:
+            category = "probe_permission_failure"
+        checks.append({"exit_code": int(entry.get("ExitCode", -1)), "category": category})
+    command = " ".join(data.get("test") or []).lower()
+    probe = "mariadb_builtin" if "healthcheck.sh" in command else "admin_ping" if "mysqladmin" in command or "mariadb-admin" in command else "custom"
+    print(json.dumps({"database_health_evidence": True, "probe_type": probe,
+        "oom_killed": bool(data.get("oom_killed")), "restart_count": int(data.get("restart_count", 0)),
+        "recent_checks": checks}))
+except Exception:
+    print("FAIL: database health metadata could not be summarized", file=sys.stderr)
+    sys.exit(1)
+# HEALTH_SUMMARY_END
+HEALTH_PY
+)
+  docker inspect --format '{"health":{{json .State.Health}},"test":{{json .Config.Healthcheck.Test}},"oom_killed":{{json .State.OOMKilled}},"restart_count":{{json .RestartCount}}}' piie-db 2>/dev/null |
+    python3 -c "$summary" || echo 'Database health metadata summary unavailable'
+  # Existing deployment preflight uses this same independent client/network.
+  # Its only SQL is SELECT 1; credentials remain in a private remote temp file.
+  db_env=$(mktemp)
+  chmod 600 "$db_env"
+  trap 'rm -f -- "$db_env"' EXIT
+  if ! docker inspect piie-db --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null |
+    grep -E '^MARIADB_ROOT_PASSWORD=' > "$db_env"; then
+    echo 'Independent database read-only probe: unavailable (credential metadata missing)'
+    exit 0
+  fi
+  if docker run --rm --pull=never --read-only --cap-drop=ALL --security-opt no-new-privileges \
+    --network piie-stack_private --env-file "$db_env" --entrypoint sh mariadb:11.4 -ec \
+    'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb --connect-timeout=5 --host=piie-db --user=root --batch --skip-column-names -e "SELECT 1" | grep -qx 1' >/dev/null 2>&1; then
+    echo 'Independent database read-only SELECT 1: PASS'
+  else
+    echo 'Independent database read-only SELECT 1: FAIL (details withheld)'
+  fi
+)
 [ "$(id -u)" = 0 ] || fail 'Verified VPS administrator required'
 case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current link';; esac
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
@@ -17,7 +73,10 @@ echo "Approved target SHA: $TARGET"
 for container in piie-app piie-db; do
   [ "$(docker inspect -f '{{.State.Running}}' "$container")" = true ] || fail "$container is not running"
   health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}' "$container")
-  [ "$health" = healthy ] || [ "$health" = not_configured ] || fail "$container health is $health"
+  if [ "$health" != healthy ] && [ "$health" != not_configured ]; then
+    if [ "$container" = piie-db ]; then database_health_evidence || echo 'Database failure evidence collection incomplete'; fi
+    fail "$container health is $health"
+  fi
   echo "Container $container: running; health=$health"
 done
 docker inspect -f '{{range .Mounts}}{{.Source}}:{{.Destination}}{{println}}{{end}}' piie-app | grep -Fx "$BASE:/srv/piie" >/dev/null || fail 'Application mount mismatch'

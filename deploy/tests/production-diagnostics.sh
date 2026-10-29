@@ -35,7 +35,7 @@ case "$1" in
   inspect)
     case "$3" in
       *State.Running*) [ "${BAD_CONTAINER:-0}" = 0 ] && echo true || echo false;;
-      *State.Health*) echo healthy;;
+      *State.Health*) if [ "${BAD_DB_HEALTH:-0}" = 1 ] && [ "$4" = piie-db ]; then echo unhealthy; else echo healthy; fi;;
       *Mounts*) echo "$FIXTURE_BASE:/srv/piie";;
       *Image*) printf 'sha256:%064d\n' 1;;
       *) exit 91;;
@@ -82,6 +82,8 @@ reject() {
 }
 reject 'caller arguments' bash "$S/inspect.sh" arbitrary-command
 reject 'unhealthy runtime' env BAD_CONTAINER=1 bash "$S/inspect.sh"
+reject 'unhealthy database despite evidence collection' env BAD_DB_HEALTH=1 bash "$S/inspect.sh"
+grep -q 'FAIL: piie-db health is unhealthy' "$S/rejected.log"
 reject 'insufficient disk' env FREE_BYTES=1 bash "$S/inspect.sh"
 reject 'inactive scheduler' env BAD_CRON=1 bash "$S/inspect.sh"
 touch -d '10 minutes ago' "$BASE/shared/storage/logs/scheduler.log"
