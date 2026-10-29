@@ -60,7 +60,8 @@ t "InstallController no longer reads the old path (code, not comment)" \
 # ── 2. Apache protection ────────────────────────────────────────────────────
 echo "Apache web-root protection"
 for ext in $SECRET_EXTS; do
-  t ".htaccess denies *.$ext" "deny_exts $HT | grep -qx '$ext'"
+  # Consume the whole parser output: grep -q can SIGPIPE PHP under pipefail.
+  t ".htaccess denies *.$ext" "deny_exts $HT | grep -x '$ext' >/dev/null"
 done
 t ".htaccess deny-list is anchored at the end" \
   "grep -qE 'FilesMatch .*\\\.\(.*\)\\\$|RewriteRule .*\\\.\(.*\)\\\$ *- \[F,L\]' $HT"
@@ -77,7 +78,7 @@ t ".htaccess still allows the asset extensions" "grep -q 'woff2' $HT"
 echo "Nginx web-root protection"
 t "nginx config exists"                "[ -f $NG ]"
 for ext in $SECRET_EXTS; do
-  t "nginx denies *.$ext"              "deny_exts $NG | grep -qx '$ext'"
+  t "nginx denies *.$ext"              "deny_exts $NG | grep -x '$ext' >/dev/null"
 done
 t "nginx dotfile rule returns 403"      "grep -qF '(^|/)\\.' $NG"
 t "nginx denies private key names"     "grep -q 'id_rsa' $NG"
