@@ -9,7 +9,7 @@ SCRIPT="$ROOT/deploy/diagnostics/production-readiness.sh"
 bash -n "$SCRIPT"
 sed -n '/^# HEALTH_SUMMARY_BEGIN$/,/^# HEALTH_SUMMARY_END$/p' "$SCRIPT" | sed '1d;$d' > "$S/summary.py"
 python3 - "$S/summary.py" <<'PY'
-import json, subprocess, sys
+import copy, datetime, json, subprocess, sys
 script = sys.argv[1]
 cases = [
     ("OCI runtime exec failed: SetSSB requires libseccomp API level", "runtime_seccomp_failure"),
@@ -26,11 +26,25 @@ for message, expected in cases:
         "test": ["CMD-SHELL", "healthcheck.sh --connect " + sensitive], "oom_killed": False, "restart_count": 2}
     result = subprocess.run([sys.executable, script], input=json.dumps(data), text=True, capture_output=True, check=True)
     output = json.loads(result.stdout)
-    assert output["recent_checks"][0] == {"exit_code": 128, "category": expected}
+    assert output["recent_checks"][0]["exit_code"] == 128
+    assert output["recent_checks"][0]["category"] == expected
+    assert output["compatible_client_required"] is False
     assert output["probe_type"] == "mariadb_builtin"
     assert output["restart_count"] == 2
     for value in sensitive.split():
         assert value not in result.stdout + result.stderr
+now = datetime.datetime.now(datetime.timezone.utc)
+entry = {"ExitCode": -1, "Output": "OCI runtime exec failed: error adding SSB flag to seccomp filter: SetSSB requires libseccomp", "End": now.isoformat()}
+base = {"health": {"Status": "unhealthy", "Log": [entry, entry, entry]}, "test": ["CMD", "healthcheck.sh"], "oom_killed": False, "restarting": False, "restart_count": 0}
+def eligible(data):
+    result = subprocess.run([sys.executable, script], input=json.dumps(data), text=True, capture_output=True, check=True)
+    return json.loads(result.stdout)["compatible_client_required"]
+assert eligible(base)
+for field, value in [("oom_killed", True), ("restarting", True), ("restart_count", 1), ("test", ["CMD", "custom"] )]:
+    data = copy.deepcopy(base); data[field] = value; assert not eligible(data)
+for field, value in [("End", (now - datetime.timedelta(minutes=10)).isoformat()), ("End", ""), ("ExitCode", 1), ("Output", "Access denied"), ("Output", "generic seccomp problem")]:
+    data = copy.deepcopy(base); data["health"]["Log"][0][field] = value; assert not eligible(data)
+data = copy.deepcopy(base); data["health"]["Log"] = [entry]; assert not eligible(data)
 bad = subprocess.run([sys.executable, script], input="bad secret fixture.invalid", text=True, capture_output=True)
 assert bad.returncode != 0
 assert "fixture.invalid" not in bad.stdout + bad.stderr
@@ -43,7 +57,14 @@ cat > "$S/bin/docker" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
-  *'Config.Healthcheck.Test'*) printf '%s\n' '{"health":{"Log":[{"ExitCode":128,"Output":"SetSSB seccomp fixture secret"}]},"test":["CMD","healthcheck.sh"],"oom_killed":false,"restart_count":0}';;
+  *'Config.Healthcheck.Test'*) python3 - <<'PY'
+import datetime, json, os
+text = "OCI runtime exec failed: error adding SSB flag to seccomp filter: SetSSB requires libseccomp fixture secret"
+if os.environ.get("EVIDENCE_MODE") == "unknown": text = "unclassified fixture secret"
+entry = {"ExitCode": -1, "Output": text, "End": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+print(json.dumps({"health":{"Status":"unhealthy","Log":[entry,entry,entry]},"test":["CMD","healthcheck.sh"],"oom_killed":False,"restarting":False,"restart_count":0}))
+PY
+    ;;
   *'Config.Env'*) printf '%s\n' 'MARIADB_ROOT_PASSWORD=SECRET_FIXTURE';;
   run*)
     [[ " $* " = *' --read-only '* && " $* " = *' --pull=never '* && " $* " = *' --cap-drop=ALL '* && " $* " = *'SELECT 1'* ]] || exit 90
@@ -59,7 +80,9 @@ database_health_evidence > "$S/pass.log" 2>&1
 grep -q 'Independent database read-only SELECT 1: PASS' "$S/pass.log"
 ! grep -Eq 'SECRET_FIXTURE|fixture secret' "$S/pass.log"
 [ -z "$(find "$S/tmp" -type f -print -quit)" ]
-CLIENT_STATUS=1 database_health_evidence > "$S/fail.log" 2>&1
+if CLIENT_STATUS=1 database_health_evidence > "$S/fail.log" 2>&1; then echo 'FAIL: failed client accepted'; exit 1; fi
 grep -q 'Independent database read-only SELECT 1: FAIL' "$S/fail.log"
 [ -z "$(find "$S/tmp" -type f -print -quit)" ]
-echo 'PASS: read-only client evidence reports success/failure and cleans private temp data'
+if EVIDENCE_MODE=unknown database_health_evidence > "$S/unknown.log" 2>&1; then echo 'FAIL: unknown health failure accepted'; exit 1; fi
+grep -q 'Independent database read-only SELECT 1: PASS' "$S/unknown.log"
+echo 'PASS: only fresh documented exec failure plus a successful read-only client qualifies; all failures clean private temp data'

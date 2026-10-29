@@ -33,9 +33,20 @@ set -euo pipefail
 printf '%s\n' "$*" >> "$DOCKER_LOG"
 case "$1" in
   inspect)
+    if [ "${2:-}" = piie-db ] && [ "${3:-}" = --format ]; then
+      echo 'MARIADB_ROOT_PASSWORD=synthetic-fixture'
+      exit 0
+    fi
     case "$3" in
+      *Config.Healthcheck.Test*) python3 - <<'PY'
+import datetime, json, os
+text = "OCI runtime exec failed: error adding SSB flag to seccomp filter: SetSSB requires libseccomp" if os.environ.get("DB_PROBE_RUNTIME") == "1" else "unknown probe error"
+entry = {"ExitCode": -1, "Output": text, "End": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+print(json.dumps({"health":{"Status":"unhealthy","Log":[entry,entry,entry]},"test":["CMD","healthcheck.sh"],"oom_killed":False,"restarting":False,"restart_count":0}))
+PY
+        ;;
       *State.Running*) [ "${BAD_CONTAINER:-0}" = 0 ] && echo true || echo false;;
-      *State.Health*) if [ "${BAD_DB_HEALTH:-0}" = 1 ] && [ "$4" = piie-db ]; then echo unhealthy; else echo healthy; fi;;
+      *State.Health*) if { [ "${BAD_DB_HEALTH:-0}" = 1 ] || [ "${DB_PROBE_RUNTIME:-0}" = 1 ]; } && [ "$4" = piie-db ]; then echo unhealthy; else echo healthy; fi;;
       *Mounts*) echo "$FIXTURE_BASE:/srv/piie";;
       *Image*) printf 'sha256:%064d\n' 1;;
       *) exit 91;;
@@ -48,6 +59,7 @@ case "$1" in
       cat >/dev/null
       echo '{"database_read_only":true,"current_pending_migrations":[],"target_pending_migrations":["2026_10_29_090000_create_curriculum_assignment_proposals"]}'
     else
+      if [[ " $* " = *' --network piie-stack_private '* && " $* " = *'SELECT 1'* ]]; then exit "${DB_CLIENT_STATUS:-0}"; fi
       [[ " $* " = *' --network none '* ]] || exit 94
     fi;;
   *) exit 95;;
@@ -84,6 +96,10 @@ reject 'caller arguments' bash "$S/inspect.sh" arbitrary-command
 reject 'unhealthy runtime' env BAD_CONTAINER=1 bash "$S/inspect.sh"
 reject 'unhealthy database despite evidence collection' env BAD_DB_HEALTH=1 bash "$S/inspect.sh"
 grep -q 'FAIL: piie-db health is unhealthy' "$S/rejected.log"
+DB_PROBE_RUNTIME=1 bash "$S/inspect.sh" > "$S/compatible-client.log" 2>&1
+grep -q 'READINESS PASS' "$S/compatible-client.log"
+grep -q 'independent service health=PASS' "$S/compatible-client.log"
+reject 'documented runtime probe failure with failed service query' env DB_PROBE_RUNTIME=1 DB_CLIENT_STATUS=1 bash "$S/inspect.sh"
 reject 'insufficient disk' env FREE_BYTES=1 bash "$S/inspect.sh"
 reject 'inactive scheduler' env BAD_CRON=1 bash "$S/inspect.sh"
 touch -d '10 minutes ago' "$BASE/shared/storage/logs/scheduler.log"
