@@ -61,6 +61,22 @@ class CourseOfferingExamTest extends TestCase
 
     protected User $student;
 
+    public function test_exam_authorship_does_not_extend_an_ended_teaching_appointment(): void
+    {
+        $exam = $this->offeringExam();
+        $authorizer = app(\App\Support\Permissions\OnlineExamAuthorizer::class);
+        $this->assertTrue($authorizer->canManageExam($this->lecturer, $exam));
+        $this->assertTrue($authorizer->canAccessExamAttempts($this->lecturer, $exam));
+        foreach ([['status' => 'ended'], ['status' => 'cancelled'], ['ends_on' => now()->subDay()->toDateString()]] as $change) {
+            DB::table('course_offering_lecturer_allocations')->where('user_id', $this->lecturer->id)
+                ->update(array_merge(['status' => 'active', 'ends_on' => null], $change));
+            $this->assertFalse($authorizer->canManageExam($this->lecturer, $exam));
+            $this->assertFalse($authorizer->canAccessExamAttempts($this->lecturer, $exam));
+            $this->actingAs($this->lecturer)->get(route('teacher.online_exams.questions.index', $exam->id))->assertForbidden();
+            $this->assertDatabaseHas('online_exams', ['id' => $exam->id]);
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

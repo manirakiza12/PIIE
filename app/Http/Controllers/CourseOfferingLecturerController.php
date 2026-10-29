@@ -121,12 +121,15 @@ class CourseOfferingLecturerController extends Controller
         ]);
 
         try {
-            $this->allocations->createPlanned($schoolId, $offering, (int) $data['user_id'], $data['role'], $data['starts_on'], $data['ends_on'] ?? null);
+            $allocation = $this->allocations->assign($schoolId, $offering, (int) $data['user_id'], $data['role'], $data['starts_on'], $data['ends_on'] ?? null);
         } catch (Throwable $exception) {
             return back()->withInput()->withErrors(['allocation' => $this->allocationMessage($exception, $schoolId)]);
         }
 
-        return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', 'Lecturer assigned as a planned allocation.');
+        $message = $allocation->status === CourseOfferingLecturerAllocation::STATUS_ACTIVE
+            ? 'Lecturer assigned. Teaching access follows the assignment dates automatically.'
+            : 'Lecturer assigned. Teaching access will activate automatically when the Course Allocation and lecturer are eligible.';
+        return redirect()->route('admin.course_offerings.lecturers.index', $offering)->with('success', $message);
     }
 
     public function update(Request $request, int $offering, int $allocation)

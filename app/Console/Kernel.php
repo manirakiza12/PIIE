@@ -28,6 +28,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('applications:retry-notifications')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('invoices:retry-emails')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('messages:send-reminders')->everyMinute()->withoutOverlapping();
+        $schedule->command('academic:activate-teaching-allocations')->everyMinute()->withoutOverlapping();
         $schedule->command('courses:reconcile-enrolment --apply')->everyMinute()->withoutOverlapping();
         $schedule->command('admissions:prepare-accepted-students')->everyFiveMinutes()->withoutOverlapping();
 

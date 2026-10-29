@@ -1173,6 +1173,24 @@ app(CourseOfferingService::class)->start($tenantA['school'], $offeringA->id);
             ->assertDontSee('Assign Lecturer');
     }
 
+    public function test_assigning_a_lecturer_to_an_open_course_automatically_enables_teaching(): void
+    {
+        $tenant = $this->tenants[1];
+        $offering = $this->createOffering($tenant, 'AUTO-TEACHING');
+        DB::table('course_offerings')->where('id', $offering->id)->update(['status' => 'open']);
+        $teacher = User::factory()->create([
+            'role_id' => 3, 'school_id' => $tenant['school'], 'account_status' => 'active', 'staff_status' => 'active',
+        ]);
+        $manager = $this->staff(1, ['academic.course_offering.lecturer.view', 'academic.course_offering.lecturer.manage']);
+        $this->actingAs($manager)->post(route('admin.course_offerings.lecturers.store', $offering->id), [
+            'user_id' => $teacher->id, 'role' => 'primary_lecturer', 'starts_on' => '2026-02-01',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('course_offering_lecturer_allocations', [
+            'school_id' => $tenant['school'], 'course_offering_id' => $offering->id,
+            'user_id' => $teacher->id, 'status' => 'active',
+        ]);
+    }
+
     public function test_lecturer_create_page_loads_without_optional_staff_profiles_table(): void
     {
         $tenant = $this->tenants[1];
@@ -2252,7 +2270,7 @@ app(CourseOfferingService::class)->start($a['school'], $offering->id);
         $manager = $this->staff(1, ['academic.course_offering.lecturer.view', 'academic.course_offering.lecturer.manage']);
 
         $this->mock(CourseOfferingLecturerAllocationService::class, function ($mock): void {
-            $mock->shouldReceive('createPlanned')->once()
+            $mock->shouldReceive('assign')->once()
                 ->andThrow(new \RuntimeException('SQLSTATE[42S02]: Base table or view not found: 1146 secret_internal_table'));
         });
 

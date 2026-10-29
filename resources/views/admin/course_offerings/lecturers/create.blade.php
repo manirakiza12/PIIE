@@ -5,7 +5,7 @@
 
 <div class="eSection-wrap">
     <h5>{{ get_phrase('Assign Lecturer') }}</h5>
-    <p class="text-muted">{{ get_phrase('This creates a Planned allocation. Activate it separately when the Allocation and lecturer are eligible.') }}</p>
+    <p class="text-muted">{{ get_phrase('Teaching access activates automatically when the Course Allocation and lecturer are eligible. During the assignment dates, lecturers can manage course content, assignments and live classes for their assigned course units.') }}</p>
 
     <p class="text-muted">A lecturer can teach different programmes and courses during the same semester. Assign them to each programme's Course Allocation. A shared allocation uses one teaching team for all its linked programmes.</p>
     @if($errors->any())
