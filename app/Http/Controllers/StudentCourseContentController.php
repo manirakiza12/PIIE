@@ -136,6 +136,7 @@ class StudentCourseContentController extends Controller
         $student = $request->user();
         $offering = $this->access->resolveOffering($student, $id);
         $row = $this->access->resolveLessonForStudent($student, $lesson);
+        abort_unless((int) $row->course_offering_id === (int) $offering->id, 404);
 
         // Engagement only. Completion is a deliberate act, and the model has no
         // path that completes a lesson on a read.
@@ -188,6 +189,7 @@ class StudentCourseContentController extends Controller
         $student = $request->user();
         $offering = $this->access->resolveOffering($student, $id);
         $row = $this->access->resolveLessonForStudent($student, $lesson);
+        abort_unless((int) $row->course_offering_id === (int) $offering->id, 404);
 
         try {
             $this->content->markComplete($student, $row);

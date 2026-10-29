@@ -140,6 +140,7 @@ trait LiveClassFixture
                 // The fixture builds its own schema rather than migrating, so a
                 // column added by a migration has to be declared here too.
                 $t->boolean('gate_progression')->default(false);
+                $t->boolean('sequential_lessons')->default(false);
             });
         }
         if (! Schema::hasTable('course_offering_lecturer_allocations')) {

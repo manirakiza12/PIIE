@@ -32,6 +32,7 @@ class CourseOffering extends Model
         // Cast only: the model is `$guarded = ['*']` and refuses direct updates,
         // so this is written through CourseOfferingService like every other field.
         'gate_progression' => 'boolean',
+        'sequential_lessons' => 'boolean',
     ];
 
     /**

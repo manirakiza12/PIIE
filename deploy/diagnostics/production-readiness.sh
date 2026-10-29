@@ -231,6 +231,18 @@ try {
     $grants = $pdo->query("SELECT COUNT(*) FROM google_account_connections WHERE status='ok' AND refresh_token_ciphertext IS NOT NULL")->fetchColumn();
     $zones = $pdo->query('SELECT DISTINCT timezone FROM schools WHERE timezone IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN);
     echo json_encode(['live_classes_read_only'=>true,'routes_and_scheduled_commands'=>'PASS','email_retry_migration_installed'=>$liveClassRetryInstalled,'smtp_fields_present'=>(int)$smtp===4,'email_outbox'=>$outbox,'google_setup'=>$google ?: null,'google_grants_present'=>(int)$grants>0,'institution_timezones'=>$zones,'queue_connection'=>$env['QUEUE_CONNECTION'] ?? 'sync','jitsi_app_id_present'=>!empty($env['JITSI_APP_ID']),'provider_connectivity_tested'=>false,'real_student_delivery_tested'=>false]).PHP_EOL;
+    // Fixed reference-course metadata, inside the existing read-only transaction.
+    $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
+    if ($course) {
+        $lessons = $pdo->query('SELECT l.id,l.title,l.status,l.released_at,l.content_type,m.id AS module_id,m.status AS module_status,m.released_at AS module_released_at FROM course_offering_lessons l JOIN course_offering_modules m ON m.id=l.course_offering_module_id AND m.course_offering_id=l.course_offering_id AND m.school_id=l.school_id WHERE l.course_offering_id=30 ORDER BY m.sequence,m.id,l.sequence,l.id')->fetchAll(PDO::FETCH_ASSOC);
+        $registered = (int)$pdo->query("SELECT COUNT(*) FROM course_registrations r JOIN course_offerings c ON c.id=r.course_offering_id AND c.school_id=r.school_id WHERE c.id=30 AND r.status='confirmed'")->fetchColumn();
+        $resources = $pdo->query('SELECT r.id,r.stored_name,r.type,l.id AS lesson_id FROM course_offering_lesson_resources r LEFT JOIN course_offering_lessons l ON l.id=r.course_offering_lesson_id AND l.course_offering_id=r.course_offering_id AND l.school_id=r.school_id WHERE r.course_offering_id=30')->fetchAll(PDO::FETCH_ASSOC);
+        $missing = [];
+        foreach ($resources as $resource) {
+            if (!$resource['lesson_id'] || ($resource['type'] === 'file' && (!$resource['stored_name'] || !is_file($root.'/storage/app/'.$resource['stored_name'])))) $missing[] = (int)$resource['id'];
+        }
+        echo json_encode(['course_learning_read_only'=>true,'offering'=>$course,'database_clock'=>$env['APP_TIMEZONE'] ?? 'UTC','utc_now'=>gmdate('c'),'confirmed_registrations'=>$registered,'lessons'=>$lessons,'missing_lesson_resource_ids'=>$missing]).PHP_EOL;
+    }
 } catch (LogicException $e) {
     fwrite(STDERR, 'FAIL: '.$e->getMessage().PHP_EOL); exit(1);
 } catch (Throwable $e) {

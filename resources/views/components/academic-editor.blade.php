@@ -176,8 +176,8 @@
         assignment, say - downloads them once.
     --}}
     <link rel="stylesheet" href="{{ asset('assets/css/summernote-lite.min.css') }}" />
-    <link rel="stylesheet" href="{{ asset('css/academic-editor.css') }}" />
+    <link rel="stylesheet" href="{{ asset('css/academic-editor.css') }}?v={{ filemtime(public_path('css/academic-editor.css')) }}" />
     <script src="{{ asset('assets/js/summernote-lite.min.js') }}"></script>
     <script src="{{ asset('assets/css/plugin/specialchars/summernote-ext-specialchars.js') }}"></script>
-    <script src="{{ asset('js/academic-editor.js') }}"></script>
+    <script src="{{ asset('js/academic-editor.js') }}?v={{ filemtime(public_path('js/academic-editor.js')) }}"></script>
 @endonce

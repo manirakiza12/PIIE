@@ -166,6 +166,7 @@ trait AssignmentFixture
                 $t->unsignedBigInteger('school_id');
                 $t->unsignedBigInteger('course_offering_id')->nullable();
                 $t->unsignedBigInteger('assignment_id');
+                $t->unsignedBigInteger('assignment_question_id')->nullable()->index();
                 $t->string('title', 191);
                 $t->string('type', 20)->default('link');
                 $t->string('link_url', 500)->nullable();
