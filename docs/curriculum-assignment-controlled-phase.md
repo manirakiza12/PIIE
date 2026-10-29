@@ -62,3 +62,5 @@ No approval of these policies is inferred from a successful technical test.
 `CurriculumProposalMysqlConcurrencyTest` uses the existing disposable `ci_test` database on GitHub CI and two actual PHP worker processes. It exercises competing mapping approvals, duplicate proposal creation and simultaneous application. It refuses a non-CI connection and skips on local SQLite; local SQLite results are not evidence of MySQL row-lock behaviour. The regular CI migrations exercise the real schema and foreign keys. Related assignment, curriculum, admission, registration, automatic enrolment and RBAC suites must also pass.
 
 No production migration or business-data test is part of this change. PR review and a separate deployment authorization remain required.
+
+CI exposed a newly published Symfony Mime advisory (CVE-2026-45070) in the unchanged baseline lockfile. The PR includes only the compatible `symfony/mime` patch from 7.4.19 to 7.4.22; no other package or security-gate policy changes. Composer audit reported no remaining advisories after the patch. MySQL foreign-key names use explicit short identifiers.

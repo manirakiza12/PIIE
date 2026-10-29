@@ -28,11 +28,11 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['school_id', 'programme_id', 'intake_session_id', 'status'], 'cam_context_idx');
             $table->unique(['school_id', 'id'], 'cam_tenant_id');
-            $table->foreign('programme_id')->references('id')->on('programmes')->restrictOnDelete();
-            $table->foreign('intake_session_id')->references('id')->on('intake_sessions')->restrictOnDelete();
-            $table->foreign('curriculum_id')->references('id')->on('curricula')->restrictOnDelete();
-            $table->foreign('entry_academic_year_id')->references('id')->on('academic_years')->restrictOnDelete();
-            $table->foreign('entry_curriculum_stage_id')->references('id')->on('curriculum_stages')->restrictOnDelete();
+            $table->foreign('programme_id', 'cam_programme_fk')->references('id')->on('programmes')->restrictOnDelete();
+            $table->foreign('intake_session_id', 'cam_intake_fk')->references('id')->on('intake_sessions')->restrictOnDelete();
+            $table->foreign('curriculum_id', 'cam_curriculum_fk')->references('id')->on('curricula')->restrictOnDelete();
+            $table->foreign('entry_academic_year_id', 'cam_entry_year_fk')->references('id')->on('academic_years')->restrictOnDelete();
+            $table->foreign('entry_curriculum_stage_id', 'cam_entry_stage_fk')->references('id')->on('curriculum_stages')->restrictOnDelete();
         });
         Schema::create('curriculum_assignment_proposals', function (Blueprint $table): void {
             $table->id();
