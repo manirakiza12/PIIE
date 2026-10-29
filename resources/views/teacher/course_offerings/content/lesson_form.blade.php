@@ -44,7 +44,7 @@
     <h4 class="mb-1">{{ $isEdit ? 'Edit lesson' : 'New lesson' }} &mdash; {{ $unitName }}</h4>
     <p class="text-muted mb-0 small">
         {{ $offering->academicYear?->label ?? '—' }} &middot; {{ $offering->academicPeriod?->label ?? '—' }}
-        &middot; <span class="text-muted">Everything stays private to you until you publish it.</span>
+        &middot; <span class="text-muted">{{ $lesson->status === 'published' ? 'Saving changes updates this published lesson for enrolled students.' : 'Draft lessons stay private until you publish them.' }}</span>
     </p>
 </div>
 
@@ -132,7 +132,7 @@
                 <label for="cc-title" class="form-label">Lesson title</label>
                 <input type="text" class="form-control form-control-lg @error('title') is-invalid @enderror"
                        id="cc-title" name="title" maxlength="191"
-                       placeholder="e.g. Fractions, Ratios &amp; Percentages"
+                       placeholder="Lesson title"
                        value="{{ old('title', $lesson->title) }}">
                 <div class="invalid-feedback" id="cc-title-note">{{ $errors->first('title') }}</div>
             </div>
@@ -150,7 +150,7 @@
                 <label for="cc-objectives" class="form-label">Learning objectives</label>
                 <textarea class="form-control @error('learning_objectives') is-invalid @enderror"
                           id="cc-objectives" name="learning_objectives" rows="4" maxlength="5000"
-                          placeholder="By the end of this lesson the student should be able to:&#10;&#8226; Convert a fraction to a decimal&#10;&#8226; Explain why a denominator of 100 makes a percentage"
+                          placeholder="By the end of this lesson the student should be able to:&#10;&#8226; Describe the key concepts&#10;&#8226; Apply the procedure in practice"
                           data-cc-dirty>{{ old('learning_objectives', $lesson->learning_objectives) }}</textarea>
                 @error('learning_objectives')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 <div class="form-text">
@@ -187,8 +187,9 @@
                 <div class="mb-3">
                     <label for="cc-released" class="form-label">Release on <span class="text-muted fw-normal">(optional)</span></label>
                     <input type="datetime-local" class="form-control" id="cc-released" name="released_at"
-                           value="{{ old('released_at', $lesson->released_at?->format('Y-m-d\TH:i')) }}">
+                           value="{{ old('released_at', app(\App\Support\CourseContent\LearningSchedule::class)->local($lesson->released_at, auth()->user())) }}">
                     <div class="form-text">
+                        Times use {{ app(\App\Support\TenantTimezone::class)->resolve(auth()->user()) }}.
                         Leave empty to appear as soon as it is published. Set a date to have it
                         appear automatically, and the page will show it as <em>Scheduled</em> until then.
                     </div>
@@ -355,7 +356,7 @@
                         <label for="cc-res-file" class="form-label small fw-semibold">Upload a file</label>
                         <input type="file" class="form-control form-control-sm mb-2" id="cc-res-file"
                                form="cc-resource-form" name="file">
-                        <div class="form-text mb-2">Up to 20 MB. For anything larger, add a link instead.</div>
+                        <div class="form-text mb-2">Up to {{ number_format(config('course_content.max_upload_kb', 20480) / 1024, 0) }} MB. Documents, images and supported videos; link to larger files.</div>
                         <button type="submit" class="btn btn-sm btn-outline-primary" form="cc-resource-form"
                                 name="type" value="file">Upload file</button>
                     </div>

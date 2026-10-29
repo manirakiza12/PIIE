@@ -120,6 +120,7 @@ auth.json
 !/config/app.php
 !/config/broadcasting.php
 !/config/cors.php
+!/config/course_content.php
 !/config/countries.php
 !/config/database.php
 !/config/filesystems.php

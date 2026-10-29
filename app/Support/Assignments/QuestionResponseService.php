@@ -84,7 +84,7 @@ class QuestionResponseService
      */
     public function questionsFor(Assignment $assignment)
     {
-        return $assignment->questions()->inReadingOrder()->get();
+        return $assignment->questions()->with('resources')->inReadingOrder()->get();
     }
 
     /**

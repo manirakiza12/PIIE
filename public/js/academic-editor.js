@@ -1661,8 +1661,6 @@
         // The plugins can only be registered once Summernote is actually present,
         // so this is where registration belongs - and `registerPlugins()` is
         // idempotent, so being reached twice is harmless.
-        API.registerPlugins();
-
         // THE PROGRESSIVE-ENHANCEMENT FLAG.
         //
         // The stylesheet hides the source textarea only under `html.piie-js`, and
@@ -1680,6 +1678,7 @@
             API.available = false;
         }
 
+        API.registerPlugins();
         API.attachAll(document);
     }
 

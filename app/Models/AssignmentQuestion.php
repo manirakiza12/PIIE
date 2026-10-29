@@ -117,6 +117,11 @@ class AssignmentQuestion extends Model
         return $this->hasMany(AssignmentQuestionResponse::class, 'assignment_question_id');
     }
 
+    public function resources(): HasMany
+    {
+        return $this->hasMany(AssignmentResource::class, 'assignment_question_id');
+    }
+
     /** Every attempt this student has made at this question. */
     public function responsesForAttempt(AssignmentSubmission $submission)
     {

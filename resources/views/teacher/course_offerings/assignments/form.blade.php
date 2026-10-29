@@ -105,7 +105,7 @@
                 <label for="as-title" class="form-label">Assignment title</label>
                 <input type="text" class="form-control form-control-lg @error('title') is-invalid @enderror"
                        id="as-title" name="title" maxlength="191" required data-as-dirty
-                       placeholder="e.g. Assignment 1 — Business Ratios"
+                       placeholder="Assignment title"
                        value="{{ old('title', $assignment->title) }}">
                 @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 {{-- The CLIENT-SIDE reason, which `@error` cannot produce: this form
@@ -144,7 +144,7 @@
                 <label for="as-objectives" class="form-label">Learning objectives <span class="text-muted fw-normal">(optional)</span></label>
                 <textarea class="form-control @error('learning_objectives') is-invalid @enderror"
                           id="as-objectives" name="learning_objectives" rows="3" maxlength="5000" data-as-dirty
-                          placeholder="By the end of this assignment the student should be able to:&#10;&#8226; Calculate a ratio from two quantities&#10;&#8226; Explain what a ratio does and does not tell you"
+                          placeholder="By the end of this assignment the student should be able to:&#10;&#8226; Apply the skills covered in this module&#10;&#8226; Explain the reasoning behind the answer"
                           >{{ old('learning_objectives', $assignment->learning_objectives) }}</textarea>
                 @error('learning_objectives')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 <div class="form-text">One per line, or separated by <kbd>;</kbd>. Shown to the student before the instructions.</div>
@@ -354,24 +354,25 @@
 
             <div class="border rounded p-3 mb-3">
                 <h6 class="mb-3">Dates and times</h6>
+                <p class="small text-muted">Times use {{ app(\App\Support\TenantTimezone::class)->resolve(auth()->user()) }}. Lesson study is self-paced; these dates apply to this assessment.</p>
                 <div class="mb-3">
                     <label for="as-released" class="form-label">Opens <span class="text-muted fw-normal">(optional)</span></label>
                     <input type="datetime-local" class="form-control" id="as-released" name="released_at" data-as-dirty
-                           value="{{ old('released_at', $assignment->released_at?->format('Y-m-d\TH:i')) }}">
+                           value="{{ old('released_at', app(\App\Support\CourseContent\LearningSchedule::class)->local($assignment->released_at, auth()->user())) }}">
                     <div class="form-text">Leave empty to open as soon as it is published. A future time shows it as <em>Scheduled</em>.</div>
                 </div>
                 <div class="mb-3">
                     <label for="as-due" class="form-label">Due</label>
                     <input type="datetime-local" class="form-control @error('due_date') is-invalid @enderror"
                            id="as-due" name="due_date" data-as-dirty
-                           value="{{ old('due_date', $assignment->due_date?->format('Y-m-d\TH:i')) }}">
+                           value="{{ old('due_date', app(\App\Support\CourseContent\LearningSchedule::class)->local($assignment->due_date, auth()->user())) }}">
                     @error('due_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     <div class="form-text">Required before publishing. Each student reads it in their own timezone.</div>
                 </div>
                 <div class="mb-0">
                     <label for="as-closes" class="form-label">Final closing time <span class="text-muted fw-normal">(optional)</span></label>
                     <input type="datetime-local" class="form-control" id="as-closes" name="closes_at" data-as-dirty
-                           value="{{ old('closes_at', $assignment->closes_at?->format('Y-m-d\TH:i')) }}">
+                           value="{{ old('closes_at', app(\App\Support\CourseContent\LearningSchedule::class)->local($assignment->closes_at, auth()->user())) }}">
                     <div class="form-text">After this, no new submission is accepted whatever the late policy says. Everything already handed in is kept.</div>
                 </div>
             </div>
@@ -465,7 +466,7 @@
                         <label for="as-res-file" class="form-label small fw-semibold">Upload a file</label>
                         <input type="file" class="form-control form-control-sm mb-2" id="as-res-file"
                                form="as-resource-form" name="file">
-                        <div class="form-text mb-2">Up to 20 MB. Documents and images only.</div>
+                        <div class="form-text mb-2">Up to {{ number_format(config('course_content.max_upload_kb', 20480) / 1024, 0) }} MB. Documents, images and supported videos.</div>
                         <button type="submit" class="btn btn-sm btn-outline-primary" form="as-resource-form" name="type" value="file">
                             Upload file
                         </button>

@@ -72,6 +72,7 @@
          HtmlSanitizer as lesson bodies and assignment instructions. The one place
          {!! !!} is correct. --}}
     <div class="as-body mb-2 piie-prose">{!! $question->prosePrompt() !!}</div>
+    @include('shared.assignment_question_resources', ['teacherView' => false])
 
     <p class="small text-muted mb-2" data-testid="as-question-requirement">
         {{ $question->require_all ? 'You must provide' : 'Provide' }}:

@@ -29,7 +29,7 @@ class AssignmentResource extends Model
     protected $table = 'assignment_resources';
 
     protected $fillable = [
-        'school_id', 'course_offering_id', 'assignment_id', 'title', 'type',
+        'school_id', 'course_offering_id', 'assignment_id', 'assignment_question_id', 'title', 'type',
         'link_url', 'original_name', 'stored_name', 'mime_type', 'size_bytes', 'created_by',
     ];
 

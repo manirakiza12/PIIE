@@ -81,8 +81,7 @@
      are waiting to be marked, has been misled by the interface - so the numbers
      that distinguish the two cases are supplied rather than left to be discovered.
 --}}
-<section class="eSection-wrap mb-3" aria-labelledby="cc-gate-heading" data-testid="cc-progression-panel">
-    <h5 id="cc-gate-heading" class="mb-2">How students move through this course</h5>
+<details class="eSection-wrap mb-3" aria-labelledby="cc-gate-heading" data-testid="cc-progression-panel"><summary id="cc-gate-heading" class="mb-2">How students move through this course</summary>
 
     <div class="border rounded p-3">
         @if($canManage)
@@ -147,6 +146,12 @@
                     @endif
                 </p>
 
+                <label for="cc-lesson-sequence" class="form-label">Lesson order within each module</label>
+                <select id="cc-lesson-sequence" name="sequential_lessons" class="form-select mb-2">
+                    <option value="0" @selected(! $offering->sequential_lessons)>Flexible — study available lessons in any order</option>
+                    <option value="1" @selected($offering->sequential_lessons)>Sequential — complete the previous lesson first</option>
+                </select>
+                <p class="small text-muted">Study at your own pace. Estimated study times are guidance, not time limits. Assessment deadlines still apply.</p>
                 <button type="submit" class="btn btn-sm btn-primary" data-testid="cc-gate-save">
                     Save this setting
                 </button>
@@ -163,18 +168,17 @@
             </p>
         @endif
     </div>
-</section>
+</details>
 
 {{-- ══ How this works ════════════════════════════════════════════════════ --}}
-<section class="eSection-wrap mb-3" aria-labelledby="cc-how-heading">
-    <h5 id="cc-how-heading" class="mb-2">How this works</h5>
+<details class="eSection-wrap mb-3" aria-labelledby="cc-how-heading"><summary id="cc-how-heading" class="mb-2">How this works</summary>
     <div class="row g-3">
         <div class="col-12 col-md-4">
             <div class="border rounded p-3 h-100">
                 <div class="fw-semibold mb-1">1 &middot; Add a Module</div>
                 <p class="small text-muted mb-0">
                     A module is one section of the course, such as
-                    <em>Foundations of Business Mathematics</em>. Modules hold ordered
+                    <em>Introduction to the course</em>. Modules hold ordered
                     lessons and appear to students in the order you set.
                 </p>
             </div>
@@ -200,7 +204,7 @@
             </div>
         </div>
     </div>
-</section>
+</details>
 
 {{-- ══ Add module ════════════════════════════════════════════════════════ --}}
 @if($canManage)
@@ -213,7 +217,7 @@
                     <label for="cc-module-title" class="form-label">Module title</label>
                     <input type="text" class="form-control @error('title') is-invalid @enderror" id="cc-module-title"
                            name="title" maxlength="191" required
-                           placeholder="e.g. Module 1 — Foundations of Business Mathematics"
+                           placeholder="e.g. Module 1 — Introduction to the course"
                            value="{{ old('title') }}">
                     @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
@@ -277,7 +281,7 @@
                         @if($module->released_at)
                             <p class="small text-muted mb-0">
                                 {{ $module->released_at->isFuture() ? 'Becomes visible' : 'Visible since' }}:
-                                <span data-testid="cc-module-release">{{ $module->released_at->format('j M Y, H:i') }}</span>
+                                <span data-testid="cc-module-release">{{ app(\App\Support\CourseContent\LearningSchedule::class)->local($module->released_at, auth()->user(), 'j M Y, H:i T') }}</span>
                             </p>
                         @endif
                     </div>
@@ -383,7 +387,7 @@
                                            id="cc-mrelease-{{ $module->id }}"
                                            name="released_at"
                                            data-testid="cc-module-release-input"
-                                           value="{{ $module->released_at?->format('Y-m-d\TH:i') }}">
+                                           value="{{ app(\App\Support\CourseContent\LearningSchedule::class)->local($module->released_at, auth()->user()) }}">
                                 </div>
                                 <button type="submit" class="btn btn-primary">Schedule publication</button>
                                 <span class="form-text mb-0">
@@ -423,7 +427,7 @@
                                          this is a teaching-time decision, not a viewer preference, so it is not
                                          routed through LiveClassDisplay. --}}
                                     <input type="datetime-local" class="form-control" id="cc-mrel-{{ $module->id }}" name="released_at"
-                                           value="{{ $module->released_at?->format('Y-m-d\TH:i') }}">
+                                           value="{{ app(\App\Support\CourseContent\LearningSchedule::class)->local($module->released_at, auth()->user()) }}">
                                 </div>
                                 <div class="col-12 col-lg-2 d-flex align-items-end">
                                     <button type="submit" class="btn btn-primary w-100">Save module</button>
@@ -458,7 +462,7 @@
                                             <span class="small text-muted ms-1">&middot; {{ $lesson->resources->count() }} {{ Str::plural('attachment', $lesson->resources->count()) }}</span>
                                         @endif
                                         @if($lesson->released_at?->isFuture())
-                                            <span class="small text-muted ms-1 d-block">Becomes visible {{ $lesson->released_at->format('j M Y, H:i') }}</span>
+                                            <span class="small text-muted ms-1 d-block">Becomes visible {{ app(\App\Support\CourseContent\LearningSchedule::class)->local($lesson->released_at, auth()->user(), 'j M Y, H:i T') }}</span>
                                         @endif
                                     </div>
                                     @if($canManage)

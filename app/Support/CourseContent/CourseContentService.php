@@ -44,6 +44,7 @@ class CourseContentService
         $this->access->assertCanManageOrFail($actor, $offering);
 
         return DB::transaction(function () use ($offering, $attributes, $actor) {
+            CourseOffering::query()->whereKey($offering->id)->lockForUpdate()->firstOrFail();
             $next = (int) CourseOfferingModule::query()
                 ->where('course_offering_id', $offering->id)
                 ->max('sequence') + 1;
@@ -56,7 +57,7 @@ class CourseContentService
                 'summary' => $this->nullIfBlank($attributes['summary'] ?? null),
                 'sequence' => $next,
                 'status' => $this->normaliseModuleStatus($attributes['status'] ?? CourseOfferingModule::STATUS_DRAFT),
-                'released_at' => $this->parseRelease($attributes['released_at'] ?? null),
+                'released_at' => app(LearningSchedule::class)->parse($attributes['released_at'] ?? null, $actor),
                 'created_by' => $actor->id,
             ])->save();
 
@@ -73,7 +74,7 @@ class CourseContentService
             'title' => trim((string) $attributes['title']),
             'summary' => $this->nullIfBlank($attributes['summary'] ?? null),
             'status' => $this->normaliseModuleStatus($attributes['status'] ?? $module->status),
-            'released_at' => $this->parseRelease($attributes['released_at'] ?? null),
+            'released_at' => app(LearningSchedule::class)->parse($attributes['released_at'] ?? null, $actor),
             'updated_by' => $actor->id,
         ])->save();
 
@@ -143,6 +144,7 @@ class CourseContentService
         $this->access->assertCanManageOrFail($actor, $offering);
 
         return DB::transaction(function () use ($module, $attributes, $actor) {
+            CourseOfferingModule::query()->whereKey($module->id)->lockForUpdate()->firstOrFail();
             $next = (int) CourseOfferingLesson::query()
                 ->where('course_offering_module_id', $module->id)
                 ->max('sequence') + 1;
@@ -162,7 +164,7 @@ class CourseContentService
                 'estimated_minutes' => $this->normaliseMinutes($attributes['estimated_minutes'] ?? null),
                 'sequence' => $next,
                 'status' => $this->normaliseLessonStatus($attributes['status'] ?? CourseOfferingLesson::STATUS_DRAFT),
-                'released_at' => $this->parseRelease($attributes['released_at'] ?? null),
+                'released_at' => app(LearningSchedule::class)->parse($attributes['released_at'] ?? null, $actor),
                 'completion_rule' => $this->normaliseCompletionRule($attributes['completion_rule'] ?? CourseOfferingLesson::RULE_MANUAL),
                 'created_by' => $actor->id,
             ])->save();
@@ -211,7 +213,7 @@ class CourseContentService
             $changes['status'] = $this->normaliseLessonStatus($attributes['status']);
         }
         if (array_key_exists('released_at', $attributes)) {
-            $changes['released_at'] = $this->parseRelease($attributes['released_at'] ?? null);
+            $changes['released_at'] = app(LearningSchedule::class)->parse($attributes['released_at'] ?? null, $actor);
         }
 
         // Publishing something empty would put a blank lesson in front of
@@ -351,29 +353,15 @@ class CourseContentService
         $offering = $this->access->resolveOffering($actor, (int) $lesson->course_offering_id);
         $this->access->assertCanManageOrFail($actor, $offering);
 
-        if (! $file || ! $file->isValid()) {
-            throw ValidationException::withMessages(['file' => 'Choose a file to attach.']);
-        }
-
+        app(LearningMaterialUpload::class)->validate($file);
         $extension = strtolower((string) $file->getClientOriginalExtension());
-        if (! preg_match('/^[a-z0-9]{1,8}$/', $extension)) {
-            throw ValidationException::withMessages(['file' => 'That file type cannot be attached.']);
-        }
-
-        // 20 MB ceiling. A lecture recording is a link, not an upload: this is a
-        // deliberate limit for the low-bandwidth markets PIIE targets.
-        $maxKilobytes = 20 * 1024;
-        if ((int) $file->getSize() > $maxKilobytes * 1024) {
-            throw ValidationException::withMessages([
-                'file' => 'Attachments are limited to 20 MB. Link to a larger recording instead.',
-            ]);
-        }
 
         $storedName = 'course-content/'.$lesson->course_offering_id.'/'.bin2hex(random_bytes(16)).'.'.$extension;
-        Storage::disk('local')->put($storedName, file_get_contents($file->getRealPath()));
+        app(LearningMaterialUpload::class)->store($file, $storedName);
 
         $resource = new CourseOfferingLessonResource();
-        $resource->forceFill([
+        try {
+            $resource->forceFill([
             'school_id' => $lesson->school_id,
             'course_offering_id' => $lesson->course_offering_id,
             'course_offering_lesson_id' => $lesson->id,
@@ -381,10 +369,14 @@ class CourseContentService
             'type' => CourseOfferingLessonResource::TYPE_FILE,
             'original_name' => (string) $file->getClientOriginalName(),
             'stored_name' => $storedName,
-            'mime_type' => (string) ($file->getClientMimeType() ?: 'application/octet-stream'),
+            'mime_type' => (string) ($file->getMimeType() ?: 'application/octet-stream'),
             'size_bytes' => (int) $file->getSize(),
             'created_by' => $actor->id,
-        ])->save();
+            ])->save();
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($storedName);
+            throw $exception;
+        }
 
         return $resource->fresh();
     }
@@ -519,29 +511,14 @@ class CourseContentService
      */
     public function recordEngagement(User $student, CourseOfferingLesson $lesson): ?CourseOfferingLessonProgress
     {
-        $existing = CourseOfferingLessonProgress::query()
-            ->where('course_offering_lesson_id', $lesson->id)
-            ->where('student_id', $student->id)
-            ->first();
-
-        if ($existing) {
-            // A completed lesson stays completed; re-opening it only refreshes
-            // when it was last seen.
-            $existing->forceFill(['last_viewed_at' => now()])->save();
-
-            return $existing;
-        }
-
-        $progress = new CourseOfferingLessonProgress();
-        $progress->forceFill([
-            'school_id' => $lesson->school_id,
-            'course_offering_id' => $lesson->course_offering_id,
-            'course_offering_lesson_id' => $lesson->id,
-            'student_id' => $student->id,
-            'status' => CourseOfferingLessonProgress::STATUS_IN_PROGRESS,
-            'started_at' => now(),
-            'last_viewed_at' => now(),
-        ])->save();
+        $progress = CourseOfferingLessonProgress::query()->firstOrCreate(
+            ['course_offering_lesson_id' => $lesson->id, 'student_id' => $student->id],
+            ['school_id' => $lesson->school_id, 'course_offering_id' => $lesson->course_offering_id,
+                'status' => CourseOfferingLessonProgress::STATUS_IN_PROGRESS,
+                'started_at' => now(), 'last_viewed_at' => now()]
+        );
+        // Only update the viewed timestamp: a concurrent completion must survive.
+        $progress->forceFill(['last_viewed_at' => now()])->save();
 
         return $progress->fresh();
     }
@@ -563,36 +540,16 @@ class CourseContentService
             throw new DomainException('This lesson is completed by its own activity, not by a button. Your progress updates when that activity is finished.');
         }
 
-        $existing = CourseOfferingLessonProgress::query()
-            ->where('course_offering_lesson_id', $lesson->id)
-            ->where('student_id', $student->id)
-            ->first();
-
-        if ($existing && $existing->isComplete()) {
-            return $existing;
-        }
-
-        if ($existing) {
-            $existing->forceFill([
+        $progress = CourseOfferingLessonProgress::query()->firstOrCreate(
+            ['course_offering_lesson_id' => $lesson->id, 'student_id' => $student->id],
+            ['school_id' => $lesson->school_id, 'course_offering_id' => $lesson->course_offering_id,
                 'status' => CourseOfferingLessonProgress::STATUS_COMPLETED,
-                'completed_at' => now(),
-                'last_viewed_at' => now(),
-            ])->save();
-
-            return $existing->fresh();
-        }
-
-        $progress = new CourseOfferingLessonProgress();
-        $progress->forceFill([
-            'school_id' => $lesson->school_id,
-            'course_offering_id' => $lesson->course_offering_id,
-            'course_offering_lesson_id' => $lesson->id,
-            'student_id' => $student->id,
-            'status' => CourseOfferingLessonProgress::STATUS_COMPLETED,
-            'started_at' => now(),
-            'completed_at' => now(),
-            'last_viewed_at' => now(),
-        ])->save();
+                'started_at' => now(), 'completed_at' => now(), 'last_viewed_at' => now()]
+        );
+        CourseOfferingLessonProgress::query()->whereKey($progress->id)
+            ->where('status', '!=', CourseOfferingLessonProgress::STATUS_COMPLETED)
+            ->update(['status' => CourseOfferingLessonProgress::STATUS_COMPLETED,
+                'completed_at' => now(), 'last_viewed_at' => now()]);
 
         return $progress->fresh();
     }
@@ -621,7 +578,9 @@ class CourseContentService
             'position' => $index + 1,
             'total' => $sequence->count(),
             'previous' => $index > 0 ? $sequence[$index - 1] : null,
-            'next' => $index < $sequence->count() - 1 ? $sequence[$index + 1] : null,
+            'next' => $index < $sequence->count() - 1
+                && app(ProgressionGate::class)->mayOpenLesson($student, $sequence[$index + 1])
+                    ? $sequence[$index + 1] : null,
         ];
     }
 
@@ -672,17 +631,6 @@ class CourseContentService
 
         // A lesson over a full day is a data error, not a long lesson.
         return ($value > 0 && $value <= 1440) ? $value : null;
-    }
-
-    private function parseRelease($value): ?\Illuminate\Support\Carbon
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $parsed = \Illuminate\Support\Carbon::parse($value);
-
-        return $parsed === null ? null : $parsed;
     }
 
     private function nullIfBlank($value): ?string

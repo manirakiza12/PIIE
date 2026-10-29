@@ -139,7 +139,7 @@
                                 {{ \App\Models\Assignment::SUBMISSION_TYPE_LABELS[$assignment->submission_type] ?? $assignment->submission_type }}
                                 &middot; {{ $assignment->attemptsAllowed() === 1 ? 'one attempt' : $assignment->attemptsAllowed().' attempts' }}
                                 @if($assignment->released_at?->isFuture())
-                                    &middot; opens {{ $assignment->released_at->format('j M Y, H:i') }}
+                                    &middot; opens {{ app(\App\Support\CourseContent\LearningSchedule::class)->local($assignment->released_at, auth()->user(), 'j M Y, H:i T') }}
                                 @endif
                             </div>
                         </td>
