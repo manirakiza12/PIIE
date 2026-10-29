@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\Curriculum\CurriculumAssignmentProposals;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
+use Tests\Feature\Support\CurriculumWorkerBarrier;
 use Tests\TestCase;
 
 /** Real connections and row locks; runs only on the existing disposable CI MySQL. */
@@ -64,24 +65,30 @@ class CurriculumProposalMysqlConcurrencyTest extends TestCase
     private function race(int $school, int $actor, string $operation, array $ids): array
     {
         $processes = [];
-        DB::beginTransaction();
         try {
-            DB::table('schools')->where('id', $school)->lockForUpdate()->firstOrFail();
-            foreach ($ids as $id) {
-                $process = new Process([PHP_BINARY, base_path('tests/Feature/Support/CurriculumProposalMysqlWorker.php'), $operation, (string) $actor, (string) $id], base_path(), ['APP_ENV' => 'testing']);
-                $process->setTimeout(30);
-                $process->start();
-                $processes[] = $process;
+            DB::transaction(function () use ($school, $actor, $operation, $ids, &$processes): void {
+                DB::table('schools')->where('id', $school)->lockForUpdate()->firstOrFail();
+                foreach ($ids as $id) {
+                    $process = new Process([PHP_BINARY, base_path('tests/Feature/Support/CurriculumProposalMysqlWorker.php'), $operation, (string) $actor, (string) $id], base_path(), ['APP_ENV' => 'testing']);
+                    $process->setTimeout(30);
+                    $processes[] = $process;
+                    $process->start();
+                }
+                // READY precedes the service's school lock. Never wait for worker
+                // completion here: both workers need the lock held by this parent.
+                foreach ($processes as $process) CurriculumWorkerBarrier::awaitReady($process);
+            });
+            $results = [];
+            foreach ($processes as $process) {
+                $process->wait();
+                $this->assertTrue($process->isSuccessful(), $process->getErrorOutput().$process->getOutput());
+                $lines = array_values(array_filter(explode("\n", trim($process->getOutput())), fn ($line) => str_starts_with($line, '{')));
+                $results[] = json_decode(end($lines), true, 512, JSON_THROW_ON_ERROR);
             }
-            foreach ($processes as $process) $this->assertTrue($process->waitUntil(fn ($type, $output) => str_contains($output, 'READY')), $process->getErrorOutput());
-        } finally { DB::commit(); }
-        $results = [];
-        foreach ($processes as $process) {
-            $process->wait();
-            $this->assertTrue($process->isSuccessful(), $process->getErrorOutput().$process->getOutput());
-            $lines = array_values(array_filter(explode("\n", trim($process->getOutput())), fn ($line) => str_starts_with($line, '{')));
-            $results[] = json_decode(end($lines), true, 512, JSON_THROW_ON_ERROR);
+            return $results;
+        } finally {
+            // Also reap siblings when startup, readiness, waiting or assertions fail.
+            foreach ($processes as $process) $process->stop(0);
         }
-        return $results;
     }
 }
