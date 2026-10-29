@@ -96,6 +96,9 @@ reject 'caller arguments' bash "$S/inspect.sh" arbitrary-command
 printf '%s\n' 452e21ac5d59ea582357914f2045d558816a1776 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/target.log" 2>&1
 grep -q 'READINESS PASS: active=452e21ac5d59ea582357914f2045d558816a1776' "$S/target.log"
+printf '%s\n' 7838f3c534d3a08fc38d3ef838bba925e2ddca43 > "$BASE/releases/old/RELEASE_SHA"
+bash "$S/inspect.sh" > "$S/learning.log" 2>&1
+grep -q 'READINESS PASS: active=7838f3c534d3a08fc38d3ef838bba925e2ddca43' "$S/learning.log"
 # Rejections must precede Docker, database, backup or application probes.
 for sha in ad5f0190e68d912a06923fc6ceba623883fb0732 0b1924ca54ed89c72400d08a3e80476888b1e719 452e21ac5d59ea582357914f2045d558816a1777 '452e21ac' '452e21ac5d59ea582357914f2045d558816a1776;id'; do
   printf '%s\n' "$sha" > "$BASE/releases/old/RELEASE_SHA"

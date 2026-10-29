@@ -14,6 +14,13 @@ final class MessagingController extends Controller
     public function __construct(private MessagingService $messages)
     {
         $this->middleware(function ($request, $next) {
+            $user = $request->user();
+            if ($request->isMethod('GET') && !$request->expectsJson()
+                && $user && (int) $user->role_id === 3
+                && $this->messages->active($user) && $user->force_password_change) {
+                return redirect()->route('teacher.password', 'edit')
+                    ->with('error', 'Please change your temporary password before opening Messages.');
+            }
             $this->messages->actor();
             return $next($request)->header('Cache-Control', 'private, no-store');
         });

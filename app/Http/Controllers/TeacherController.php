@@ -477,16 +477,14 @@ class TeacherController extends Controller
 
 
 
-            if ($request->new_password != $request->confirm_password) {
-                return back()->with("error", "Confirm Password Doesn't match!");
-            }
-
+            \App\Support\Passwords\PortalPasswordChange::validate($request);
 
             if (!Hash::check($request->old_password, auth()->user()->password)) {
                 return back()->with("error", "Current Password Doesn't match!");
             }
 
             $data['password'] = Hash::make($request->new_password);
+            $data['force_password_change'] = false;
             User::where('id', auth()->user()->id)->update($data);
 
             return redirect(route('teacher.password', 'edit'))->with('message', get_phrase('Password changed successfully'));

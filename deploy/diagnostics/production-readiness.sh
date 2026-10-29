@@ -7,6 +7,8 @@ BASE=/home/piie/deployments/piie
 # Exact release identities; neither caller input nor arbitrary main is admitted.
 TARGET=452e21ac5d59ea582357914f2045d558816a1776
 BASELINE=67be85e70349287f58ffeb4bfaafabccb9e953ff
+# Verified learning release: protected production deployment 40926044964.
+LEARNING_RELEASE=7838f3c534d3a08fc38d3ef838bba925e2ddca43
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
@@ -93,7 +95,7 @@ case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
 echo "Active release SHA: $ACTIVE"
-[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved Live Classes transition'
+[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || [ "$ACTIVE" = "$LEARNING_RELEASE" ] || fail 'Live release is outside the approved Live Classes transition'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'
 for container in piie-app piie-db; do
@@ -215,7 +217,7 @@ try {
     }
     $kernel = file_get_contents($root.'/app/Console/Kernel.php');
     $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
-    if (($sha === '452e21ac5d59ea582357914f2045d558816a1776') !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
+    if (in_array($sha, ['452e21ac5d59ea582357914f2045d558816a1776', '7838f3c534d3a08fc38d3ef838bba925e2ddca43'], true) !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
     $commands = ['live-classes:send-reminders','live-classes:refresh-google-links'];
     if ($liveClassRetryInstalled) $commands[] = 'live-classes:retry-emails';
     foreach ($commands as $command) {
@@ -231,6 +233,10 @@ try {
     $grants = $pdo->query("SELECT COUNT(*) FROM google_account_connections WHERE status='ok' AND refresh_token_ciphertext IS NOT NULL")->fetchColumn();
     $zones = $pdo->query('SELECT DISTINCT timezone FROM schools WHERE timezone IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN);
     echo json_encode(['live_classes_read_only'=>true,'routes_and_scheduled_commands'=>'PASS','email_retry_migration_installed'=>$liveClassRetryInstalled,'smtp_fields_present'=>(int)$smtp===4,'email_outbox'=>$outbox,'google_setup'=>$google ?: null,'google_grants_present'=>(int)$grants>0,'institution_timezones'=>$zones,'queue_connection'=>$env['QUEUE_CONNECTION'] ?? 'sync','jitsi_app_id_present'=>!empty($env['JITSI_APP_ID']),'provider_connectivity_tested'=>false,'real_student_delivery_tested'=>false]).PHP_EOL;
+    // Communication access incident: metadata only, never message content or credentials.
+    $communicationAccess = $pdo->query("SELECT role_id, account_status, staff_status, force_password_change, COUNT(*) AS accounts FROM users WHERE role_id=3 GROUP BY role_id,account_status,staff_status,force_password_change")->fetchAll(PDO::FETCH_ASSOC);
+    $reportedThread = $pdo->query('SELECT t.id AS thread_id, u.id AS user_id, u.role_id, u.account_status, u.staff_status, u.force_password_change, (u.school_id=t.school_id) AS same_school FROM message_thrades t JOIN users u ON u.id=t.sender_id OR u.id=t.reciver_id WHERE t.id=6')->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['communication_access_read_only'=>true,'lecturer_account_states'=>$communicationAccess,'reported_thread_participant_states'=>$reportedThread]).PHP_EOL;
     // Fixed reference-course metadata, inside the existing read-only transaction.
     $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
     if ($course) {
