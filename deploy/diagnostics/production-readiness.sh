@@ -3,16 +3,17 @@
 set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
-# Baseline: protected activation 40868664451. Target: approved PR #127 merge.
-# Exact release identities; neither caller input nor arbitrary main is admitted.
-TARGET=452e21ac5d59ea582357914f2045d558816a1776
-BASELINE=67be85e70349287f58ffeb4bfaafabccb9e953ff
-# Verified learning release: protected production deployment 40926044964.
-LEARNING_RELEASE=7838f3c534d3a08fc38d3ef838bba925e2ddca43
-# Verified communication release: protected activation 40935786447.
-COMMUNICATION_RELEASE=9a5f3b05b3fbafcb10ccda36a6b48d567cf78529
-# Verified lesson release: protected activation 40987512197.
-LESSON_RELEASE=d2fa0a15c61618f996d1f0bfc1c786745eba52bd
+# Baseline: protected production deployment of PR #132 (student assignment submission).
+# Production SHA 5195eccaf8857c1e05523a13787a851034840fb2 confirmed by
+# production diagnostics run 41085927437 (active release read from
+# /home/piie/deployments/piie/current/RELEASE_SHA). Merged through protected
+# GitHub rules (PR #132).
+# Exact release identity; neither caller input nor arbitrary main is admitted.
+BASELINE=5195eccaf8857c1e05523a13787a851034840fb2
+# Target: protected PR #133 merge (student assignment upload limits and lesson
+# transition). Verified by all 5 CI checks in run 41073596727 (success) and
+# merged through protected GitHub rules. No arbitrary release SHA is admitted.
+TARGET=5a49e9a715fd9fb9861395fb7a3dbf72d28af557
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
@@ -221,7 +222,7 @@ try {
     }
     $kernel = file_get_contents($root.'/app/Console/Kernel.php');
     $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
-    if (in_array($sha, ['452e21ac5d59ea582357914f2045d558816a1776', '7838f3c534d3a08fc38d3ef838bba925e2ddca43', '9a5f3b05b3fbafcb10ccda36a6b48d567cf78529', 'd2fa0a15c61618f996d1f0bfc1c786745eba52bd'], true) !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
+    if (in_array($sha, ['452e21ac5d59ea582357914f2045d558816a1776', '7838f3c534d3a08fc38d3ef838bba925e2ddca43', '9a5f3b05b3fbafcb10ccda36a6b48d567cf78529', 'd2fa0a15c61618f996d1f0bfc1c786745eba52bd', 'e46dafa4128bbb75b8fa29318dd09b03a87d5257'], true) !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
     $commands = ['live-classes:send-reminders','live-classes:refresh-google-links'];
     if ($liveClassRetryInstalled) $commands[] = 'live-classes:retry-emails';
     foreach ($commands as $command) {
