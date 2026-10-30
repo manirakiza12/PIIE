@@ -38,6 +38,11 @@ test('real vendor mounts one editor per field and submits the visible prompt', a
         const editable = w.document.querySelector('.note-editable');
         const area = w.document.querySelector('#prompt');
         assert.ok(w.jQuery(area).data('summernote'), 'initialization must finish with a real vendor context: '+w.editorFailure);
+        // Alignment and indentation are supplied by the native paragraph menu.
+        for (const icon of ['align-left', 'align-center', 'align-right', 'align-justify', 'align-outdent', 'align-indent']) {
+            assert.ok(w.document.querySelector('.note-para .note-dropdown-menu button .note-icon-' + icon),
+                'paragraph menu offers ' + icon);
+        }
         for (let i = 0; i < 4; i++) {
             w.jQuery(area).summernote('code');
             api.attachAll(w.document);
