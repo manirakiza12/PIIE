@@ -233,7 +233,8 @@ class CourseAssignmentSubmissionTest extends TestCase
             ])
             ->assertSessionHasErrors();
 
-        $this->assertSame(0, DB::table('assignment_submissions')->count());
+        $this->assertSame(0, DB::table('assignment_submissions')->where('is_draft', false)->count());
+        $this->assertSame('Only words.', AssignmentSubmission::where('is_draft', true)->first()->text_response);
 
         // And both halves together are accepted, which is what makes this a
         // combination test rather than just a refusal test.

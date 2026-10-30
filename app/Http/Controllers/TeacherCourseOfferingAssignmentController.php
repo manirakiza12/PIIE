@@ -800,46 +800,32 @@ class TeacherCourseOfferingAssignmentController extends Controller
             );
     }
 
-    /**
-     * The handout rules, shared by both upload paths.
-     *
-     * Two paths exist - one against a saved assignment, one against an assignment
-     * being created by the upload itself - and they MUST validate identically. A
-     * second hand-written copy is how "the file field is required" comes to mean
-     * two slightly different things depending on the screen a lecturer used.
-     *
-     * `nullable` is deliberately ABSENT from `file` and `link_url`: Laravel skips
-     * every rule on a null attribute marked nullable, and `required_if` is not
-     * evaluated first, so `nullable` silently cancels the very requirement it sits
-     * beside.
-     *
-     * @return array<string, array<int, string>>
-     */
+    /** Validate only the selected resource type, shared by new and saved content. */
     private function resourceRules(): array
     {
         return [
             'type' => ['required', 'in:link,file'],
             'title' => ['nullable', 'string', 'max:191'],
-            'link_url' => ['required_if:type,link', 'url:http,https', 'max:500'],
-            'file' => ['required_if:type,file', 'file', 'max:20480'],
+            'link_url' => ['exclude_unless:type,link', 'required', 'url:http,https', 'max:500'],
+            'file' => ['exclude_unless:type,file', 'required', 'file', 'max:'.config('course_content.max_upload_kb', 20480)],
         ];
     }
 
     public function storeResource(Request $request, int $id, int $assignment): RedirectResponse
     {
         $target = $this->access->resolveForManager($request->user(), $id, $assignment);
+        $request->validate(['assignment_question_id' => ['nullable', 'integer']]);
+        $question = $request->filled('assignment_question_id')
+            ? $target->questions()->where('school_id', $target->school_id)
+                ->findOrFail($request->integer('assignment_question_id'))
+            : null;
 
         // ATTACHMENT ERRORS GO IN THEIR OWN BAG - the same defect and the same
         // reasoning as on the lesson form. Tapping "Upload file" without choosing
         // one put "the file field is required" into the ASSIGNMENT's error block,
         // under a heading saying the assignment had failed to save, when the
         // assignment was never part of that request.
-        $validator = Validator::make($request->all(), [
-            'type' => ['required', 'in:link,file'],
-            'title' => ['nullable', 'string', 'max:191'],
-            'link_url' => ['nullable', 'required_if:type,link', 'url:http,https', 'max:500'],
-            'file' => ['nullable', 'required_if:type,file', 'file', 'max:20480'],
-        ]);
+        $validator = Validator::make($request->all(), $this->resourceRules());
 
         if ($validator->fails()) {
             throw new ValidationException($validator, null, self::RESOURCE_ERROR_BAG);
@@ -851,14 +837,16 @@ class TeacherCourseOfferingAssignmentController extends Controller
             $this->guarded(fn () => $this->assignments->attachFile(
                 $request->user(),
                 $target,
-                $request->file('file')
+                $request->file('file'),
+                $question
             ));
         } else {
             $this->guarded(fn () => $this->assignments->attachLink(
                 $request->user(),
                 $target,
                 (string) ($validated['title'] ?? $validated['link_url']),
-                (string) $validated['link_url']
+                (string) $validated['link_url'],
+                $question
             ));
         }
 
@@ -951,8 +939,11 @@ class TeacherCourseOfferingAssignmentController extends Controller
             // ONLY the observable rules. The declared-but-unimplemented ones are
             // deliberately absent - see the class docblock.
             'completion_rule' => ['required', Rule::in(Assignment::IMPLEMENTED_COMPLETION_RULES)],
-            'submission_kinds' => ['nullable', 'array'],
+            'submission_kinds' => ['required_with:submission_requirement_mode', 'nullable', 'array', 'min:1'],
             'submission_kinds.*' => ['string', Rule::in(AssignmentSubmissionItem::CONFIGURABLE_KINDS)],
+            'submission_requirement_mode' => ['sometimes', 'required', Rule::in(['all', 'any'])],
+            'optional_submission_kinds' => ['nullable', 'array'],
+            'optional_submission_kinds.*' => ['string', Rule::in(AssignmentSubmissionItem::CONFIGURABLE_KINDS)],
         ];
     }
 
@@ -1034,6 +1025,8 @@ class TeacherCourseOfferingAssignmentController extends Controller
             'requirement_role' => $validated['requirement_role'] ?? Assignment::ROLE_OPTIONAL,
             'completion_rule' => $validated['completion_rule'] ?? Assignment::RULE_SUBMISSION,
             'submission_kinds' => $validated['submission_kinds'] ?? null,
+            ...array_intersect_key($validated, array_flip(['submission_requirement_mode', 'optional_submission_kinds'])),
+            ...(isset($validated['submission_requirement_mode']) ? ['optional_submission_kinds' => $validated['optional_submission_kinds'] ?? []] : []),
         ];
 
         // A preview is not a save, so it must not be held to the publish rules -

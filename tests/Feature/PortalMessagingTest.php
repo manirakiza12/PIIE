@@ -51,6 +51,52 @@ class PortalMessagingTest extends TestCase
         return $this->postJson(route('messaging.send', $thread->id), ['message' => $text, 'client_message_id' => $id ?? (string) Str::uuid()]);
     }
 
+    public function test_lecturer_can_open_shared_inbox_owned_thread_and_message_notification(): void
+    {
+        $thread = $this->thread();
+        $this->actingAs($this->student);
+        $this->send($thread)->assertCreated();
+        $notification = \App\Models\UserNotification::where('user_id', $this->teacher->id)->firstOrFail();
+
+        $this->actingAs($this->teacher)->get('/messages')->assertOk();
+        $this->get('/messages/threads/'.$thread->id)->assertOk()->assertSee('Hello lecturer');
+        $this->get('/notifications')->assertOk()->assertSee('New portal message');
+        $this->post(route('notifications.read', $notification->id))->assertRedirect(route('messaging.show', $thread->id));
+        $this->get(route('messaging.show', $thread->id))->assertOk();
+    }
+
+    public function test_lecturer_password_change_completes_setup_and_restores_messaging(): void
+    {
+        $this->teacher->update(['force_password_change' => true, 'password' => \Illuminate\Support\Facades\Hash::make('Temporary-Password-123!')]);
+        $thread = $this->thread();
+        $this->actingAs($this->teacher)->get('/messages')->assertRedirect(route('teacher.password', 'edit'));
+        $this->get('/messages/threads/'.$thread->id)->assertRedirect(route('teacher.password', 'edit'));
+        $this->post(route('teacher.password', 'update'), [
+            'old_password' => 'Temporary-Password-123!',
+            'new_password' => 'Personal-Password-456!',
+            'confirm_password' => 'Personal-Password-456!',
+        ])->assertRedirect(route('teacher.password', 'edit'));
+        $this->assertFalse($this->teacher->fresh()->force_password_change);
+        $this->actingAs($this->teacher->fresh())->get('/messages')->assertOk();
+        $this->get('/messages/threads/'.$thread->id)->assertOk();
+    }
+
+    public function test_failed_lecturer_password_change_keeps_messaging_setup_guard(): void
+    {
+        $this->teacher->update(['force_password_change' => true, 'password' => \Illuminate\Support\Facades\Hash::make('Temporary-Password-123!')]);
+        $this->actingAs($this->teacher)->post(route('teacher.password', 'update'), [
+            'old_password' => 'Incorrect-Password', 'new_password' => 'Personal-Password-456!', 'confirm_password' => 'Personal-Password-456!',
+        ])->assertRedirect();
+        $this->assertTrue($this->teacher->fresh()->force_password_change);
+        $this->getJson(route('messaging.index'))->assertForbidden();
+        $this->post(route('teacher.password', 'update'), [
+            'old_password' => 'Temporary-Password-123!', 'new_password' => '1e3', 'confirm_password' => '1000',
+        ])->assertSessionHasErrors('confirm_password');
+        $this->assertTrue($this->teacher->fresh()->force_password_change);
+        $this->teacher->update(['account_status' => 'disable']);
+        $this->get('/messages')->assertForbidden();
+    }
+
     public function test_mobile_directory_only_exposes_allowed_contacts_and_escapes_names(): void
     {
         $this->person(7, 'Hidden Student');

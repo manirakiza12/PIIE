@@ -64,6 +64,14 @@
                 <div class="eForm-layouts">
                 <form action="{{ route('teacher.password', 'update') }}" method="post">
                     @CSRF
+                    @if(auth()->user()->force_password_change)
+                        <div class="alert alert-info">Change your temporary password to finish account setup and open Messages. Enter your temporary password as the current password.</div>
+                    @endif
+                    @if($errors->any())
+                        <div class="alert alert-danger" role="alert">
+                            @foreach($errors->all() as $error)<div>{{ $error }}</div>@endforeach
+                        </div>
+                    @endif
 
                     <div class="fpb-7">
                     <label for="new_password" class="eForm-label">{{ get_phrase('New Password') }}</label>

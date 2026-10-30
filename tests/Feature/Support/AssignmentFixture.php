@@ -97,6 +97,8 @@ trait AssignmentFixture
                 $t->string('requirement_role', 20)->default('optional');
                 $t->string('completion_rule', 30)->default('submission');
                 $t->string('submission_kinds', 120)->nullable();
+                $t->string('submission_requirement_mode', 8)->nullable();
+                $t->string('optional_submission_kinds', 120)->nullable();
             });
 
             Schema::table('assignments', function (Blueprint $t): void {
@@ -166,6 +168,7 @@ trait AssignmentFixture
                 $t->unsignedBigInteger('school_id');
                 $t->unsignedBigInteger('course_offering_id')->nullable();
                 $t->unsignedBigInteger('assignment_id');
+                $t->unsignedBigInteger('assignment_question_id')->nullable()->index();
                 $t->string('title', 191);
                 $t->string('type', 20)->default('link');
                 $t->string('link_url', 500)->nullable();

@@ -68,7 +68,7 @@
 
                 <dt class="col-5 col-sm-4 text-muted">What to submit</dt>
                 <dd class="col-7 col-sm-8">
-                    {{ \App\Models\Assignment::SUBMISSION_TYPE_LABELS[$assignment->submission_type] ?? $assignment->submission_type }}
+                    {{ $assignment->evidenceRequirementLabel() }} ({{ $assignment->requiresAllResponseKinds() ? 'all required' : 'any one sufficient' }})
                 </dd>
 
                 <dt class="col-5 col-sm-4 text-muted">Attempts</dt>

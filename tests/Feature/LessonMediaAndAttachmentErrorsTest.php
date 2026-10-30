@@ -176,7 +176,7 @@ class LessonMediaAndAttachmentErrorsTest extends TestCase
 
         $this->assertIsString($js);
         $this->assertStringContainsString('data-cc-media', $js);
-        $this->assertStringContainsString('preload="none"', $js, 'media must not download until asked');
+        $this->assertStringContainsString("media.preload = 'none'", $js, 'media must not download until asked');
     }
 
     public function test_a_playable_attachment_offers_itself_for_embedding(): void

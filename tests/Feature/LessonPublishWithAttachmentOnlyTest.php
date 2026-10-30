@@ -6,7 +6,7 @@ use App\Models\CourseOfferingLesson;
 use DomainException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Tests\Feature\Support\CourseContentFixture;
+use Tests\Feature\Support\AssignmentFixture;
 use Tests\TestCase;
 
 /**
@@ -41,14 +41,14 @@ use Tests\TestCase;
  */
 class LessonPublishWithAttachmentOnlyTest extends TestCase
 {
-    use CourseContentFixture {
-        setUp as protected courseContentSetUp;
+    use AssignmentFixture {
+        setUp as protected assignmentFixtureSetUp;
     }
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->courseContentSetUp();
+        $this->assignmentFixtureSetUp();
         Storage::fake('local');
     }
 
@@ -71,6 +71,7 @@ class LessonPublishWithAttachmentOnlyTest extends TestCase
             // guard was ever reached.
             $payload + [
                 'title' => $lesson->title,
+                'assignment_id' => $lesson->assignment_id ?: $this->publishedAssignment()->id,
                 'status' => 'published',
                 'course_offering_module_id' => $lesson->course_offering_module_id,
             ]
@@ -228,6 +229,7 @@ class LessonPublishWithAttachmentOnlyTest extends TestCase
             $this->module(),
             [
                 'title' => 'Born published and written',
+                'assignment_id' => $this->publishedAssignment()->id,
                 'status' => CourseOfferingLesson::STATUS_PUBLISHED,
                 'body' => '<p>Real content.</p>',
             ]

@@ -221,6 +221,7 @@ class SubmissionService
         // everything belongs to a question, and an item with no question on it would
         // be evidence a lecturer could not attribute to anything they asked.
         $items = $questionBased ? [] : $this->normaliseItems($assignment, $attributes['items'] ?? null);
+        if (!$questionBased) { $items = $this->retainDraftEvidence($assignment, $student, $items); }
 
         // CALLED UNCONDITIONALLY, and that is the point.
         //
@@ -267,6 +268,8 @@ class SubmissionService
         );
 
         return DB::transaction(function () use ($student, $assignment, $attributes, $items, $questionBased, $questions, $questionAnswers) {
+            Assignment::whereKey($assignment->id)->lockForUpdate()->firstOrFail();
+            $this->assertMayStillPrepare($assignment, $this->attemptsUsed($assignment, $student));
             $draft = $this->currentDraft($assignment, $student);
 
             if (! $draft) {
@@ -319,6 +322,10 @@ class SubmissionService
     public function submit(User $student, Assignment $assignment, array $attributes, ?string $idempotencyKey = null): AssignmentSubmission
     {
         $this->assertRegistered($student, $assignment);
+        $idempotencyKey = $this->normaliseKey($idempotencyKey);
+        if ($idempotencyKey !== null && ($existing = $this->submissionForKey($assignment, $student, $idempotencyKey))) {
+            return $existing;
+        }
 
         // THE REST PERIOD IS CHECKED FIRST, BEFORE THE ATTEMPT COUNT.
         //
@@ -345,27 +352,12 @@ class SubmissionService
             throw new DomainException($refusal);
         }
 
-        $idempotencyKey = $this->normaliseKey($idempotencyKey);
-
-        // Fast path: this exact submission already landed. Returning the
-        // existing attempt is the correct outcome of a retry, not an error.
-        if ($idempotencyKey !== null) {
-            $existing = AssignmentSubmission::query()
-                ->where('assignment_id', $assignment->id)
-                ->where('student_id', $student->id)
-                ->where('idempotency_key', $idempotencyKey)
-                ->first();
-
-            if ($existing) {
-                return $existing;
-            }
-        }
-
         $questionBased = $this->isQuestionBased($assignment);
         $questions = $questionBased ? $this->questionAnswers->questionsFor($assignment) : collect();
 
         $items = $questionBased ? [] : $this->normaliseItems($assignment, $attributes['items'] ?? null);
         $text = $questionBased ? null : $this->richTextOrNull($attributes['text'] ?? null);
+        if (!$questionBased) { $items = $this->retainDraftEvidence($assignment, $student, $items); }
 
         // Unconditional for the same reason as the draft path: a question id posted
         // to a generic assignment must be refused, not ignored.
@@ -391,7 +383,16 @@ class SubmissionService
             )
         );
 
-        $this->requiredCheck($assignment, $items, $text, forDraft: false, questionAnswers: $questionAnswers);
+        try {
+            $this->requiredCheck($assignment, $items, $text, forDraft: false, questionAnswers: $questionAnswers);
+        } catch (ValidationException $exception) {
+            // Keep valid uploaded work when final requirements are incomplete.
+            // No attempt is consumed; invalid file formats never reach this point.
+            if ($questionBased ? $this->questionAnswers->hasAnyAnswer($questions, $questionAnswers) : ($items !== [] || $text !== null)) {
+                $this->saveDraft($student, $assignment, $attributes);
+            }
+            throw $exception;
+        }
 
         // "Empty" means different things for the two models, and each is asked in
         // its own terms: a generic attempt is empty with no text and no evidence,
@@ -417,6 +418,11 @@ class SubmissionService
                 ->whereKey($assignment->id)
                 ->lockForUpdate()
                 ->first();
+
+            if ($idempotencyKey !== null && ($existing = $this->submissionForKey($assignment, $student, $idempotencyKey))) {
+                return $existing;
+            }
+            $this->assertMayStillPrepare($assignment, $this->attemptsUsed($assignment, $student));
 
             $used = AssignmentSubmission::query()
                 ->where('assignment_id', $assignment->id)
@@ -586,7 +592,7 @@ class SubmissionService
         ?string $text,
         bool $forDraft
     ): void {
-        $accepted = $assignment->acceptedEvidenceKinds();
+        $accepted = $assignment->responseKinds();
 
         $supplied = array_values(array_unique(array_map(
             fn (array $item) => (string) $item['kind'],
@@ -605,6 +611,8 @@ class SubmissionService
 
         $missing = array_values(array_diff($accepted, array_unique($supplied)));
 
+        if (!$assignment->requiresAllResponseKinds() && array_intersect($accepted, $supplied) !== []) { return; }
+
         if ($missing === []) {
             return;
         }
@@ -617,11 +625,14 @@ class SubmissionService
             ? $labels[0]
             : implode(', ', array_slice($labels, 0, -1)).' and '.end($labels);
 
-        throw ValidationException::withMessages([
-            'items' => $forDraft
-                ? 'This task asks for '.$expected.'. Add it, or the submission will be refused when you hand it in.'
-                : 'This task asks for '.$expected.', which your submission is missing.',
-        ]);
+        if (!$assignment->requiresAllResponseKinds()) {
+            throw ValidationException::withMessages(['items' => 'Provide any one of: '.$assignment->evidenceRequirementLabel().'. Optional attachments do not replace the required response.']);
+        }
+        $errors = ['items' => 'This task asks for '.$expected.', which your submission is missing.'];
+        foreach ($missing as $kind) {
+            $errors[$kind === 'link' ? 'link_url' : $kind] = 'Add the required '.strtolower(AssignmentSubmissionItem::KIND_LABELS[$kind] ?? $kind).'.';
+        }
+        throw ValidationException::withMessages($errors);
     }
 
     private function assertHasWork(array $items, ?string $text): void
@@ -652,6 +663,8 @@ class SubmissionService
         bool $forDraft,
         array $questionAnswers = []
     ): void {
+        // Drafts may be incomplete; supplied values still pass format validation.
+        if ($forDraft) { return; }
         if ($this->isQuestionBased($assignment)) {
             $this->questionAnswers->assertRequiredAnswered(
                 $this->questionAnswers->questionsFor($assignment),
@@ -730,9 +743,10 @@ class SubmissionService
                 $url = trim((string) ($row['url'] ?? ''));
                 $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
 
-                if ($url === '' || ! in_array($scheme, AssignmentSubmissionItem::LINK_SCHEMES, true)) {
+                if (!filter_var($url, FILTER_VALIDATE_URL) || ! in_array($scheme, AssignmentSubmissionItem::LINK_SCHEMES, true)) {
                     throw ValidationException::withMessages([
                         'items' => 'A link must be a full http or https address.',
+                        'link_url' => 'Use a full http or https address.',
                     ]);
                 }
 
@@ -768,6 +782,7 @@ class SubmissionService
 
         if ($extension === '' || ! in_array($extension, $allowed, true)) {
             throw ValidationException::withMessages([
+                $kind => 'Choose a supported '.strtolower(AssignmentSubmissionItem::KIND_LABELS[$kind] ?? $kind).' file: '.implode(', ', $allowed).'.',
                 'items' => 'A '.strtolower(AssignmentSubmissionItem::KIND_LABELS[$kind] ?? $kind)
                     .' must be one of: '.implode(', ', $allowed).'.',
             ]);
@@ -775,6 +790,7 @@ class SubmissionService
 
         if ($file->getSize() > self::MAX_UPLOAD_KB * 1024) {
             throw ValidationException::withMessages([
+                $kind => 'Files are limited to 20 MB.',
                 'items' => 'Files are limited to 20 MB. Compress it, or link to the material instead.',
             ]);
         }
@@ -784,6 +800,7 @@ class SubmissionService
 
         if (in_array($extension, $blocked, true) || in_array($detected, $blocked, true)) {
             throw ValidationException::withMessages([
+                $kind => 'That file type cannot be submitted.',
                 'items' => 'That file type cannot be submitted.',
             ]);
         }
@@ -803,12 +820,15 @@ class SubmissionService
             ->where('assignment_submission_id', $submission->id)
             ->get();
 
-        $existing->each(fn (AssignmentSubmissionItem $item) => $this->deleteItemFile($item));
+        $keep = array_values(array_filter(array_map(fn ($item) => $item['existing_id'] ?? null, $items)));
+        $existing->whereNotIn('id', $keep)->each(fn (AssignmentSubmissionItem $item) => $this->deleteItemFile($item));
         AssignmentSubmissionItem::query()
             ->where('assignment_submission_id', $submission->id)
+            ->whereNotIn('id', $keep)
             ->delete();
 
         foreach ($items as $item) {
+            if (isset($item['existing_id'])) { continue; }
             // The written response is already on the submission itself.
             if ($item['kind'] === AssignmentSubmissionItem::KIND_TEXT) {
                 continue;
@@ -830,6 +850,27 @@ class SubmissionService
 
             $row->save();
         }
+    }
+
+    private function submissionForKey(Assignment $assignment, User $student, string $key): ?AssignmentSubmission
+    {
+        return AssignmentSubmission::where('assignment_id', $assignment->id)
+            ->where('student_id', $student->id)->where('is_draft', false)
+            ->where('idempotency_key', $key)->first();
+    }
+
+    private function retainDraftEvidence(Assignment $assignment, User $student, array $items): array
+    {
+        $draft = $this->currentDraft($assignment, $student);
+        if (!$draft) { return $items; }
+        $replaced = array_column($items, 'kind');
+        foreach ($draft->items as $stored) {
+            if ($stored->assignment_question_id || !in_array($stored->kind, $assignment->acceptedEvidenceKinds(), true)
+                || in_array($stored->kind, $replaced, true)) { continue; }
+            if ($stored->hasFile() && (!$stored->stored_path || !Storage::disk('local')->exists($stored->stored_path))) { continue; }
+            $items[] = ['kind' => $stored->kind, 'existing_id' => $stored->id];
+        }
+        return $items;
     }
     /**
      * Store one evidence file OUTSIDE THE WEB ROOT under a generated name.

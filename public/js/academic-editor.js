@@ -214,6 +214,25 @@
             var doc = document.implementation.createHTMLDocument('');
             var host = doc.createElement('div');
             host.innerHTML = html;
+            // Pasted HTML must also be safe while it is visible in the editor.
+            // The server still applies the authoritative formatting allowlist.
+            host.querySelectorAll('script,style,iframe,object,embed,svg,math,meta,link,base,form,input,button,textarea,select').forEach(function (node) { node.remove(); });
+            host.querySelectorAll('*').forEach(function (node) {
+                Array.from(node.attributes).forEach(function (attribute) {
+                    var name = attribute.name.toLowerCase();
+                    var value = attribute.value.replace(/[\s\u0000-\u001f]+/g, '').toLowerCase();
+                    if (name.indexOf('on') === 0 || name === 'srcdoc' || name === 'contenteditable'
+                        || name.indexOf('data-piie-') === 0
+                        || ((name === 'href' || name === 'src') && /^(javascript|vbscript|data):/.test(value))) {
+                        node.removeAttribute(attribute.name);
+                    }
+                });
+                if (node.hasAttribute('class')) {
+                    node.className = node.className.split(/\s+/).filter(function (name) {
+                        return !/^note-|^piie-editor/.test(name);
+                    }).join(' ');
+                }
+            });
 
             // Word conditional comments, including the paired form.
             var walker = doc.createTreeWalker(host, NodeFilter.SHOW_COMMENT, null, false);
@@ -447,11 +466,9 @@
                 ['font', ['bold', 'italic', 'underline', 'superscript', 'subscript', 'strikethrough', 'clear']],
                 ['fontname', ['fontname']],
                 ['color', ['color']],
-                ['para', ['ul', 'ol']],
+                ['para', ['ul', 'ol', 'paragraph']],
                 ['height', ['height']],
-                ['alignment', ['left', 'center', 'right', 'justify']],
                 ['insert', ['link', 'table', 'piieSymbol', 'piieEquation', 'specialchars']],
-                ['list', ['outdent', 'indent']],
                 ['quote', ['blockquote']],
                 ['history', ['undo', 'redo']],
                 ['fullscreen', ['fullscreen']]
@@ -502,6 +519,10 @@
                 toolbar: toolbar,
                 callbacks: {
                     onInit: function () { API.nameTheEditor(cfg); },
+                    onChange: function (html, editable) {
+                        var source = document.getElementById(cfg.fieldId);
+                        API.bridgeToSource(editable && editable[0] ? editable[0] : API.editableFor(source));
+                    },
                     /**
                      * SUMMERNOTE'S OWN "THE EDITABLE EXISTS" SIGNAL.
                      *
@@ -564,6 +585,11 @@
 
                 var html = clipboard.getData('text/html');
                 var text = clipboard.getData('text/plain');
+                var plain = document.createElement('div');
+                plain.textContent = text || '';
+                var plainHtml = plain.innerHTML.replace(/\r\n?|\n/g, '<br>');
+                // We insert the cleaned fragment once; suppress native paste.
+                e.preventDefault();
 
                 // The editable this PASTE happened in, from Summernote's own context.
                 // Preferred over `activeEditable()` because it is not a guess at all:
@@ -574,7 +600,7 @@
                     : API.activeEditable();
 
                 if (!html) {
-                    if (text) { API.insertHtml(text.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n'), target); }
+                    if (text) { API.insertHtml(plainHtml, target); }
                     return;
                 }
 
@@ -585,7 +611,7 @@
                 }
 
                 if (tidied.replace(/<[^>]+>/g, '').trim() === '' && !/<img/i.test(tidied)) {
-                    if (text) { API.insertHtml(text, target); }
+                    if (text) { API.insertHtml(plainHtml, target); }
                     return;
                 }
 
@@ -612,7 +638,13 @@
                 }
 
                 try {
-                    $(editable).summernote('pasteHTML', html);
+                    var source = API.sourceTextareaFor(editable);
+                    if (source && $(source).data('summernote')) {
+                        $(source).summernote('pasteHTML', html);
+                    } else {
+                        editable.focus();
+                        document.execCommand('insertHTML', false, html);
+                    }
                 } catch (e) { /* no editor running on that node */ }
 
                 // `pasteHTML` edits the DOM directly, so it does not raise the
@@ -719,9 +751,10 @@
         writeTo: function (area, html) {
             var value = html === null || html === undefined ? '' : String(html);
 
-            if (area.getAttribute('data-piie-editor-ready') === '1' && $ && $.fn) {
+            if (area.getAttribute('data-piie-editor-ready') === '1' && $ && $.fn && $(area).data('summernote')) {
                 try {
                     $(area).summernote('code', value);
+                    area.value = value;
 
                     return true;
                 } catch (e) { /* fall through to the region the person sees */ }
@@ -731,6 +764,7 @@
 
             if (editable && typeof editable.innerHTML === 'string') {
                 editable.innerHTML = value;
+                API.bridgeToSource(editable);
 
                 return true;
             }
@@ -767,7 +801,7 @@
 
             if (editable && $ && $.fn) {
                 try {
-                    var viaApi = $(editable).summernote('code');
+                    var viaApi = $(area).data('summernote') ? $(area).summernote('code') : null;
 
                     if (typeof viaApi === 'string') {
                         return viaApi;
@@ -841,6 +875,7 @@
             if (!textarea) { return null; }
 
             if (!API.available) { reportUnavailable(textarea); return null; }
+            if (textarea.getAttribute('data-piie-editor-failed') === '1') { return null; }
 
             if (textarea.getAttribute('data-piie-editor-ready') === '1') {
                 return $(textarea).data('piieEditor');
@@ -859,60 +894,25 @@
 
             var options = API.optionsFor(cfg);
 
-            /**
-             * ONE FIELD MUST NOT BE ABLE TO BREAK THE PAGE.
-             *
-             * `summernote(options)` builds a toolbar, measures a font and creates DOM.
-             * All three can throw — a font probe, a browser quirk, a plugin this trimmed
-             * build does not have — and the previous version let the exception escape.
-             *
-             * That was not a cosmetic fault. `academic-editor.css` hides the source
-             * textarea as soon as `<html>` carries `piie-js`, and `start()` adds that
-             * class BEFORE any field is attached. So a field whose initialisation threw
-             * was left with `display: none` and nothing in its place: on exam 20 the
-             * student saw question 4 as a card with only a number and marks, and had
-             * nothing at all to type into. Worse, the exception unwound `attachAll`'s
-             * loop, so every field AFTER the failing one was never attempted either.
-             *
-             * Two things follow, and both are here:
-             *
-             *   1. the exception is caught, and the field is REVEALED as a working plain
-             *      textarea — the same fallback used when Summernote is absent, and the
-             *      same one the stylesheet documents;
-             *   2. `attachAll()` isolates each field, so one failure costs one field.
-             *
-             * A student with an unformatted answer box is an inconvenience. A student
-             * with an invisible one loses their work while the page reports it saved.
-             *
-             * ── WHICH RECOVERY, DEPENDING ON HOW FAR IT GOT ──────────────────
-             *
-             * The exception can strike before or after Summernote creates the editable,
-             * and the two need OPPOSITE recoveries:
-             *
-             *   editable absent → the field is a hidden textarea with nothing in its
-             *                    place. REVEAL it as a plain, working, still-submitted
-             *                    field. That is `reportUnavailable()`.
-             *
-             *   editable present → the editor is LIVE and fully usable to the student;
-             *                    only our setup bookkeeping was skipped. Revealing the
-             *                    textarea here would put TWO controls on the page for
-             *                    one answer — one the student is typing into and one
-             *                    autosave may read — which is worse than the original
-             *                    fault. So the field is marked ready, the bridge is
-             *                    bound, and the student keeps the editor they can see.
-             *
-             * This second case is not hypothetical: it is what a Summernote build that
-             * throws while building its toolbar or measuring its fonts does, and it is
-             * how exam 20's question 3 became an editor that looked perfect and
-             * recorded nothing.
-             */
+            // Constructor failure may leave DOM without a registered context.
+            // Retain it only if usable; otherwise preserve the document in the
+            // source textarea and remove the orphan before reporting fallback.
             try {
                 $(textarea).summernote(options);
             } catch (e) {
                 var shell = textarea.closest ? textarea.closest('.piie-editor-shell') : null;
                 var liveEditable = shell ? shell.querySelector('.note-editable') : null;
 
-                if (!liveEditable) {
+                if (!liveEditable || !$(textarea).data('summernote')) {
+                    // A constructor can leave DOM without registering its context.
+                    // Keep the document, remove that orphan, and use the source
+                    // textarea; a later command must never initialize it again.
+                    if (liveEditable && liveEditable.innerHTML && liveEditable.innerHTML !== '<p><br></p>') {
+                        textarea.value = liveEditable.innerHTML;
+                    }
+                    if (shell) {
+                        shell.querySelectorAll('.note-editor').forEach(function (orphan) { orphan.remove(); });
+                    }
                     reportUnavailable(textarea);
                     textarea.setAttribute('data-piie-editor-failed', '1');
 
@@ -943,6 +943,7 @@
          * the defect it is.
          */
         bindBridge: function (textarea) {
+            if (textarea.getAttribute('data-piie-editor-failed') === '1') { return false; }
             var shell = textarea.closest ? textarea.closest('.piie-editor-shell') : null;
             if (!shell) { return false; }
 
@@ -1345,193 +1346,57 @@
         /* ── plugin registration, once, at load time ────────────────────────── */
         registerPlugins: function () {
             if (!API.available || !$.summernote || !$.summernote.plugins) { return; }
-            if ($.summernote.plugins.piieTable) { return; }
-
-            var ui = $.summernote.ui;
-
-            /* ── table ──────────────────────────────────────────────────────
-             * Summernote Lite ships no table dialog of its own. Built through
-             * its own API rather than beside it, so the editor still owns the
-             * document, and every cell carries a real `scope` so a screen reader
-             * announces the column a figure belongs to. */
-            $.summernote.plugins.piieTable = function (context) {
-                context.addButton('piieTable', 'table', {
-                    tooltip: 'Insert a table',
-                    icon: '<i class="fa fa-table"></i>',
-                    click: function () {
-                        var html = ui.dialog({
-                            title: 'Insert a table',
-                            callback: function (dialogHtml) {
-                                var $d = $(dialogHtml);
-                                var rows = parseInt($d.find('[name="rows"]').val(), 10) || 2;
-                                var cols = parseInt($d.find('[name="cols"]').val(), 10) || 2;
-
-                                rows = Math.min(Math.max(rows, 1), 30);
-                                cols = Math.min(Math.max(cols, 1), 12);
-
-                                var out = '<table><thead><tr>';
-                                for (var c = 0; c < cols; c++) {
-                                    out += '<th scope="col">Heading ' + (c + 1) + '</th>';
-                                }
-                                out += '</tr></thead><tbody>';
-                                for (var r = 0; r < rows; r++) {
-                                    out += '<tr>';
-                                    for (var k = 0; k < cols; k++) { out += '<td>Cell</td>'; }
-                                    out += '</tr>';
-                                }
-                                return out + '</tbody></table>';
-                            }
-                        });
-
-                        if (html) { context.invoke('insertNode', $.parseHTML(html)[0]); }
-                    }
+            if ($.summernote.plugins.piieSymbol) { return; }
+            // Summernote 0.8.18 registers buttons through memo(), not addButton().
+            // Native table/subscript/superscript stay under the vendor's ownership.
+            function button(context, name, label, contents, click) {
+                context.memo('button.' + name, function () {
+                    return context.ui.button({ contents: contents, tooltip: label, click: click }).render();
                 });
-            };
-
-            /* ── sub / superscript ──────────────────────────────────────────
-             * `document.execCommand` is deprecated and absent in some embedded
-             * webviews, so the wrapper falls back to wrapping the selection in
-             * the element directly. Either way the result is a plain <sub> or
-             * <sup>, which is what the sanitizer allows. */
-            function subSuper(command) {
-                return function (context) {
-                    context.addButton(command, command, {
-                        tooltip: command === 'superscript' ? 'Superscript' : 'Subscript',
-                        icon: command === 'superscript'
-                            ? '<i class="fa fa-superscript"></i>'
-                            : '<i class="fa fa-subscript"></i>',
-                        click: function () {
-                            if (document.queryCommandSupported && document.queryCommandSupported(command)) {
-                                document.execCommand(command, false, null);
-                                return;
-                            }
-
-                            var selection = window.getSelection();
-                            if (!selection || selection.isCollapsed) { return; }
-
-                            var range = selection.getRangeAt(0);
-                            var element = document.createElement(command === 'superscript' ? 'sup' : 'sub');
-                            element.appendChild(range.extractContents());
-                            range.insertNode(element);
-                            selection.removeAllRanges();
-                        }
-                    });
-                };
             }
-
-            $.summernote.plugins.superscript = subSuper('superscript');
-            $.summernote.plugins.subscript = subSuper('subscript');
-
-            /* ── piieMedia: embed a lesson's OWN recording ───────────────────
-             *
-             * Summernote's built-in `video` pastes a THIRD-PARTY url - a YouTube
-             * or Vimeo link. That is the wrong tool for the recordings PIIE holds
-             * itself: a lecturer who has uploaded a lecture recording to the
-             * lesson's Resources panel should be able to place THAT recording in
-             * the lesson, not retype its address, and the embed must be reachable
-             * only by registered students.
-             *
-             * So this never accepts a typed url. The Resources panel renders one
-             * radio per playable attachment whose VALUE is the authorised resource
-             * url, built server-side by the route that re-checks registration and
-             * release. There is nothing free-form here to mistype and nothing for
-             * a crafted request to smuggle in - the browser is choosing between
-             * urls this page already vouched for, not supplying one.
-             *
-             * `preload="none"` and no autoplay are deliberate: PIIE's students are
-             * largely on metered connections, and a lesson body full of media that
-             * starts downloading the moment it renders is a data bill, not a
-             * feature. The fallback link matters too, because Safari and older
-             * Android still decline some codecs outright.
-             *
-             * The markup is plain <audio>/<video> with `controls`, which is what
-             * the lesson sanitizer allows through. */
-            $.summernote.plugins.piieMedia = function (context) {
-                context.addButton('piieMedia', 'piieMedia', {
-                    tooltip: 'Insert a recording from this lesson',
-                    icon: '<i class="fa fa-play-circle"></i>',
-                    click: function () {
-                        var chosen = document.querySelector('[data-cc-media]:checked');
-
-                        // Nothing ticked: say so rather than inserting nothing and
-                        // leaving the lecturer to wonder whether it worked.
-                        if (!chosen) {
-                            window.alert(
-                                'Tick a recording in the Resources panel first, then choose Insert.'
-                            );
-                            return;
-                        }
-
-                        var parts = String(chosen.value).split('|');
-                        var kind = parts[0] === 'audio' ? 'audio' : 'video';
-                        var url = parts[1];
-
-                        if (!url) { return; }
-
-                        var html = '<p><' + kind + ' controls preload="none" src="' + url + '">'
-                            + 'Your browser cannot play this recording.'
-                            + ' <a href="' + url + '">Download it instead.</a>'
-                            + '</' + kind + '></p>';
-
-                        context.invoke('insertNode', $.parseHTML(html)[0]);
-                    }
-                });
-            };
-
-            /* ── mathematical symbols ──────────────────────────────────────
-             * A plain overlay rather than a Summernote dialog, because a symbol
-             * picker is a GRID of targets and Summernote's dialog contract only
-             * returns a string from a text field. The overlay is not an editor
-             * and does not own a caret: it inserts through the editor's own API,
-             * so undo, the toolbar and the sanitized round-trip all still work
-             * exactly as they do for any other insertion. */
             $.summernote.plugins.piieSymbol = function (context) {
-                context.addButton('piieSymbol', 'piieSymbol', {
-                    tooltip: 'Mathematical symbols',
-                    icon: '<i class="fa fa-calculator"></i>',
-                    click: function () { API.openSymbolPicker(context); }
+                button(context, 'piieSymbol', 'Mathematical symbols', '∑', function () {
+                    API.openSymbolPicker(context);
                 });
             };
-
-            /* ── equation notation ──────────────────────────────────────────
-             * Stores LaTeX and a plain-text fallback. Nothing is executed, and
-             * the server allowlist permits exactly `span[data-latex]` and
-             * `span[data-equation]` and nothing else, so the notation cannot
-             * become an injection point. The fallback is what a reader without a
-             * renderer sees, which is why it is required rather than optional. */
             $.summernote.plugins.piieEquation = function (context) {
-                context.addButton('piieEquation', 'piieEquation', {
-                    tooltip: 'Insert an equation',
-                    icon: '<i class="fa fa-superscript"></i>',
-                    click: function () {
-                        var html = ui.dialog({
-                            title: 'Insert an equation',
-                            callback: function (dialogHtml) {
-                                var $d = $(dialogHtml);
-                                var latex = ($d.find('[name="latex"]').val() || '').trim();
-                                if (!latex) { return ''; }
-
-                                var fallback = ($d.find('[name="fallback"]').val() || '').trim();
-                                if (!fallback) { fallback = latex; }
-
-                                var escape = function (s) {
-                                    return String(s)
-                                        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-                                        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                                };
-
-                                return '<span data-latex="' + escape(latex) + '">'
-                                    + escape(fallback) + '</span>';
-                            }
-                        });
-
-                        if (html) { context.invoke('insertNode', $.parseHTML(html)[0]); }
-                    }
+                button(context, 'piieEquation', 'Insert an equation', 'x²', function () {
+                    var latex = window.prompt('Equation (LaTeX notation)');
+                    if (!latex || !latex.trim()) { return; }
+                    var fallback = window.prompt('Readable equation text', latex);
+                    if (fallback === null) { return; }
+                    var span = document.createElement('span');
+                    span.setAttribute('data-latex', latex.trim());
+                    span.textContent = fallback || latex;
+                    context.invoke('editor.insertNode', span);
+                });
+            };
+            $.summernote.plugins.piieMedia = function (context) {
+                button(context, 'piieMedia', 'Embed selected recording', '▶', function () {
+                    API.insertSelectedMedia(context);
                 });
             };
         },
 
-        /* ── the symbol overlay ───────────────────────────────────────────── */
+        insertSelectedMedia: function (context) {
+            var chosen = document.querySelector('[data-cc-media]:checked');
+            if (!chosen) { window.alert('Select an audio or video attachment in Resources first.'); return; }
+            var parts = String(chosen.value).split('|');
+            if (!parts[1]) { return; }
+            var paragraph = document.createElement('p');
+            var media = document.createElement(parts[0] === 'audio' ? 'audio' : 'video');
+            media.controls = true;
+            media.preload = 'none';
+            media.src = parts[1];
+            paragraph.appendChild(media);
+            // The shared sanitizer does not permit inline media players. Keep an
+            // authorized resource link outside the player so it survives saving.
+            var link = document.createElement('a');
+            link.href = parts[1];
+            link.textContent = 'Open ' + (parts[0] === 'audio' ? 'audio' : 'video') + ' recording';
+            paragraph.appendChild(link);
+            context.invoke('editor.insertNode', paragraph);
+        },
         openSymbolPicker: function (context) {
             if (document.querySelector('.piie-symbol-overlay')) { return; }
 
@@ -1661,8 +1526,6 @@
         // The plugins can only be registered once Summernote is actually present,
         // so this is where registration belongs - and `registerPlugins()` is
         // idempotent, so being reached twice is harmless.
-        API.registerPlugins();
-
         // THE PROGRESSIVE-ENHANCEMENT FLAG.
         //
         // The stylesheet hides the source textarea only under `html.piie-js`, and
@@ -1680,6 +1543,7 @@
             API.available = false;
         }
 
+        API.registerPlugins();
         API.attachAll(document);
     }
 

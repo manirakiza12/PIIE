@@ -44,6 +44,7 @@ class CourseContentService
         $this->access->assertCanManageOrFail($actor, $offering);
 
         return DB::transaction(function () use ($offering, $attributes, $actor) {
+            CourseOffering::query()->whereKey($offering->id)->lockForUpdate()->firstOrFail();
             $next = (int) CourseOfferingModule::query()
                 ->where('course_offering_id', $offering->id)
                 ->max('sequence') + 1;
@@ -56,7 +57,7 @@ class CourseContentService
                 'summary' => $this->nullIfBlank($attributes['summary'] ?? null),
                 'sequence' => $next,
                 'status' => $this->normaliseModuleStatus($attributes['status'] ?? CourseOfferingModule::STATUS_DRAFT),
-                'released_at' => $this->parseRelease($attributes['released_at'] ?? null),
+                'released_at' => app(LearningSchedule::class)->parse($attributes['released_at'] ?? null, $actor),
                 'created_by' => $actor->id,
             ])->save();
 
@@ -69,11 +70,18 @@ class CourseContentService
         $offering = $this->access->resolveOffering($actor, (int) $module->course_offering_id);
         $this->access->assertCanManageOrFail($actor, $offering);
 
+        if (($attributes['status'] ?? $module->status) === CourseOfferingModule::STATUS_PUBLISHED) {
+            foreach ($module->lessons()->where('school_id', $module->school_id)
+                ->where('course_offering_id', $module->course_offering_id)->where('status', CourseOfferingLesson::STATUS_PUBLISHED)->get() as $lesson) {
+                app(LessonPublicationCheck::class)->assertPublishable($lesson);
+            }
+        }
+
         $module->forceFill([
             'title' => trim((string) $attributes['title']),
             'summary' => $this->nullIfBlank($attributes['summary'] ?? null),
             'status' => $this->normaliseModuleStatus($attributes['status'] ?? $module->status),
-            'released_at' => $this->parseRelease($attributes['released_at'] ?? null),
+            'released_at' => app(LearningSchedule::class)->parse($attributes['released_at'] ?? null, $actor),
             'updated_by' => $actor->id,
         ])->save();
 
@@ -143,6 +151,23 @@ class CourseContentService
         $this->access->assertCanManageOrFail($actor, $offering);
 
         return DB::transaction(function () use ($module, $attributes, $actor) {
+            User::whereKey($actor->id)->lockForUpdate()->firstOrFail();
+            CourseOfferingModule::query()->whereKey($module->id)->where('school_id', $module->school_id)
+                ->where('course_offering_id', $module->course_offering_id)->lockForUpdate()->firstOrFail();
+            $signature = $attributes;
+            unset($signature['creation_key']);
+            ksort($signature);
+            $fingerprint = hash('sha256', json_encode([$module->id, $signature], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+            $key = $attributes['creation_key'] ?? $fingerprint;
+            $existing = CourseOfferingLesson::where('school_id', $module->school_id)
+                ->where('created_by', $actor->id)->where('creation_key', $key)->lockForUpdate()->first();
+            if ($existing) {
+                abort_unless((int) $existing->course_offering_id === (int) $module->course_offering_id, 409);
+                if ($existing->creation_fingerprint !== $fingerprint) {
+                    throw ValidationException::withMessages(['creation_key' => 'This lesson was already saved. Open its saved draft from Course Content to edit it; the submitted text is retained here.']);
+                }
+                return $existing;
+            }
             $next = (int) CourseOfferingLesson::query()
                 ->where('course_offering_module_id', $module->id)
                 ->max('sequence') + 1;
@@ -162,10 +187,15 @@ class CourseContentService
                 'estimated_minutes' => $this->normaliseMinutes($attributes['estimated_minutes'] ?? null),
                 'sequence' => $next,
                 'status' => $this->normaliseLessonStatus($attributes['status'] ?? CourseOfferingLesson::STATUS_DRAFT),
-                'released_at' => $this->parseRelease($attributes['released_at'] ?? null),
+                'released_at' => app(LearningSchedule::class)->parse($attributes['released_at'] ?? null, $actor),
                 'completion_rule' => $this->normaliseCompletionRule($attributes['completion_rule'] ?? CourseOfferingLesson::RULE_MANUAL),
                 'created_by' => $actor->id,
+                'creation_key' => $key,
+                'creation_fingerprint' => $fingerprint,
             ])->save();
+
+            $lesson->assignment_id = $this->resolveLessonAssignment($lesson, $attributes['assignment_id'] ?? null);
+            $lesson->save();
 
             // THE SAME RULE AS ON UPDATE, AND IT WAS MISSING HERE.
             //
@@ -186,6 +216,10 @@ class CourseContentService
                 );
             }
 
+            if ($lesson->status === CourseOfferingLesson::STATUS_PUBLISHED) {
+                app(LessonPublicationCheck::class)->assertPublishable($lesson);
+            }
+
             return $lesson->fresh();
         });
     }
@@ -195,54 +229,84 @@ class CourseContentService
         $offering = $this->access->resolveOffering($actor, (int) $lesson->course_offering_id);
         $this->access->assertCanManageOrFail($actor, $offering);
 
-        $changes = [
-            'title' => trim((string) $attributes['title']),
-            'summary' => $this->nullIfBlank($attributes['summary'] ?? null),
-            'learning_objectives' => $this->nullIfBlank($attributes['learning_objectives'] ?? null),
-            'estimated_minutes' => $this->normaliseMinutes($attributes['estimated_minutes'] ?? null),
-            'completion_rule' => $this->normaliseCompletionRule($attributes['completion_rule'] ?? $lesson->completion_rule),
-            'updated_by' => $actor->id,
-        ];
+        return DB::transaction(function () use ($actor, $lesson, $attributes) {
+            $lesson = CourseOfferingLesson::whereKey($lesson->id)->where('school_id', $lesson->school_id)
+                ->where('course_offering_id', $lesson->course_offering_id)->lockForUpdate()->firstOrFail();
+            $moduleId = $attributes['course_offering_module_id'] ?? $lesson->course_offering_module_id;
+            CourseOfferingModule::whereKey($moduleId)->where('school_id', $lesson->school_id)
+                ->where('course_offering_id', $lesson->course_offering_id)->firstOrFail();
+            $lesson->course_offering_module_id = $moduleId;
 
-        if (array_key_exists('body', $attributes)) {
-            $changes['body'] = $attributes['body'];
-        }
-        if (array_key_exists('status', $attributes)) {
-            $changes['status'] = $this->normaliseLessonStatus($attributes['status']);
-        }
-        if (array_key_exists('released_at', $attributes)) {
-            $changes['released_at'] = $this->parseRelease($attributes['released_at'] ?? null);
-        }
+            $changes = [
+                'title' => trim((string) $attributes['title']),
+                'summary' => $this->nullIfBlank($attributes['summary'] ?? null),
+                'learning_objectives' => $this->nullIfBlank($attributes['learning_objectives'] ?? null),
+                'estimated_minutes' => $this->normaliseMinutes($attributes['estimated_minutes'] ?? null),
+                'completion_rule' => $this->normaliseCompletionRule($attributes['completion_rule'] ?? $lesson->completion_rule),
+                'updated_by' => $actor->id,
+                'course_offering_module_id' => $moduleId,
+            ];
 
-        // Publishing something empty would put a blank lesson in front of
-        // students, so it is refused here rather than discovered by them.
-        //
-        // "EMPTY" HAS TO MEAN SOMETHING A STUDENT WOULD CALL BLANK - AND AN
-        // ATTACHED FILE IS NOT THAT.
-        //
-        // The check used to read only the lesson body, so a lecturer whose lesson
-        // IS the material - a slide deck, a scanned handout, a recorded lecture,
-        // or simply a link to the reading - was told to "add some lesson content"
-        // while looking at a list of perfectly good attachments. The rule existed
-        // to stop a blank page reaching a student, and it was refusing a lesson
-        // that had content of a different kind.
-        //
-        // So an attachment counts. A link or an uploaded file IS the lesson, and a
-        // student opening it sees the attachment rather than nothing at all.
-        if (($changes['status'] ?? $lesson->status) === CourseOfferingLesson::STATUS_PUBLISHED) {
-            $body = array_key_exists('body', $changes) ? $changes['body'] : $lesson->body;
-
-            if (! $this->lessonHasSomethingToShow($lesson, $body)) {
-                throw new DomainException(
-                    'This lesson has nothing in it yet. Add written content, or attach a file or a link, '
-                    .'before publishing - a published lesson with no content is not something a student should be shown.'
-                );
+            if (array_key_exists('assignment_id', $attributes)) {
+                $changes['assignment_id'] = $this->resolveLessonAssignment($lesson, $attributes['assignment_id']);
             }
+
+            if (array_key_exists('body', $attributes)) {
+                $changes['body'] = $attributes['body'];
+            }
+            if (array_key_exists('status', $attributes)) {
+                $changes['status'] = $this->normaliseLessonStatus($attributes['status']);
+            }
+            if (array_key_exists('released_at', $attributes)) {
+                $changes['released_at'] = app(LearningSchedule::class)->parse($attributes['released_at'] ?? null, $actor);
+            }
+
+            // Publishing something empty would put a blank lesson in front of
+            // students, so it is refused here rather than discovered by them.
+            //
+            // "EMPTY" HAS TO MEAN SOMETHING A STUDENT WOULD CALL BLANK - AND AN
+            // ATTACHED FILE IS NOT THAT.
+            //
+            // The check used to read only the lesson body, so a lecturer whose lesson
+            // IS the material - a slide deck, a scanned handout, a recorded lecture,
+            // or simply a link to the reading - was told to "add some lesson content"
+            // while looking at a list of perfectly good attachments. The rule existed
+            // to stop a blank page reaching a student, and it was refusing a lesson
+            // that had content of a different kind.
+            //
+            // So an attachment counts. A link or an uploaded file IS the lesson, and a
+            // student opening it sees the attachment rather than nothing at all.
+            if (($changes['status'] ?? $lesson->status) === CourseOfferingLesson::STATUS_PUBLISHED) {
+                $body = array_key_exists('body', $changes) ? $changes['body'] : $lesson->body;
+
+                if (! $this->lessonHasSomethingToShow($lesson, $body)) {
+                    throw new DomainException(
+                        'This lesson has nothing in it yet. Add written content, or attach a file or a link, '
+                        .'before publishing - a published lesson with no content is not something a student should be shown.'
+                    );
+                }
+                $candidate = clone $lesson;
+                $candidate->forceFill($changes);
+                app(LessonPublicationCheck::class)->assertPublishable($candidate);
+            }
+
+            $lesson->forceFill($changes)->save();
+
+            return $lesson->fresh();
+        });
+    }
+
+    private function resolveLessonAssignment(CourseOfferingLesson $lesson, mixed $id): ?int
+    {
+        if (!$id) { return null; }
+        $assignment = \App\Models\Assignment::whereKey($id)->where('school_id', $lesson->school_id)
+            ->where('course_offering_id', $lesson->course_offering_id)->lockForUpdate()->first();
+        if (!$assignment || ($assignment->course_offering_module_id && (int) $assignment->course_offering_module_id !== (int) $lesson->course_offering_module_id)
+            || CourseOfferingLesson::where('assignment_id', $id)
+            ->when($lesson->exists, fn ($q) => $q->where('id', '!=', $lesson->id))->lockForUpdate()->first()) {
+            throw ValidationException::withMessages(['assignment_id' => 'Choose an assignment in this Course Offering and lesson module, not one linked to a different lesson or module.']);
         }
-
-        $lesson->forceFill($changes)->save();
-
-        return $lesson->fresh();
+        return (int) $assignment->id;
     }
 
     /**
@@ -262,11 +326,7 @@ class CourseContentService
      */
     private function lessonHasSomethingToShow(CourseOfferingLesson $lesson, ?string $body): bool
     {
-        if ($this->sanitizer->hasMeaningfulText($body)) {
-            return true;
-        }
-
-        return $lesson->resources()->exists();
+        return app(LessonPublicationCheck::class)->hasContent($lesson, $body);
     }
 
     /** @param array<int> $orderedIds */
@@ -351,29 +411,15 @@ class CourseContentService
         $offering = $this->access->resolveOffering($actor, (int) $lesson->course_offering_id);
         $this->access->assertCanManageOrFail($actor, $offering);
 
-        if (! $file || ! $file->isValid()) {
-            throw ValidationException::withMessages(['file' => 'Choose a file to attach.']);
-        }
-
+        app(LearningMaterialUpload::class)->validate($file);
         $extension = strtolower((string) $file->getClientOriginalExtension());
-        if (! preg_match('/^[a-z0-9]{1,8}$/', $extension)) {
-            throw ValidationException::withMessages(['file' => 'That file type cannot be attached.']);
-        }
-
-        // 20 MB ceiling. A lecture recording is a link, not an upload: this is a
-        // deliberate limit for the low-bandwidth markets PIIE targets.
-        $maxKilobytes = 20 * 1024;
-        if ((int) $file->getSize() > $maxKilobytes * 1024) {
-            throw ValidationException::withMessages([
-                'file' => 'Attachments are limited to 20 MB. Link to a larger recording instead.',
-            ]);
-        }
 
         $storedName = 'course-content/'.$lesson->course_offering_id.'/'.bin2hex(random_bytes(16)).'.'.$extension;
-        Storage::disk('local')->put($storedName, file_get_contents($file->getRealPath()));
+        app(LearningMaterialUpload::class)->store($file, $storedName);
 
         $resource = new CourseOfferingLessonResource();
-        $resource->forceFill([
+        try {
+            $resource->forceFill([
             'school_id' => $lesson->school_id,
             'course_offering_id' => $lesson->course_offering_id,
             'course_offering_lesson_id' => $lesson->id,
@@ -381,10 +427,14 @@ class CourseContentService
             'type' => CourseOfferingLessonResource::TYPE_FILE,
             'original_name' => (string) $file->getClientOriginalName(),
             'stored_name' => $storedName,
-            'mime_type' => (string) ($file->getClientMimeType() ?: 'application/octet-stream'),
+            'mime_type' => (string) ($file->getMimeType() ?: 'application/octet-stream'),
             'size_bytes' => (int) $file->getSize(),
             'created_by' => $actor->id,
-        ])->save();
+            ])->save();
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($storedName);
+            throw $exception;
+        }
 
         return $resource->fresh();
     }
@@ -519,29 +569,14 @@ class CourseContentService
      */
     public function recordEngagement(User $student, CourseOfferingLesson $lesson): ?CourseOfferingLessonProgress
     {
-        $existing = CourseOfferingLessonProgress::query()
-            ->where('course_offering_lesson_id', $lesson->id)
-            ->where('student_id', $student->id)
-            ->first();
-
-        if ($existing) {
-            // A completed lesson stays completed; re-opening it only refreshes
-            // when it was last seen.
-            $existing->forceFill(['last_viewed_at' => now()])->save();
-
-            return $existing;
-        }
-
-        $progress = new CourseOfferingLessonProgress();
-        $progress->forceFill([
-            'school_id' => $lesson->school_id,
-            'course_offering_id' => $lesson->course_offering_id,
-            'course_offering_lesson_id' => $lesson->id,
-            'student_id' => $student->id,
-            'status' => CourseOfferingLessonProgress::STATUS_IN_PROGRESS,
-            'started_at' => now(),
-            'last_viewed_at' => now(),
-        ])->save();
+        $progress = CourseOfferingLessonProgress::query()->firstOrCreate(
+            ['course_offering_lesson_id' => $lesson->id, 'student_id' => $student->id],
+            ['school_id' => $lesson->school_id, 'course_offering_id' => $lesson->course_offering_id,
+                'status' => CourseOfferingLessonProgress::STATUS_IN_PROGRESS,
+                'started_at' => now(), 'last_viewed_at' => now()]
+        );
+        // Only update the viewed timestamp: a concurrent completion must survive.
+        $progress->forceFill(['last_viewed_at' => now()])->save();
 
         return $progress->fresh();
     }
@@ -563,36 +598,16 @@ class CourseContentService
             throw new DomainException('This lesson is completed by its own activity, not by a button. Your progress updates when that activity is finished.');
         }
 
-        $existing = CourseOfferingLessonProgress::query()
-            ->where('course_offering_lesson_id', $lesson->id)
-            ->where('student_id', $student->id)
-            ->first();
-
-        if ($existing && $existing->isComplete()) {
-            return $existing;
-        }
-
-        if ($existing) {
-            $existing->forceFill([
+        $progress = CourseOfferingLessonProgress::query()->firstOrCreate(
+            ['course_offering_lesson_id' => $lesson->id, 'student_id' => $student->id],
+            ['school_id' => $lesson->school_id, 'course_offering_id' => $lesson->course_offering_id,
                 'status' => CourseOfferingLessonProgress::STATUS_COMPLETED,
-                'completed_at' => now(),
-                'last_viewed_at' => now(),
-            ])->save();
-
-            return $existing->fresh();
-        }
-
-        $progress = new CourseOfferingLessonProgress();
-        $progress->forceFill([
-            'school_id' => $lesson->school_id,
-            'course_offering_id' => $lesson->course_offering_id,
-            'course_offering_lesson_id' => $lesson->id,
-            'student_id' => $student->id,
-            'status' => CourseOfferingLessonProgress::STATUS_COMPLETED,
-            'started_at' => now(),
-            'completed_at' => now(),
-            'last_viewed_at' => now(),
-        ])->save();
+                'started_at' => now(), 'completed_at' => now(), 'last_viewed_at' => now()]
+        );
+        CourseOfferingLessonProgress::query()->whereKey($progress->id)
+            ->where('status', '!=', CourseOfferingLessonProgress::STATUS_COMPLETED)
+            ->update(['status' => CourseOfferingLessonProgress::STATUS_COMPLETED,
+                'completed_at' => now(), 'last_viewed_at' => now()]);
 
         return $progress->fresh();
     }
@@ -621,7 +636,9 @@ class CourseContentService
             'position' => $index + 1,
             'total' => $sequence->count(),
             'previous' => $index > 0 ? $sequence[$index - 1] : null,
-            'next' => $index < $sequence->count() - 1 ? $sequence[$index + 1] : null,
+            'next' => $index < $sequence->count() - 1
+                && app(ProgressionGate::class)->mayOpenLesson($student, $sequence[$index + 1])
+                    ? $sequence[$index + 1] : null,
         ];
     }
 
@@ -672,17 +689,6 @@ class CourseContentService
 
         // A lesson over a full day is a data error, not a long lesson.
         return ($value > 0 && $value <= 1440) ? $value : null;
-    }
-
-    private function parseRelease($value): ?\Illuminate\Support\Carbon
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $parsed = \Illuminate\Support\Carbon::parse($value);
-
-        return $parsed === null ? null : $parsed;
     }
 
     private function nullIfBlank($value): ?string

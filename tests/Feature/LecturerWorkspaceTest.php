@@ -64,6 +64,55 @@ class LecturerWorkspaceTest extends TestCase
         $this->k12Teacher = $this->lecturer($this->tenants['k12'], 'K12 Teacher', ['live_classes.view']);
     }
 
+    public function test_course_messaging_requires_current_teaching_and_confirmed_enrolment_and_retains_history(): void
+    {
+        Schema::table('message_thrades', fn (Blueprint $t) => $t->unsignedBigInteger('school_id')->nullable());
+        Schema::table('chats', function (Blueprint $t) {
+            $t->unsignedBigInteger('school_id')->nullable();
+            $t->unsignedBigInteger('sender_id')->nullable();
+            $t->text('message')->nullable();
+        });
+        (require database_path('migrations/2026_10_15_050000_add_messaging_safety_and_delivery_tables.php'))->up();
+        $student = User::factory()->create(['school_id' => $this->tenants['a']['school'], 'role_id' => 7, 'account_status' => 'active']);
+        $messages = app(\App\Support\Messaging\MessagingService::class);
+        foreach (['primary_lecturer', 'co_lecturer'] as $role) {
+            $course = $this->allocated($this->tenants['a'], $this->lecturerA, 'MSG-'.$role, $role, 'in_progress');
+            $this->assertFalse($messages->pairAllowed($student, $this->lecturerA));
+            DB::table('course_registrations')->insert(['school_id' => $student->school_id, 'student_id' => $student->id,
+                'subject_id' => $course->subject_id, 'course_offering_id' => $course->id, 'status' => 'registered']);
+            $this->assertFalse($messages->pairAllowed($student, $this->lecturerA));
+            DB::table('course_registrations')->where('course_offering_id', $course->id)->update(['status' => 'confirmed']);
+            $this->assertTrue($messages->pairAllowed($student, $this->lecturerA));
+            $this->assertTrue($messages->pairAllowed($this->lecturerA, $student));
+            $this->assertFalse($messages->pairAllowed($student, $this->lecturerB));
+            $this->assertFalse($messages->pairAllowed($student, $this->foreignLecturer));
+            $this->actingAs($student)->get(route('messaging.index', ['q' => 'Lecturer']))->assertOk()
+                ->assertSee('Lecturer A')->assertDontSee('Lecturer B')->assertDontSee('Foreign Lecturer');
+            $this->actingAs($student)->post(route('messaging.start'), ['recipient_id' => $this->lecturerA->id])->assertRedirect();
+            $thread = \App\Models\MessageThrade::firstOrFail();
+            $this->postJson(route('messaging.send', $thread->id), ['message' => 'Course question', 'client_message_id' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
+            $this->assertDatabaseHas('user_notifications', ['user_id' => $this->lecturerA->id, 'type' => 'portal_message']);
+            $this->actingAs($this->lecturerA)->postJson(route('messaging.send', $thread->id),
+                ['message' => 'Lecturer response', 'client_message_id' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
+            $this->actingAs($this->lecturerB)->getJson(route('messaging.poll', $thread->id))->assertNotFound();
+            $this->postJson(route('messaging.start'), ['recipient_id' => $student->id])->assertForbidden();
+            $this->actingAs($student);
+            foreach ([['starts_on' => '2027-01-01'], ['ends_on' => '2026-09-01'], ['status' => 'cancelled']] as $change) {
+                DB::table('course_offering_lecturer_allocations')->where('course_offering_id', $course->id)->update(array_merge(['starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'active'], $change));
+                $this->assertFalse($messages->pairAllowed($student, $this->lecturerA));
+                $this->postJson(route('messaging.send', $thread->id), ['message' => 'Denied', 'client_message_id' => (string) \Illuminate\Support\Str::uuid()])->assertForbidden();
+                $this->getJson(route('messaging.poll', $thread->id))->assertOk()->assertJsonFragment(['text' => 'Course question', 'writable' => false]);
+            }
+            DB::table('course_offering_lecturer_allocations')->where('course_offering_id', $course->id)
+                ->update(['status' => 'active', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30']);
+            DB::table('course_offerings')->where('id', $course->id)->update(['status' => 'completed']);
+            $this->assertFalse($messages->pairAllowed($student, $this->lecturerA));
+            DB::table('course_offerings')->where('id', $course->id)->update(['status' => 'in_progress']);
+            DB::table('course_registrations')->where('course_offering_id', $course->id)->update(['status' => 'cancelled']);
+            $this->assertFalse($messages->pairAllowed($student, $this->lecturerA));
+        }
+    }
+
     // ---------------------------------------------------------------- 1, 2, 5
 
     public function test_lecturer_sees_only_the_course_offerings_they_are_allocated_to(): void

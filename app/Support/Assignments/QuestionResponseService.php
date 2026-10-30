@@ -84,7 +84,7 @@ class QuestionResponseService
      */
     public function questionsFor(Assignment $assignment)
     {
-        return $assignment->questions()->inReadingOrder()->get();
+        return $assignment->questions()->with('resources')->inReadingOrder()->get();
     }
 
     /**
@@ -489,6 +489,7 @@ class QuestionResponseService
     {
         $missing = [];
         $messages = [];
+        $fieldErrors = [];
 
         foreach ($questions as $question) {
             if (! $question->is_required) {
@@ -511,6 +512,7 @@ class QuestionResponseService
             // had answered in writing be told to choose a file. A message is only
             // useful if the student can act on it without guessing.
             $messages[] = $question->unansweredMessage();
+            $fieldErrors['questions.'.$question->id] = $question->unansweredMessage();
         }
 
         if ($missing === []) {
@@ -521,7 +523,7 @@ class QuestionResponseService
             ? 'A saved draft still has to be something you could hand in.'
             : 'Answer every required question before you submit.';
 
-        throw ValidationException::withMessages(['questions' => $messages]);
+        throw ValidationException::withMessages(['questions' => $messages] + $fieldErrors);
     }
 
     /**

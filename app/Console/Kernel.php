@@ -20,7 +20,8 @@ class Kernel extends ConsoleKernel
         // Scheduler on Windows) — see App\Console\Commands\SendLiveClassReminders
         // for what breaks silently if that isn't set up, and how to test the
         // command directly without it.
-        $schedule->command('live-classes:send-reminders')->everyFiveMinutes();
+        $schedule->command('live-classes:send-reminders')->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command('live-classes:retry-emails')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('live-classes:refresh-google-links')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
         $schedule->command('online-exams:send-result-emails')->everyFiveMinutes();
         $schedule->command('online-exams:send-start-reminders')->everyFiveMinutes();
@@ -28,6 +29,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('applications:retry-notifications')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('invoices:retry-emails')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('messages:send-reminders')->everyMinute()->withoutOverlapping();
+        $schedule->command('academic:activate-teaching-allocations')->everyMinute()->withoutOverlapping();
         $schedule->command('courses:reconcile-enrolment --apply')->everyMinute()->withoutOverlapping();
         $schedule->command('admissions:prepare-accepted-students')->everyFiveMinutes()->withoutOverlapping();
 

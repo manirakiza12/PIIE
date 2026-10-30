@@ -157,8 +157,13 @@ class StudentCourseAssignmentController extends Controller
 
         return view('student.course_assignments.show', [
             'questionBased' => $questionBased,
+            'lecturerNames' => $offering->lecturerAllocations()->where('status', 'active')->with('lecturer')->get()
+                ->map(fn ($allocation) => (int) $allocation->lecturer?->school_id === (int) $offering->school_id ? $allocation->lecturer?->name : null)
+                ->filter()->unique()->implode(', '),
             'questions' => $questions,
             'questionAnswers' => $questionAnswers,
+            'releasedQuestionAnswers' => ($questionBased && $latest?->isReleased())
+                ? $this->submissions->answersFor($latest, $questions) : [],
             'evidenceByQuestion' => $evidenceByQuestion,
             // One token per page render, carried by the submit form. The UNIQUE
             // index on assignment_submissions.idempotency_key is the actual guard:
@@ -322,6 +327,20 @@ class StudentCourseAssignmentController extends Controller
         $student = $request->user();
         $target = $this->access->resolveForStudent($student, $id, $assignment);
 
+        // THE UPLOAD GATE, BEFORE ANYTHING ELSE.
+        //
+        // Runs after PHP has already accepted the whole body, so the student's
+        // written answer really is in hand here. It checks the aggregate before
+        // any file is moved and before any draft row is touched, so a request
+        // over the application limit is refused with the text still available
+        // to be saved as a draft.
+        //
+        // What this CANNOT do is stop PHP's own post_max_size rejection. A
+        // request larger than the server limit never reaches this controller
+        // at all; the exception handler turns that 413 into a validation error
+        // and says plainly that nothing was received.
+        app(\App\Support\Assignments\UploadGate::class)->assertWithinLimits($request);
+
         $this->guarded(fn () => $this->submissions->saveDraft($student, $target, [
             'text' => $request->input('text'),
             'items' => $this->evidenceFrom($request, $target),
@@ -350,6 +369,18 @@ class StudentCourseAssignmentController extends Controller
     {
         $student = $request->user();
         $target = $this->access->resolveForStudent($student, $id, $assignment);
+
+        // THE UPLOAD GATE, BEFORE ANYTHING ELSE.
+        //
+        // Runs after PHP has accepted the whole body, so the student's written
+        // answer is in hand. It checks the aggregate before any file is moved
+        // and before any attempt is consumed, so a request over the
+        // application limit is refused without spending an attempt.
+        //
+        // A request larger than the server limit never reaches this method;
+        // the exception handler turns that 413 into a validation error and says
+        // plainly that nothing was received.
+        app(\App\Support\Assignments\UploadGate::class)->assertWithinLimits($request);
 
         $record = $this->guarded(fn () => $this->submissions->submit($student, $target, [
             'text' => $request->input('text'),
@@ -384,6 +415,7 @@ class StudentCourseAssignmentController extends Controller
             'unitName' => optional($offering->subject)->name ?: $offering->reference,
             'assignment' => $record->assignment,
             'submission' => $record,
+            'questions' => $this->submissions->questionsFor($record->assignment),
             'display' => AssignmentDisplay::make($record->assignment, $student),
         ]);
     }

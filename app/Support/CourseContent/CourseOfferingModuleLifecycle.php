@@ -174,14 +174,16 @@ class CourseOfferingModuleLifecycle
         if (self::canTransition($module, CourseOfferingModule::STATUS_PUBLISHED)) {
             $scheduled = $module->released_at !== null && $module->released_at->isFuture();
 
+            if ($module->status !== CourseOfferingModule::STATUS_PUBLISHED || $scheduled) {
             $actions['publish_now'] = [
-                'label' => $scheduled ? 'Publish now' : 'Publish now',
+                'label' => 'Publish now',
                 'hint' => $scheduled
                     ? 'Release it straight away instead of waiting for '.($module->released_at->format('j M Y, H:i')).'.'
                     : 'Make it visible to students on this Course Allocation now.',
                 'style' => 'primary',
                 'schedule' => false,
             ];
+            }
 
             $actions['schedule'] = [
                 'label' => $scheduled ? 'Reschedule' : 'Schedule publication',

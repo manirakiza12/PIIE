@@ -73,8 +73,8 @@
     :value="old('prompt', $question?->prompt)"
     :testid="'aq-prompt-'.($editing ? $question->id : 'new')"
     :height="240"
-    placeholder="Calculate the gross profit from the figures below. Use the toolbar for tables, numbered steps, symbols and equations."
-    :help="'Formatting and lists are kept, and this is the same editor your students answer in. The same sanitizer every other piece of PIIE rich text passes through is applied when you save.'"
+    placeholder="Write the question students should answer."
+    :help="'Use the toolbar for headings, lists, tables and supporting images.'"
 />
 
 <div class="row g-3 mb-3">

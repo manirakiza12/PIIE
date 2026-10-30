@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
-# Fixed Module 1 pre/post release inspection. No parameters or caller commands.
+# Fixed Live Classes pre/post release inspection. No parameters or caller commands.
 set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
-TARGET=ad5f0190e68d912a06923fc6ceba623883fb0732
-BASELINE=0b1924ca54ed89c72400d08a3e80476888b1e719
+# Baseline: protected production deployment of PR #132 (student assignment submission).
+# Production SHA 5195eccaf8857c1e05523a13787a851034840fb2 confirmed by
+# production diagnostics run 41085927437 (active release read from
+# /home/piie/deployments/piie/current/RELEASE_SHA). Merged through protected
+# GitHub rules (PR #132).
+# Exact release identity; neither caller input nor arbitrary main is admitted.
+BASELINE=5195eccaf8857c1e05523a13787a851034840fb2
+# Target: protected PR #133 merge (student assignment upload limits and lesson
+# transition). Verified by all 5 CI checks in run 41073596727 (success) and
+# merged through protected GitHub rules. No arbitrary release SHA is admitted.
+TARGET=5a49e9a715fd9fb9861395fb7a3dbf72d28af557
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
@@ -90,8 +99,8 @@ HEALTH_PY
 case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current link';; esac
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
-[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved Module 1 transition'
 echo "Active release SHA: $ACTIVE"
+[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || [ "$ACTIVE" = "$LEARNING_RELEASE" ] || [ "$ACTIVE" = "$COMMUNICATION_RELEASE" ] || [ "$ACTIVE" = "$LESSON_RELEASE" ] || fail 'Live release is outside the approved release history'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'
 for container in piie-app piie-db; do
@@ -183,7 +192,8 @@ try {
     $pending = array_values(array_diff($files, $ran));
     if ($pending) throw new LogicException('Active release has pending migrations');
     $installed = in_array($module, $ran, true);
-    if (($sha === 'ad5f0190e68d912a06923fc6ceba623883fb0732') !== $installed) throw new LogicException('Module migration and active release disagree');
+    // Both approved releases include this already-deployed module and schema.
+    if (!$installed || !is_file($root.'/database/migrations/'.$module.'.php')) throw new LogicException('Required existing module migration missing');
     $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
     foreach (['curriculum_applicability_mappings','curriculum_assignment_proposals'] as $table) {
         if (in_array($table, $tables, true) !== $installed) throw new LogicException('Module table/migration collision');
@@ -205,7 +215,50 @@ try {
         $service = file_get_contents($root.'/app/Support/Curriculum/CurriculumAssignmentProposals.php');
         if (!str_contains($service, 'academic.programme_cohort.membership') || !str_contains($service, "authorize(\$actor, 'approve')")) throw new LogicException('Apply authority guard missing');
     }
-    echo json_encode(['database_read_only'=>true,'current_pending_migrations'=>$pending,'target_pending_migrations'=>$installed ? [] : [$module],'module_tables_present'=>$installed,'admissions_finance_schema_checks'=>'PASS','module_route_and_authority_source_checks'=>$installed ? 'PASS' : 'not active yet']).PHP_EOL;
+    echo json_encode(['database_read_only'=>true,'current_pending_migrations'=>$pending,'module_tables_present'=>$installed,'admissions_finance_schema_checks'=>'PASS','module_route_and_authority_source_checks'=>'PASS']).PHP_EOL;
+    $routes = file_get_contents($root.'/routes/web.php');
+    foreach (['student.live_classes.show','student.live_classes.join','live_classes.recording.access'] as $route) {
+        if (!str_contains($routes, $route)) throw new LogicException('Live Class route missing');
+    }
+    $kernel = file_get_contents($root.'/app/Console/Kernel.php');
+    $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
+    if (in_array($sha, ['452e21ac5d59ea582357914f2045d558816a1776', '7838f3c534d3a08fc38d3ef838bba925e2ddca43', '9a5f3b05b3fbafcb10ccda36a6b48d567cf78529', 'd2fa0a15c61618f996d1f0bfc1c786745eba52bd'], true) !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
+    $commands = ['live-classes:send-reminders','live-classes:refresh-google-links'];
+    if ($liveClassRetryInstalled) $commands[] = 'live-classes:retry-emails';
+    foreach ($commands as $command) {
+        if (!str_contains($kernel, $command)) throw new LogicException('Live Class scheduled command missing');
+    }
+    $outbox = null;
+    if ($liveClassRetryInstalled) {
+        $pdo->query('SELECT schedule_revision, notification_revision FROM live_classes WHERE 1=0');
+        $outbox = $pdo->query('SELECT COUNT(*) AS total, SUM(sent_at IS NOT NULL) AS transport_accepted, SUM(sent_at IS NULL AND discarded_at IS NULL AND attempts >= 5) AS exhausted, SUM(sent_at IS NULL AND discarded_at IS NULL AND attempts < 5) AS pending FROM live_class_email_deliveries')->fetch(PDO::FETCH_ASSOC);
+    }
+    $smtp = $pdo->query("SELECT COUNT(*) FROM global_settings WHERE `key` IN ('smtp_user','smtp_pass','smtp_host','smtp_port') AND value IS NOT NULL AND value <> ''")->fetchColumn();
+    $google = $pdo->query("SELECT enabled, (client_id IS NOT NULL AND client_id <> '' AND client_secret IS NOT NULL AND client_secret <> '') AS credentials_present, (verified_at IS NOT NULL) AS previously_verified FROM google_meet_settings WHERE id=1")->fetch(PDO::FETCH_ASSOC);
+    $grants = $pdo->query("SELECT COUNT(*) FROM google_account_connections WHERE status='ok' AND refresh_token_ciphertext IS NOT NULL")->fetchColumn();
+    $zones = $pdo->query('SELECT DISTINCT timezone FROM schools WHERE timezone IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN);
+    echo json_encode(['live_classes_read_only'=>true,'routes_and_scheduled_commands'=>'PASS','email_retry_migration_installed'=>$liveClassRetryInstalled,'smtp_fields_present'=>(int)$smtp===4,'email_outbox'=>$outbox,'google_setup'=>$google ?: null,'google_grants_present'=>(int)$grants>0,'institution_timezones'=>$zones,'queue_connection'=>$env['QUEUE_CONNECTION'] ?? 'sync','jitsi_app_id_present'=>!empty($env['JITSI_APP_ID']),'provider_connectivity_tested'=>false,'real_student_delivery_tested'=>false]).PHP_EOL;
+    // Communication access incident: metadata only, never message content or credentials.
+    $communicationAccess = $pdo->query("SELECT role_id, account_status, staff_status, force_password_change, COUNT(*) AS accounts FROM users WHERE role_id=3 GROUP BY role_id,account_status,staff_status,force_password_change")->fetchAll(PDO::FETCH_ASSOC);
+    $reportedThread = $pdo->query('SELECT t.id AS thread_id, u.id AS user_id, u.role_id, u.account_status, u.staff_status, u.force_password_change, (u.school_id=t.school_id) AS same_school FROM message_thrades t JOIN users u ON u.id=t.sender_id OR u.id=t.reciver_id WHERE t.id=6')->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['communication_access_read_only'=>true,'lecturer_account_states'=>$communicationAccess,'reported_thread_participant_states'=>$reportedThread]).PHP_EOL;
+    $associationInstalled = (bool)$pdo->query("SHOW COLUMNS FROM course_offering_lessons LIKE 'assignment_id'")->fetch(PDO::FETCH_ASSOC);
+    $associationColumn = $associationInstalled ? 'assignment_id' : 'NULL AS assignment_id';
+    $publishedLessons = $pdo->query('SELECT id,course_offering_id,'.$associationColumn.' FROM course_offering_lessons WHERE status=\'published\' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    $unlinkedLessons = array_values(array_filter($publishedLessons, fn($lesson) => empty($lesson['assignment_id'])));
+    echo json_encode(['lesson_publication_read_only'=>true,'association_schema_installed'=>$associationInstalled,'published_lesson_count'=>count($publishedLessons),'unlinked_published_lesson_count'=>count($unlinkedLessons),'unlinked_published_lessons'=>$unlinkedLessons,'historical_records_modified'=>false]).PHP_EOL;
+    // Fixed reference-course metadata, inside the existing read-only transaction.
+    $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
+    if ($course) {
+        $lessons = $pdo->query('SELECT l.id,l.title,l.status,l.released_at,l.content_type,m.id AS module_id,m.status AS module_status,m.released_at AS module_released_at FROM course_offering_lessons l JOIN course_offering_modules m ON m.id=l.course_offering_module_id AND m.course_offering_id=l.course_offering_id AND m.school_id=l.school_id WHERE l.course_offering_id=30 ORDER BY m.sequence,m.id,l.sequence,l.id')->fetchAll(PDO::FETCH_ASSOC);
+        $registered = (int)$pdo->query("SELECT COUNT(*) FROM course_registrations r JOIN course_offerings c ON c.id=r.course_offering_id AND c.school_id=r.school_id WHERE c.id=30 AND r.status='confirmed'")->fetchColumn();
+        $resources = $pdo->query('SELECT r.id,r.stored_name,r.type,l.id AS lesson_id FROM course_offering_lesson_resources r LEFT JOIN course_offering_lessons l ON l.id=r.course_offering_lesson_id AND l.course_offering_id=r.course_offering_id AND l.school_id=r.school_id WHERE r.course_offering_id=30')->fetchAll(PDO::FETCH_ASSOC);
+        $missing = [];
+        foreach ($resources as $resource) {
+            if (!$resource['lesson_id'] || ($resource['type'] === 'file' && (!$resource['stored_name'] || !is_file($root.'/storage/app/'.$resource['stored_name'])))) $missing[] = (int)$resource['id'];
+        }
+        echo json_encode(['course_learning_read_only'=>true,'offering'=>$course,'database_clock'=>$env['APP_TIMEZONE'] ?? 'UTC','utc_now'=>gmdate('c'),'confirmed_registrations'=>$registered,'lessons'=>$lessons,'missing_lesson_resource_ids'=>$missing]).PHP_EOL;
+    }
 } catch (LogicException $e) {
     fwrite(STDERR, 'FAIL: '.$e->getMessage().PHP_EOL); exit(1);
 } catch (Throwable $e) {
@@ -222,4 +275,4 @@ for path in /health / /login /applicant/login /careers; do
 done
 [ "$(curl --fail --silent --show-error --max-time 20 https://piie.ac.ug/health)" = PIIE-APP-OK ] || fail 'Application health body mismatch'
 [ "$(cat "$BASE/current/RELEASE_SHA")" = "$ACTIVE" ] || fail 'Release changed during inspection'
-echo "READINESS PASS: active=$ACTIVE; fixed Module 1 transition; no deployment or application writes performed"
+echo "READINESS PASS: active=$ACTIVE; approved Live Classes transition; no deployment or application writes performed"

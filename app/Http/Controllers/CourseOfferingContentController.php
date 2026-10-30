@@ -158,6 +158,7 @@ class CourseOfferingContentController extends Controller
         $this->access->assertCanManage($request->user(), $offering);
 
         $enabled = $request->boolean('gate_progression');
+        $request->validate(['sequential_lessons' => ['sometimes', 'boolean']]);
 
         // Through the service, NOT `$offering->save()`. `CourseOffering` is
         // `$guarded = ['*']` with an `updating` hook that refuses every direct
@@ -165,7 +166,8 @@ class CourseOfferingContentController extends Controller
         // here reads as correct and throws a DomainException on the first click -
         // a switch that appears broken rather than one that is absent.
         app(\App\Support\CourseOffering\CourseOfferingService::class)
-            ->setProgressionGate($offering->school_id, $offering->id, $enabled);
+            ->setProgressionGate($offering->school_id, $offering->id, $enabled,
+                $request->has('sequential_lessons') ? $request->boolean('sequential_lessons') : null);
 
         return back()->with(
             'success',
@@ -287,7 +289,8 @@ class CourseOfferingContentController extends Controller
         $updated = $this->guarded(fn () => CourseOfferingModuleLifecycle::apply(
             $target,
             $to,
-            $validated['released_at'] ?? null,
+            app(\App\Support\CourseContent\LearningSchedule::class)
+                ->parse($validated['released_at'] ?? null, $request->user())?->toIso8601String(),
             $request->user()->id
         ));
 
@@ -373,6 +376,7 @@ class CourseOfferingContentController extends Controller
             'modules' => $modules,
             'lesson' => $lesson,
             'mode' => 'create',
+            'lessonAssignments' => $this->lessonAssignments($offering),
         ]);
     }
 
@@ -401,6 +405,7 @@ class CourseOfferingContentController extends Controller
                 ->get(),
             'lesson' => $row,
             'mode' => 'edit',
+            'lessonAssignments' => $this->lessonAssignments($offering, $row),
         ]);
     }
 
@@ -417,7 +422,9 @@ class CourseOfferingContentController extends Controller
 
         return redirect()
             ->route('teacher.course_offerings.content.lessons.edit', [$offering->id, $lesson->id])
-            ->with('success', 'Lesson saved as a draft. Use Preview to see it as a student, then Publish when you are ready.');
+            ->with('success', $lesson->status === CourseOfferingLesson::STATUS_PUBLISHED
+                ? ($lesson->released_at?->isFuture() ? 'Lesson published and scheduled for its release date.' : 'Lesson published. Confirmed students can now see it.')
+                : 'Lesson saved as a draft. Link its assignment before publishing.');
     }
 
     public function updateLesson(Request $request, int $id, int $lesson): RedirectResponse
@@ -447,7 +454,7 @@ class CourseOfferingContentController extends Controller
         return redirect()
             ->route('teacher.course_offerings.content.lessons.edit', [$offering->id, $row->id])
             ->with('success', $status === CourseOfferingLesson::STATUS_PUBLISHED
-                ? 'Lesson published. Confirmed students can now see it.'
+                ? ($row->fresh()->released_at?->isFuture() ? 'Lesson published and scheduled for its release date.' : 'Lesson published. Confirmed students can now see it.')
                 : 'Lesson saved.');
     }
 
@@ -549,6 +556,13 @@ class CourseOfferingContentController extends Controller
         // than on name - would otherwise leave the lecturer a blank lesson they
         // never asked for and cannot explain.
         $lesson = DB::transaction(function () use ($request, $validated, $parent) {
+            $request->validate([
+                'creation_key' => ['nullable', 'string', 'max:64'],
+                'assignment_id' => ['nullable', 'integer', 'min:1'],
+                'estimated_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
+                'released_at' => ['nullable', 'date'],
+                'completion_rule' => ['nullable', 'in:manual'],
+            ]);
             // `status` is not taken from the request. See the method note.
             $created = $this->guarded(fn () => $this->content->createLesson($request->user(), $parent, [
                 'title' => $request->input('title') ?: 'Untitled lesson',
@@ -556,7 +570,14 @@ class CourseOfferingContentController extends Controller
                 'learning_objectives' => $request->input('learning_objectives') ?: null,
                 'status' => CourseOfferingLesson::STATUS_DRAFT,
                 'body' => $request->input('body'),
+                'creation_key' => $request->input('creation_key') ?: null,
+                'assignment_id' => $request->input('assignment_id'),
+                'estimated_minutes' => $request->input('estimated_minutes'),
+                'released_at' => $request->input('released_at'),
+                'completion_rule' => $request->input('completion_rule') ?: 'manual',
             ]));
+
+            if ($request->filled('creation_key') && $created->resources()->exists()) { return $created; }
 
             if ($validated['type'] === 'file') {
                 $this->guarded(fn () => $this->content->attachFileResource(
@@ -585,37 +606,14 @@ class CourseOfferingContentController extends Controller
             );
     }
 
-    /**
-     * The attachment rules, shared by both upload paths.
-     *
-     * Two paths exist - one against a saved lesson, one against a lesson being
-     * created by the upload itself - and they MUST validate identically. A second
-     * hand-written copy is how "the file field is required" ends up meaning two
-     * slightly different things depending on which screen a lecturer used.
-     *
-     * `nullable` IS DELIBERATELY ABSENT from `file` and `link_url`.
-     *
-     * These rules used to carry it, and `nullable` quietly cancels `required_if`:
-     * Laravel skips every rule on an attribute marked nullable when its value is
-     * null, and `required_if` is not evaluated first. So "type=file, no file
-     * chosen" PASSED validation, the handler then got a null file and failed
-     * later - on the create-a-lesson path, after the draft had already been
-     * written. The lecturer was left with an empty lesson from an upload that
-     * was never attached.
-     *
-     * An absent value is already skipped by the non-implicit rules (`url`,
-     * `file`), so `nullable` was doing nothing useful: it was only ever
-     * suppressing the requirement it sat next to.
-     *
-     * @return array<string, array<int, string>>
-     */
+    /** Validate only the selected resource type, shared by new and saved content. */
     private function resourceRules(): array
     {
         return [
             'type' => ['required', 'in:link,file'],
             'title' => ['nullable', 'string', 'max:191'],
-            'link_url' => ['required_if:type,link', 'url:http,https', 'max:500'],
-            'file' => ['required_if:type,file', 'file', 'max:20480'],
+            'link_url' => ['exclude_unless:type,link', 'required', 'url:http,https', 'max:500'],
+            'file' => ['exclude_unless:type,file', 'required', 'file', 'max:'.config('course_content.max_upload_kb', 20480)],
         ];
     }
 
@@ -760,6 +758,8 @@ class CourseOfferingContentController extends Controller
             'status' => ['required', 'in:draft,published,archived'],
             'released_at' => ['nullable', 'date'],
             'completion_rule' => ['nullable', 'in:manual'],
+            'assignment_id' => ['nullable', 'integer', 'min:1'],
+            'creation_key' => ['nullable', 'string', 'max:64'],
         ];
 
         // An UNSAVED PREVIEW must not be held to the publish rules, or a
@@ -770,6 +770,15 @@ class CourseOfferingContentController extends Controller
         }
 
         return $rules;
+    }
+
+    private function lessonAssignments($offering, ?CourseOfferingLesson $lesson = null)
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('assignments', 'course_offering_id')) { return collect(); }
+        return Assignment::where('school_id', $offering->school_id)->where('course_offering_id', $offering->id)
+            ->whereNotIn('id', CourseOfferingLesson::whereNotNull('assignment_id')
+                ->when($lesson, fn ($q) => $q->where('id', '!=', $lesson->id))->select('assignment_id'))
+            ->orderBy('title')->get();
     }
 
     /** Re-resolve a module inside the Allocation; a foreign id is a 404, not a move. */

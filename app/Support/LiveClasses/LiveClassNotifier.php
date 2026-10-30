@@ -9,17 +9,14 @@ use App\Models\Noticeboard;
 use App\Models\Session;
 use App\Models\User;
 use App\Support\Notifications\NotificationService;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Sends a single reminder pass (24h-before or 1h-before) for one class: one
  * in-app Noticeboard entry, plus one email per eligible student.
  *
- * Never called twice for the same (class, reminder type) — the caller
- * (App\Console\Commands\SendLiveClassReminders) checks LiveClassNotification
- * first and only calls this when nothing has been sent yet; recording that a
- * reminder went out is this class's last step, not a guard of its own, so
- * that a partial failure here is visible rather than silently marked "sent".
+ * The reminder command claims each schedule revision under a class lock.
+ * In-app delivery and encrypted email retry records commit with that claim.
  */
 class LiveClassNotifier
 {
@@ -66,7 +63,9 @@ class LiveClassNotifier
 
     public static function announceRescheduled(LiveClass $liveClass): int
     {
-        $key = LiveClassNotification::rescheduledKey($liveClass->scheduled_at);
+        $key = (int) $liveClass->schedule_revision > 0
+            ? 'rescheduled:'.$liveClass->schedule_revision
+            : LiveClassNotification::rescheduledKey($liveClass->scheduled_at);
 
         if ($key === null) {
             return 0;
@@ -104,6 +103,17 @@ class LiveClassNotifier
         );
     }
 
+    public static function announceUpdated(LiveClass $liveClass): int
+    {
+        return self::announce($liveClass, 'updated:'.(int) $liveClass->notification_revision,
+            LiveClassEligibility::eligibleStudentUserIds($liveClass), 'updated',
+            fn (array $context): array => [
+                'title' => $context['unit'].' live class updated',
+                'body' => $context['title'].' details have changed. Open the class to review the latest information.',
+                'cta' => 'View Live Class',
+            ]);
+    }
+
     public static function announceRecording(LiveClass $liveClass): int
     {
         return self::announceRecordingAvailable($liveClass);
@@ -117,7 +127,7 @@ class LiveClassNotifier
             && !empty(get_settings('smtp_port'));
     }
 
-    /** @return int number of students actually emailed */
+    /** @return int number of student emails recorded for delivery */
     public static function sendReminder(LiveClass $liveClass, string $type): int
     {
         $liveClass->loadMissing(['subject', 'teacher', 'classRoom', 'academicSession']);
@@ -158,7 +168,7 @@ class LiveClassNotifier
             ->where('school_id', $liveClass->school_id)
             ->where('role_id', 7)
             ->whereNotNull('email')
-            ->chunkById(100, function ($students) use ($liveClass, $windowLabel, $joinUrl, $tz, &$sent) {
+            ->chunkById(100, function ($students) use ($liveClass, $type, $windowLabel, $joinUrl, $tz, &$sent) {
                 foreach ($students as $student) {
                     // Derive everything BEFORE the guarded send. Only the
                     // transport call itself may fail silently; a data problem
@@ -174,8 +184,7 @@ class LiveClassNotifier
                     $institutionStart = $tz->inTenantTime($liveClass->scheduled_at, $tenant);
                     $institutionZone = $tz->resolve($tenant);
 
-                    try {
-                        Mail::to($student->email)->send(new LiveClassReminderEmail([
+                        LiveClassEmailDelivery::queue($liveClass, $student, LiveClassNotification::reminderKey($liveClass, $type), new LiveClassReminderEmail([
                             'student_name' => $student->name,
                             'class_title' => $liveClass->title,
                             'subject' => optional($liveClass->subject)->name,
@@ -201,10 +210,6 @@ class LiveClassNotifier
                         ]));
 
                         $sent++;
-                    } catch (\Throwable $e) {
-                        // One bad address must not stop the rest of the batch.
-                        report($e);
-                    }
                 }
             });
 
@@ -231,6 +236,13 @@ class LiveClassNotifier
         \Illuminate\Support\Collection $recipients,
         string $eventType,
         callable $message
+    ): int {
+        return DB::transaction(fn () => self::deliverAnnouncement($liveClass, $dedupKey, $recipients, $eventType, $message));
+    }
+
+    private static function deliverAnnouncement(
+        LiveClass $liveClass, string $dedupKey, \Illuminate\Support\Collection $recipients,
+        string $eventType, callable $message
     ): int {
         if ($liveClass->course_offering_id === null || $recipients->isEmpty()) {
             return 0;
@@ -287,8 +299,8 @@ class LiveClassNotifier
 
         $copy = $message(self::context($liveClass));
 
-        // Channel 2: email. Optional, and never able to fail the request.
-        self::emailStudents($liveClass, $recipients, $copy);
+        // Persist optional email in this transaction; transport runs after commit.
+        self::emailStudents($liveClass, $recipients, $copy, $dedupKey);
 
         return $recipients->count();
     }
@@ -398,7 +410,7 @@ class LiveClassNotifier
         );
     }
 
-    private static function emailStudents(LiveClass $liveClass, \Illuminate\Support\Collection $recipients, array $copy): void
+    private static function emailStudents(LiveClass $liveClass, \Illuminate\Support\Collection $recipients, array $copy, string $dedupKey): void
     {
         if (! self::isMailConfigured()) {
             return;
@@ -411,7 +423,7 @@ class LiveClassNotifier
             ->where('school_id', $liveClass->school_id)
             ->where('role_id', 7)
             ->whereNotNull('email')
-            ->chunkById(100, function ($students) use ($liveClass, $copy, $context, $tz): void {
+            ->chunkById(100, function ($students) use ($liveClass, $copy, $context, $tz, $dedupKey): void {
                 foreach ($students as $student) {
                     // The SAME stored instant, read in THIS recipient's own
                     // clock (their personal timezone if they chose one,
@@ -425,8 +437,7 @@ class LiveClassNotifier
                         ? $tz->inEffectiveTime($liveClass->scheduled_at, $student)
                         : null;
 
-                    try {
-                        Mail::to($student->email)->send(new LiveClassReminderEmail([
+                        LiveClassEmailDelivery::queue($liveClass, $student, $dedupKey, new LiveClassReminderEmail([
                             'student_name' => $student->name,
                             'class_title' => $liveClass->title,
                             'subject' => $context['unit'],
@@ -452,11 +463,6 @@ class LiveClassNotifier
                             'window_label' => $copy['title'],
                             'school_id' => $liveClass->school_id,
                         ]));
-                    } catch (\Throwable $e) {
-                        // A dead address must not abort the batch, and the
-                        // in-app notification has already been delivered.
-                        report($e);
-                    }
                 }
             });
     }
@@ -480,7 +486,7 @@ class LiveClassNotifier
             . "{$classInfo}\n"
             . get_phrase('Date') . ': ' . optional($liveClass->start_date)->format('Y-m-d') . "\n"
             . get_phrase('Time') . ": {$liveClass->start_time} - {$liveClass->end_time}\n"
-            . get_phrase('Join Link') . ': ' . ($liveClass->meeting_url ?: 'TBD');
+            . get_phrase('View Live Class') . ': ' . self::actionUrl($liveClass, 'published');
 
         $sessionId = (int) get_school_settings($liveClass->school_id)->value('running_session');
         if ($sessionId === 0) {

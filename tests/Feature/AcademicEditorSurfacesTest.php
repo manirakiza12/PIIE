@@ -145,11 +145,13 @@ class AcademicEditorSurfacesTest extends TestCase
         // The toolbar, read from the source rather than from a rendered page: this
         // is a claim about what the editor can do, and the rendered toolbar only
         // exists once Summernote has executed in a browser.
+        // Native paragraph-menu alignment and indentation are checked against
+        // the rendered vendor controls in academic-editor-vendor.test.js.
         foreach ([
             'bold', 'italic', 'underline', 'style', 'fontname', 'ul', 'ol',
-            'left', 'center', 'right', 'justify', 'link', 'table',
+            'paragraph', 'link', 'table',
             'piieSymbol', 'piieEquation', 'specialchars',
-            'outdent', 'indent', 'blockquote', 'undo', 'redo', 'fullscreen',
+            'blockquote', 'undo', 'redo', 'fullscreen',
             'superscript', 'subscript',
         ] as $capability) {
             $this->assertStringContainsString(

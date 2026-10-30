@@ -160,6 +160,7 @@
                                 <p class="fw-semibold mb-1">{{ $question->heading }}</p>
                             @endif
                             <div class="as-body piie-prose">{!! $question->prosePrompt() !!}</div>
+                            @include('shared.assignment_question_resources', ['teacherView' => true])
                         </div>
                         <div class="text-nowrap">
                             <span class="badge bg-light text-dark border"
@@ -215,6 +216,25 @@
                                 ])
                                 <button type="submit" class="btn btn-sm btn-primary">Save this question</button>
                             </form>
+                            <details class="mt-2">
+                                <summary>Add supporting material</summary>
+                                <form method="POST" enctype="multipart/form-data" action="{{ route('teacher.course_offerings.assignments.resources.store', [$offering->id, $assignment->id]) }}" class="mt-2">
+                                    @csrf
+                                    <input type="hidden" name="assignment_question_id" value="{{ $question->id }}">
+                                    <input type="hidden" name="type" value="file">
+                                    <label for="aq-file-{{ $question->id }}" class="form-label">Local file</label>
+                                    <input type="file" name="file" id="aq-file-{{ $question->id }}" class="form-control mb-2" required>
+                                    <button class="btn btn-sm btn-outline-primary" type="submit">Upload file</button>
+                                </form>
+                                <form method="POST" action="{{ route('teacher.course_offerings.assignments.resources.store', [$offering->id, $assignment->id]) }}" class="mt-2">
+                                    @csrf
+                                    <input type="hidden" name="assignment_question_id" value="{{ $question->id }}">
+                                    <input type="hidden" name="type" value="link">
+                                    <label for="aq-link-{{ $question->id }}" class="form-label">External resource URL</label>
+                                    <input type="url" name="link_url" id="aq-link-{{ $question->id }}" class="form-control mb-2" required>
+                                    <button class="btn btn-sm btn-outline-primary" type="submit">Add link</button>
+                                </form>
+                            </details>
                         </div>
                     @endunless
                 </article>
@@ -234,10 +254,13 @@
                 <div class="d-flex flex-wrap align-items-center gap-2">
                     <label class="small text-muted">Order:</label>
                     @foreach($questions as $question)
-                        <input type="hidden" name="order[]" value="{{ $question->id }}">
-                        <span class="badge bg-light text-dark border">
-                            {{ $question->heading ?: 'Q'.$loop->iteration }}
-                        </span>
+                        <label class="small">Position {{ $loop->iteration }}
+                            <select name="order[]" class="form-select form-select-sm">
+                                @foreach($questions as $option)
+                                    <option value="{{ $option->id }}" @selected($option->id === $question->id)>{{ $option->heading ?: 'Question '.$loop->iteration }}</option>
+                                @endforeach
+                            </select>
+                        </label>
                     @endforeach
                 </div>
                 <p class="small text-muted mt-2 mb-0">

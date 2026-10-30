@@ -67,6 +67,7 @@ class TenantTimezoneTest extends TestCase
         DB::reconnect('sqlite');
         $this->bootAdmissionsTestSchema();
         $this->schema();
+        (require database_path('migrations/2026_10_29_150000_add_live_class_notification_revisions.php'))->up();
         if (! Schema::hasColumn('users', 'staff_status')) {
             Schema::table('users', function (Blueprint $t): void {
                 $t->string('staff_status')->nullable();

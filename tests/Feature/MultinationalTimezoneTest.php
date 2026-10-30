@@ -71,6 +71,7 @@ class MultinationalTimezoneTest extends TestCase
         DB::reconnect('sqlite');
         $this->bootAdmissionsTestSchema();
         $this->schema();
+        (require database_path('migrations/2026_10_29_150000_add_live_class_notification_revisions.php'))->up();
 
         $this->school = $this->makeSchool('Africa/Kampala');
         $this->otherSchool = $this->makeSchool('Europe/London');

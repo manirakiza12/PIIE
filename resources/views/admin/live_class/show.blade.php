@@ -123,7 +123,7 @@
                         {{ $liveClass->displayStatusLabel() }}
                     </span>
                 </div>
-                <div class="col-md-6"><strong>{{ get_phrase('Date') }}:</strong> {{ optional($liveClass->start_date)->format('d M Y') }}</div>
+                <div class="col-md-6"><strong>{{ get_phrase('Date') }}:</strong> {{ $display->localStart()?->format('d M Y') }}</div>
                 <div class="col-md-6"><strong>{{ get_phrase('Time') }}:</strong> {{ app(App\Support\LiveClasses\LiveClassDisplay::class)->for($liveClass, auth()->user())->timeRange24() ?: '—' }} @if($liveClass->duration_minutes !== null)<span class="text-muted">({{ $liveClass->duration_minutes }} {{ get_phrase('min') }})</span>@endif</div>
                 <div class="col-md-6"><strong>{{ get_phrase('Published') }}:</strong> {{ $liveClass->is_published ? get_phrase('Yes') : get_phrase('No') }}</div>
                 <div class="col-md-6">

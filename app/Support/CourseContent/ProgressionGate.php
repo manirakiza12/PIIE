@@ -107,19 +107,42 @@ final class ProgressionGate
     /**
      * May this student open this lesson?
      *
-     * A lesson inside a module the student has reached is available. The gate is
-     * at MODULE granularity, deliberately: gating every lesson individually would
-     * mean a student cannot open lesson 2 until lesson 1 is marked, which turns
-     * a reading course into a lockstep one and is not what any of the benchmarked
-     * systems do by default.
+     * Module progression remains independent. Teachers can additionally require
+     * lesson completion in order inside a module. Neither setting imposes a
+     * timetable, and completed, released lessons remain available for revision.
      */
     public function mayOpenLesson(User $student, CourseOfferingLesson $lesson): bool
     {
         if (! $lesson->module) {
-            return true;
+            return false;
         }
 
-        return $this->mayOpenModule($student, $lesson->module);
+        $completed = \App\Models\CourseOfferingLessonProgress::query()
+            ->where('student_id', $student->id)
+            ->where('course_offering_id', $lesson->course_offering_id)
+            ->where('status', \App\Models\CourseOfferingLessonProgress::STATUS_COMPLETED)
+            ->pluck('course_offering_lesson_id')->map(fn ($id) => (int) $id)->all();
+        // Release and enrollment are enforced before this gate. Existing work
+        // remains available for revision when new requirements are added.
+        if (in_array((int) $lesson->id, $completed, true)) {
+            return true;
+        }
+        if (! $this->mayOpenModule($student, $lesson->module)) {
+            return false;
+        }
+        if (! $lesson->module->offering?->sequential_lessons) {
+            return true;
+        }
+        foreach ($lesson->module->studentLessons()->orderBy('sequence')->orderBy('id')->get() as $previous) {
+            if ((int) $previous->id === (int) $lesson->id) {
+                return true;
+            }
+            if (! in_array((int) $previous->id, $completed, true)) {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     /**

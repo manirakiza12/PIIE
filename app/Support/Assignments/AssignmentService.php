@@ -121,9 +121,10 @@ class AssignmentService
         $assignment->submission_type = $this->normaliseSubmissionType($attributes['submission_type'] ?? null);
         $assignment->late_policy = $this->normaliseLatePolicy($attributes['late_policy'] ?? null);
         $assignment->allowed_attempts = $this->normaliseAttempts($attributes['allowed_attempts'] ?? null);
-        $assignment->due_date = $this->parseMoment($attributes['due_date'] ?? null);
-        $assignment->released_at = $this->parseMoment($attributes['released_at'] ?? null);
-        $assignment->closes_at = $this->parseMoment($attributes['closes_at'] ?? null);
+        $schedule = app(\App\Support\CourseContent\LearningSchedule::class);
+        $assignment->due_date = $schedule->parse($attributes['due_date'] ?? null, $actor);
+        $assignment->released_at = $schedule->parse($attributes['released_at'] ?? null, $actor);
+        $assignment->closes_at = $schedule->parse($attributes['closes_at'] ?? null, $actor);
 
         // ── Module/chapter task fields ──
         //
@@ -149,9 +150,21 @@ class AssignmentService
             $assignment->requirement_role
         );
 
-        $assignment->submission_kinds = $this->normaliseSubmissionKinds(
-            $attributes['submission_kinds'] ?? null
-        );
+        if (!$assignment->exists || array_key_exists('submission_kinds', $attributes)) {
+            $assignment->submission_kinds = $this->normaliseSubmissionKinds($attributes['submission_kinds'] ?? null);
+        }
+        if (array_key_exists('submission_requirement_mode', $attributes)) {
+            if (!in_array($attributes['submission_requirement_mode'], ['all', 'any'], true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['submission_requirement_mode' => 'Choose all selected methods or any one method.']);
+            }
+            $assignment->submission_requirement_mode = $attributes['submission_requirement_mode'];
+            if (!$assignment->submission_kinds) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['submission_kinds' => 'Select at least one primary response method.']);
+            }
+        }
+        if (array_key_exists('optional_submission_kinds', $attributes)) {
+            $assignment->optional_submission_kinds = $this->normaliseSubmissionKinds($attributes['optional_submission_kinds']);
+        }
 
         // A closed assignment has no release time to speak of, and closing is
         // recorded as an event so "when did this close, and who closed it" is
@@ -341,13 +354,14 @@ class AssignmentService
 
     // ── resources ─────────────────────────────────────────────────────────
 
-    public function attachLink(User $actor, Assignment $assignment, string $title, string $url): AssignmentResource
+    public function attachLink(User $actor, Assignment $assignment, string $title, string $url, ?\App\Models\AssignmentQuestion $question = null): AssignmentResource
     {
         $offering = $this->access->resolveOffering($actor, (int) $assignment->course_offering_id);
         $this->access->assertCanManageOrFail($actor, $offering);
         $this->access->resolveForManager($actor, (int) $offering->id, (int) $assignment->id);
 
         $url = trim($url);
+        $this->assertResourceQuestion($assignment, $question);
         if (! in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)) {
             throw ValidationException::withMessages([
                 'link_url' => 'The resource link must be a valid http or https address.',
@@ -360,37 +374,45 @@ class AssignmentService
             'assignment_id' => $assignment->id,
             'title' => trim($title) !== '' ? trim($title) : $url,
             'type' => AssignmentResource::TYPE_LINK,
+            ...($question ? ['assignment_question_id' => $question->id] : []),
             'link_url' => $url,
             'created_by' => $actor->id,
         ]);
     }
 
-    public function attachFile(User $actor, Assignment $assignment, UploadedFile $file): AssignmentResource
+    public function attachFile(User $actor, Assignment $assignment, UploadedFile $file, ?\App\Models\AssignmentQuestion $question = null): AssignmentResource
     {
         $offering = $this->access->resolveOffering($actor, (int) $assignment->course_offering_id);
         $this->access->assertCanManageOrFail($actor, $offering);
         $this->access->resolveForManager($actor, (int) $offering->id, (int) $assignment->id);
 
-        $this->assertUploadable($file);
+        $this->assertResourceQuestion($assignment, $question);
+        app(\App\Support\CourseContent\LearningMaterialUpload::class)->validate($file);
 
         // storage/app is OUTSIDE the web root. The name is generated, so an
         // uploaded "handout.pdf" cannot be requested at a guessable path or
         // overwrite an application file.
         $storedName = 'assignments/'.$offering->id.'/'.bin2hex(random_bytes(16)).'.'.strtolower((string) $file->getClientOriginalExtension());
-        Storage::disk('local')->put($storedName, file_get_contents($file->getRealPath()));
+        app(\App\Support\CourseContent\LearningMaterialUpload::class)->store($file, $storedName);
 
-        return AssignmentResource::query()->create([
+        try {
+            return AssignmentResource::query()->create([
             'school_id' => $offering->school_id,
             'course_offering_id' => $offering->id,
             'assignment_id' => $assignment->id,
             'title' => trim((string) $file->getClientOriginalName()) ?: 'Attachment',
             'type' => AssignmentResource::TYPE_FILE,
+            ...($question ? ['assignment_question_id' => $question->id] : []),
             'original_name' => (string) $file->getClientOriginalName(),
             'stored_name' => $storedName,
-            'mime_type' => (string) ($file->getClientMimeType() ?: 'application/octet-stream'),
+            'mime_type' => (string) ($file->getMimeType() ?: 'application/octet-stream'),
             'size_bytes' => (int) $file->getSize(),
             'created_by' => $actor->id,
-        ]);
+            ]);
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($storedName);
+            throw $exception;
+        }
     }
 
     public function deleteResource(User $actor, int $resourceId): void
@@ -408,8 +430,37 @@ class AssignmentService
         $this->access->assertCanManageOrFail($actor, $offering);
         $this->access->resolveForManager($actor, (int) $offering->id, (int) $resource->assignment_id);
 
+        if ($resource->assignment_question_id) {
+            $assignment = Assignment::query()->findOrFail($resource->assignment_id);
+            if (app(QuestionService::class)->questionsAreFrozen($assignment)) {
+                throw ValidationException::withMessages(['file' => 'Resources for questions with submitted work are locked.']);
+            }
+        }
+
+        if ($resource->assignment_question_id) {
+            $assignment = Assignment::query()->findOrFail($resource->assignment_id);
+            if (app(QuestionService::class)->questionsAreFrozen($assignment)) {
+                throw ValidationException::withMessages(['file' => 'Resources for questions with submitted work are locked.']);
+            }
+        }
+
         $this->deleteStoredFile($resource->stored_name);
         $resource->delete();
+    }
+
+    private function assertResourceQuestion(Assignment $assignment, ?\App\Models\AssignmentQuestion $question): void
+    {
+        if (! $question) {
+            return;
+        }
+        if ((int) $question->assignment_id !== (int) $assignment->id
+            || (int) $question->school_id !== (int) $assignment->school_id
+            || (int) $question->course_offering_id !== (int) $assignment->course_offering_id) {
+            throw ValidationException::withMessages(['assignment_question_id' => 'Choose a question from this assignment.']);
+        }
+        if (app(QuestionService::class)->questionsAreFrozen($assignment)) {
+            throw ValidationException::withMessages(['assignment_question_id' => 'Questions with submitted work are locked.']);
+        }
     }
 
     /**
@@ -632,17 +683,6 @@ class AssignmentService
 
         // More than 99 attempts is a data error, not a generous policy.
         return ($value >= 1 && $value <= 99) ? $value : null;
-    }
-
-    private function parseMoment($value): ?Carbon
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $parsed = $value instanceof Carbon ? $value->copy() : Carbon::parse((string) $value);
-
-        return $parsed;
     }
 
     /**

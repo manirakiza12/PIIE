@@ -81,7 +81,7 @@ class QuestionService
      */
     public function questionsFor(Assignment $assignment)
     {
-        return $assignment->questions()->inReadingOrder()->get();
+        return $assignment->questions()->with('resources')->inReadingOrder()->get();
     }
 
     /**
@@ -193,6 +193,14 @@ class QuestionService
 
             $items->each->delete();
 
+            // Preserve supporting handouts on the assignment when removing an
+            // unanswered question; do not leave orphaned attachment metadata.
+            $row->resources()->update(['assignment_question_id' => null]);
+
+            // Keep lecturer handouts available on the assignment when removing
+            // an unanswered question. They must not become orphaned files.
+            $row->resources()->update(['assignment_question_id' => null]);
+
             // `assignment_question_responses` rows belong to the submission, not the
             // question, so they are NOT cascaded here - but with no submissions in
             // existence there cannot be any, and the foreign keys have no
@@ -225,6 +233,9 @@ class QuestionService
             ->all();
 
         $wanted = array_values(array_unique(array_map('intval', $orderedIds)));
+        if (count($wanted) !== count($orderedIds)) {
+            throw ValidationException::withMessages(['questions' => 'Choose each question only once in the order.']);
+        }
 
         $unknown = array_diff($wanted, $existing);
         if ($unknown !== []) {

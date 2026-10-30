@@ -57,12 +57,9 @@
     /**
      * THE NEXT THING TO DO.
      *
-     * Ordered by what actually unblocks the student, not by what is nearest in
-     * the file. An outstanding REQUIRED assessment comes first, because a lesson
-     * the student has already finished is not work; a module cannot be completed
-     * while a required assessment is pending, however many lessons are done. Only
-     * when nothing required is outstanding does an unfinished lesson become the
-     * suggestion.
+     * Continue Learning selects an eligible unfinished lesson. Once lessons are
+     * complete, it points to required assessment work that is available. The
+     * server applies the same progression rules to direct links and downloads.
      *
      * Both are searched in module and reading order, so this agrees with the list
      * below it rather than jumping around.
@@ -71,6 +68,8 @@
     $nextAssessmentModule = null;
 
     foreach ($modules as $candidate) {
+        if (! app(\App\Support\CourseContent\ProgressionGate::class)->mayOpenModule(auth()->user(), $candidate)) { continue; }
+        if ($candidate->lessons->contains(fn ($item) => ! in_array((int) $item->id, $completedIds, true))) { continue; }
         foreach (($moduleCompletion[$candidate->id]['assessments'] ?? []) as $row) {
             if ($row['required'] && ! $row['satisfied']) {
                 $nextAssessment = $row;
@@ -83,18 +82,18 @@
     $nextLesson = null;
     $nextLessonModule = null;
 
-    if ($nextAssessment === null) {
-        foreach ($modules as $candidate) {
-            foreach ($candidate->lessons as $candidateLesson) {
-                if (! in_array((int) $candidateLesson->id, $completedIds, true)) {
-                    $nextLesson = $candidateLesson;
-                    $nextLessonModule = $candidate;
-                    break 2;
-                }
+    foreach ($modules as $candidate) {
+        foreach ($candidate->lessons as $candidateLesson) {
+            if (! in_array((int) $candidateLesson->id, $completedIds, true)
+                && app(\App\Support\CourseContent\ProgressionGate::class)->mayOpenLesson(auth()->user(), $candidateLesson)) {
+                $nextLesson = $candidateLesson;
+                $nextLessonModule = $candidate;
+                break 2;
             }
         }
     }
 
+    if ($nextLesson !== null) { $nextAssessment = null; }
     // "Up to date" is only true when NOTHING required is outstanding. The old
     // version derived this from lessons alone, which is how a student with a
     // pending assessment was congratulated for finishing the course.
@@ -337,6 +336,7 @@
                         @foreach($module->lessons as $lesson)
                             @php
                                 $isComplete = in_array((int) $lesson->id, $completedIds, true);
+                                $canOpen = app(\App\Support\CourseContent\ProgressionGate::class)->mayOpenLesson(auth()->user(), $lesson);
                                 // "In progress" means the student has genuinely
                                 // OPENED the lesson. It is display state only and
                                 // is never counted towards the progress figure
@@ -347,7 +347,8 @@
                             @endphp
                             <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-2">
                                 <a class="text-decoration-none d-flex align-items-center gap-2 text-dark"
-                                   href="{{ route('student.courses.content.lessons.show', [$offering->id, $lesson->id]) }}">
+                                   @if($canOpen) href="{{ route('student.courses.content.lessons.show', [$offering->id, $lesson->id]) }}"
+                                   @else aria-disabled="true" title="Complete the earlier learning requirements first" @endif>
                                     {{--
                                         THE STATE ICON.
 
@@ -394,7 +395,7 @@
                                     @if($isComplete) text-success fw-semibold
                                     @elseif($isInProgress) text-warning fw-semibold
                                     @else text-muted @endif">
-                                    {{ $isComplete ? 'Completed' : ($isInProgress ? 'In progress' : 'Not started') }}
+                                    {{ ! $canOpen ? 'Locked' : ($isComplete ? 'Completed' : ($isInProgress ? 'In progress' : 'Not started')) }}
                                 </span>
                             </li>
                         @endforeach

@@ -72,6 +72,40 @@
     </div>
 @endif
 
+@if($linkedAssignment ?? null)
+        @php
+            $assignmentState = $linkedAssignment->state ?? null;
+            $assignmentCanSubmit = $linkedAssignment->canSubmit ?? false;
+            $assignmentReason = $linkedAssignment->refusalReason ?? null;
+        @endphp
+        <div class="border rounded p-3 mb-3" data-testid="cc-lesson-assignment">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <strong class="d-block">Linked assignment</strong>
+                    <span class="small text-muted">{{ $linkedAssignment->title }}</span>
+                </div>
+                @if($assignmentCanSubmit)
+                    <a class="btn btn-primary btn-sm"
+                       href="{{ route('student.courses.assignments.show', [$offering->id, $linkedAssignment->id]) }}">
+                        Start assignment
+                    </a>
+                @else
+                    <span class="badge text-bg-secondary" data-testid="cc-assignment-unavailable">
+                        {{ $assignmentState ?: 'Unavailable' }}
+                    </span>
+                @endif
+            </div>
+            @if(!$assignmentCanSubmit && $assignmentReason)
+                <p class="small text-muted mt-2 mb-0">{{ $assignmentReason }}</p>
+            @endif
+            @if($assignmentCanSubmit)
+                <p class="small text-muted mt-2 mb-0">
+                    Complete this lesson first, then start the linked assignment. You can return to this lesson at any time.
+                </p>
+            @endif
+        </div>
+    @endif
+
 <div class="row g-4">
     <div class="col-12 col-lg-8">
         <article class="cc-surface border rounded p-3 p-md-4">

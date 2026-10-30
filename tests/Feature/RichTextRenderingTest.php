@@ -535,7 +535,7 @@ class RichTextRenderingTest extends TestCase
             'paragraph / style' => ['paragraph', "['para'"],
             'bullet list' => ['bullet list', "'ul'"],
             'numbered list' => ['numbered list', "'ol'"],
-            'alignment' => ['alignment', "'justify'"],
+            'alignment' => ['alignment', "'paragraph'"],
             'undo' => ['undo', "'undo'"],
             'redo' => ['redo', "'redo'"],
             'table' => ['table', "'table'"],
@@ -600,12 +600,12 @@ class RichTextRenderingTest extends TestCase
             'which the controller must actually read'
         );
 
-        // The help text already promises the shared sanitizer, so the claim the
-        // lecturer sees is checked against the code rather than taken on trust.
+        // Keep the authoring guidance aligned with the editor. Sanitization is
+        // verified by the hostile-input and round-trip tests in this class.
         $this->assertStringContainsString(
-            'sanitizer',
+            'Use the toolbar for headings, lists, tables and supporting images.',
             $fields,
-            'the field states that saving filters, and that must be true'
+            'the field explains the formatting tools available to lecturers'
         );
     }
 

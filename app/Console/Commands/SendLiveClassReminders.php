@@ -6,6 +6,7 @@ use App\Models\LiveClass;
 use App\Models\LiveClassNotification;
 use App\Support\LiveClasses\LiveClassNotifier;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Sends the 24-hour and 1-hour reminders for published, upcoming live
@@ -53,25 +54,34 @@ class SendLiveClassReminders extends Command
             ->where('status', LiveClass::STATUS_SCHEDULED)
             ->whereNotNull('scheduled_at')
             ->whereBetween('scheduled_at', [$windowStart, $windowEnd])
-            ->whereDoesntHave('notifications', fn ($q) => $q->where('type', $type))
             ->get();
 
         $classesNotified = 0;
 
         foreach ($classes as $liveClass) {
             try {
-                $recipientCount = LiveClassNotifier::sendReminder($liveClass, $type);
-
-                LiveClassNotification::create([
-                    'school_id' => $liveClass->school_id,
-                    'live_class_id' => $liveClass->id,
-                    'type' => $type,
-                    'recipient_count' => $recipientCount,
-                    'sent_at' => now(),
-                ]);
-
-                $classesNotified++;
-                $this->line("  #{$liveClass->id} \"{$liveClass->title}\" — {$type}: {$recipientCount} recipient(s).");
+                $delivered = DB::transaction(function () use ($liveClass, $type, $windowStart, $windowEnd): bool {
+                    // Recheck under the same class lock used by edits. A stale
+                    // scheduler candidate must not notify after cancellation or rescheduling.
+                    $current = LiveClass::whereKey($liveClass->id)->lockForUpdate()->firstOrFail();
+                    if (!$current->is_published || $current->status !== LiveClass::STATUS_SCHEDULED
+                        || !$current->scheduled_at?->betweenIncluded($windowStart, $windowEnd)) return false;
+                    $key = LiveClassNotification::reminderKey($current, $type);
+                    $recipients = \App\Support\LiveClasses\LiveClassEligibility::eligibleStudentUserIds($current);
+                    if ($recipients->isEmpty()) return false;
+                    $claimed = LiveClassNotification::query()->insertOrIgnore([
+                        'school_id' => $current->school_id, 'live_class_id' => $current->id,
+                        'type' => $key, 'recipient_count' => $recipients->count(), 'sent_at' => now(),
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                    if (!$claimed) return false;
+                    LiveClassNotifier::sendReminder($current, $type);
+                    return true;
+                });
+                if ($delivered) {
+                    $classesNotified++;
+                    $this->line("  #{$liveClass->id} — {$type}: reminder recorded.");
+                }
             } catch (\Throwable $e) {
                 // One broken class (bad data, mail failure, whatever) must
                 // never stop the rest of the run from going out.

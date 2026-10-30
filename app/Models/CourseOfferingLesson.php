@@ -72,11 +72,12 @@ class CourseOfferingLesson extends Model
     protected $fillable = [
         'school_id', 'course_offering_id', 'course_offering_module_id', 'title', 'summary',
         'learning_objectives', 'body', 'content_type', 'estimated_minutes', 'sequence',
-        'status', 'released_at', 'completion_rule', 'created_by', 'updated_by',
+        'status', 'released_at', 'completion_rule', 'created_by', 'updated_by', 'assignment_id', 'creation_key',
     ];
 
     protected $casts = [
         'school_id' => 'integer',
+        'assignment_id' => 'integer',
         'course_offering_id' => 'integer',
         'course_offering_module_id' => 'integer',
         'sequence' => 'integer',

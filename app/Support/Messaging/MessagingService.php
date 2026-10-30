@@ -3,9 +3,11 @@
 namespace App\Support\Messaging;
 
 use App\Models\{AuditLog, Chat, MessageThrade, School, User, UserNotification};
+use App\Models\{CourseOfferingLecturerAllocation, CourseRegistration};
+use App\Support\CourseOffering\LecturerCourseOfferingAccess;
 use App\Support\Permissions\PermissionService;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\{Cache, DB};
+use Illuminate\Support\Facades\{Cache, DB, Schema};
 
 final class MessagingService
 {
@@ -38,9 +40,35 @@ final class MessagingService
         return (int) $actor->id !== (int) $other->id
             && (int) $actor->school_id === (int) $other->school_id
             && $this->active($actor) && $this->active($other)
+            && $this->coursePairAllowed($actor, $other)
             && ($this->staff($actor) || $this->staff($other))
             && (in_array((int) $actor->role_id, [6, 7], true) || $this->staff($actor))
             && (in_array((int) $other->role_id, [6, 7], true) || $this->staff($other));
+    }
+
+    /** Ordinary HEI lecturer/student contact follows confirmed course participation. */
+    private function coursePairAllowed(User $actor, User $other): bool
+    {
+        $roles = [(int) $actor->role_id, (int) $other->role_id];
+        sort($roles);
+        if ($roles !== [3, 7]) return true;
+        $school = School::find($actor->school_id);
+        if (!$school) return false;
+        if ($school->academicStructure() === 'class_based') return true;
+
+        $lecturer = (int) $actor->role_id === 3 ? $actor : $other;
+        $student = (int) $actor->role_id === 7 ? $actor : $other;
+        if (!Schema::hasColumn('course_registrations', 'course_offering_id')) return false;
+        $registered = CourseRegistration::where('school_id', $actor->school_id)
+            ->where('student_id', $student->id)->where('status', CourseRegistration::STATUS_CONFIRMED)
+            ->pluck('course_offering_id');
+        $access = app(LecturerCourseOfferingAccess::class);
+        foreach ($registered->filter()->unique() as $id) {
+            $offering = $access->resolveForLecturer($lecturer, (int) $id);
+            if ($offering && in_array($offering->my_role, [CourseOfferingLecturerAllocation::ROLE_PRIMARY_LECTURER, CourseOfferingLecturerAllocation::ROLE_CO_LECTURER], true)
+                && $access->teachingActionsAllowed($offering)) return true;
+        }
+        return false;
     }
 
     public function owned(User $actor, int $id): MessageThrade

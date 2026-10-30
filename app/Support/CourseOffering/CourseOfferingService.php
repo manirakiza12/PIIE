@@ -208,9 +208,9 @@ class CourseOfferingService
      *
      * @throws DomainException
      */
-    public function setProgressionGate(int $schoolId, int $offeringId, bool $enabled): CourseOffering
+    public function setProgressionGate(int $schoolId, int $offeringId, bool $enabled, ?bool $sequentialLessons = null): CourseOffering
     {
-        return DB::transaction(function () use ($schoolId, $offeringId, $enabled): CourseOffering {
+        return DB::transaction(function () use ($schoolId, $offeringId, $enabled, $sequentialLessons): CourseOffering {
             // `$draftOnly` is FALSE, deliberately. Every other mutator on this Allocation is
             // draft-only because subject, year, period and reference are identity:
             // changing them mid-course would rewrite history. This column is not
@@ -221,11 +221,13 @@ class CourseOfferingService
             $offering = $this->offering($schoolId, $offeringId, false);
 
             $before = (bool) $offering->gate_progression;
+            $previousSequence = (bool) $offering->sequential_lessons;
+            $sequentialLessons ??= $previousSequence;
 
             // Nothing to record for a no-op, and the audit trail should mean
             // something: a row saying "gate set to off" when it was already off
             // is noise that makes the real changes harder to find.
-            if ($before === $enabled) {
+            if ($before === $enabled && $previousSequence === $sequentialLessons) {
                 return $offering;
             }
 
@@ -234,6 +236,7 @@ class CourseOfferingService
                 ->where('id', $offeringId)
                 ->update([
                     'gate_progression' => $enabled,
+                    'sequential_lessons' => $sequentialLessons,
                     'updated_at' => now(),
                 ]);
 
@@ -242,8 +245,8 @@ class CourseOfferingService
             $this->audit(
                 $enabled ? 'COURSE_OFFERING_PROGRESSION_ENABLED' : 'COURSE_OFFERING_PROGRESSION_DISABLED',
                 $offering,
-                ['gate_progression' => $before],
-                ['gate_progression' => $enabled],
+                ['gate_progression' => $before, 'sequential_lessons' => $previousSequence],
+                ['gate_progression' => $enabled, 'sequential_lessons' => $sequentialLessons],
             );
 
             return $offering;
