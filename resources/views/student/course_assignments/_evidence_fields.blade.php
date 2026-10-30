@@ -2,6 +2,7 @@
     $primaryKinds = $assignment->responseKinds();
     $optionalKinds = $assignment->optionalEvidenceKinds();
     $labels = \App\Models\AssignmentSubmissionItem::KIND_LABELS;
+    $uploadLimit = \App\Support\Assignments\UploadLimit::LABEL;
 @endphp
 <fieldset class="mb-3">
     <legend class="h6">Response method</legend>
@@ -9,6 +10,7 @@
         {{ $assignment->requiresAllResponseKinds() ? 'All selected methods are required:' : 'Choose any one accepted method:' }}
         {{ $assignment->evidenceRequirementLabel() }}.
     </p>
+    <p class="small text-muted mb-3" data-testid="as-upload-limit">{{ $uploadLimit }}</p>
     @if(!$assignment->requiresAllResponseKinds() && count($primaryKinds) > 1)
         <label for="as-response-method" class="form-label">How would you like to respond?</label>
         <select id="as-response-method" class="form-select mb-3" name="response_method" data-as-method-select aria-describedby="as-requirement">
@@ -52,5 +54,6 @@
         </div>
         @if($optional)</details>@endif
     @endforeach
+    @error('files')<p class="text-danger small" role="alert">{{ $message }}</p>@enderror
     @error('items')<p class="text-danger small" role="alert">{{ $message }}</p>@enderror
 </fieldset>
