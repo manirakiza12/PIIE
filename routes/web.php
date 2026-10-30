@@ -107,6 +107,16 @@ Route::post('webhooks/marzpay', [\App\Http\Controllers\MarzPayWebhookController:
 Route::get('payments/pesapal/callback', [\App\Http\Controllers\Applicant\PesaPalController::class, 'callback'])->middleware('throttle:60,1')->name('applicant.pesapal.callback');
 // Register GET notifications: no CSRF exemption or applicant session is needed.
 Route::get('payments/pesapal/ipn', [\App\Http\Controllers\Applicant\PesaPalController::class, 'ipn'])->middleware('throttle:120,1')->name('applicant.pesapal.ipn');
+// The Pesapal business dashboard has a production IPN registered against https://.../api/pesapal/ipn
+// with id 402714d2-47f3-4fb6-9218-d9b975394ded. The application otherwise serves /payments/pesapal/ipn
+// only, so this handle keeps both paths working from the same controller. It never changes how new IPN
+// registrations are created or which notification_id orders carry.
+Route::get('api/pesapal/ipn', [\App\Http\Controllers\Applicant\PesaPalController::class, 'ipn'])
+    ->middleware('throttle:120,1')->name('applicant.pesapal.ipn.api');
+// Notifications registered as POST must still work without a browser session or CSRF token.
+Route::post('api/pesapal/ipn', [\App\Http\Controllers\Applicant\PesaPalController::class, 'ipn'])
+    ->middleware('throttle:120,1')->name('applicant.pesapal.ipn.api.post')
+    ->withoutMiddleware(\App\Http\Middleware\VerifyCsrfToken::class);
 Route::match(['get', 'post'], 'payments/application/{admission}', [\App\Http\Controllers\Applicant\PesaPalController::class, 'invitation'])
     ->middleware(['signed', 'throttle:20,1'])->name('applicant.pesapal.invitation');
 

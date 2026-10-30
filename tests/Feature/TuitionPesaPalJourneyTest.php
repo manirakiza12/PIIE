@@ -81,7 +81,7 @@ class TuitionPesaPalJourneyTest extends TestCase
         $this->assertSame(route('tuition.pesapal.callback'), $request['callback_url']);
         $this->assertSame(self::GUID, $request['notification_id']);
         $this->assertEqualsCanonicalizing(['id', 'amount', 'currency', 'description', 'callback_url', 'notification_id', 'billing_address'], array_keys($request->data()));
-        $this->assertSame(['email_address' => 'student@example.test', 'phone_number' => '+256771234567', 'first_name' => 'Student'], $request['billing_address']);
+        $this->assertSame(['email_address' => 'student@example.test', 'phone_number' => '+256771234567', 'first_name' => 'Student', 'last_name' => 'Student'], $request['billing_address']);
         $this->assertSame('unpaid', $fee->fresh()->status);
         $this->assertSame(0, (int) $fee->fresh()->paid_amount);
     }
@@ -96,7 +96,7 @@ class TuitionPesaPalJourneyTest extends TestCase
         $request = $orders->sole()[0];
         $this->assertSame('USD', $request['currency']);
         $this->assertSame('5000.00', $request['amount']);
-        $this->assertSame(['email_address' => 'student@example.test', 'phone_number' => '', 'first_name' => 'Student'], $request['billing_address']);
+        $this->assertSame(['email_address' => 'student@example.test', 'phone_number' => '', 'first_name' => 'Student', 'last_name' => 'Student'], $request['billing_address']);
         $this->assertArrayNotHasKey('payment_method', $request->data());
         $this->assertArrayNotHasKey('country_code', $request['billing_address']);
         $this->assertSame('unpaid', $fee->fresh()->status);
