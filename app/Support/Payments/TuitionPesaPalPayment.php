@@ -68,13 +68,19 @@ final class TuitionPesaPalPayment
             return $payment->fresh();
         }
         $student = User::whereKey($fee->student_id)->where('school_id', $fee->school_id)->firstOrFail();
+        // Pesapal validates the billing name fields; a lone first_name with an
+        // empty last_name is what SubmitOrderRequest rejects with HTTP 422, so
+        // single-word names fall back to the first token for both.
+        $names = collect(preg_split('/\s+/', trim((string) $student->name)) ?: [])->filter()->values();
+        $firstName = $names->first() ?: 'Payer';
+        $lastName = $names->skip(1)->implode(' ') ?: $firstName;
         try {
             $order = (new PesaPalService($configuration))->submitOrder(['id' => $payment->reference,
                 'amount' => (string) $payment->amount, 'currency' => $payment->currency,
                 'description' => 'School fees PRN ' . $payment->reference,
                 'callback_url' => route('tuition.pesapal.callback'), 'notification_id' => $configuration->notificationId,
-                'billing_address' => ['email_address' => (string) $student->email, 'phone_number' => preg_replace('/[()\s-]/', '', $phone ?: (string) $student->phone),
-                    'first_name' => (string) $student->name]]);
+                'billing_address' => ['email_address' => trim((string) $student->email), 'phone_number' => preg_replace('/[()\s-]/', '', $phone ?: (string) $student->phone),
+                    'first_name' => $firstName, 'last_name' => $lastName]]);
             DB::transaction(function () use ($payment, $order) {
                 $locked = TuitionPayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
                 if ($locked->gateway_txn_id && $locked->gateway_txn_id !== $order->orderTrackingId) { throw new PesaPalException(); }
