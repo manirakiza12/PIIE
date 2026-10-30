@@ -24,9 +24,9 @@ class StudentAssignmentUploadLimitTest extends TestCase
         return "/student/courses/{$this->offering->id}/assignments/{$assignment->id}".($action ? '/'.$action : '');
     }
 
-    private function textFile(int $bytes, string $name = 'answer.txt'): UploadedFile
+private function textFile(int $kilobytes, string $name = 'answer.txt'): UploadedFile
     {
-        return UploadedFile::fake()->createWithContent($name, $bytes);
+        return UploadedFile::fake()->create($name, $kilobytes);
     }
 
     public function test_label_matches_the_aggregate_and_per_file_constants(): void
@@ -49,7 +49,7 @@ class StudentAssignmentUploadLimitTest extends TestCase
 
         $response = $this->post($this->endpoint($assignment, 'submit'), [
             'text' => '<p>My answer.</p>',
-            'document' => $this->textFile(25 * 1024 * 1024),
+            'document' => $this->textFile(25 * 1024),
             'idempotency_key' => 'oversized-submit',
         ]);
 
@@ -66,7 +66,7 @@ class StudentAssignmentUploadLimitTest extends TestCase
 
         $response = $this->post($this->endpoint($assignment, 'draft'), [
             'text' => '<p>My answer so far.</p>',
-            'document' => $this->textFile(25 * 1024 * 1024),
+            'document' => $this->textFile(25 * 1024),
         ]);
 
         $response->assertRedirect();

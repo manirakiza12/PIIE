@@ -21,11 +21,10 @@ use Illuminate\Validation\ValidationException;
  *
  * WHAT THIS GATE CHECKS
  *
- *   Aggregate size, in two ways: `CONTENT_LENGTH` from the server (the figure
- *   PHP actually used to decide whether to accept the body) and the sum of
- *   the real uploaded file sizes (the fallback when the server does not
- *   report a content length, which is common in test environments and some
- *   proxies). Either one is sufficient to refuse.
+ *   Aggregate size, via `CONTENT_LENGTH` from the server (the figure PHP
+ *   actually used to decide whether to accept the body). The application's
+ *   aggregate limit sits below the server's own limits, so the gate catches
+ *   oversized requests before the server rejects them with a raw 413.
  *
  *   File count, against a hard cap.
  *

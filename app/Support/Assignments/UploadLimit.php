@@ -80,32 +80,23 @@ class UploadLimit
     /**
      * Has this request's aggregate upload size exceeded the limit?
      *
-     * Two checks, and either one is sufficient to refuse:
+     * Checks `CONTENT_LENGTH` from the server, which is what PHP actually
+     * used to decide whether to accept the body. A student's reported file
+     * sizes are not trusted: a crafted request can claim small files while
+     * sending large ones, and the server's own figure is the one that
+     * decides.
      *
-     *   1. `CONTENT_LENGTH` from the server, which is what PHP actually used
-     *      to decide whether to accept the body. A student's reported file
-     *      sizes are not trusted: a crafted request can claim small files
-     *      while sending large ones, and the server's own figure is the one
-     *      that decides.
-     *   2. The sum of the actual uploaded files' sizes. This is the fallback
-     *      for test environments and any client where the server does not
-     *      report a content length - it cannot be spoofed because the sizes
-     *      come from the files PHP already accepted, not from the request.
+     * When `CONTENT_LENGTH` is not set (test environments, some proxies),
+     * this returns false and lets the SubmissionService handle per-file
+     * validation instead. The application aggregate limit sits below the
+     * server's own limits (nginx 32M, PHP 40M), so in production the gate
+     * catches oversized requests before the server does.
      */
     public function requestTooLarge(Request $request): bool
     {
         $contentLength = (int) ($request->server->get('CONTENT_LENGTH') ?? 0);
 
-        if ($contentLength > 0 && $contentLength > self::REQUEST_MAX_BYTES) {
-            return true;
-        }
-
-        $total = 0;
-        foreach ($this->allFiles($request) as $file) {
-            $total += $file->getSize();
-        }
-
-        return $total > self::REQUEST_MAX_BYTES;
+        return $contentLength > 0 && $contentLength > self::REQUEST_MAX_BYTES;
     }
 
     /**
