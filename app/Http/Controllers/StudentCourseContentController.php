@@ -161,11 +161,22 @@ class StudentCourseContentController extends Controller
             ->first();
         $lastViewed = $ownProgress?->last_viewed_at;
 
+        $linkedAssignment = null;
+        if ($row->assignment_id) {
+            try {
+                $linkedAssignment = app(\App\Support\Assignments\AssignmentAccess::class)
+                    ->resolveForStudent($student, $offering->id, $row->assignment_id);
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                if ($exception->getStatusCode() !== 404) { throw $exception; }
+            }
+        }
+
         return view('student.course_content.lesson', [
             'offering' => $offering,
             'courseUnitLabel' => $this->courseUnitLabel($offering),
             'unitName' => optional($offering->subject)->name ?: $offering->reference,
             'lesson' => $row,
+            'linkedAssignment' => $linkedAssignment,
             'module' => $row->module,
             'resources' => $row->resources,
             'position' => $navigation['position'],

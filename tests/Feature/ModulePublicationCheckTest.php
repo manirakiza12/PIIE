@@ -68,21 +68,21 @@ class ModulePublicationCheckTest extends TestCase
 
     // ── The warning, which must NOT block ───────────────────────────────────
 
-    public function test_a_reading_only_module_is_allowed_but_warned_about(): void
+    public function test_a_reading_only_module_without_a_lesson_assignment_is_blocked(): void
     {
         $module = $this->module(['title' => 'Reading only']);
         $this->lesson($module, ['status' => CourseOfferingLesson::STATUS_PUBLISHED]);
 
         $result = $this->check->evaluate($module);
 
-        $this->assertTrue($result['ready'], 'a reading-only topic is a legitimate shape');
+        $this->assertFalse($result['ready'], 'each published lesson now requires its own assignment');
         $this->assertNotEmpty($result['warnings'], 'but the lecturer is told nothing checks understanding');
     }
 
     public function test_a_module_with_a_required_assessment_and_no_pass_mark_is_warned_about(): void
     {
         $module = $this->module(['title' => 'Unthresholded']);
-        $this->lesson($module, ['status' => CourseOfferingLesson::STATUS_PUBLISHED]);
+        $this->lesson($module, ['status' => CourseOfferingLesson::STATUS_PUBLISHED, 'assignment_id' => $this->publishedAssignment()->id]);
 
         $assessment = Assignment::query()->create([
             'school_id' => $module->school_id,
@@ -112,7 +112,7 @@ class ModulePublicationCheckTest extends TestCase
     public function test_a_thresholded_required_assessment_produces_no_threshold_warning(): void
     {
         $module = $this->module(['title' => 'Thresholded']);
-        $this->lesson($module, ['status' => CourseOfferingLesson::STATUS_PUBLISHED]);
+        $this->lesson($module, ['status' => CourseOfferingLesson::STATUS_PUBLISHED, 'assignment_id' => $this->publishedAssignment()->id]);
 
         Assignment::query()->create([
             'school_id' => $module->school_id,
@@ -142,7 +142,7 @@ class ModulePublicationCheckTest extends TestCase
         // Optional work is supplementary in every state. It must not silence the
         // warning, because it gates nothing and checks nothing.
         $module = $this->module(['title' => 'Only optional']);
-        $this->lesson($module, ['status' => CourseOfferingLesson::STATUS_PUBLISHED]);
+        $this->lesson($module, ['status' => CourseOfferingLesson::STATUS_PUBLISHED, 'assignment_id' => $this->publishedAssignment()->id]);
 
         Assignment::query()->create([
             'school_id' => $module->school_id,

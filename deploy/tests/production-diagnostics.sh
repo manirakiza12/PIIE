@@ -99,6 +99,9 @@ grep -q 'READINESS PASS: active=452e21ac5d59ea582357914f2045d558816a1776' "$S/ta
 printf '%s\n' 7838f3c534d3a08fc38d3ef838bba925e2ddca43 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/learning.log" 2>&1
 grep -q 'READINESS PASS: active=7838f3c534d3a08fc38d3ef838bba925e2ddca43' "$S/learning.log"
+printf '%s\n' 9a5f3b05b3fbafcb10ccda36a6b48d567cf78529 > "$BASE/releases/old/RELEASE_SHA"
+bash "$S/inspect.sh" > "$S/communication.log" 2>&1
+grep -q 'READINESS PASS: active=9a5f3b05b3fbafcb10ccda36a6b48d567cf78529' "$S/communication.log"
 # Rejections must precede Docker, database, backup or application probes.
 for sha in ad5f0190e68d912a06923fc6ceba623883fb0732 0b1924ca54ed89c72400d08a3e80476888b1e719 452e21ac5d59ea582357914f2045d558816a1777 '452e21ac' '452e21ac5d59ea582357914f2045d558816a1776;id'; do
   printf '%s\n' "$sha" > "$BASE/releases/old/RELEASE_SHA"

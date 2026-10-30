@@ -535,7 +535,7 @@ class RichTextRenderingTest extends TestCase
             'paragraph / style' => ['paragraph', "['para'"],
             'bullet list' => ['bullet list', "'ul'"],
             'numbered list' => ['numbered list', "'ol'"],
-            'alignment' => ['alignment', "'justify'"],
+            'alignment' => ['alignment', "'paragraph'"],
             'undo' => ['undo', "'undo'"],
             'redo' => ['redo', "'redo'"],
             'table' => ['table', "'table'"],

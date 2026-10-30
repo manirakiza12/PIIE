@@ -141,6 +141,10 @@ trait CourseContentFixture
                 $t->string('status', 20)->default('draft');
                 $t->dateTime('released_at')->nullable();
                 $t->string('completion_rule', 32)->default('manual');
+                $t->unsignedBigInteger('assignment_id')->nullable()->unique('lesson_assignment_unique');
+                $t->string('creation_key', 64)->nullable();
+                $t->char('creation_fingerprint', 64)->nullable();
+                $t->unique(['school_id', 'created_by', 'creation_key'], 'lesson_creation_unique');
                 $t->unsignedBigInteger('created_by')->nullable(); $t->unsignedBigInteger('updated_by')->nullable();
                 $t->timestamps();
             });

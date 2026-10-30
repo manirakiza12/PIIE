@@ -299,7 +299,9 @@ function flush(env) {
  * would drive it, rather than by poking the textarea it is supposed to update.
  */
 function type(env, editable, html) {
-    env.jq(editable).summernote('code', html);
+    // Typing changes the contenteditable DOM; it does not initialize Summernote
+    // on the generated div (the actual vendor instance belongs to the textarea).
+    editable.innerHTML = html;
     editable.dispatchEvent({ type: 'input' });
 }
 
