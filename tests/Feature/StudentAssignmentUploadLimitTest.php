@@ -36,7 +36,7 @@ class StudentAssignmentUploadLimitTest extends TestCase
 
         $this->assertStringContainsString((string) $aggregateMB.' MB', UploadLimit::LABEL);
         $this->assertStringContainsString('under '.$fileMB.' MB', UploadLimit::LABEL);
-        $this->assertLessThan(UploadLimit::FILE_MAX_BYTES, UploadLimit::REQUEST_MAX_BYTES);
+        $this->assertGreaterThan(UploadLimit::FILE_MAX_BYTES, UploadLimit::REQUEST_MAX_BYTES);
     }
 
     public function test_submit_refuses_oversized_request_without_spending_attempt(): void

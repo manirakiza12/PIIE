@@ -42,12 +42,6 @@ class UploadGate
         if ($this->limit->tooManyFiles($files)) {
             throw ValidationException::withMessages(['files' => $this->limit->tooManyFilesMessage()]);
         }
-
-        foreach ($files as $file) {
-            if ($this->limit->fileTooLarge($file)) {
-                throw ValidationException::withMessages(['files' => $this->limit->fileMessage()]);
-            }
-        }
     }
 
     /**

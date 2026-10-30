@@ -29,6 +29,7 @@ class StudentCourseContentController extends Controller
         private CourseContentAccess $access,
         private CourseContentService $content,
         private ModuleCompletion $moduleCompletion,
+        private \App\Support\Assignments\SubmissionService $submissions,
     ) {}
 
     /**
@@ -180,8 +181,13 @@ class StudentCourseContentController extends Controller
                 if (! $linkedAssignmentCanSubmit) {
                     $linkedAssignmentReason = \App\Support\Assignments\AssignmentLifecycle::refusalReason($linkedAssignment, $used);
                 }
-            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
-                if ($exception->getStatusCode() !== 404) { throw $exception; }
+            } catch (\Throwable $exception) {
+                // The linked assignment is a convenience, not a requirement. If it
+                // cannot be resolved for any reason - unpublished, unallocated,
+                // wrong tenant, a service refusal - the lesson still renders.
+                // Swallowing here is deliberate: a lesson must never 404 because
+                // its transition target could not be inspected.
+                report($exception);
             }
         }
 
