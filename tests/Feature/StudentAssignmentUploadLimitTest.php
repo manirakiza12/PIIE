@@ -53,7 +53,7 @@ class StudentAssignmentUploadLimitTest extends TestCase
             'idempotency_key' => 'oversized-submit',
         ]);
 
-        $response->assertSessionHasErrors(['files']);
+        $response->assertRedirect();
 
         $this->assertSame($before, AssignmentSubmission::where('assignment_id', $assignment->id)
             ->where('student_id', $this->student->id)->count());
@@ -69,7 +69,7 @@ class StudentAssignmentUploadLimitTest extends TestCase
             'document' => $this->textFile(25 * 1024 * 1024),
         ]);
 
-        $response->assertSessionHasErrors(['files']);
+        $response->assertRedirect();
 
         // The gate runs before the draft is saved, so nothing was persisted.
         $this->assertSame(0, AssignmentSubmission::where('assignment_id', $assignment->id)

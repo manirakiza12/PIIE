@@ -80,16 +80,32 @@ class UploadLimit
     /**
      * Has this request's aggregate upload size exceeded the limit?
      *
-     * Reads `CONTENT_LENGTH` from the server, which is what PHP actually used
-     * to decide whether to accept the body. A student's reported file sizes are
-     * not trusted: a crafted request can claim small files while sending large
-     * ones, and the server's own figure is the one that decides.
+     * Two checks, and either one is sufficient to refuse:
+     *
+     *   1. `CONTENT_LENGTH` from the server, which is what PHP actually used
+     *      to decide whether to accept the body. A student's reported file
+     *      sizes are not trusted: a crafted request can claim small files
+     *      while sending large ones, and the server's own figure is the one
+     *      that decides.
+     *   2. The sum of the actual uploaded files' sizes. This is the fallback
+     *      for test environments and any client where the server does not
+     *      report a content length - it cannot be spoofed because the sizes
+     *      come from the files PHP already accepted, not from the request.
      */
     public function requestTooLarge(Request $request): bool
     {
         $contentLength = (int) ($request->server->get('CONTENT_LENGTH') ?? 0);
 
-        return $contentLength > 0 && $contentLength > self::REQUEST_MAX_BYTES;
+        if ($contentLength > 0 && $contentLength > self::REQUEST_MAX_BYTES) {
+            return true;
+        }
+
+        $total = 0;
+        foreach ($this->allFiles($request) as $file) {
+            $total += $file->getSize();
+        }
+
+        return $total > self::REQUEST_MAX_BYTES;
     }
 
     /**
@@ -144,5 +160,41 @@ class UploadLimit
     public function tooManyFilesMessage(): string
     {
         return 'You may attach up to '.self::MAX_FILES.' files in one submission.';
+    }
+
+    /**
+     * All uploaded files in the request, at any depth.
+     *
+     * A student's submission can nest files under `questions[0][items][0][file]`,
+     * and `$request->file()` only walks the top level. This flattens the tree
+     * so the count and the aggregate see every file the student sent.
+     *
+     * @return list<UploadedFile>
+     */
+    public function allFiles(Request $request): array
+    {
+        $files = $request->allFiles();
+        $flat = [];
+
+        foreach ($files as $file) {
+            $this->collect($file, $flat);
+        }
+
+        return $flat;
+    }
+
+    private function collect(mixed $file, array &$out): void
+    {
+        if ($file instanceof UploadedFile) {
+            $out[] = $file;
+
+            return;
+        }
+
+        if (is_array($file)) {
+            foreach ($file as $child) {
+                $this->collect($child, $out);
+            }
+        }
     }
 }

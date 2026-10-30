@@ -3,15 +3,14 @@
 namespace App\Support\Assignments;
 
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 
 /**
  * The gate that runs BEFORE any file is moved.
  *
  * The order matters. PHP rejects the whole request when `post_max_size` is
- * exceeded, and that rejection is a raw PHP warning - not an exception, not
- * a validation error, nothing a controller can catch. So this class does not
+ * exceeded, and that rejection is a raw warning - not an exception, not a
+ * validation error, nothing a controller can catch. So this class does not
  * try to catch the rejection; it PREVENTS it by refusing the request earlier,
  * at the point where the student's text is still available to be saved as a
  * draft.
@@ -19,6 +18,21 @@ use Illuminate\Validation\ValidationException;
  * It is called from the controller, before `saveDraft` or `submit`, and it
  * throws a `ValidationException` - the same kind the existing per-file checks
  * throw - so the existing error-display path handles it without a new one.
+ *
+ * WHAT THIS GATE CHECKS
+ *
+ *   Aggregate size, in two ways: `CONTENT_LENGTH` from the server (the figure
+ *   PHP actually used to decide whether to accept the body) and the sum of
+ *   the real uploaded file sizes (the fallback when the server does not
+ *   report a content length, which is common in test environments and some
+ *   proxies). Either one is sufficient to refuse.
+ *
+ *   File count, against a hard cap.
+ *
+ *   It deliberately does NOT re-check per-file size. The SubmissionService
+ *   already validates each file's format, size and kind against the
+ *   assignment's own allowlist; a second gate here would reject files the
+ *   service would have accepted and break existing assignment tests.
  */
 class UploadGate
 {
@@ -37,46 +51,10 @@ class UploadGate
             throw ValidationException::withMessages(['files' => $this->limit->requestMessage()]);
         }
 
-        $files = $this->uploadedFiles($request);
+        $files = $this->limit->allFiles($request);
 
         if ($this->limit->tooManyFiles($files)) {
             throw ValidationException::withMessages(['files' => $this->limit->tooManyFilesMessage()]);
-        }
-    }
-
-    /**
-     * All uploaded files in the request, at any depth.
-     *
-     * A student's submission can nest files under `questions[0][items][0][file]`,
-     * and `$request->file()` only walks the top level. This flattens the tree
-     * so the count and the per-file checks see every file the student sent.
-     *
-     * @return list<UploadedFile>
-     */
-    private function uploadedFiles(Request $request): array
-    {
-        $files = $request->allFiles();
-        $flat = [];
-
-        foreach ($files as $file) {
-            $this->collect($file, $flat);
-        }
-
-        return $flat;
-    }
-
-    private function collect(mixed $file, array &$out): void
-    {
-        if ($file instanceof UploadedFile) {
-            $out[] = $file;
-
-            return;
-        }
-
-        if (is_array($file)) {
-            foreach ($file as $child) {
-                $this->collect($child, $out);
-            }
         }
     }
 }
