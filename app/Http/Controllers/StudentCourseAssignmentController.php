@@ -157,8 +157,13 @@ class StudentCourseAssignmentController extends Controller
 
         return view('student.course_assignments.show', [
             'questionBased' => $questionBased,
+            'lecturerNames' => $offering->lecturerAllocations()->where('status', 'active')->with('lecturer')->get()
+                ->map(fn ($allocation) => (int) $allocation->lecturer?->school_id === (int) $offering->school_id ? $allocation->lecturer?->name : null)
+                ->filter()->unique()->implode(', '),
             'questions' => $questions,
             'questionAnswers' => $questionAnswers,
+            'releasedQuestionAnswers' => ($questionBased && $latest?->isReleased())
+                ? $this->submissions->answersFor($latest, $questions) : [],
             'evidenceByQuestion' => $evidenceByQuestion,
             // One token per page render, carried by the submit form. The UNIQUE
             // index on assignment_submissions.idempotency_key is the actual guard:
@@ -384,6 +389,7 @@ class StudentCourseAssignmentController extends Controller
             'unitName' => optional($offering->subject)->name ?: $offering->reference,
             'assignment' => $record->assignment,
             'submission' => $record,
+            'questions' => $this->submissions->questionsFor($record->assignment),
             'display' => AssignmentDisplay::make($record->assignment, $student),
         ]);
     }

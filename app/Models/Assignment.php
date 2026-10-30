@@ -256,6 +256,7 @@ class Assignment extends Model
         'closed_at', 'closed_by',
         // Module/chapter task fields
         'course_offering_module_id', 'requirement_role', 'completion_rule', 'submission_kinds',
+        'submission_requirement_mode', 'optional_submission_kinds',
         // Threshold and recovery
         'pass_mark', 'retry_policy', 'attempts_cycle', 'locked_until',
     ];
@@ -379,7 +380,7 @@ class Assignment extends Model
      * as they always have. Nothing is inferred about an assignment that never
      * asked the question.
      */
-    public function acceptedEvidenceKinds(): array
+    public function responseKinds(): array
     {
         $stored = trim((string) $this->submission_kinds);
 
@@ -407,9 +408,34 @@ class Assignment extends Model
         return in_array($kind, $this->acceptedEvidenceKinds(), true);
     }
 
+    public function optionalEvidenceKinds(): array
+    {
+        return array_values(array_diff(array_intersect(
+            AssignmentSubmissionItem::CONFIGURABLE_KINDS,
+            array_map('trim', explode(',', (string) $this->optional_submission_kinds))
+        ), $this->responseKinds()));
+    }
+
+    public function acceptedEvidenceKinds(): array
+    {
+        return array_values(array_unique(array_merge($this->responseKinds(), $this->optionalEvidenceKinds())));
+    }
+
+    public function requiresAllResponseKinds(): bool
+    {
+        // Legacy rows keep their actual server-side requirement, despite old OR wording.
+        return $this->submission_requirement_mode !== 'any';
+    }
+
+    public function responseKindRequired(string $kind): bool
+    {
+        return in_array($kind, $this->responseKinds(), true)
+            && ($this->requiresAllResponseKinds() || count($this->responseKinds()) === 1);
+    }
+
     public function requiresWrittenResponse(): bool
     {
-        return $this->acceptsEvidenceKind(\App\Models\AssignmentSubmissionItem::KIND_TEXT);
+        return $this->responseKindRequired(AssignmentSubmissionItem::KIND_TEXT);
     }
 
     /** A short, plain-word description of what the student is asked to hand in. */
@@ -417,7 +443,7 @@ class Assignment extends Model
     {
         $labels = array_map(
             fn (string $kind) => \App\Models\AssignmentSubmissionItem::KIND_LABELS[$kind] ?? $kind,
-            $this->acceptedEvidenceKinds()
+            $this->responseKinds()
         );
 
         if ($labels === []) {
@@ -430,7 +456,7 @@ class Assignment extends Model
 
         $last = array_pop($labels);
 
-        return implode(', ', $labels).' or '.$last;
+        return implode(', ', $labels).($this->requiresAllResponseKinds() ? ' and ' : ' or ').$last;
     }
 
     // ── relations ──────────────────────────────────────────────────────────

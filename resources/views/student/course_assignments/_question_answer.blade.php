@@ -50,16 +50,19 @@
 @endphp
 
 <div class="as-question border rounded p-3 mb-3" data-testid="as-question-{{ $question->id }}"
-     data-question-id="{{ $question->id }}">
+     data-question-id="{{ $question->id }}" data-as-question="{{ $question->id }}" role="group" aria-labelledby="{{ $prefix }}heading-{{ $question->id }}"
+     aria-describedby="{{ $prefix }}error-{{ $question->id }}">
 
     <div class="d-flex justify-content-between align-items-baseline flex-wrap gap-2 mb-1">
-        <h6 class="mb-0" data-testid="as-question-number">
+        <h6 class="mb-0" id="{{ $prefix }}heading-{{ $question->id }}" data-testid="as-question-number">
             Question {{ $loop->iteration }} of {{ $questionCount }}
         </h6>
         <span class="small text-nowrap" data-testid="as-question-marks">
             <span class="fw-semibold">{{ $question->marksLabelWithUnit() }}</span>
             @if(! $question->is_required)
                 <span class="text-muted">&middot; optional</span>
+            @else
+                <span class="text-muted">&middot; required</span>
             @endif
         </span>
     </div>
@@ -78,13 +81,21 @@
         {{ $question->require_all ? 'You must provide' : 'Provide' }}:
         {{ $question->responseRequirementLabel() }}
     </p>
+    <div id="{{ $prefix }}error-{{ $question->id }}" class="small text-danger" role="alert">{{ $errors->first('questions.'.$question->id) }}</div>
 
     @if($kinds === [])
         <div class="alert alert-warning py-2 small mb-0" data-testid="as-question-unconfigured">
             Your lecturer has not finished setting up this question. Contact them if you need it.
         </div>
     @else
+        @if(!$question->require_all && count($kinds) > 1)
+            <label for="{{ $prefix }}method-{{ $question->id }}" class="form-label small">Choose your response method</label>
+            <select id="{{ $prefix }}method-{{ $question->id }}" class="form-select mb-3" data-as-question-method>
+                @foreach($kinds as $kind)<option value="{{ $kind }}">{{ $item::KIND_LABELS[$kind] }}</option>@endforeach
+            </select>
+        @endif
         @if($question->acceptsWrittenResponse())
+            <div data-as-question-method-panel="text">
             {{--
                 THE ACADEMIC EDITOR, not a plain textarea.
 
@@ -116,12 +127,13 @@
                 name="{{ $fieldBase }}[text]"
                 :id="$prefix.'text-'.$question->id"
                 :label="$item::KIND_LABELS[$item::KIND_TEXT]"
-                :value="old($fieldBase.'[text]', $answer?->text_response)"
+                :value="old('questions.'.$question->id.'.text', $answer?->text_response)"
                 :testid="'as-question-text-'.$question->id"
                 :height="260"
                 placeholder="Write your answer here. Use the toolbar for headings, numbered steps, tables, symbols and equations."
                 :help="'Formatting is saved with your answer. If the toolbar does not appear, this box still works exactly the same way.'"
             />
+            </div>
         @endif
 
         @if($question->acceptsLink())
@@ -129,7 +141,7 @@
                 $attachedLink = $evidence->firstWhere('kind', $item::KIND_LINK);
                 $thisSlot = $slot++;
             @endphp
-            <div class="mb-2" data-testid="as-question-slot-link-{{ $question->id }}">
+            <div class="mb-2" data-as-question-method-panel="link" data-testid="as-question-slot-link-{{ $question->id }}">
                 <label for="{{ $prefix }}link-{{ $question->id }}" class="form-label small">
                     {{ $item::KIND_LABELS[$item::KIND_LINK] }}
                 </label>
@@ -138,7 +150,7 @@
                        id="{{ $prefix }}link-{{ $question->id }}"
                        name="{{ $fieldBase }}[items][{{ $thisSlot }}][url]"
                        data-testid="as-question-link-{{ $question->id }}"
-                       value="{{ old($fieldBase.'[items]['.$thisSlot.'][url]', $attachedLink?->url) }}">
+                       value="{{ old('questions.'.$question->id.'.items.'.$thisSlot.'.url', $attachedLink?->url) }}">
                 <div class="form-text">A full http or https address.</div>
             </div>
         @endif
@@ -155,7 +167,7 @@
                     : ($kind === $item::KIND_VIDEO ? 'video/*' : implode(',', $item::extensionsFor($kind))));
             @endphp
 
-            <div class="mb-3" data-testid="as-question-slot-{{ $kind }}-{{ $question->id }}">
+            <div class="mb-3" data-as-question-method-panel="{{ $kind }}" data-testid="as-question-slot-{{ $kind }}-{{ $question->id }}">
                 <label for="{{ $inputId }}" class="form-label small">
                     {{ $item::KIND_LABELS[$kind] }}
                 </label>

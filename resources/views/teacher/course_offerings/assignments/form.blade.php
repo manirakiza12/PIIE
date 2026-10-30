@@ -254,7 +254,7 @@
                      file the student attaches, and nothing here captures anything. --}}
                 <div class="mb-0">
                     <label class="form-label d-block">What the student hands in</label>
-                    @php $chosen = old('submission_kinds', $assignment->acceptedEvidenceKinds()); @endphp
+                    @php $chosen = old('submission_kinds', $assignment->responseKinds()); @endphp
                     @foreach($evidenceKinds as $kind)
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="submission_kinds[]"
@@ -266,8 +266,7 @@
                         </div>
                     @endforeach
                     <div class="form-text mt-1">
-                        Tick every kind that will be accepted. A submission missing one of
-                        these is refused rather than half-accepted.
+                        Choose the primary response methods, then decide whether all or any one is required below.
                     </div>
                 </div>
             </div>
@@ -284,6 +283,30 @@
                     <div class="form-text">A mark above this is refused when you grade.</div>
                 </div>
 
+                <div class="mb-3">
+                    <label for="as-response-rule" class="form-label">Required response rule</label>
+                    <select id="as-response-rule" name="submission_requirement_mode" class="form-select">
+                        <option value="all" @selected(old('submission_requirement_mode', $assignment->submission_requirement_mode ?? 'all') === 'all')>ALL selected methods required</option>
+                        <option value="any" @selected(old('submission_requirement_mode', $assignment->submission_requirement_mode ?? 'all') === 'any')>ANY ONE accepted method sufficient</option>
+                    </select>
+                    @if($assignment->exists && !$assignment->submission_requirement_mode)
+                        <p class="form-text">This existing assignment requires all selected methods. That rule stays in place unless you change it here.</p>
+                    @endif
+                    @error('submission_requirement_mode')<p class="text-danger small">{{ $message }}</p>@enderror
+                </div>
+                <fieldset class="mb-3">
+                    <legend class="h6">Optional supporting attachments</legend>
+                    <p class="form-text">These never replace the primary response. A method selected above remains part of the required response rule.</p>
+                    @foreach($evidenceKinds as $kind)
+                        @if($kind !== 'text')
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="optional_submission_kinds[]" id="as-optional-{{ $kind }}" value="{{ $kind }}"
+                                   @checked(in_array($kind, (array) old('optional_submission_kinds', $assignment->optionalEvidenceKinds()), true))>
+                            <label for="as-optional-{{ $kind }}" class="form-check-label">{{ \App\Models\AssignmentSubmissionItem::KIND_LABELS[$kind] }}</label>
+                        </div>
+                        @endif
+                    @endforeach
+                </fieldset>
                 <div class="mb-3">
                     <label for="as-type" class="form-label">What the student submits</label>
                     <select class="form-select" id="as-type" name="submission_type">
@@ -558,7 +581,7 @@
     // the brief than part of the configuration.
     var SETTINGS_FIELDS = [
         'title', 'course_offering_module_id', 'requirement_role',
-        'completion_rule', 'submission_kinds', 'submission_type',
+        'completion_rule', 'submission_kinds', 'submission_requirement_mode', 'optional_submission_kinds', 'submission_type',
         'max_marks', 'pass_mark', 'allowed_attempts', 'retry_policy',
         'late_policy', 'due_date', 'released_at', 'closes_at'
     ];

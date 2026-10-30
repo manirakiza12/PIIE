@@ -394,11 +394,16 @@ class AssignmentEvidenceCarryForwardTest extends TestCase
                     ],
                 ],
             ])
-            ->assertSessionHasErrors('questions');
+            ->assertSessionHasNoErrors();
 
-        // The withdrawal itself did not happen, because the draft was refused - so
-        // the file is still there and the student has not lost their work.
-        $this->assertSame(1, AssignmentSubmissionItem::query()->count());
+        // A student can revise an incomplete draft, but cannot hand it in yet.
+        $this->assertSame(0, AssignmentSubmissionItem::query()->count());
+        $this->actingAs($this->student)
+            ->post("/student/courses/{$this->offering->id}/assignments/{$assignment->id}/submit", [
+                'questions' => [(string) $question->id => ['items' => []]],
+                'idempotency_key' => 'withdrawn-required',
+            ])->assertSessionHasErrors('questions');
+        $this->assertSame(0, AssignmentSubmission::where('is_draft', false)->count());
     }
 
     public function test_the_withdraw_control_is_offered_only_when_something_is_attached(): void

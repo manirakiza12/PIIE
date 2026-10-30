@@ -97,6 +97,8 @@ trait AssignmentFixture
                 $t->string('requirement_role', 20)->default('optional');
                 $t->string('completion_rule', 30)->default('submission');
                 $t->string('submission_kinds', 120)->nullable();
+                $t->string('submission_requirement_mode', 8)->nullable();
+                $t->string('optional_submission_kinds', 120)->nullable();
             });
 
             Schema::table('assignments', function (Blueprint $t): void {

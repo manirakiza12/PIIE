@@ -67,11 +67,35 @@
 
             @if($submission->writtenResponse() !== null)
                 <div class="as-surface border rounded p-3" data-testid="as-my-text">
-                    {!! nl2br(e($submission->writtenResponse())) !!}
+                    {!! app(\App\Support\CourseContent\HtmlSanitizer::class)->sanitize($submission->writtenResponse()) !!}
                 </div>
             @endif
 
-            @if(! $submission->hasFile() && ! $submission->writtenResponse() !== null)
+            @foreach($questions as $question)
+                @php $answer = $submission->questionResponses->firstWhere('assignment_question_id', $question->id); @endphp
+                <section class="border rounded p-3 mb-3" data-testid="as-submitted-question-{{ $question->id }}">
+                    <h6>Question {{ $loop->iteration }} of {{ $questions->count() }}</h6>
+                    <div class="piie-prose">{!! $question->prosePrompt() !!}</div>
+                    @if($answer?->text_response)
+                        <h6 class="mt-3">Your answer</h6>
+                        <div class="piie-prose">{!! app(\App\Support\CourseContent\HtmlSanitizer::class)->sanitize($answer->text_response) !!}</div>
+                    @endif
+                    @if($submission->isReleased() && $answer?->feedback)
+                        <p class="small mt-2">Feedback: {{ $answer->feedback }}</p>
+                    @endif
+                </section>
+            @endforeach
+            @foreach($submission->items as $item)
+                <p class="small">
+                    @if($item->assignment_question_id) Question {{ $questions->search(fn ($q) => $q->id === $item->assignment_question_id) + 1 }}: @endif
+                    @if($item->hasFile())
+                        <a href="{{ route('student.courses.assignments.submissions.evidence', [$offering->id, $assignment->id, $submission->id, $item->id]) }}">{{ $item->displayName() }}</a>
+                    @elseif($item->hasUsableLink())
+                        <a href="{{ $item->url }}" target="_blank" rel="noopener noreferrer">{{ $item->displayName() }}</a>
+                    @endif
+                </p>
+            @endforeach
+            @if(! $submission->hasFile() && $submission->writtenResponse() === null && $submission->items->isEmpty() && $submission->questionResponses->isEmpty())
                 <p class="text-muted mb-0">This attempt recorded no work.</p>
             @endif
         </article>

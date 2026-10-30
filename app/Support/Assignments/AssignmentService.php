@@ -150,9 +150,21 @@ class AssignmentService
             $assignment->requirement_role
         );
 
-        $assignment->submission_kinds = $this->normaliseSubmissionKinds(
-            $attributes['submission_kinds'] ?? null
-        );
+        if (!$assignment->exists || array_key_exists('submission_kinds', $attributes)) {
+            $assignment->submission_kinds = $this->normaliseSubmissionKinds($attributes['submission_kinds'] ?? null);
+        }
+        if (array_key_exists('submission_requirement_mode', $attributes)) {
+            if (!in_array($attributes['submission_requirement_mode'], ['all', 'any'], true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['submission_requirement_mode' => 'Choose all selected methods or any one method.']);
+            }
+            $assignment->submission_requirement_mode = $attributes['submission_requirement_mode'];
+            if (!$assignment->submission_kinds) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['submission_kinds' => 'Select at least one primary response method.']);
+            }
+        }
+        if (array_key_exists('optional_submission_kinds', $attributes)) {
+            $assignment->optional_submission_kinds = $this->normaliseSubmissionKinds($attributes['optional_submission_kinds']);
+        }
 
         // A closed assignment has no release time to speak of, and closing is
         // recorded as an event so "when did this close, and who closed it" is
