@@ -376,6 +376,7 @@ class CourseOfferingContentController extends Controller
             'modules' => $modules,
             'lesson' => $lesson,
             'mode' => 'create',
+            'lessonAssignments' => $this->lessonAssignments($offering),
         ]);
     }
 
@@ -404,6 +405,7 @@ class CourseOfferingContentController extends Controller
                 ->get(),
             'lesson' => $row,
             'mode' => 'edit',
+            'lessonAssignments' => $this->lessonAssignments($offering, $row),
         ]);
     }
 
@@ -420,7 +422,9 @@ class CourseOfferingContentController extends Controller
 
         return redirect()
             ->route('teacher.course_offerings.content.lessons.edit', [$offering->id, $lesson->id])
-            ->with('success', 'Lesson saved as a draft. Use Preview to see it as a student, then Publish when you are ready.');
+            ->with('success', $lesson->status === CourseOfferingLesson::STATUS_PUBLISHED
+                ? ($lesson->released_at?->isFuture() ? 'Lesson published and scheduled for its release date.' : 'Lesson published. Confirmed students can now see it.')
+                : 'Lesson saved as a draft. Link its assignment before publishing.');
     }
 
     public function updateLesson(Request $request, int $id, int $lesson): RedirectResponse
@@ -450,7 +454,7 @@ class CourseOfferingContentController extends Controller
         return redirect()
             ->route('teacher.course_offerings.content.lessons.edit', [$offering->id, $row->id])
             ->with('success', $status === CourseOfferingLesson::STATUS_PUBLISHED
-                ? 'Lesson published. Confirmed students can now see it.'
+                ? ($row->fresh()->released_at?->isFuture() ? 'Lesson published and scheduled for its release date.' : 'Lesson published. Confirmed students can now see it.')
                 : 'Lesson saved.');
     }
 
@@ -552,6 +556,13 @@ class CourseOfferingContentController extends Controller
         // than on name - would otherwise leave the lecturer a blank lesson they
         // never asked for and cannot explain.
         $lesson = DB::transaction(function () use ($request, $validated, $parent) {
+            $request->validate([
+                'creation_key' => ['nullable', 'string', 'max:64'],
+                'assignment_id' => ['nullable', 'integer', 'min:1'],
+                'estimated_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
+                'released_at' => ['nullable', 'date'],
+                'completion_rule' => ['nullable', 'in:manual'],
+            ]);
             // `status` is not taken from the request. See the method note.
             $created = $this->guarded(fn () => $this->content->createLesson($request->user(), $parent, [
                 'title' => $request->input('title') ?: 'Untitled lesson',
@@ -559,7 +570,14 @@ class CourseOfferingContentController extends Controller
                 'learning_objectives' => $request->input('learning_objectives') ?: null,
                 'status' => CourseOfferingLesson::STATUS_DRAFT,
                 'body' => $request->input('body'),
+                'creation_key' => $request->input('creation_key') ?: null,
+                'assignment_id' => $request->input('assignment_id'),
+                'estimated_minutes' => $request->input('estimated_minutes'),
+                'released_at' => $request->input('released_at'),
+                'completion_rule' => $request->input('completion_rule') ?: 'manual',
             ]));
+
+            if ($request->filled('creation_key') && $created->resources()->exists()) { return $created; }
 
             if ($validated['type'] === 'file') {
                 $this->guarded(fn () => $this->content->attachFileResource(
@@ -740,6 +758,8 @@ class CourseOfferingContentController extends Controller
             'status' => ['required', 'in:draft,published,archived'],
             'released_at' => ['nullable', 'date'],
             'completion_rule' => ['nullable', 'in:manual'],
+            'assignment_id' => ['nullable', 'integer', 'min:1'],
+            'creation_key' => ['nullable', 'string', 'max:64'],
         ];
 
         // An UNSAVED PREVIEW must not be held to the publish rules, or a
@@ -750,6 +770,15 @@ class CourseOfferingContentController extends Controller
         }
 
         return $rules;
+    }
+
+    private function lessonAssignments($offering, ?CourseOfferingLesson $lesson = null)
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('assignments', 'course_offering_id')) { return collect(); }
+        return Assignment::where('school_id', $offering->school_id)->where('course_offering_id', $offering->id)
+            ->whereNotIn('id', CourseOfferingLesson::whereNotNull('assignment_id')
+                ->when($lesson, fn ($q) => $q->where('id', '!=', $lesson->id))->select('assignment_id'))
+            ->orderBy('title')->get();
     }
 
     /** Re-resolve a module inside the Allocation; a foreign id is a 404, not a move. */

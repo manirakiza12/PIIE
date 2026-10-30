@@ -55,6 +55,17 @@ final class ModulePublicationCheck
                 .'Add at least one lesson before you publish it.';
         }
 
+        foreach (CourseOfferingLesson::where('course_offering_module_id', $module->id)
+            ->where('school_id', $module->school_id)->where('course_offering_id', $module->course_offering_id)
+            ->where('status', CourseOfferingLesson::STATUS_PUBLISHED)->get() as $lesson) {
+            if (!app(LessonPublicationCheck::class)->hasContent($lesson, $lesson->body)) {
+                $errors[] = 'Lesson '.$lesson->id.': add written content or an accessible file or link before publishing.';
+            }
+            if ($problem = app(LessonPublicationCheck::class)->assignmentProblem($lesson)) {
+                $errors[] = 'Lesson '.$lesson->id.': '.$problem;
+            }
+        }
+
         // Warned rather than refused: a reading-only topic is a real shape, and a
         // lecturer who has deliberately built one should not be forced to add an
         // assessment they do not want. The warning is what makes the choice visible.

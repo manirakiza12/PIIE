@@ -251,10 +251,22 @@ jobs:
         run: |
           python3 deploy/check-public-assets.py https://piie.ac.ug
 
+      - name: Verify published lesson editor asset (read-only)
+        if: ${{ inputs.mode == 'activate' }}
+        run: |
+          curl --fail --silent --show-error --retry 3 "https://piie.ac.ug/js/academic-editor.js?release=$SHA" -o "$RUNNER_TEMP/academic-editor.js"
+          cmp public/js/academic-editor.js "$RUNNER_TEMP/academic-editor.js"
+          echo 'PASS: live academic editor asset matches the verified release'
+
       - name: Reconcile eligible current-semester course enrolment
         if: ${{ inputs.mode == 'activate' }}
         run: |
           ssh piie-prod "bash $REMOTE_BASE/bin/reconcile-course-enrolment.sh '$SHA'"
+
+      - name: Audit published lesson requirements (read-only)
+        if: ${{ inputs.mode == 'activate' }}
+        run: |
+          ssh piie-prod "test \"\$(cat $REMOTE_BASE/current/RELEASE_SHA)\" = '$SHA' && if command -v docker >/dev/null && docker inspect piie-app >/dev/null 2>&1; then bash $REMOTE_BASE/bin/container-app.sh /srv/piie/current php artisan course-content:audit; else /usr/local/php83/bin/php $REMOTE_BASE/current/artisan course-content:audit; fi"
 
       - name: Remove key material
         if: always()

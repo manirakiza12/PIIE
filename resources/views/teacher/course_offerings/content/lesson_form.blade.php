@@ -84,6 +84,10 @@
       @if($isEdit) action="{{ route('teacher.course_offerings.content.lessons.update', [$offering->id, $lesson->id]) }}" @else action="{{ route('teacher.course_offerings.content.lessons.store', [$offering->id]) }}" @endif>
     @csrf
     @if($isEdit) @method('PUT') @endif
+    @php
+        $creationKey = old('creation_key', (string) \Illuminate\Support\Str::uuid());
+    @endphp
+    <input type="hidden" name="creation_key" value="{{ $creationKey }}">
 
     {{-- ══ A TWO-STEP AUTHORING FLOW ══════════════════════════════════
 
@@ -251,10 +255,28 @@
                     label="Lesson content"
                     :value="old('body', $lesson->body)"
                     help="Use the toolbar for headings, bold, lists, tables, images and quotations. Save Draft keeps it private. Preview shows it exactly as a student will read it. Publish makes it visible to confirmed students."
-                    :height="420"
+                    :height="280"
                     testid="cc-body-editor" />
             </div>
 
+            <div class="border rounded p-3 mb-3">
+                <label for="cc-assignment" class="form-label">Required lesson assignment</label>
+                <select id="cc-assignment" name="assignment_id" class="form-select @error('assignment_id') is-invalid @enderror">
+                    <option value="">Choose an assignment for this specific lesson</option>
+                    @foreach(($lessonAssignments ?? collect()) as $option)
+                        <option value="{{ $option->id }}" @selected((int) old('assignment_id', $lesson->assignment_id) === (int) $option->id)>{{ $option->title }} — {{ ucfirst($option->status) }}</option>
+                    @endforeach
+                </select>
+                @error('assignment_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                <p class="form-text mb-2">Drafts may be incomplete. Publishing needs content and a valid published or scheduled assignment linked here. An assignment used by another lesson cannot be reused.</p>
+                @if($isEdit)
+                    <a target="_blank" rel="noopener" href="{{ route('teacher.course_offerings.assignments.create', ['id' => $offering->id, 'course_offering_module_id' => $lesson->course_offering_module_id]) }}">Create the assignment in a new tab</a>
+                    <span class="small text-muted"> — finish and publish it, then reload this saved draft and select it here.</span>
+                @else
+                    <span class="small">Save Draft first to create the lesson assignment and attach resources.</span>
+                @endif
+            </div>
+            <div id="cc-save-status" role="status" aria-live="polite" class="small mb-2"></div>
             <div class="d-flex flex-wrap gap-2 mb-4">
                 <button type="submit" name="status" value="draft" class="btn btn-outline-secondary" data-cc-unsaved-ok>
                     Save Draft
@@ -437,6 +459,7 @@
           : route('teacher.course_offerings.content.lessons.resources.store_new', [$offering->id]) }}">
     @csrf
     @unless($isEdit)
+        <input type="hidden" name="creation_key" value="{{ $creationKey }}">
         {{-- The draft carries what has been typed so far, so uploading a file
              never costs the lecturer the lesson they were in the middle of
              writing. All optional: a lecturer who wants a file-only lesson simply
@@ -446,6 +469,10 @@
         <input type="hidden" name="learning_objectives" value="{{ old('learning_objectives', $lesson->learning_objectives) }}">
         <input type="hidden" name="course_offering_module_id" value="{{ old('course_offering_module_id', $lesson->course_offering_module_id) }}">
         <input type="hidden" name="body" value="{{ old('body', $lesson->body) }}">
+        <input type="hidden" name="assignment_id" value="{{ old('assignment_id', $lesson->assignment_id) }}">
+        <input type="hidden" name="estimated_minutes" value="{{ old('estimated_minutes', $lesson->estimated_minutes) }}">
+        <input type="hidden" name="released_at" value="{{ old('released_at', app(\App\Support\CourseContent\LearningSchedule::class)->local($lesson->released_at, auth()->user())) }}">
+        <input type="hidden" name="completion_rule" value="{{ old('completion_rule', $lesson->completion_rule) }}">
     @endunless
 </form>
 
@@ -629,6 +656,16 @@ document.addEventListener('DOMContentLoaded', function () {
         // Three independent layers, because each covers a case the others miss.
         var form = document.getElementById('cc-lesson-form');
         if (!form) { return; }
+        if (form.hasAttribute('data-cc-authoring-bound')) { return; }
+        form.setAttribute('data-cc-authoring-bound', '1');
+        var insertMedia = form.querySelector('[data-cc-insert-media]');
+        if (insertMedia) {
+            insertMedia.addEventListener('click', function () {
+                var source = document.getElementById('cc-body');
+                var context = window.jQuery && window.jQuery(source).data('summernote');
+                if (context && window.PIIEAademicEditor) { window.PIIEAademicEditor.insertSelectedMedia(context); }
+            });
+        }
         var draftKey = form.getAttribute('data-cc-draft-key');
         var dirty = false;
         var saveTimer = null;
@@ -650,7 +687,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     summary: document.getElementById('cc-summary').value,
                     objectives: document.getElementById('cc-objectives').value,
                     minutes: document.getElementById('cc-minutes').value,
-                    body: $body.summernote('code'),
+                    body: window.PIIEAademicEditor.codeFor('body', form),
                     saved_at: new Date().toISOString()
                 }));
             } catch (e) { /* private browsing / quota: the other layers still apply */ }
@@ -677,7 +714,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('cc-summary').value = recovery.summary || '';
                     document.getElementById('cc-objectives').value = recovery.objectives || '';
                     document.getElementById('cc-minutes').value = recovery.minutes || '';
-                    $body.summernote('code', recovery.body || '');
+                    window.PIIEAademicEditor.setCode('body', recovery.body || '', form);
                     dirty = true;
                 }
                 recoveryBox.classList.add('d-none');
@@ -700,19 +737,39 @@ document.addEventListener('DOMContentLoaded', function () {
             event.returnValue = '';
         });
 
+        var processing = false;
+        form.addEventListener('submit', function (event) {
+            if (event.defaultPrevented) { return; }
+            if (processing) { event.preventDefault(); return; }
+            var submitter = event.submitter;
+            var status = form.querySelector('[name="status"]');
+            if (submitter && submitter.name === 'status' && status) { status.value = submitter.value; }
+            if (window.PIIEAademicEditor) { window.PIIEAademicEditor.syncAll(form); }
+            processing = true;
+            form.setAttribute('aria-busy', 'true');
+            form.querySelectorAll('button[type="submit"]').forEach(function (button) { button.disabled = true; });
+            var notice = document.getElementById('cc-save-status');
+            if (notice) { notice.textContent = status && status.value === 'published' ? 'Publishing lesson…' : 'Saving draft…'; }
+        });
+        var resourceForm = document.getElementById('cc-resource-form');
+        if (resourceForm) {
+            resourceForm.addEventListener('submit', function () {
+                if (window.PIIEAademicEditor) { window.PIIEAademicEditor.syncAll(form); }
+                ['title', 'summary', 'learning_objectives', 'course_offering_module_id', 'body', 'creation_key', 'assignment_id', 'estimated_minutes', 'released_at', 'completion_rule'].forEach(function (name) {
+                    var source = form.querySelector('[name="' + name + '"]');
+                    var target = resourceForm.querySelector('[name="' + name + '"]');
+                    if (source && target) { target.value = source.value; }
+                });
+            });
+        }
+
         // 3. Submitting is NOT leaving - a save is the point. Buttons that save
         //    opt out explicitly, so a legitimate save never raises a prompt.
         form.addEventListener('submit', function (event) {
-            var submitter = event.submitter;
-            if (submitter && submitter.hasAttribute('data-cc-unsaved-ok')) {
-                form.removeEventListener('submit', arguments.callee);
-                dirty = false;
-                try { window.localStorage.removeItem(draftKey); } catch (e) {}
-                return;
-            }
-            if (isDirty() && !window.confirm('This action will discard unsaved changes. Continue?')) {
-                event.preventDefault();
-            }
+            if (event.defaultPrevented) { return; }
+            dirty = false;
+            // Keep a recovery copy until the next page has confirmed the save.
+            snapshot();
         });
 
         // ══ Preview ════════════════════════════════════════════════════════
@@ -749,9 +806,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            if ($body && typeof $body.summernote === 'function') {
-                $body.summernote('code', $body.summernote('code'));
-            }
+            if (window.PIIEAademicEditor) { window.PIIEAademicEditor.syncAll(lessonForm); }
 
             var previewForm = document.createElement('form');
             previewForm.method = 'POST';
@@ -770,7 +825,7 @@ document.addEventListener('DOMContentLoaded', function () {
             draftFlag.value = '1';
             previewForm.appendChild(draftFlag);
 
-            var fields = ['title', 'summary', 'learning_objectives', 'estimated_minutes', 'body', 'course_offering_module_id', 'status', 'released_at', 'completion_rule'];
+            var fields = ['title', 'summary', 'learning_objectives', 'estimated_minutes', 'body', 'course_offering_module_id', 'status', 'released_at', 'completion_rule', 'assignment_id'];
             fields.forEach(function (name) {
                 var field = lessonForm.querySelector('[name="' + name + '"]');
                 if (!field || !field.value) return;

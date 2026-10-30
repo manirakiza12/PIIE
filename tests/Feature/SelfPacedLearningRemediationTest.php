@@ -101,6 +101,7 @@ class SelfPacedLearningRemediationTest extends TestCase
         $module = $this->module(['title' => 'Introduction to Administrative Logs']);
         $lesson = app(CourseContentService::class)->createLesson($this->lecturer, $module, [
             'title' => 'Introduction to Administrative Logs', 'body' => '<p>How to maintain administrative logs.</p>',
+            'assignment_id' => $this->publishedAssignment()->id,
             'status' => 'published', 'released_at' => '2026-10-29T17:32',
         ]);
         $this->assertSame('14:32', $lesson->released_at->format('H:i'));

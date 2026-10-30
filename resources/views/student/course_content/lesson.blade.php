@@ -72,6 +72,13 @@
     </div>
 @endif
 
+@if($linkedAssignment ?? null)
+    <div class="border rounded p-3 mb-3">
+        <strong>Lesson assignment:</strong> {{ $linkedAssignment->title }}
+        <a class="btn btn-sm btn-outline-primary ms-2" href="{{ route('student.courses.assignments.show', [$offering->id, $linkedAssignment->id]) }}">Open assignment</a>
+    </div>
+@endif
+
 <div class="row g-4">
     <div class="col-12 col-lg-8">
         <article class="cc-surface border rounded p-3 p-md-4">

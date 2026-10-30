@@ -61,15 +61,15 @@
        editor on every PIIE authoring screen rather than only this one. That is
        the point of the shared component; the duplication is what was wrong. */
     .piie-editor-shell { border: 1px solid var(--cc-line); border-radius: 8px; overflow: hidden; background: #fff; }
-    .piie-editor-shell .note-editor { min-height: 460px; max-height: 70vh; overflow-y: auto; }
-    .piie-editor-shell .note-editable { min-height: 460px; padding: 1rem 1.15rem; }
+    #cc-lesson-form .piie-editor-shell .note-editor { min-height: 220px; max-height: 70vh; overflow-y: auto; }
+    #cc-lesson-form .piie-editor-shell .note-editable { min-height: 220px; padding: 1rem 1.15rem; }
     @media (max-width: 767.98px) {
         /* Phones: shorter, so the Save/Preview/Publish bar stays reachable
            without a long scroll past the toolbar. */
-        .piie-editor-shell .note-editable { min-height: 300px; }
-        .piie-editor-shell .note-editor { min-height: 300px; max-height: 55vh; }
+        #cc-lesson-form .piie-editor-shell .note-editable { min-height: 200px; }
+        #cc-lesson-form .piie-editor-shell .note-editor { min-height: 200px; max-height: 55vh; }
     }
     @media print {
-        .piie-editor-shell .note-toolbar { display: none !important; }
+        #cc-lesson-form .piie-editor-shell .note-toolbar { display: none !important; }
     }
 </style>
