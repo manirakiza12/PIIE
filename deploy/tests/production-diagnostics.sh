@@ -13,7 +13,7 @@ cleanup() {
 trap cleanup EXIT
 BASE="$S/host"
 mkdir -p "$S/bin" "$BASE/releases/old/vendor" "$BASE/releases/previous/vendor" "$BASE/shared/storage/logs" "$BASE/backups/20261029-000000-0b1924ca54ed"
-printf '%s\n' 67be85e70349287f58ffeb4bfaafabccb9e953ff > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
 printf '%040d\n' 1 > "$BASE/releases/previous/RELEASE_SHA"
 printf 'synthetic autoloader\n' | tee "$BASE/releases/old/vendor/autoload.php" > "$BASE/releases/previous/vendor/autoload.php"
 ln -s releases/old "$BASE/current"
@@ -93,26 +93,17 @@ reject() {
   echo "PASS: rejects $name"
 }
 reject 'caller arguments' bash "$S/inspect.sh" arbitrary-command
-printf '%s\n' 452e21ac5d59ea582357914f2045d558816a1776 > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' 5a49e9a715fd9fb9861395fb7a3dbf72d28af557 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/target.log" 2>&1
-grep -q 'READINESS PASS: active=452e21ac5d59ea582357914f2045d558816a1776' "$S/target.log"
-printf '%s\n' 7838f3c534d3a08fc38d3ef838bba925e2ddca43 > "$BASE/releases/old/RELEASE_SHA"
-bash "$S/inspect.sh" > "$S/learning.log" 2>&1
-grep -q 'READINESS PASS: active=7838f3c534d3a08fc38d3ef838bba925e2ddca43' "$S/learning.log"
-printf '%s\n' 9a5f3b05b3fbafcb10ccda36a6b48d567cf78529 > "$BASE/releases/old/RELEASE_SHA"
-bash "$S/inspect.sh" > "$S/communication.log" 2>&1
-grep -q 'READINESS PASS: active=9a5f3b05b3fbafcb10ccda36a6b48d567cf78529' "$S/communication.log"
-printf '%s\n' d2fa0a15c61618f996d1f0bfc1c786745eba52bd > "$BASE/releases/old/RELEASE_SHA"
-bash "$S/inspect.sh" > "$S/lesson.log" 2>&1
-grep -q 'READINESS PASS: active=d2fa0a15c61618f996d1f0bfc1c786745eba52bd' "$S/lesson.log"
+grep -q 'READINESS PASS: active=5a49e9a715fd9fb9861395fb7a3dbf72d28af557' "$S/target.log"
 # Rejections must precede Docker, database, backup or application probes.
-for sha in ad5f0190e68d912a06923fc6ceba623883fb0732 0b1924ca54ed89c72400d08a3e80476888b1e719 452e21ac5d59ea582357914f2045d558816a1777 '452e21ac' '452e21ac5d59ea582357914f2045d558816a1776;id'; do
+for sha in 67be85e70349287f58ffeb4bfaafabccb9e953ff 452e21ac5d59ea582357914f2045d558816a1776 7838f3c534d3a08fc38d3ef838bba925e2ddca43 9a5f3b05b3fbafcb10ccda36a6b48d567cf78529 d2fa0a15c61618f996d1f0bfc1c786745eba52bd ad5f0190e68d912a06923fc6ceba623883fb0732 0b1924ca54ed89c72400d08a3e80476888b1e719 452e21ac5d59ea582357914f2045d558816a1777 '452e21ac' '452e21ac5d59ea582357914f2045d558816a1776;id'; do
   printf '%s\n' "$sha" > "$BASE/releases/old/RELEASE_SHA"
   : > "$DOCKER_LOG"
   reject 'unexpected, obsolete, abbreviated or tampered release' env BASELINE="$sha" TARGET="$sha" bash "$S/inspect.sh"
   [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: rejected SHA reached production probes'; exit 1; }
 done
-printf '%s\n' 67be85e70349287f58ffeb4bfaafabccb9e953ff > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
 echo 'PASS: only exact approved baseline and target accepted; environment overrides cannot broaden the gate'
 reject 'unhealthy runtime' env BAD_CONTAINER=1 bash "$S/inspect.sh"
 reject 'unhealthy database despite evidence collection' env BAD_DB_HEALTH=1 bash "$S/inspect.sh"
@@ -132,7 +123,7 @@ reject 'corrupt backup' bash "$S/inspect.sh"
 cp "$S/saved.gz" "$B/database.sql.gz"
 printf '%040d\n' 2 > "$BASE/releases/old/RELEASE_SHA"
 reject 'unapproved live release' bash "$S/inspect.sh"
-printf '%s\n' 67be85e70349287f58ffeb4bfaafabccb9e953ff > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
 cp "$B/SHA256SUMS" "$S/saved-manifest"
 sed 's|environment.backup|../../shared/.env|' "$S/saved-manifest" > "$B/SHA256SUMS"
 reject 'unsafe backup manifest path' bash "$S/inspect.sh"
