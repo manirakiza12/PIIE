@@ -162,10 +162,24 @@ class StudentCourseContentController extends Controller
         $lastViewed = $ownProgress?->last_viewed_at;
 
         $linkedAssignment = null;
+        $linkedAssignmentState = null;
+        $linkedAssignmentCanSubmit = false;
+        $linkedAssignmentReason = null;
         if ($row->assignment_id) {
             try {
                 $linkedAssignment = app(\App\Support\Assignments\AssignmentAccess::class)
                     ->resolveForStudent($student, $offering->id, $row->assignment_id);
+                $linkedAssignmentState = \App\Support\Assignments\AssignmentState::for(
+                    $linkedAssignment,
+                    $this->submissions->latestSubmission($linkedAssignment, $student),
+                    $this->submissions->attemptsUsed($linkedAssignment, $student),
+                    (bool) $this->submissions->currentDraft($linkedAssignment, $student)
+                );
+                $used = $this->submissions->attemptsUsed($linkedAssignment, $student);
+                $linkedAssignmentCanSubmit = \App\Support\Assignments\AssignmentLifecycle::mayAcceptNewSubmission($linkedAssignment, $used);
+                if (! $linkedAssignmentCanSubmit) {
+                    $linkedAssignmentReason = \App\Support\Assignments\AssignmentLifecycle::refusalReason($linkedAssignment, $used);
+                }
             } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
                 if ($exception->getStatusCode() !== 404) { throw $exception; }
             }
@@ -177,6 +191,9 @@ class StudentCourseContentController extends Controller
             'unitName' => optional($offering->subject)->name ?: $offering->reference,
             'lesson' => $row,
             'linkedAssignment' => $linkedAssignment,
+            'linkedAssignmentState' => $linkedAssignmentState,
+            'linkedAssignmentCanSubmit' => $linkedAssignmentCanSubmit,
+            'linkedAssignmentReason' => $linkedAssignmentReason,
             'module' => $row->module,
             'resources' => $row->resources,
             'position' => $navigation['position'],
