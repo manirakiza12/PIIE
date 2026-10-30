@@ -19,7 +19,7 @@ class StudentAssignmentUploadLimitTest extends TestCase
         Storage::fake('local');
     }
 
-    private function endpoint(Assignment $assignment, string $action = ''): string
+    private function endpoint(\App\Models\Assignment $assignment, string $action = ''): string
     {
         return "/student/courses/{$this->offering->id}/assignments/{$assignment->id}".($action ? '/'.$action : '');
     }
