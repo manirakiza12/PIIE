@@ -1,0 +1,59 @@
+name: PIIE Student Assignment Verification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: piie-production-deploy
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: ${{ github.ref == 'refs/heads/main' && vars.PIIE_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Require exact current main CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MAIN=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)
+          [ "$GITHUB_SHA" = "$MAIN" ]
+          RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/piie-ci.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+          [ -n "$RUN" ]
+  inspect:
+    needs: gate
+    environment: production
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Prepare pinned SSH client
+        env:
+          PIIE_SSH_KEY: ${{ secrets.PIIE_SSH_KEY }}
+          PIIE_SSH_KNOWN_HOSTS: ${{ secrets.PIIE_SSH_KNOWN_HOSTS }}
+          PIIE_SSH_HOST: ${{ secrets.PIIE_SSH_HOST }}
+          PIIE_SSH_PORT: ${{ secrets.PIIE_SSH_PORT }}
+          PIIE_SSH_USER: ${{ secrets.PIIE_SSH_USER }}
+        run: bash deploy/diagnostics/prepare-ssh.sh
+      - name: Inspect reported assignment without writes
+        run: |
+          set -euo pipefail
+          bash -n deploy/diagnostics/student-assignment-readiness.sh
+          ssh -F "$RUNNER_TEMP/piie-diagnostics/config" -T piie-prod 'bash --noprofile --norc -se' < deploy/diagnostics/student-assignment-readiness.sh | tee assignment-verification.log
+      - name: Retain inspection evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: student-assignment-verification-${{ github.run_id }}
+          path: assignment-verification.log
+          retention-days: 14
+      - name: Remove temporary SSH material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/piie-diagnostics/key" "$RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config"

@@ -939,8 +939,11 @@ class TeacherCourseOfferingAssignmentController extends Controller
             // ONLY the observable rules. The declared-but-unimplemented ones are
             // deliberately absent - see the class docblock.
             'completion_rule' => ['required', Rule::in(Assignment::IMPLEMENTED_COMPLETION_RULES)],
-            'submission_kinds' => ['nullable', 'array'],
+            'submission_kinds' => ['required_with:submission_requirement_mode', 'nullable', 'array', 'min:1'],
             'submission_kinds.*' => ['string', Rule::in(AssignmentSubmissionItem::CONFIGURABLE_KINDS)],
+            'submission_requirement_mode' => ['sometimes', 'required', Rule::in(['all', 'any'])],
+            'optional_submission_kinds' => ['nullable', 'array'],
+            'optional_submission_kinds.*' => ['string', Rule::in(AssignmentSubmissionItem::CONFIGURABLE_KINDS)],
         ];
     }
 
@@ -1022,6 +1025,8 @@ class TeacherCourseOfferingAssignmentController extends Controller
             'requirement_role' => $validated['requirement_role'] ?? Assignment::ROLE_OPTIONAL,
             'completion_rule' => $validated['completion_rule'] ?? Assignment::RULE_SUBMISSION,
             'submission_kinds' => $validated['submission_kinds'] ?? null,
+            ...array_intersect_key($validated, array_flip(['submission_requirement_mode', 'optional_submission_kinds'])),
+            ...(isset($validated['submission_requirement_mode']) ? ['optional_submission_kinds' => $validated['optional_submission_kinds'] ?? []] : []),
         ];
 
         // A preview is not a save, so it must not be held to the publish rules -

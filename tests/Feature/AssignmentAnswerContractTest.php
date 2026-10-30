@@ -698,7 +698,7 @@ class AssignmentAnswerContractTest extends TestCase
             ->assertSee('Prepared, not submitted');
     }
 
-    public function test_a_draft_may_not_be_left_with_a_blank_REQUIRED_question(): void
+    public function test_a_draft_may_be_incomplete_but_a_final_submission_requires_every_question(): void
     {
         $k = self::K;
 
@@ -711,9 +711,14 @@ class AssignmentAnswerContractTest extends TestCase
         $this->draftPaper($assignment, [
             (string) $q1->id => $this->browserAnswer($q1, ['text' => '<p>Half done.</p>']),
             (string) $q2->id => $this->browserAnswer($q2),
-        ])->assertSessionHasErrors('questions');
+        ])->assertSessionHasNoErrors();
 
-        $this->assertSame(0, AssignmentSubmission::query()->count());
+        $this->assertSame(1, AssignmentSubmission::where('is_draft', true)->count());
+        $this->submitPaper($assignment, [
+            (string) $q1->id => $this->browserAnswer($q1, ['text' => '<p>Half done.</p>']),
+            (string) $q2->id => $this->browserAnswer($q2),
+        ])->assertSessionHasErrors('questions');
+        $this->assertSame(0, AssignmentSubmission::where('is_draft', false)->count());
     }
 
     public function test_a_draft_may_leave_an_OPTIONAL_question_blank(): void
@@ -773,7 +778,7 @@ class AssignmentAnswerContractTest extends TestCase
         $this->draftPaper($assignment, [
             (string) $q1->id => $this->browserAnswer($q1, ['text' => '<p>Answered.</p>']),
             (string) $q2->id => $this->browserAnswer($q2),
-        ])->assertSessionHasErrors('questions');
+        ])->assertSessionHasNoErrors();
 
         // Put the audio on the draft so there is something to preserve.
         $this->draftPaper($assignment, [
@@ -802,10 +807,11 @@ class AssignmentAnswerContractTest extends TestCase
         $this->assertSame(0, AssignmentSubmission::query()->where('is_draft', false)->count());
         $this->assertNull(AssignmentSubmission::query()->where('idempotency_key', 'failing-key')->first());
 
-        // ...and the evidence the student had is untouched, still readable, still
-        // on disk. A validation failure must not cost a student their work.
-        Storage::disk('local')->assertExists($storedPath);
-        $this->assertNotNull(AssignmentSubmissionItem::query()->find($stored->id));
+        // The newly uploaded replacement is preserved as draft evidence even
+        // though another required question stopped the final submission.
+        $saved = AssignmentSubmissionItem::where('assignment_submission_id', $draft->id)->firstOrFail();
+        Storage::disk('local')->assertExists($saved->stored_path);
+        $this->assertSame('why.webm', $saved->original_name);
 
         $this->actingAs($this->student)
             ->get("/student/courses/{$this->offering->id}/assignments/{$assignment->id}")

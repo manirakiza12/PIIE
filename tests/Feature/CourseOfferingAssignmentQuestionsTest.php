@@ -534,7 +534,7 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
             ->assertSee('Prepared, not submitted');
     }
 
-    public function test_a_draft_that_leaves_a_required_question_blank_is_refused(): void
+    public function test_an_incomplete_draft_is_saved_but_final_submission_is_refused(): void
     {
         [$assignment, $questions] = $this->paper();
 
@@ -546,9 +546,13 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
                     (string) $questions[0]->id => $this->answerFor($questions[0], 'Only the first one.'),
                 ],
             ])
-            ->assertSessionHasErrors('questions');
+            ->assertSessionHasNoErrors();
 
-        $this->assertSame(0, AssignmentSubmission::query()->count());
+        $this->assertSame(1, AssignmentSubmission::query()->where('is_draft', true)->count());
+        $this->post("/student/courses/{$this->offering->id}/assignments/{$assignment->id}/submit", [
+            'questions' => [(string) $questions[0]->id => $this->answerFor($questions[0], 'Only the first one.')],
+        ])->assertSessionHasErrors('questions');
+        $this->assertSame(0, AssignmentSubmission::query()->where('is_draft', false)->count());
     }
 
     public function test_an_OPTIONAL_question_may_be_left_blank(): void
@@ -593,7 +597,7 @@ class CourseOfferingAssignmentQuestionsTest extends TestCase
         $payload[(string) $questions[0]->id] = ['text' => '   <p></p>  ', 'items' => []];
 
         $this->actingAs($this->student)
-            ->post("/student/courses/{$this->offering->id}/assignments/{$assignment->id}/draft", [
+            ->post("/student/courses/{$this->offering->id}/assignments/{$assignment->id}/submit", [
                 'questions' => $payload,
             ])
             ->assertSessionHasErrors('questions');
