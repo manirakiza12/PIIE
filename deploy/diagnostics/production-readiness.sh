@@ -4,12 +4,12 @@ set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
 # Baseline: protected production deployment of PR #132 (student assignment submission).
-# Production SHA 5195eccaf8857c1e05523a13787a851034840fb2 confirmed by
-# production diagnostics run 41085927437 (active release read from
+# Production SHA 918104a843d692e9df952fe67aa263f205b0e175 confirmed by
+# production activation run 41178337956 (active release read from
 # /home/piie/deployments/piie/current/RELEASE_SHA). Merged through protected
-# GitHub rules (PR #132).
+# GitHub rules (PR #139).
 # Exact release identity; neither caller input nor arbitrary main is admitted.
-BASELINE=5195eccaf8857c1e05523a13787a851034840fb2
+BASELINE=918104a843d692e9df952fe67aa263f205b0e175
 # Target: protected PR #133 merge (student assignment upload limits and lesson
 # transition). Verified by all 5 CI checks in run 41073596727 (success) and
 # merged through protected GitHub rules. No arbitrary release SHA is admitted.
@@ -101,6 +101,8 @@ ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
 echo "Active release SHA: $ACTIVE"
 # Only BASELINE and TARGET are approved. LEARNING_RELEASE, COMMUNICATION_RELEASE, LESSON_RELEASE were removed in PR #134.
+# BASELINE updated to 918104a (PR #139 merged, activated 2026-10-31 via run 41178337956).
+# TARGET remains 5a49e9a (PR #133).
 [ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved release history'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'

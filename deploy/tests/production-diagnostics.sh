@@ -105,6 +105,26 @@ for sha in 67be85e70349287f58ffeb4bfaafabccb9e953ff 452e21ac5d59ea582357914f2045
 done
 printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
 echo 'PASS: only exact approved baseline and target accepted; environment overrides cannot broaden the gate'
+# Regression (PR #140): release gate updated for new baseline 918104a.
+# New baseline must pass.
+printf '%s\n' 918104a843d692e9df952fe67aa263f205b0e175 > "$BASE/releases/old/RELEASE_SHA"
+bash "$S/inspect.sh" > "$S/new_baseline.log" 2>&1
+grep -q 'READINESS PASS: active=918104a843d692e9df952fe67aa263f205b0e175' "$S/new_baseline.log" || { echo 'FAIL: new baseline 918104a must pass release gate'; exit 1; }
+# Old baseline (5195ecc) must now fail (no longer approved baseline).
+printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
+: > "$DOCKER_LOG"
+reject 'old baseline no longer approved' env BASELINE=5195eccaf8857c1e05523a13787a851034840fb2 bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: old baseline 5195ecc must fail release gate'; exit 1; }
+[ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: old baseline reached production probes'; exit 1; }
+# Target (5a49e9a) must still pass.
+printf '%s\n' 5a49e9a715fd9fb9861395fb7a3dbf72d28af557 > "$BASE/releases/old/RELEASE_SHA"
+bash "$S/inspect.sh" > "$S/target.log" 2>&1
+grep -q 'READINESS PASS: active=5a49e9a715fd9fb9861395fb7a3dbf72d28af557' "$S/target.log" || { echo 'FAIL: target 5a49e9a must still pass release gate'; exit 1; }
+# Unexpected SHA must still fail.
+printf '%s\n' 67be85e70349287f58ffeb4bfaafabccb9e953ff > "$BASE/releases/old/RELEASE_SHA"
+: > "$DOCKER_LOG"
+reject 'unexpected SHA still rejected' env BASELINE=67be85e70349287f58ffeb4bfaafabccb9e953ff TARGET=67be85e70349287f58ffeb4bfaafabccb9e953ff bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: unexpected SHA must fail release gate'; exit 1; }
+[ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: unexpected SHA reached production probes'; exit 1; }
+echo 'PASS: release gate correctly accepts new baseline, target, rejects old baseline and unexpected SHAs'
 # Regression (PR #137): Live Classes retry migration approved-release gate.
 grep -Fq "getenv('DIAG_BASELINE')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved-release gate must read DIAG_BASELINE from probe environment'; exit 1; }
 grep -Fq "getenv('DIAG_TARGET')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved-release gate must read DIAG_TARGET from probe environment'; exit 1; }
