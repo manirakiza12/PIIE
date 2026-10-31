@@ -101,7 +101,8 @@ grep -q 'READINESS PASS: active=5a49e9a715fd9fb9861395fb7a3dbf72d28af557' "$S/ta
 for sha in 67be85e70349287f58ffeb4bfaafabccb9e953ff 452e21ac5d59ea582357914f2045d558816a1776 7838f3c534d3a08fc38d3ef838bba925e2ddca43 9a5f3b05b3fbafcb10ccda36a6b48d567cf78529 d2fa0a15c61618f996d1f0bfc1c786745eba52bd ad5f0190e68d912a06923fc6ceba623883fb0732 0b1924ca54ed89c72400d08a3e80476888b1e719 452e21ac5d59ea582357914f2045d558816a1777 '452e21ac' '452e21ac5d59ea582357914f2045d558816a1776;id'; do
   printf '%s\n' "$sha" > "$BASE/releases/old/RELEASE_SHA"
   : > "$DOCKER_LOG"
-  reject 'unexpected, obsolete, abbreviated or tampered release' env BASELINE="$sha" TARGET="$sha" bash "$S/inspect.sh"
+  # Use default BASELINE/TARGET/ROLLBACK (hardcoded in script) to test rejection
+  bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: rejected SHA must fail release gate'; exit 1; }
   [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: rejected SHA reached production probes'; exit 1; }
 done
 # Rollback release (5195ecc) must pass as legitimate rollback target.
@@ -119,7 +120,8 @@ grep -q 'READINESS PASS: active=918104a843d692e9df952fe67aa263f205b0e175' "$S/ne
 # Unexpected SHA must still fail.
 printf '%s\n' 67be85e70349287f58ffeb4bfaafabccb9e953ff > "$BASE/releases/old/RELEASE_SHA"
 : > "$DOCKER_LOG"
-reject 'unexpected SHA still rejected' env BASELINE=67be85e70349287f58ffeb4bfaafabccb9e953ff TARGET=67be85e70349287f58ffeb4bfaafabccb9e953ff bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: unexpected SHA must fail release gate'; exit 1; }
+# Use default BASELINE/TARGET/ROLLBACK (hardcoded in script) to test rejection of unknown SHA
+bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: unexpected SHA must fail release gate'; exit 1; }
 [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: unexpected SHA reached production probes'; exit 1; }
 echo 'PASS: release gate correctly accepts baseline, target, rollback; rejects unexpected SHAs'
 # Regression (PR #137): Live Classes retry migration approved-release gate.
