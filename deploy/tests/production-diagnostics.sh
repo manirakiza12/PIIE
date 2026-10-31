@@ -106,7 +106,8 @@ done
 # Old baseline (5195ecc) must now fail (no longer approved baseline).
 printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
 : > "$DOCKER_LOG"
-reject 'old baseline no longer approved' env BASELINE=5195eccaf8857c1e05523a13787a851034840fb2 bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: old baseline 5195ecc must fail release gate'; exit 1; }
+# Do NOT override BASELINE - use default (918104a) so old baseline is rejected
+reject 'old baseline no longer approved' bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: old baseline 5195ecc must fail release gate'; exit 1; }
 [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: old baseline reached production probes'; exit 1; }
 # Target (5a49e9a) must still pass.
 printf '%s\n' 5a49e9a715fd9fb9861395fb7a3dbf72d28af557 > "$BASE/releases/old/RELEASE_SHA"
