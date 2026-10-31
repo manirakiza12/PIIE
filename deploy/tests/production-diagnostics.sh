@@ -13,7 +13,8 @@ cleanup() {
 trap cleanup EXIT
 BASE="$S/host"
 mkdir -p "$S/bin" "$BASE/releases/old/vendor" "$BASE/releases/previous/vendor" "$BASE/shared/storage/logs" "$BASE/backups/20261029-000000-0b1924ca54ed"
-printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
+# Baseline updated to 918104a (activated via run 41178337956). This fixture must match BASELINE in production-readiness.sh.
+printf '%s\n' 918104a843d692e9df952fe67aa263f205b0e175 > "$BASE/releases/old/RELEASE_SHA"
 printf '%040d\n' 1 > "$BASE/releases/previous/RELEASE_SHA"
 printf 'synthetic autoloader\n' | tee "$BASE/releases/old/vendor/autoload.php" > "$BASE/releases/previous/vendor/autoload.php"
 ln -s releases/old "$BASE/current"
