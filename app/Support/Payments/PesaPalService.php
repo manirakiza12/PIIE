@@ -7,6 +7,7 @@ use Illuminate\Cache\DatabaseStore;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /** API 3.0 transport only. No settlement, redirects or payment/config writes. */
 final class PesaPalService
@@ -180,14 +181,44 @@ final class PesaPalService
             $request = Http::acceptJson()->asJson()->connectTimeout(5)->timeout(15)->withOptions(['allow_redirects' => false]);
             if ($token !== null) { $request = $request->withToken($token); }
             $response = $method === 'GET' ? $request->get($base . $path, $data) : $request->post($base . $path, $data);
-            if (! $response->successful()) { throw new PesaPalException(); }
+            if (! $response->successful()) { $this->logProviderRejection($method, $path, $response); throw new PesaPalException(); }
             // Associative JSON decoding collapses {} and [] into the same
             // PHP value. The list endpoint must have an actual JSON array root.
             if ($path === '/api/URLSetup/GetIpnList' && ! str_starts_with(ltrim($response->body()), '[')) { throw new PesaPalException(); }
             $decoded = json_decode($response->body(), true, 512, JSON_THROW_ON_ERROR);
             if (! is_array($decoded)) { throw new PesaPalException(); }
             return $decoded;
-        } catch (\Exception $e) { throw new PesaPalException(); }
+        } catch (\Exception $e) {
+            if (! $e instanceof PesaPalException) { $this->logTransportFailure($method, $path, $e); }
+            throw new PesaPalException();
+        }
+    }
+
+    /** Provider rejection diagnostics: HTTP status plus the provider error code and message only. Never logs request payloads or credentials. */
+    private function logProviderRejection(string $method, string $path, object $response): void
+    {
+        try {
+            $error = json_decode((string) $response->body(), true, 512, JSON_THROW_ON_ERROR);
+            $error = is_array($error) ? $error['error'] : null;
+        } catch (\Exception) { $error = null; }
+        $this->logFailure('Pesapal rejected the request.', $method, $path, $error, ['http_status' => $response->status()]);
+    }
+
+    /** Timeout/DNS/SSL class failures: exception class name only. */
+    private function logTransportFailure(string $method, string $path, \Exception $e): void
+    {
+        $this->logFailure('Pesapal request did not complete.', $method, $path, null, ['failure' => class_basename($e)]);
+    }
+
+    private function logFailure(string $event, string $method, string $path, mixed $error, array $extra): void
+    {
+        try {
+            Log::warning('pesapal: '.$event, array_merge([
+                'environment' => $this->configuration->environment, 'request_method' => $method, 'request_path' => $path,
+                'provider_error_code' => is_array($error) && is_string($error['code'] ?? null) ? $error['code'] : null,
+                'provider_error_message' => is_array($error) && (is_string($error['message'] ?? null)) ? mb_substr($error['message'], 0, 250) : null,
+            ], $extra));
+        } catch (\Exception) { /* Diagnostics must never change payment behaviour. */ }
     }
 
     private function envelope(array $data): void
