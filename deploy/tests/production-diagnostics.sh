@@ -105,6 +105,17 @@ for sha in 67be85e70349287f58ffeb4bfaafabccb9e953ff 452e21ac5d59ea582357914f2045
 done
 printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
 echo 'PASS: only exact approved baseline and target accepted; environment overrides cannot broaden the gate'
+# Regression (PR #137): Live Classes retry migration approved-release gate.
+grep -Fq "getenv('DIAG_BASELINE')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved-release gate must read DIAG_BASELINE from probe environment'; exit 1; }
+grep -Fq "getenv('DIAG_TARGET')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved-release gate must read DIAG_TARGET from probe environment'; exit 1; }
+grep -Fq 'Approved release missing required Live Classes retry migration' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved release missing Live Classes retry migration must fail'; exit 1; }
+grep -Fq 'Unexpected release has Live Classes retry migration' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: unapproved release with Live Classes retry migration must fail'; exit 1; }
+if grep -Fq 'Live Classes release and retry migration disagree' "$ROOT/deploy/diagnostics/production-readiness.sh"; then echo 'FAIL: stale Live Classes release/migration disagreement gate reintroduced'; exit 1; fi
+# Verify the approved-release array is built from DIAG_BASELINE and DIAG_TARGET only.
+grep -Fq "array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved releases must be filtered from DIAG_BASELINE and DIAG_TARGET only'; exit 1; }
+# Verify no hardcoded SHA list remains in the Live Classes check.
+! grep -Eq 'in_array\(\$sha, \[.*452e21ac.*7838f3c5.*9a5f3b05.*d2fa0a15.*e46dafa' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: hardcoded SHA list must not be present in Live Classes check'; exit 1; }
+echo 'PASS: Live Classes retry migration approved-release gate is env-driven and fail-closed'
 reject 'unhealthy runtime' env BAD_CONTAINER=1 bash "$S/inspect.sh"
 reject 'unhealthy database despite evidence collection' env BAD_DB_HEALTH=1 bash "$S/inspect.sh"
 grep -q 'FAIL: piie-db health is unhealthy' "$S/rejected.log"

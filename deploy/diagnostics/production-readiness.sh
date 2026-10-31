@@ -100,7 +100,8 @@ case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
 echo "Active release SHA: $ACTIVE"
-[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || [ "$ACTIVE" = "$LEARNING_RELEASE" ] || [ "$ACTIVE" = "$COMMUNICATION_RELEASE" ] || [ "$ACTIVE" = "$LESSON_RELEASE" ] || fail 'Live release is outside the approved release history'
+# Only BASELINE and TARGET are approved. LEARNING_RELEASE, COMMUNICATION_RELEASE, LESSON_RELEASE were removed in PR #134.
+[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved release history'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'
 for container in piie-app piie-db; do
@@ -176,7 +177,9 @@ IMAGE=$(docker inspect -f '{{.Image}}' piie-app)
 # no framework/provider bootstrap, no credential argv/env output, no server file writes.
 docker run --rm -i --pull=never --read-only --cap-drop=ALL --security-opt no-new-privileges --pids-limit=64 \
   --mount "type=bind,source=$BASE,target=/srv/piie,readonly" --network container:piie-app \
-  --user www-data --workdir /srv/piie/current --entrypoint php "$IMAGE" <<'PHP'
+  --user www-data --workdir /srv/piie/current \
+  -e "DIAG_BASELINE=$BASELINE" -e "DIAG_TARGET=$TARGET" \
+  --entrypoint php "$IMAGE" <<'PHP'
 <?php
 require '/srv/piie/current/vendor/autoload.php';
 $pdo = null;
@@ -222,7 +225,12 @@ try {
     }
     $kernel = file_get_contents($root.'/app/Console/Kernel.php');
     $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
-    if (in_array($sha, ['452e21ac5d59ea582357914f2045d558816a1776', '7838f3c534d3a08fc38d3ef838bba925e2ddca43', '9a5f3b05b3fbafcb10ccda36a6b48d567cf78529', 'd2fa0a15c61618f996d1f0bfc1c786745eba52bd', 'e46dafa4128bbb75b8fa29318dd09b03a87d5257'], true) !== $liveClassRetryInstalled) throw new LogicException('Live Classes release and retry migration disagree');
+    // Approved releases are BASELINE and TARGET (passed via env). Both include the Live Classes retry migration
+    // since it was introduced in PR #127 (452e21a) which precedes both. Any approved release MUST have it.
+    $approvedReleases = array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET')], fn($v) => $v !== false && $v !== '');
+    $isApprovedRelease = in_array($sha, $approvedReleases, true);
+    if ($isApprovedRelease && !$liveClassRetryInstalled) throw new LogicException('Approved release missing required Live Classes retry migration');
+    if (!$isApprovedRelease && $liveClassRetryInstalled) throw new LogicException('Unexpected release has Live Classes retry migration; release gate should have rejected');
     $commands = ['live-classes:send-reminders','live-classes:refresh-google-links'];
     if ($liveClassRetryInstalled) $commands[] = 'live-classes:retry-emails';
     foreach ($commands as $command) {
