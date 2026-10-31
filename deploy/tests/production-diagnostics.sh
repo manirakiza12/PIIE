@@ -126,8 +126,8 @@ grep -Fq "duplicate_schools" "$ROOT/deploy/diagnostics/production-readiness.sh" 
 # Verify the diagnostic SQL only selects safe fields (school_id, count) and no sensitive fields.
 grep -Fq "SELECT school_id, COUNT(*) AS active_pesapal_configs" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must select only school_id and count'; exit 1; }
 # Verify the JSON output only contains safe keys.
-grep -Fq '"school_id"' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output school_id'; exit 1; }
-grep -Fq '"active_pesapal_configs"' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output active_pesapal_configs'; exit 1; }
+grep -Fq "school_id" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output school_id'; exit 1; }
+grep -Fq "active_pesapal_configs" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output active_pesapal_configs'; exit 1; }
 # Verify the diagnostic uses the read-only transaction (no writes).
 ! grep -Eq '\$pdo->(exec|query|prepare)\(.?(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE)' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must not contain write operations'; exit 1; }
 echo 'PASS: Pesapal duplicate configurations diagnostic is read-only, sanitized, and write-free'
