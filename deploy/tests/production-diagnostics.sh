@@ -119,7 +119,8 @@ echo 'PASS: Live Classes retry migration approved-release gate is env-driven and
 # Regression (Pesapal admin 422): duplicate configurations diagnostic.
 grep -Fq "payment_methods" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate configurations diagnostic must query payment_methods table'; exit 1; }
 grep -Fq "name = 'pesapal' AND status = 1" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must filter by name and status'; exit 1; }
-grep -Fq "GROUP BY school_id HAVING COUNT(*) > 1" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must group by school and find duplicates'; exit 1; }
+# Use grep -z to match across newlines in the heredoc SQL query.
+grep -Pzq "GROUP BY school_id\s+HAVING COUNT\(\*\) > 1" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must group by school and find duplicates'; exit 1; }
 grep -Fq "pesapal_duplicate_configurations_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must emit read-only JSON output'; exit 1; }
 grep -Fq "duplicate_schools" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output duplicate_schools array'; exit 1; }
 # Verify no sensitive data exposure in diagnostic output.
