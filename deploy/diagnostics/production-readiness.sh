@@ -256,6 +256,19 @@ try {
     $unlinkedLessons = array_values(array_filter($publishedLessons, fn($lesson) => empty($lesson['assignment_id'])));
     echo json_encode(['lesson_publication_read_only'=>true,'association_schema_installed'=>$associationInstalled,'published_lesson_count'=>count($publishedLessons),'unlinked_published_lesson_count'=>count($unlinkedLessons),'unlinked_published_lessons'=>$unlinkedLessons,'historical_records_modified'=>false]).PHP_EOL;
     // Fixed reference-course metadata, inside the existing read-only transaction.
+    // Pesapal duplicate configurations check: read-only, sanitized output only.
+    $pesapalDuplicates = $pdo->query(
+        "SELECT school_id, COUNT(*) AS active_pesapal_configs
+         FROM payment_methods
+         WHERE name = 'pesapal' AND status = 1
+         GROUP BY school_id
+         HAVING COUNT(*) > 1"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    $pesapalDuplicateCount = count($pesapalDuplicates);
+    // Only emit sanitized metadata: school_id and count. No payment_keys, credentials, or IPN identifiers.
+    $pesapalDuplicateSanitized = array_map(fn ($row) => ['school_id' => (int)$row['school_id'], 'active_pesapal_configs' => (int)$row['active_pesapal_configs']], $pesapalDuplicates);
+    echo json_encode(['pesapal_duplicate_configurations_read_only'=>true,'duplicate_school_count'=>$pesapalDuplicateCount,'duplicate_schools'=>$pesapalDuplicateSanitized]).PHP_EOL;
+
     $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
     if ($course) {
         $lessons = $pdo->query('SELECT l.id,l.title,l.status,l.released_at,l.content_type,m.id AS module_id,m.status AS module_status,m.released_at AS module_released_at FROM course_offering_lessons l JOIN course_offering_modules m ON m.id=l.course_offering_module_id AND m.course_offering_id=l.course_offering_id AND m.school_id=l.school_id WHERE l.course_offering_id=30 ORDER BY m.sequence,m.id,l.sequence,l.id')->fetchAll(PDO::FETCH_ASSOC);
