@@ -3,17 +3,12 @@
 set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
-# Baseline: protected production deployment of PR #132 (student assignment submission).
-# Production SHA 918104a843d692e9df952fe67aa263f205b0e175 confirmed by
-# production activation run 41178337956 (active release read from
-# /home/piie/deployments/piie/current/RELEASE_SHA). Merged through protected
-# GitHub rules (PR #139).
-# Exact release identity; neither caller input nor arbitrary main is admitted.
+# Baseline: current active production release (PR #139 merged, activated 2026-10-31 via run 41178337956).
 BASELINE=918104a843d692e9df952fe67aa263f205b0e175
-# Target: protected PR #133 merge (student assignment upload limits and lesson
-# transition). Verified by all 5 CI checks in run 41073596727 (success) and
-# merged through protected GitHub rules. No arbitrary release SHA is admitted.
+# Target: protected PR #133 merge (student assignment upload limits and lesson transition).
 TARGET=5a49e9a715fd9fb9861395fb7a3dbf72d28af557
+# Rollback: previous approved production release (PR #132) retained for legitimate rollback diagnostics.
+ROLLBACK=5195eccaf8857c1e05523a13787a851034840fb2
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
@@ -100,10 +95,11 @@ case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
 echo "Active release SHA: $ACTIVE"
-# Only BASELINE and TARGET are approved. LEARNING_RELEASE, COMMUNICATION_RELEASE, LESSON_RELEASE were removed in PR #134.
+# Only BASELINE, TARGET, and ROLLBACK are approved. LEARNING_RELEASE, COMMUNICATION_RELEASE, LESSON_RELEASE were removed in PR #134.
 # BASELINE updated to 918104a (PR #139 merged, activated 2026-10-31 via run 41178337956).
+# ROLLBACK is the previous approved production release (5195ecc, PR #132) retained for legitimate rollback.
 # TARGET remains 5a49e9a (PR #133).
-[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved release history'
+[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || [ "$ACTIVE" = "$ROLLBACK" ] || fail 'Live release is outside the approved release history'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'
 for container in piie-app piie-db; do
@@ -180,7 +176,7 @@ IMAGE=$(docker inspect -f '{{.Image}}' piie-app)
 docker run --rm -i --pull=never --read-only --cap-drop=ALL --security-opt no-new-privileges --pids-limit=64 \
   --mount "type=bind,source=$BASE,target=/srv/piie,readonly" --network container:piie-app \
   --user www-data --workdir /srv/piie/current \
-  -e "DIAG_BASELINE=$BASELINE" -e "DIAG_TARGET=$TARGET" \
+  -e "DIAG_BASELINE=$BASELINE" -e "DIAG_TARGET=$TARGET" -e "DIAG_ROLLBACK=$ROLLBACK" \
   --entrypoint php "$IMAGE" <<'PHP'
 <?php
 require '/srv/piie/current/vendor/autoload.php';
@@ -227,9 +223,9 @@ try {
     }
     $kernel = file_get_contents($root.'/app/Console/Kernel.php');
     $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
-    // Approved releases are BASELINE and TARGET (passed via env). Both include the Live Classes retry migration
-    // since it was introduced in PR #127 (452e21a) which precedes both. Any approved release MUST have it.
-    $approvedReleases = array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET')], fn($v) => $v !== false && $v !== '');
+    // Approved releases are BASELINE, TARGET, and ROLLBACK (passed via env). All include the Live Classes retry migration
+    // since it was introduced in PR #127 (452e21a) which precedes all three. Any approved release MUST have it.
+    $approvedReleases = array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET'), getenv('DIAG_ROLLBACK')], fn($v) => $v !== false && $v !== '');
     $isApprovedRelease = in_array($sha, $approvedReleases, true);
     if ($isApprovedRelease && !$liveClassRetryInstalled) throw new LogicException('Approved release missing required Live Classes retry migration');
     if (!$isApprovedRelease && $liveClassRetryInstalled) throw new LogicException('Unexpected release has Live Classes retry migration; release gate should have rejected');
