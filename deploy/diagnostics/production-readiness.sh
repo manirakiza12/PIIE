@@ -100,7 +100,8 @@ case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
 echo "Active release SHA: $ACTIVE"
-[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || [ "$ACTIVE" = "$LEARNING_RELEASE" ] || [ "$ACTIVE" = "$COMMUNICATION_RELEASE" ] || [ "$ACTIVE" = "$LESSON_RELEASE" ] || fail 'Live release is outside the approved release history'
+# Only BASELINE and TARGET are approved. LEARNING_RELEASE, COMMUNICATION_RELEASE, LESSON_RELEASE were removed in PR #134.
+[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved release history'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'
 for container in piie-app piie-db; do
