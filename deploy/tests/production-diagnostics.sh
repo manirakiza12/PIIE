@@ -123,8 +123,11 @@ grep -Fq "name = 'pesapal' AND status = 1" "$ROOT/deploy/diagnostics/production-
 grep -Pzq "GROUP BY school_id\s+HAVING COUNT\(\*\) > 1" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must group by school and find duplicates'; exit 1; }
 grep -Fq "pesapal_duplicate_configurations_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must emit read-only JSON output'; exit 1; }
 grep -Fq "duplicate_schools" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output duplicate_schools array'; exit 1; }
-# Verify no sensitive data exposure in diagnostic output (check PHP probe only, not comments).
+# Verify no sensitive data exposure in diagnostic output (check SQL query only selects safe fields).
 sed -n "/^<?php$/,/^PHP$/p" "$ROOT/deploy/diagnostics/production-readiness.sh" | sed '$d' > "$S/probe_check.php"
+# The Pesapal duplicate diagnostic SQL must only SELECT school_id and COUNT(*)
+grep -Fq "SELECT school_id, COUNT(*) AS active_pesapal_configs" "$S/probe_check.php" || { echo 'FAIL: Pesapal duplicate diagnostic must select only school_id and count'; exit 1; }
+# Ensure no sensitive fields are selected or output
 ! grep -Eq "payment_keys|consumer_key|consumer_secret|notification_id|encrypted_credentials" "$S/probe_check.php" || { echo 'FAIL: Pesapal duplicate diagnostic must not expose sensitive fields'; exit 1; }
 # Verify the diagnostic uses the read-only transaction (no writes) - check PHP probe only.
 sed -n "/^<?php$/,/^PHP$/p" "$ROOT/deploy/diagnostics/production-readiness.sh" | sed '$d' > "$S/probe_check.php"
