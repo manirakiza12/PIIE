@@ -116,6 +116,17 @@ grep -Fq "array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET')" "$ROOT/d
 # Verify no hardcoded SHA list remains in the Live Classes check.
 ! grep -Eq 'in_array\(\$sha, \[.*452e21ac.*7838f3c5.*9a5f3b05.*d2fa0a15.*e46dafa' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: hardcoded SHA list must not be present in Live Classes check'; exit 1; }
 echo 'PASS: Live Classes retry migration approved-release gate is env-driven and fail-closed'
+# Regression (Pesapal admin 422): duplicate configurations diagnostic.
+grep -Fq "payment_methods" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate configurations diagnostic must query payment_methods table'; exit 1; }
+grep -Fq "name = 'pesapal' AND status = 1" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must filter by name and status'; exit 1; }
+grep -Fq "GROUP BY school_id HAVING COUNT(*) > 1" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must group by school and find duplicates'; exit 1; }
+grep -Fq "pesapal_duplicate_configurations_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must emit read-only JSON output'; exit 1; }
+grep -Fq "duplicate_schools" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output duplicate_schools array'; exit 1; }
+# Verify no sensitive data exposure in diagnostic output.
+! grep -Eq "payment_keys|consumer_key|consumer_secret|notification_id|encrypted_credentials" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must not expose sensitive fields'; exit 1; }
+# Verify the diagnostic uses the read-only transaction (no writes).
+! grep -Eq '\$pdo->(exec|query|prepare)\(.?(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE)' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must not contain write operations'; exit 1; }
+echo 'PASS: Pesapal duplicate configurations diagnostic is read-only, sanitized, and write-free'
 reject 'unhealthy runtime' env BAD_CONTAINER=1 bash "$S/inspect.sh"
 reject 'unhealthy database despite evidence collection' env BAD_DB_HEALTH=1 bash "$S/inspect.sh"
 grep -q 'FAIL: piie-db health is unhealthy' "$S/rejected.log"
