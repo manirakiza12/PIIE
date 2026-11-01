@@ -292,7 +292,14 @@ class OnlineExamSnapshotProctoringTest extends TestCase
             ]), 'updated_at' => now(), 'created_at' => now()]
         );
 
-        $teacher = $this->makeTeacherWithPermission(1);
+$teacher = $this->makeTeacherWithPermission(1);
+
+        // Ensure the teacher owns the exam for authorization
+        DB::table('online_exams')->where('id', $examId)->update([
+            'created_by' => $teacher->id,
+            'creator_id' => $teacher->id,
+        ]);
+
         $this->actingAs($teacher);
 
         $response1 = $this->postJson(route('teacher.online_exams.proctoring.request_snapshot', [
@@ -365,7 +372,14 @@ class OnlineExamSnapshotProctoringTest extends TestCase
             ]), 'updated_at' => now(), 'created_at' => now()]
         );
 
-        $teacher = $this->makeTeacherWithPermission(1);
+$teacher = $this->makeTeacherWithPermission(1);
+
+        // Ensure the teacher owns the exam for authorization
+        DB::table('online_exams')->where('id', $examId)->update([
+            'created_by' => $teacher->id,
+            'creator_id' => $teacher->id,
+        ]);
+
         $this->actingAs($teacher);
 
         $response = $this->postJson(route('teacher.online_exams.proctoring.request_snapshot', [
