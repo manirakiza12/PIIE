@@ -178,6 +178,11 @@ grep -Fq "pesapal_orphaned_settlements_read_only" "$ROOT/deploy/diagnostics/prod
 grep -Fq "pesapal_ownership_mismatches_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal ownership mismatch diagnostic must emit read-only JSON output'; exit 1; }
 # Verify new duplicate reversal diagnostic exists.
 grep -Fq "pesapal_duplicate_reversals_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate reversal diagnostic must emit read-only JSON output'; exit 1; }
+# Verify new pending-orders diagnostic exists and is read-only.
+grep -Fq "pesapal_pending_orders_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal pending orders diagnostic must emit read-only JSON output'; exit 1; }
+grep -Fq "missing_invoice" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal pending orders diagnostic must report missing invoice count'; exit 1; }
+grep -Fq "school_mismatch" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal pending orders diagnostic must report school mismatch count'; exit 1; }
+grep -Fq "with_tracking_id" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal pending orders diagnostic must report tracking ID presence'; exit 1; }
 # Verify new Pesapal outstanding-orders diagnostic exists.
 grep -Fq "pesapal_outstanding_orders_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal outstanding orders diagnostic must emit read-only JSON output'; exit 1; }
 # Verify the diagnostic uses the read-only transaction (no writes).
