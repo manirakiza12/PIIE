@@ -4,11 +4,11 @@ set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
 # Baseline: current active production release (PR #139 merged, activated 2026-10-31 via run 41178337956).
-BASELINE=d057e8b7fb579ca27d5db3484ed77a01d8cfbc50
+BASELINE=d77e8fa962a9d2ad62bf956e0f0e506c279d6ee6
 # Target: protected PR #133 merge (student assignment upload limits and lesson transition).
 TARGET=5a49e9a715fd9fb9861395fb7a3dbf72d28af557
 # Rollback: previous approved production release (PR #132) retained for legitimate rollback diagnostics.
-ROLLBACK=918104a843d692e9df952fe67aa263f205b0e175
+ROLLBACK=7999e54bd4a3fe842a37f431787ac44860bba266
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
@@ -308,6 +308,31 @@ try {
     // Reversal duplication detection: tuition payments reversed more than once (read-only).
     $tuitionDupReversal = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT gateway_txn_id FROM tuition_payments WHERE method='pesapal' AND status='reversed' AND gateway_txn_id IS NOT NULL AND gateway_txn_id <> '' GROUP BY gateway_txn_id HAVING COUNT(*) > 1) d")->fetchColumn();
     echo json_encode(['pesapal_duplicate_reversals_read_only'=>true,'duplicate_tuition_reversed_txn'=>$tuitionDupReversal]).PHP_EOL;
+
+    // Pending tuition order sanitized evidence (aggregate counts only; no identifiers or PII).
+    // Whether the linked invoice exists and ownership matches.
+    $pendingTuitionOrders = $pdo->query("SELECT tp.id, tp.fee_id, tp.school_id, tp.gateway_txn_id, tp.gateway_payload, tp.created_at, sfm.id AS fee_pk, sfm.school_id AS fee_school_id FROM tuition_payments tp LEFT JOIN student_fee_managers sfm ON sfm.id=tp.fee_id WHERE tp.method='pesapal' AND tp.status='pending'")->fetchAll(PDO::FETCH_ASSOC);
+    $pendingWithValidInvoice = 0;
+    $pendingMissingInvoice = 0;
+    $pendingSchoolMismatch = 0;
+    $pendingWithTrackingId = 0;
+    $pendingWithoutTrackingId = 0;
+    $pendingWithSettlementEvidence = 0;
+    $pendingWithProviderConfirmation = 0;
+    $pendingOlderThan7Days = 0;
+    $now = time();
+    foreach ($pendingTuitionOrders as $po) {
+        if ($po['fee_pk'] === null) { $pendingMissingInvoice++; }
+        elseif ($po['fee_school_id'] === null) { $pendingSchoolMismatch++; }  // invoice exists but school_id is NULL
+        elseif ((int)$po['fee_school_id'] !== (int)$po['school_id']) { $pendingSchoolMismatch++; }
+        else { $pendingWithValidInvoice++; }
+        if (!empty($po['gateway_txn_id'])) { $pendingWithTrackingId++; } else { $pendingWithoutTrackingId++; }
+        $gp = json_decode((string)($po['gateway_payload'] ?? ''), true);
+        if (is_array($gp) && isset($gp['classification'])) { $pendingWithSettlementEvidence++; }
+        if (is_array($gp) && !empty($gp['provider_confirmation_code'])) { $pendingWithProviderConfirmation++; }
+        if (strtotime((string)$po['created_at']) !== false && ($now - strtotime((string)$po['created_at'])) > 604800) { $pendingOlderThan7Days++; }
+    }
+    echo json_encode(['pesapal_pending_orders_read_only'=>true,'total_pending'=>count($pendingTuitionOrders),'with_valid_invoice'=>$pendingWithValidInvoice,'missing_invoice'=>$pendingMissingInvoice,'school_mismatch'=>$pendingSchoolMismatch,'with_tracking_id'=>$pendingWithTrackingId,'without_tracking_id'=>$pendingWithoutTrackingId,'with_settlement_evidence'=>$pendingWithSettlementEvidence,'with_provider_confirmation'=>$pendingWithProviderConfirmation,'older_than_7_days'=>$pendingOlderThan7Days]).PHP_EOL;
 
     $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
     if ($course) {
