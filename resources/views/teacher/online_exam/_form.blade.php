@@ -204,14 +204,14 @@
     @if(empty($structureLocked))
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Start Date') }}</label>
-        <input type="date" class="form-control eForm-control" name="start_date" value="{{ old('start_date', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('Y-m-d') : '') : '') }}" required>
+        <input type="date" class="form-control eForm-control" name="start_date" value="{{ old('start_date', !empty($exam) ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('Y-m-d') : '') : '') }}" required>
     </div>
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Hour') }}</label>
         <select class="form-select eForm-select" name="start_hour" required>
             @for ($h = 1; $h <= 12; $h++)
-                <option value="{{ $h }}" {{ old('start_hour', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('h') : '') : '') == $h ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
+                <option value="{{ $h }}" {{ old('start_hour', !empty($exam) ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('h') : '') : '') == $h ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
             @endfor
         </select>
     </div>
@@ -220,7 +220,7 @@
         <label class="eForm-label">{{ get_phrase('Minute') }}</label>
         <select class="form-select eForm-select" name="start_minute" required>
             @for ($m = 0; $m < 60; $m++)
-                <option value="{{ $m }}" {{ old('start_minute', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('i') : '') : '') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                <option value="{{ $m }}" {{ old('start_minute', !empty($exam) ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('i') : '') : '') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
             @endfor
         </select>
     </div>
@@ -228,21 +228,21 @@
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Period') }}</label>
         <select class="form-select eForm-select" name="start_period" required>
-            <option value="AM" {{ old('start_period', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('A') : 'AM') : 'AM') === 'AM' ? 'selected' : '' }}>AM</option>
-            <option value="PM" {{ old('start_period', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('A') : 'AM') : 'AM') === 'PM' ? 'selected' : '' }}>PM</option>
+            <option value="AM" {{ old('start_period', !empty($exam) ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('A') : 'AM') : 'AM') === 'AM' ? 'selected' : '' }}>AM</option>
+            <option value="PM" {{ old('start_period', !empty($exam) ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('A') : 'AM') : 'AM') === 'PM' ? 'selected' : '' }}>PM</option>
         </select>
     </div>
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('End Date') }}</label>
-        <input type="date" class="form-control eForm-control" name="end_date" value="{{ old('end_date', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('Y-m-d') : '') : '') }}" required>
+        <input type="date" class="form-control eForm-control" name="end_date" value="{{ old('end_date', !empty($exam) ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('Y-m-d') : '') : '') }}" required>
     </div>
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Hour') }}</label>
         <select class="form-select eForm-select" name="end_hour" required>
             @for ($h = 1; $h <= 12; $h++)
-                <option value="{{ $h }}" {{ old('end_hour', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('h') : '') : '') == $h ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
+                <option value="{{ $h }}" {{ old('end_hour', !empty($exam) ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('h') : '') : '') == $h ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
             @endfor
         </select>
     </div>
@@ -251,7 +251,7 @@
         <label class="eForm-label">{{ get_phrase('Minute') }}</label>
         <select class="form-select eForm-select" name="end_minute" required>
             @for ($m = 0; $m < 60; $m++)
-                <option value="{{ $m }}" {{ old('end_minute', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('i') : '') : '') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                <option value="{{ $m }}" {{ old('end_minute', !empty($exam) ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('i') : '') : '') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
             @endfor
         </select>
     </div>
@@ -259,8 +259,8 @@
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Period') }}</label>
         <select class="form-select eForm-select" name="end_period" required>
-            <option value="AM" {{ old('end_period', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('A') : 'AM') : 'AM') === 'AM' ? 'selected' : '' }}>AM</option>
-            <option value="PM" {{ old('end_period', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('A') : 'AM') : 'AM') === 'PM' ? 'selected' : '' }}>PM</option>
+            <option value="AM" {{ old('end_period', !empty($exam) ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('A') : 'AM') : 'AM') === 'AM' ? 'selected' : '' }}>AM</option>
+            <option value="PM" {{ old('end_period', !empty($exam) ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('A') : 'AM') : 'AM') === 'PM' ? 'selected' : '' }}>PM</option>
         </select>
     </div>
 @else
@@ -281,7 +281,7 @@
     <div class="col-12">
         <div class="alert alert-info mt-2">
             <strong>{{ get_phrase('Schedule Summary') }}:</strong><br>
-            <span id="examScheduleSummary">{{ $exam ? $exam->windowSummary() : '' }}</span>
+            <span id="examScheduleSummary">{{ !empty($exam) ? $exam->windowSummary() : '' }}</span>
         </div>
     </div>
 

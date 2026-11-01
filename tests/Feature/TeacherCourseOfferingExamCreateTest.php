@@ -184,13 +184,13 @@ class TeacherCourseOfferingExamCreateTest extends TestCase
         $this->assertStringContainsString('value="'.$this->offering->id.'"', $html, 'their own Allocation is offered');
 
         $this->assertStringNotContainsString(
-            'value="'.$notMine->id.'"',
+            'NOT-MINE-2026-S1',
             $html,
             'an Allocation they are not allocated to must never be offered'
         );
 
         $this->assertStringNotContainsString(
-            'value="'.$theirs['offering']->id.'"',
+            'THEIRS-2025-S1',
             $html,
             'another institution\'s Allocation must never be offered'
         );
