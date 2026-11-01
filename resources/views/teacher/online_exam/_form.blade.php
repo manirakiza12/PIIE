@@ -265,16 +265,16 @@
     </div>
 @else
     @if($exam?->scheduledStartAt())
-        <input type="hidden" name="start_date" value="{{ $exam->scheduledStartAt()->format('Y-m-d') }}">
-        <input type="hidden" name="start_hour" value="{{ $exam->scheduledStartAt()->format('h') }}">
-        <input type="hidden" name="start_minute" value="{{ $exam->scheduledStartAt()->format('i') }}">
-        <input type="hidden" name="start_period" value="{{ $exam->scheduledStartAt()->format('A') }}">
+        <input type="hidden" name="start_date" value="{{ $exam?->scheduledStartAt()?->format('Y-m-d') }}">
+        <input type="hidden" name="start_hour" value="{{ $exam?->scheduledStartAt()?->format('h') }}">
+        <input type="hidden" name="start_minute" value="{{ $exam?->scheduledStartAt()?->format('i') }}">
+        <input type="hidden" name="start_period" value="{{ $exam?->scheduledStartAt()?->format('A') }}">
     @endif
     @if($exam?->scheduledEndAt())
-        <input type="hidden" name="end_date" value="{{ $exam->scheduledEndAt()->format('Y-m-d') }}">
-        <input type="hidden" name="end_hour" value="{{ $exam->scheduledEndAt()->format('h') }}">
-        <input type="hidden" name="end_minute" value="{{ $exam->scheduledEndAt()->format('i') }}">
-        <input type="hidden" name="end_period" value="{{ $exam->scheduledEndAt()->format('A') }}">
+        <input type="hidden" name="end_date" value="{{ $exam?->scheduledEndAt()?->format('Y-m-d') }}">
+        <input type="hidden" name="end_hour" value="{{ $exam?->scheduledEndAt()?->format('h') }}">
+        <input type="hidden" name="end_minute" value="{{ $exam?->scheduledEndAt()?->format('i') }}">
+        <input type="hidden" name="end_period" value="{{ $exam?->scheduledEndAt()?->format('A') }}">
     @endif
 @endif
 
