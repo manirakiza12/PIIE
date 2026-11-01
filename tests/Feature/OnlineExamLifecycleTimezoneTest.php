@@ -164,7 +164,7 @@ class OnlineExamLifecycleTimezoneTest extends TestCase
 
         $this->assertSame('10:00', $exam->scheduledStartAt()->format('H:i'));
         $this->assertSame('11:00', $exam->scheduledEndAt()->format('H:i'));
-        $this->assertSame('10:00 to 11:00', $exam->windowSummary());
+        $this->assertSame('1 Nov 2026, 10:00 AM to 1 Nov 2026, 11:00 AM', $exam->windowSummary());
     }
 
     /** Historical schedules are preserved: no stored value is rewritten. */
