@@ -29,10 +29,10 @@
                     <i class="bi bi-calendar-event"></i>
                     {{ get_phrase('This exam is taken at the same scheduled time for everyone') }}:
                     @if($exam->start_datetime)
-                        <strong>{{ get_phrase('Opens') }} {{ $exam->start_datetime->format('d M Y, H:i') }}</strong>
+                        <strong>{{ get_phrase('Opens') }} {{ $exam->start_datetime->format('d M Y, g:i A') }}</strong>
                     @endif
                     @if($exam->end_datetime)
-                        &mdash; <strong>{{ get_phrase('Closes') }} {{ $exam->end_datetime->format('d M Y, H:i') }}</strong>
+                        &mdash; <strong>{{ get_phrase('Closes') }} {{ $exam->end_datetime->format('d M Y, g:i A') }}</strong>
                     @endif
                 </div>
             @endif

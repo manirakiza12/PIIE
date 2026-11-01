@@ -3,6 +3,7 @@
 namespace Tests\Feature\Support;
 
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -594,7 +595,32 @@ trait OnlineExamTestHelper
             'updated_at' => now(),
         ];
 
-        return (int) DB::table('online_exams')->insertGetId(array_merge($defaults, $overrides));
+        // ── TIMEZONE CONSISTENCY ──────────────────────────────────────────
+        // String datetime overrides are supplied in the institution's scheduling
+        // timezone (Africa/Kampala). Convert them to UTC before storage so that
+        // OnlineExam::scheduledStartAt()/scheduledEndAt() (which parse DB values
+        // as UTC and render as Kampala) return the intended instant.
+        // Carbon instances (the defaults above) are already UTC and pass through.
+        $timezone = function_exists('get_settings') ? get_settings('timezone') : null;
+        $timezone = $timezone ?: 'Africa/Kampala';
+        if (! in_array($timezone, timezone_identifiers_list(), true)) {
+            $timezone = 'Africa/Kampala';
+        }
+
+        $start = $overrides['start_datetime'] ?? $defaults['start_datetime'];
+        if (is_string($start)) {
+            $start = Carbon::parse($start, $timezone)->setTimezone('UTC')->format('Y-m-d H:i:s');
+        }
+
+        $end = $overrides['end_datetime'] ?? $defaults['end_datetime'];
+        if (is_string($end)) {
+            $end = Carbon::parse($end, $timezone)->setTimezone('UTC')->format('Y-m-d H:i:s');
+        }
+
+        return (int) DB::table('online_exams')->insertGetId(array_merge($defaults, $overrides, [
+            'start_datetime' => $start,
+            'end_datetime' => $end,
+        ]));
     }
 
     protected function makeQuestion(int $examId, array $overrides = []): int
