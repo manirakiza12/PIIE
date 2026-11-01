@@ -311,7 +311,7 @@ try {
 
     // Pending tuition order sanitized evidence (aggregate counts only; no identifiers or PII).
     // Whether the linked invoice exists and ownership matches.
-    $pendingTuitionOrders = $pdo->query("SELECT tp.id, tp.fee_id, tp.school_id, tp.gateway_txn_id, tp.gateway_payload, tp.created_at, sfm.school_id AS fee_school_id FROM tuition_payments tp LEFT JOIN student_fee_managers sfm ON sfm.id=tp.fee_id WHERE tp.method='pesapal' AND tp.status='pending'")->fetchAll(PDO::FETCH_ASSOC);
+    $pendingTuitionOrders = $pdo->query("SELECT tp.id, tp.fee_id, tp.school_id, tp.gateway_txn_id, tp.gateway_payload, tp.created_at, sfm.id AS fee_pk, sfm.school_id AS fee_school_id FROM tuition_payments tp LEFT JOIN student_fee_managers sfm ON sfm.id=tp.fee_id WHERE tp.method='pesapal' AND tp.status='pending'")->fetchAll(PDO::FETCH_ASSOC);
     $pendingWithValidInvoice = 0;
     $pendingMissingInvoice = 0;
     $pendingSchoolMismatch = 0;
@@ -322,7 +322,8 @@ try {
     $pendingOlderThan7Days = 0;
     $now = time();
     foreach ($pendingTuitionOrders as $po) {
-        if ($po['fee_school_id'] === null) { $pendingMissingInvoice++; }
+        if ($po['fee_pk'] === null) { $pendingMissingInvoice++; }
+        elseif ($po['fee_school_id'] === null) { $pendingSchoolMismatch++; }  // invoice exists but school_id is NULL
         elseif ((int)$po['fee_school_id'] !== (int)$po['school_id']) { $pendingSchoolMismatch++; }
         else { $pendingWithValidInvoice++; }
         if (!empty($po['gateway_txn_id'])) { $pendingWithTrackingId++; } else { $pendingWithoutTrackingId++; }
