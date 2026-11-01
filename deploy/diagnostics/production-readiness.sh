@@ -293,6 +293,22 @@ try {
     $tuitionDupSettled = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT gateway_txn_id FROM tuition_payments WHERE method='pesapal' AND status='paid' AND gateway_txn_id IS NOT NULL AND gateway_txn_id <> '' GROUP BY gateway_txn_id HAVING COUNT(*) > 1) d")->fetchColumn();
     echo json_encode(['pesapal_duplicate_settlements_read_only'=>true,'duplicate_application_settled_txn'=>$appDupSettled,'duplicate_tuition_settled_txn'=>$tuitionDupSettled]).PHP_EOL;
 
+    // Orphaned settlement detection: paid tuition payments whose fee_id does not exist (read-only).
+    $orphanedTuition = (int)$pdo->query("SELECT COUNT(*) FROM tuition_payments tp LEFT JOIN student_fee_managers sfm ON sfm.id=tp.fee_id WHERE tp.method='pesapal' AND tp.status='paid' AND sfm.id IS NULL")->fetchColumn();
+    // Orphaned settlement detection: paid application payments whose admission_id does not exist (read-only).
+    $orphanedApplicant = (int)$pdo->query("SELECT COUNT(*) FROM application_payments ap LEFT JOIN admissions a ON a.id=ap.admission_id WHERE ap.method='pesapal' AND ap.status='paid' AND a.id IS NULL")->fetchColumn();
+    echo json_encode(['pesapal_orphaned_settlements_read_only'=>true,'orphaned_tuition_settled'=>$orphanedTuition,'orphaned_applicant_settled'=>$orphanedApplicant]).PHP_EOL;
+
+    // Ownership mismatch detection: tuition payments whose school_id differs from their fee's school_id (read-only).
+    $tuitionOwnershipMismatch = (int)$pdo->query("SELECT COUNT(*) FROM tuition_payments tp JOIN student_fee_managers sfm ON sfm.id=tp.fee_id WHERE tp.method='pesapal' AND tp.school_id <> sfm.school_id")->fetchColumn();
+    // Ownership mismatch detection: application payments whose school_id differs from their admission's school_id (read-only).
+    $applicantOwnershipMismatch = (int)$pdo->query("SELECT COUNT(*) FROM application_payments ap JOIN admissions a ON a.id=ap.admission_id WHERE ap.method='pesapal' AND ap.school_id <> a.school_id")->fetchColumn();
+    echo json_encode(['pesapal_ownership_mismatches_read_only'=>true,'tuition_school_mismatch'=>$tuitionOwnershipMismatch,'applicant_school_mismatch'=>$applicantOwnershipMismatch]).PHP_EOL;
+
+    // Reversal duplication detection: tuition payments reversed more than once (read-only).
+    $tuitionDupReversal = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT gateway_txn_id FROM tuition_payments WHERE method='pesapal' AND status='reversed' AND gateway_txn_id IS NOT NULL AND gateway_txn_id <> '' GROUP BY gateway_txn_id HAVING COUNT(*) > 1) d")->fetchColumn();
+    echo json_encode(['pesapal_duplicate_reversals_read_only'=>true,'duplicate_tuition_reversed_txn'=>$tuitionDupReversal]).PHP_EOL;
+
     $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
     if ($course) {
         $lessons = $pdo->query('SELECT l.id,l.title,l.status,l.released_at,l.content_type,m.id AS module_id,m.status AS module_status,m.released_at AS module_released_at FROM course_offering_lessons l JOIN course_offering_modules m ON m.id=l.course_offering_module_id AND m.course_offering_id=l.course_offering_id AND m.school_id=l.school_id WHERE l.course_offering_id=30 ORDER BY m.sequence,m.id,l.sequence,l.id')->fetchAll(PDO::FETCH_ASSOC);
