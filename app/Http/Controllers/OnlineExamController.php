@@ -2878,56 +2878,70 @@ public function heartbeat($submissionId)
         $snapshot = null;
         $pendingRequest = null;
 
-        DB::transaction(function () use ($submission, $validated, $filename, $imageData, $mime, &$snapshot, &$pendingRequest) {
-            $snapshot = \App\Models\OnlineExamSnapshot::create([
-                'submission_id' => $submission->id,
-                'disk' => 'local',
-                'path' => $filename,
-                'size_bytes' => strlen($imageData),
-                'mime_type' => $mime,
-                'capture_type' => $validated['capture_type'] ?? 'automatic',
-                'metadata' => $validated['metadata'] ?? null,
-                'captured_at' => now(),
-            ]);
+        try {
+            DB::transaction(function () use ($submission, $validated, $filename, $imageData, $mime, &$snapshot, &$pendingRequest) {
+                $snapshot = \App\Models\OnlineExamSnapshot::create([
+                    'submission_id' => $submission->id,
+                    'disk' => 'local',
+                    'path' => $filename,
+                    'size_bytes' => strlen($imageData),
+                    'mime_type' => $mime,
+                    'capture_type' => $validated['capture_type'] ?? 'automatic',
+                    'metadata' => $validated['metadata'] ?? null,
+                    'captured_at' => now(),
+                ]);
 
-            // Only complete a pending request if there's a specific request_id
-            // and it matches a real pending request (not just capture_type claim)
-            $requestId = $validated['request_id'] ?? null;
-            if ($requestId) {
-                $pendingRequest = \App\Models\OnlineExamSnapshotRequest::where('id', (int) $requestId)
-                    ->where('submission_id', $submission->id)
-                    ->where('status', 'pending')
-                    ->lockForUpdate()
-                    ->first();
+                // Only complete a pending request if there's a specific request_id
+                // and it matches a real pending request (not just capture_type claim)
+                $requestId = $validated['request_id'] ?? null;
+                if ($requestId) {
+                    $pendingRequest = \App\Models\OnlineExamSnapshotRequest::where('id', (int) $requestId)
+                        ->where('submission_id', $submission->id)
+                        ->where('status', 'pending')
+                        ->lockForUpdate()
+                        ->first();
 
-                if ($pendingRequest && ($pendingRequest->expires_at === null || $pendingRequest->expires_at->gt(now()))) {
-                    $pendingRequest->update([
-                        'status' => 'completed',
-                        'completed_at' => now(),
-                        'metadata' => array_merge(
-                            $pendingRequest->metadata ?? [],
-                            ['snapshot_id' => $snapshot->id]
-                        ),
-                    ]);
+                    if ($pendingRequest && ($pendingRequest->expires_at === null || $pendingRequest->expires_at->gt(now()))) {
+                        $pendingRequest->update([
+                            'status' => 'completed',
+                            'completed_at' => now(),
+                            'metadata' => array_merge(
+                                $pendingRequest->metadata ?? [],
+                                ['snapshot_id' => $snapshot->id]
+                            ),
+                        ]);
+                    } else {
+                        // Request expired or not found - mark as failed
+                        if ($pendingRequest) {
+                            $pendingRequest->update([
+                                'status' => 'expired',
+                                'completed_at' => now(),
+                            ]);
+                        }
+                    }
                 }
-            }
 
-            // Record the proctoring event
-            \App\Models\OnlineExamProctoringEvent::create([
-                'submission_id' => $submission->id,
-                'event_type' => 'snapshot_captured',
-                'event_time' => now(),
-                'metadata' => array_merge(
-                    $validated['metadata'] ?? [],
-                    [
-                        'snapshot_id' => $snapshot->id,
-                        'capture_type' => $validated['capture_type'] ?? 'automatic',
-                        'request_id' => $requestId,
-                        'source' => 'camera_monitor',
-                    ]
-                ),
-            ]);
-        });
+                // Record the proctoring event
+                \App\Models\OnlineExamProctoringEvent::create([
+                    'submission_id' => $submission->id,
+                    'event_type' => 'snapshot_captured',
+                    'event_time' => now(),
+                    'metadata' => array_merge(
+                        $validated['metadata'] ?? [],
+                        [
+                            'snapshot_id' => $snapshot->id,
+                            'capture_type' => $validated['capture_type'] ?? 'automatic',
+                            'request_id' => $requestId,
+                            'source' => 'camera_monitor',
+                        ]
+                    ),
+                ]);
+            });
+        } catch (\Throwable $e) {
+            // Clean up uploaded file on failure
+            \Storage::disk('local')->delete($filename);
+            throw $e;
+        }
 
         return response()->json([
             'status' => 'success',
@@ -3032,30 +3046,55 @@ public function heartbeat($submissionId)
             ], 422);
         }
 
-        // Create pending snapshot request (expires in 2 minutes)
-        $snapshotRequest = \App\Models\OnlineExamSnapshotRequest::create([
-            'submission_id' => $submission->id,
-            'requested_by' => $request->user()->id,
-            'status' => 'pending',
-            'requested_at' => now(),
-            'expires_at' => now()->addMinutes(2),
-            'metadata' => [
-                'requested_by_name' => $request->user()->name,
-            ],
-        ]);
+        $snapshotRequest = null;
+        DB::transaction(function () use ($request, $submission, &$snapshotRequest) {
+            // Re-check inside transaction to prevent races
+            $existing = \App\Models\OnlineExamSnapshotRequest::where('submission_id', $submission->id)
+                ->where('status', 'pending')
+                ->where(function ($q) {
+                    $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })
+                ->lockForUpdate()
+                ->first();
 
-        // Record the invigilator snapshot request event
-        \App\Models\OnlineExamProctoringEvent::create([
-            'submission_id' => $submission->id,
-            'event_type' => 'snapshot_requested',
-            'event_time' => now(),
-            'metadata' => [
+            if ($existing) {
+                $snapshotRequest = $existing;
+                return;
+            }
+
+            // Create pending snapshot request (expires in 2 minutes)
+            $snapshotRequest = \App\Models\OnlineExamSnapshotRequest::create([
+                'submission_id' => $submission->id,
                 'requested_by' => $request->user()->id,
-                'requested_by_name' => $request->user()->name,
-                'requested_at' => now()->toDateTimeString(),
-                'snapshot_request_id' => $snapshotRequest->id,
-            ],
-        ]);
+                'status' => 'pending',
+                'requested_at' => now(),
+                'expires_at' => now()->addMinutes(2),
+                'metadata' => [
+                    'requested_by_name' => $request->user()->name,
+                ],
+            ]);
+
+            // Record the invigilator snapshot request event
+            \App\Models\OnlineExamProctoringEvent::create([
+                'submission_id' => $submission->id,
+                'event_type' => 'snapshot_requested',
+                'event_time' => now(),
+                'metadata' => [
+                    'requested_by' => $request->user()->id,
+                    'requested_by_name' => $request->user()->name,
+                    'requested_at' => now()->toDateTimeString(),
+                    'snapshot_request_id' => $snapshotRequest->id,
+                ],
+            ]);
+        });
+
+        if ($snapshotRequest->wasRecentlyCreated === false) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'A snapshot request is already pending for this attempt.',
+                'request_id' => $snapshotRequest->id,
+            ], 422);
+        }
 
         return response()->json([
             'status' => 'success',
