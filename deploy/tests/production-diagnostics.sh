@@ -172,6 +172,12 @@ grep -Fq "payment_methods_single_active_pesapal_unique" "$ROOT/deploy/diagnostic
 grep -Fq "pesapal_environment_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal environment diagnostic must emit read-only JSON output'; exit 1; }
 # Verify new Pesapal duplicate-settlement diagnostic exists.
 grep -Fq "pesapal_duplicate_settlements_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate settlement diagnostic must emit read-only JSON output'; exit 1; }
+# Verify new orphaned settlement diagnostic exists.
+grep -Fq "pesapal_orphaned_settlements_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal orphaned settlement diagnostic must emit read-only JSON output'; exit 1; }
+# Verify new ownership mismatch diagnostic exists.
+grep -Fq "pesapal_ownership_mismatches_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal ownership mismatch diagnostic must emit read-only JSON output'; exit 1; }
+# Verify new duplicate reversal diagnostic exists.
+grep -Fq "pesapal_duplicate_reversals_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate reversal diagnostic must emit read-only JSON output'; exit 1; }
 # Verify new Pesapal outstanding-orders diagnostic exists.
 grep -Fq "pesapal_outstanding_orders_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal outstanding orders diagnostic must emit read-only JSON output'; exit 1; }
 # Verify the diagnostic uses the read-only transaction (no writes).
