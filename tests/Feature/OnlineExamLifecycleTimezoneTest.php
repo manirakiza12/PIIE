@@ -159,8 +159,8 @@ class OnlineExamLifecycleTimezoneTest extends TestCase
         $storedStart = $exam->getRawOriginal('start_datetime');
         $storedEnd = $exam->getRawOriginal('end_datetime');
 
-        $this->assertSame('07:00:00', (string) $storedStart->format('H:i:s'));
-        $this->assertSame('08:00:00', (string) $storedEnd->format('H:i:s'));
+        $this->assertSame('07:00:00', (string) Carbon::parse($storedStart)->format('H:i:s'));
+        $this->assertSame('08:00:00', (string) Carbon::parse($storedEnd)->format('H:i:s'));
 
         $this->assertSame('10:00', $exam->scheduledStartAt()->format('H:i'));
         $this->assertSame('11:00', $exam->scheduledEndAt()->format('H:i'));
