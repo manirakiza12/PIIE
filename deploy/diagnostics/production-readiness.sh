@@ -267,6 +267,32 @@ try {
     $pesapalDuplicateSanitized = array_map(fn ($row) => ['school_id' => (int)$row['school_id'], 'active_pesapal_configs' => (int)$row['active_pesapal_configs']], $pesapalDuplicates);
     echo json_encode(['pesapal_duplicate_configurations_read_only'=>true,'duplicate_school_count'=>$pesapalDuplicateCount,'duplicate_schools'=>$pesapalDuplicateSanitized]).PHP_EOL;
 
+    // Pesapal uniqueness constraint verification (read-only metadata, no rows written).
+    $pesapalConstraintColumn = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='payment_methods' AND COLUMN_NAME='active_pesapal_school_id'")->fetchColumn();
+    $pesapalConstraintIndexRows = $pdo->query("SELECT NON_UNIQUE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='payment_methods' AND INDEX_NAME='payment_methods_single_active_pesapal_unique' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $pesapalConstraintIndexPresent = $pesapalConstraintIndexRows !== false;
+    $pesapalConstraintUnique = $pesapalConstraintIndexPresent && ((int)$pesapalConstraintIndexRows['NON_UNIQUE'] === 0);
+    echo json_encode(['pesapal_constraint_read_only'=>true,'generated_column_present'=>$pesapalConstraintColumn>0,'unique_index_present'=>$pesapalConstraintIndexPresent,'unique_index_enforced'=>$pesapalConstraintUnique]).PHP_EOL;
+
+    // Pesapal environment check (metadata only; credentials are never decoded or emitted).
+    $pesapalEnvRows = $pdo->query("SELECT school_id, payment_keys FROM payment_methods WHERE name='pesapal' AND status=1")->fetchAll(PDO::FETCH_ASSOC);
+    $pesapalEnvs = [];
+    foreach ($pesapalEnvRows as $er) {
+        $keys = json_decode((string)$er['payment_keys'], true);
+        $pesapalEnvs[] = ['school_id' => (int)$er['school_id'], 'environment' => is_array($keys) ? (string)($keys['environment'] ?? 'unknown') : 'unreadable'];
+    }
+    echo json_encode(['pesapal_environment_read_only'=>true,'configured_schools'=>$pesapalEnvs]).PHP_EOL;
+
+    // Outstanding Pesapal order counts (read-only).
+    $applicantPending = (int)$pdo->query("SELECT COUNT(*) FROM application_payments WHERE method='pesapal' AND status='pending'")->fetchColumn();
+    $tuitionPending = (int)$pdo->query("SELECT COUNT(*) FROM tuition_payments WHERE method='pesapal' AND status='pending'")->fetchColumn();
+    echo json_encode(['pesapal_outstanding_orders_read_only'=>true,'applicant_pending'=>$applicantPending,'tuition_pending'=>$tuitionPending]).PHP_EOL;
+
+    // Duplicate settlement detection (aggregate counts only; no identifiers emitted).
+    $appDupSettled = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT gateway_txn_id FROM application_payments WHERE method='pesapal' AND status='paid' AND gateway_txn_id IS NOT NULL AND gateway_txn_id <> '' GROUP BY gateway_txn_id HAVING COUNT(*) > 1) d")->fetchColumn();
+    $tuitionDupSettled = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT gateway_txn_id FROM tuition_payments WHERE method='pesapal' AND status='paid' AND gateway_txn_id IS NOT NULL AND gateway_txn_id <> '' GROUP BY gateway_txn_id HAVING COUNT(*) > 1) d")->fetchColumn();
+    echo json_encode(['pesapal_duplicate_settlements_read_only'=>true,'duplicate_application_settled_txn'=>$appDupSettled,'duplicate_tuition_settled_txn'=>$tuitionDupSettled]).PHP_EOL;
+
     $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
     if ($course) {
         $lessons = $pdo->query('SELECT l.id,l.title,l.status,l.released_at,l.content_type,m.id AS module_id,m.status AS module_status,m.released_at AS module_released_at FROM course_offering_lessons l JOIN course_offering_modules m ON m.id=l.course_offering_module_id AND m.course_offering_id=l.course_offering_id AND m.school_id=l.school_id WHERE l.course_offering_id=30 ORDER BY m.sequence,m.id,l.sequence,l.id')->fetchAll(PDO::FETCH_ASSOC);
