@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * A school must never have two active PesaPal rows.
@@ -14,6 +13,11 @@ use Illuminate\Support\Facades\Schema;
  *
  * The migration fails closed if duplicates already exist. It never merges,
  * deletes, or rewrites a configuration; an operator must resolve them.
+ *
+ * The duplicate check is skipped while the connection is in pretend mode
+ * (used by `migrate --pretend` during deployment review), because pretend
+ * mode records queries instead of executing them and would otherwise report
+ * the table as missing or the duplicates as empty.
  */
 return new class extends Migration
 {
@@ -27,27 +31,21 @@ return new class extends Migration
         if (! in_array($driver, ['mysql', 'sqlite'], true)) {
             throw new RuntimeException('Single active PesaPal configuration requires MySQL/MariaDB or SQLite.');
         }
-        if (! Schema::hasTable('payment_methods')) {
-            throw new RuntimeException('payment_methods is missing; PesaPal configuration cannot be protected.');
-        }
-        $duplicates = $connection->select(
-            "SELECT school_id FROM payment_methods WHERE name = 'pesapal' AND status = 1 AND school_id IS NOT NULL "
-            . 'GROUP BY school_id HAVING COUNT(*) > 1 LIMIT 1'
-        );
-        if ($duplicates) {
-            throw new RuntimeException('Duplicate active PesaPal configurations exist. Resolve them explicitly; no rows were changed.');
+        if (! $connection->pretending()) {
+            $duplicates = $connection->select(
+                "SELECT school_id FROM payment_methods WHERE name = 'pesapal' AND status = 1 AND school_id IS NOT NULL "
+                . 'GROUP BY school_id HAVING COUNT(*) > 1 LIMIT 1'
+            );
+            if ($duplicates) {
+                throw new RuntimeException('Duplicate active PesaPal configurations exist. Resolve them explicitly; no rows were changed.');
+            }
         }
         if ($driver === 'mysql') {
-            // MySQL has no partial unique index. The generated column is NULL
-            // for every row that is not an active PesaPal configuration, and a
-            // unique index treats NULLs as distinct.
             $connection->statement(
                 'ALTER TABLE payment_methods ADD COLUMN ' . self::COLUMN . " BIGINT GENERATED ALWAYS AS (CASE WHEN name = 'pesapal' AND status = 1 THEN school_id ELSE NULL END) STORED, "
                 . 'ADD UNIQUE INDEX ' . self::INDEX . ' (' . self::COLUMN . ')'
             );
         } else {
-            // SQLite supports a partial unique index directly. NULL school_id
-            // rows remain unconstrained, matching the application query.
             $connection->statement('CREATE UNIQUE INDEX ' . self::INDEX
                 . " ON payment_methods (school_id) WHERE name = 'pesapal' AND status = 1");
         }
