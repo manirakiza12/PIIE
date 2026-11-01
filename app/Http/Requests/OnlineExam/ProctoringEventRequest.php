@@ -53,11 +53,6 @@ class ProctoringEventRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            $event = (string) $this->input('event_type');
-            if (in_array($event, ['snapshot_captured', 'snapshot_failed'], true)) {
-                $validator->errors()->add('event_type', 'Snapshot events are not allowed in this stage.');
-            }
-
             if ($this->submission && $this->submission->status !== OnlineExamSubmission::STATUS_IN_PROGRESS) {
                 $validator->errors()->add('submission_id', 'Proctoring events can be recorded only for active attempts.');
             }

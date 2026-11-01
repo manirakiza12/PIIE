@@ -296,6 +296,31 @@ trait OnlineExamTestHelper
             $table->timestamps();
         });
 
+        Schema::create('online_exam_snapshots', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('submission_id')->index();
+            $table->string('disk', 50)->default('local');
+            $table->string('path', 500);
+            $table->unsignedBigInteger('size_bytes')->nullable();
+            $table->string('mime_type', 100)->nullable();
+            $table->string('capture_type', 30)->nullable();
+            $table->json('metadata')->nullable();
+            $table->dateTime('captured_at')->index();
+            $table->timestamps();
+        });
+
+        Schema::create('online_exam_snapshot_requests', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('submission_id')->index();
+            $table->unsignedBigInteger('requested_by')->index();
+            $table->string('status', 20)->default('pending');
+            $table->dateTime('requested_at');
+            $table->dateTime('completed_at')->nullable();
+            $table->dateTime('expires_at')->nullable();
+            $table->json('metadata')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('question_banks', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('school_id')->index();

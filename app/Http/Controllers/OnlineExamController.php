@@ -24,6 +24,8 @@ use App\Http\Requests\OnlineExam\CameraReadinessRequest;
 use App\Http\Requests\OnlineExam\ManualMarkAnswerRequest;
 use App\Http\Requests\OnlineExam\ProctoringEventRequest;
 use App\Http\Requests\OnlineExam\SaveOnlineExamAnswerRequest;
+use App\Http\Requests\OnlineExam\SnapshotCaptureRequest;
+use App\Http\Requests\OnlineExam\SnapshotFailedRequest;
 use App\Http\Requests\OnlineExam\StartOnlineExamRequest;
 use App\Http\Requests\OnlineExam\StoreOnlineExamQuestionRequest;
 use App\Http\Requests\OnlineExam\StoreOnlineExamRequest;
@@ -1772,7 +1774,28 @@ class OnlineExamController extends Controller
             ->chronological()
             ->paginate(100);
 
-        return view('teacher.online_exam.proctoring', compact('exam', 'submission', 'events'));
+        // Count flagged events across ALL events, not just paginated page
+        $flagsCount = OnlineExamProctoringEvent::forSubmission($submission->id)
+            ->whereIn('event_type', [
+                'tab_hidden', 'fullscreen_exited', 'camera_permission_denied',
+                'connection_lost', 'snapshot_failed'
+            ])
+            ->count();
+
+        $snapshots = \App\Models\OnlineExamSnapshot::forSubmission($submission->id)
+            ->chronological()
+            ->get();
+        $snapshotsCount = $snapshots->count();
+        $lastSnapshot = $snapshots->last();
+        $lastSnapshotData = $lastSnapshot ? [
+            'id' => $lastSnapshot->id,
+            'captured_at' => $lastSnapshot->captured_at->toDateTimeString(),
+            'url' => route('admin.online_exams.snapshot_image', ['submission' => $submission->id, 'snapshot' => $lastSnapshot->id]),
+        ] : null;
+
+        return view('teacher.online_exam.proctoring', compact(
+            'exam', 'submission', 'events', 'snapshots', 'snapshotsCount', 'lastSnapshot', 'flagsCount'
+        ));
     }
 
     public function teacherResults(Request $request, OnlineExam $exam)
@@ -2811,6 +2834,343 @@ public function heartbeat($submissionId)
         ]);
     }
 
+    public function captureSnapshot(SnapshotCaptureRequest $request, $submissionId)
+    {
+        $submission = $this->findStudentSubmissionOrFail((int) $submissionId);
+        $this->authorize('view', $submission);
+
+        $validated = $request->validated();
+
+        // Decode and validate image
+        $base64Image = $validated['image'];
+        $base64Image = preg_replace('/^data:image\/\w+;base64,/', '', $base64Image);
+        $imageData = base64_decode($base64Image, true);
+
+        if ($imageData === false) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid image data.',
+            ], 422);
+        }
+
+        // Determine MIME type from magic bytes
+        $mime = finfo_buffer(finfo_open(FILEINFO_MIME_TYPE), $imageData);
+        $allowedMimes = ['image/webp', 'image/jpeg', 'image/png', 'image/gif'];
+        if (!in_array($mime, $allowedMimes, true)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unsupported image type.',
+            ], 422);
+        }
+
+        $ext = match ($mime) {
+            'image/webp' => 'webp',
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            default => 'webp',
+        };
+
+        $filename = 'snapshots/' . $submission->id . '/' . now()->format('Y/m/d') . '/' . uniqid('snap_', true) . '.' . $ext;
+
+        \Storage::disk('local')->put($filename, $imageData);
+
+        $snapshot = null;
+        $pendingRequest = null;
+
+        try {
+            DB::transaction(function () use ($submission, $validated, $filename, $imageData, $mime, &$snapshot, &$pendingRequest) {
+                $snapshot = \App\Models\OnlineExamSnapshot::create([
+                    'submission_id' => $submission->id,
+                    'disk' => 'local',
+                    'path' => $filename,
+                    'size_bytes' => strlen($imageData),
+                    'mime_type' => $mime,
+                    'capture_type' => $validated['capture_type'] ?? 'automatic',
+                    'metadata' => $validated['metadata'] ?? null,
+                    'captured_at' => now(),
+                ]);
+
+                // Only complete a pending request if there's a specific request_id
+                // and it matches a real pending request (not just capture_type claim)
+                $requestId = $validated['request_id'] ?? null;
+                if ($requestId) {
+                    $pendingRequest = \App\Models\OnlineExamSnapshotRequest::where('id', (int) $requestId)
+                        ->where('submission_id', $submission->id)
+                        ->where('status', 'pending')
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($pendingRequest && ($pendingRequest->expires_at === null || $pendingRequest->expires_at->gt(now()))) {
+                        $pendingRequest->update([
+                            'status' => 'completed',
+                            'completed_at' => now(),
+                            'metadata' => array_merge(
+                                $pendingRequest->metadata ?? [],
+                                ['snapshot_id' => $snapshot->id]
+                            ),
+                        ]);
+                    } else {
+                        // Request expired or not found - mark as failed
+                        if ($pendingRequest) {
+                            $pendingRequest->update([
+                                'status' => 'expired',
+                                'completed_at' => now(),
+                            ]);
+                        }
+                    }
+                }
+
+                // Record the proctoring event
+                \App\Models\OnlineExamProctoringEvent::create([
+                    'submission_id' => $submission->id,
+                    'event_type' => 'snapshot_captured',
+                    'event_time' => now(),
+                    'metadata' => array_merge(
+                        $validated['metadata'] ?? [],
+                        [
+                            'snapshot_id' => $snapshot->id,
+                            'capture_type' => $validated['capture_type'] ?? 'automatic',
+                            'request_id' => $requestId,
+                            'source' => 'camera_monitor',
+                        ]
+                    ),
+                ]);
+            });
+        } catch (\Throwable $e) {
+            // Clean up uploaded file on failure
+            \Storage::disk('local')->delete($filename);
+            throw $e;
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'snapshot_id' => $snapshot->id,
+            'captured_at' => $snapshot->captured_at->toDateTimeString(),
+            'request_completed' => $pendingRequest !== null,
+        ]);
+    }
+
+    public function snapshotFailed(SnapshotFailedRequest $request, $submissionId)
+    {
+        $submission = $this->findStudentSubmissionOrFail((int) $submissionId);
+        $this->authorize('view', $submission);
+
+        $validated = $request->validated();
+
+        \App\Models\OnlineExamProctoringEvent::create([
+            'submission_id' => $submission->id,
+            'event_type' => 'snapshot_failed',
+            'event_time' => now(),
+            'metadata' => array_merge(
+                $validated['metadata'] ?? [],
+                [
+                    'error' => $validated['error'] ?? 'unknown',
+                    'source' => 'camera_monitor',
+                ]
+            ),
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+        ]);
+    }
+
+    public function cameraStatus($submissionId)
+    {
+        $submission = $this->findStudentSubmissionOrFail((int) $submissionId);
+        $this->authorize('view', $submission);
+
+        // Get recent camera events
+        $cameraEvents = \App\Models\OnlineExamProctoringEvent::forSubmission($submission->id)
+            ->whereIn('event_type', [
+                'camera_permission_granted',
+                'camera_permission_denied',
+                'camera_started',
+                'camera_stopped',
+                'snapshot_captured',
+                'snapshot_failed',
+            ])
+            ->chronological()
+            ->limit(20)
+            ->get();
+
+        $lastSnapshot = \App\Models\OnlineExamSnapshot::forSubmission($submission->id)
+            ->latest('captured_at')
+            ->first();
+
+        return response()->json([
+            'camera_consent_at' => $submission->camera_consent_at?->toDateTimeString(),
+            'camera_permission_granted' => $submission->camera_permission_granted,
+            'camera_ready_at' => $submission->camera_ready_at?->toDateTimeString(),
+            'recent_events' => $cameraEvents,
+            'last_snapshot' => $lastSnapshot ? [
+                'id' => $lastSnapshot->id,
+                'captured_at' => $lastSnapshot->captured_at->toDateTimeString(),
+'url' => route('student.online_exam.snapshot_image', ['submission' => $submission->id, 'snapshot' => $lastSnapshot->id]),
+            ] : null,
+        ]);
+    }
+
+    public function requestSnapshot(Request $request, $examId, $submissionId)
+    {
+        $exam = $this->findExamOrFail((int) $examId);
+        $this->authorize('reviewProctoring', $exam);
+
+        $submission = OnlineExamSubmission::where('id', (int) $submissionId)
+            ->where('online_exam_id', $exam->id)
+            ->where('school_id', $this->school_id)
+            ->firstOrFail();
+        $this->authorize('view', $submission);
+
+        if ($submission->status !== OnlineExamSubmission::STATUS_IN_PROGRESS) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Cannot request snapshot: submission is not in progress.',
+            ], 422);
+        }
+
+        // Check for existing pending request to prevent duplicates
+        $existingPending = \App\Models\OnlineExamSnapshotRequest::where('submission_id', $submission->id)
+            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->first();
+
+        if ($existingPending) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'A snapshot request is already pending for this attempt.',
+                'request_id' => $existingPending->id,
+            ], 422);
+        }
+
+        $snapshotRequest = null;
+        DB::transaction(function () use ($request, $submission, &$snapshotRequest) {
+            // Re-check inside transaction to prevent races
+            $existing = \App\Models\OnlineExamSnapshotRequest::where('submission_id', $submission->id)
+                ->where('status', 'pending')
+                ->where(function ($q) {
+                    $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                $snapshotRequest = $existing;
+                return;
+            }
+
+            // Create pending snapshot request (expires in 2 minutes)
+            $snapshotRequest = \App\Models\OnlineExamSnapshotRequest::create([
+                'submission_id' => $submission->id,
+                'requested_by' => $request->user()->id,
+                'status' => 'pending',
+                'requested_at' => now(),
+                'expires_at' => now()->addMinutes(2),
+                'metadata' => [
+                    'requested_by_name' => $request->user()->name,
+                ],
+            ]);
+
+            // Record the invigilator snapshot request event
+            \App\Models\OnlineExamProctoringEvent::create([
+                'submission_id' => $submission->id,
+                'event_type' => 'snapshot_requested',
+                'event_time' => now(),
+                'metadata' => [
+                    'requested_by' => $request->user()->id,
+                    'requested_by_name' => $request->user()->name,
+                    'requested_at' => now()->toDateTimeString(),
+                    'snapshot_request_id' => $snapshotRequest->id,
+                ],
+            ]);
+        });
+
+        if ($snapshotRequest->wasRecentlyCreated === false) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'A snapshot request is already pending for this attempt.',
+                'request_id' => $snapshotRequest->id,
+            ], 422);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Snapshot requested. The student will capture it on their next check-in.',
+            'request_id' => $snapshotRequest->id,
+            'expires_at' => $snapshotRequest->expires_at->toDateTimeString(),
+        ]);
+    }
+
+    public function pendingSnapshotRequest($submissionId)
+    {
+        $submission = $this->findStudentSubmissionOrFail((int) $submissionId);
+        $this->authorize('view', $submission);
+
+        if ($submission->status !== OnlineExamSubmission::STATUS_IN_PROGRESS) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No pending requests for inactive attempts.',
+            ], 422);
+        }
+
+        $pendingRequest = \App\Models\OnlineExamSnapshotRequest::where('submission_id', $submission->id)
+            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->first();
+
+        if (! $pendingRequest) {
+            return response()->json([
+                'status' => 'success',
+                'has_pending' => false,
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'has_pending' => true,
+            'request' => [
+                'id' => $pendingRequest->id,
+                'requested_at' => $pendingRequest->requested_at->toDateTimeString(),
+                'expires_at' => $pendingRequest->expires_at->toDateTimeString(),
+                'requested_by_name' => $pendingRequest->metadata['requested_by_name'] ?? null,
+            ],
+        ]);
+    }
+
+    public function snapshotImage($submissionId, $snapshotId)
+    {
+        $submission = OnlineExamSubmission::findOrFail((int) $submissionId);
+        $this->authorize('view', $submission);
+
+        $snapshot = \App\Models\OnlineExamSnapshot::where('id', (int) $snapshotId)
+            ->where('submission_id', $submission->id)
+            ->firstOrFail();
+
+        $disk = \Storage::disk($snapshot->disk);
+
+        if (! $disk->exists($snapshot->path)) {
+            abort(404);
+        }
+
+        $filePath = $disk->path($snapshot->path);
+        $mimeType = $snapshot->mime_type ?? $disk->mimeType($snapshot->path) ?? 'application/octet-stream';
+
+        $response = new \Symfony\Component\HttpFoundation\BinaryFileResponse($filePath);
+        $response->headers->set('Content-Type', $mimeType);
+        $response->headers->set('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        $response->headers->set('Content-Disposition', (new \Symfony\Component\HttpFoundation\ResponseHeaderBag())
+            ->makeDisposition(\Symfony\Component\HttpFoundation\ResponseHeaderBag::DISPOSITION_INLINE, 'snapshot_' . $snapshot->id . '.webp'));
+
+        return $response;
+    }
+
     public function submitExam(SubmitOnlineExamRequest $request, $id)
     {
         $exam = $this->findStudentExamOrFail((int) $id);
@@ -3133,7 +3493,28 @@ public function heartbeat($submissionId)
             ->chronological()
             ->paginate(100);
 
-        return view('admin.online_exam.proctoring', compact('exam', 'submission', 'events'));
+        // Count flagged events across ALL events, not just paginated page
+        $flagsCount = OnlineExamProctoringEvent::forSubmission($submission->id)
+            ->whereIn('event_type', [
+                'tab_hidden', 'fullscreen_exited', 'camera_permission_denied',
+                'connection_lost', 'snapshot_failed'
+            ])
+            ->count();
+
+        $snapshots = \App\Models\OnlineExamSnapshot::forSubmission($submission->id)
+            ->chronological()
+            ->get();
+        $snapshotsCount = $snapshots->count();
+        $lastSnapshot = $snapshots->last();
+        $lastSnapshotData = $lastSnapshot ? [
+            'id' => $lastSnapshot->id,
+            'captured_at' => $lastSnapshot->captured_at->toDateTimeString(),
+            'url' => route('admin.online_exams.snapshot_image', ['submission' => $submission->id, 'snapshot' => $lastSnapshot->id]),
+        ] : null;
+
+        return view('admin.online_exam.proctoring', compact(
+            'exam', 'submission', 'events', 'snapshots', 'snapshotsCount', 'lastSnapshot', 'flagsCount'
+        ));
     }
 
     public function manualMarking(ManualMarkAnswerRequest $request, $answerId)
@@ -4353,22 +4734,18 @@ public function heartbeat($submissionId)
 
     private function applyLifecycleFilter($query, string $lifecycleState): void
     {
-        $now = now();
         if ($lifecycleState === 'active') {
-            $query->where('workflow_state', 'published')
-                ->where(function ($q) use ($now) {
-                    $q->whereNull('start_datetime')->orWhere('start_datetime', '<=', $now);
-                })
-                ->where(function ($q) use ($now) {
-                    $q->whereNull('end_datetime')->orWhere('end_datetime', '>=', $now);
-                });
+            $query->active();
             return;
         }
 
         if ($lifecycleState === 'completed') {
-            $query->where('workflow_state', 'published')
-                ->whereNotNull('end_datetime')
-                ->where('end_datetime', '<', $now);
+            $query->ended();
+            return;
+        }
+
+        if ($lifecycleState === 'upcoming') {
+            $query->upcoming();
             return;
         }
 
@@ -4379,7 +4756,6 @@ public function heartbeat($submissionId)
 
     private function applyTabFilter($query, string $tab): void
     {
-        $now = now();
         if ($tab === 'drafts') {
             $query->where('workflow_state', 'draft');
             return;
@@ -4401,20 +4777,12 @@ public function heartbeat($submissionId)
         }
 
         if ($tab === 'active') {
-            $query->where('workflow_state', 'published')
-                ->where(function ($q) use ($now) {
-                    $q->whereNull('start_datetime')->orWhere('start_datetime', '<=', $now);
-                })
-                ->where(function ($q) use ($now) {
-                    $q->whereNull('end_datetime')->orWhere('end_datetime', '>=', $now);
-                });
+            $query->active();
             return;
         }
 
         if ($tab === 'completed') {
-            $query->where('workflow_state', 'published')
-                ->whereNotNull('end_datetime')
-                ->where('end_datetime', '<', $now);
+            $query->ended();
             return;
         }
 

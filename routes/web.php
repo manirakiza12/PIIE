@@ -2043,6 +2043,8 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'admin', 'rba
     // route's `{id}` is unconstrained and would otherwise swallow the literal.
     Route::get('admin/online-exams-results-review',           'resultReviewQueue')->name('admin.online_exams.result_review_queue');
     Route::get('admin/online-exams/{id}/proctoring/{submission}', 'reviewProctoring')->name('admin.online_exams.proctoring.review');
+    Route::post('admin/online-exams/{id}/proctoring/{submission}/request-snapshot', 'requestSnapshot')->name('admin.online_exams.proctoring.request_snapshot');
+    Route::get('admin/online-exams/submissions/{submission}/snapshots/{snapshot}', 'snapshotImage')->name('admin.online_exams.snapshot_image');
     Route::post('admin/online-exams/answers/{answer}/manual-mark', 'manualMarking')->name('admin.online_exams.answers.manual_mark');
     Route::post('admin/online-exams/submissions/{submission}/finalize', 'finalizeResult')->name('admin.online_exams.submissions.finalize');
     Route::post('admin/online-exams/submissions/{submission}/publish-result', 'publishResult')->name('admin.online_exams.submissions.publish_result');
@@ -2101,6 +2103,11 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'student')->g
     // authorises an automatic consequence for leaving the page.
     Route::post('student/online-exams/submissions/{submission}/incident', 'recordExamIncident')->name('student.online_exam.incident');
     Route::post('student/online-exams/submissions/{submission}/proctoring-event', 'proctoringEvent')->name('student.online_exam.proctoring_event');
+    Route::post('student/online-exams/submissions/{submission}/snapshot', 'captureSnapshot')->name('student.online_exam.snapshot');
+    Route::post('student/online-exams/submissions/{submission}/snapshot-failed', 'snapshotFailed')->name('student.online_exam.snapshot_failed');
+    Route::get('student/online-exams/submissions/{submission}/pending-snapshot-request', 'pendingSnapshotRequest')->name('student.online_exam.pending_snapshot_request');
+    Route::get('student/online-exams/submissions/{submission}/camera-status', 'cameraStatus')->name('student.online_exam.camera_status');
+    Route::get('student/online-exams/submissions/{submission}/snapshots/{snapshot}', 'snapshotImage')->name('student.online_exam.snapshot_image');
     Route::post('student/online-exams/submissions/{submission}/timeout-submit', 'timeoutSubmit')->name('student.online_exam.timeout_submit');
     Route::get('student/online-exams/{id}/take',    'takeExam')->name('student.online_exam.take');
     Route::post('student/online-exams/{id}/submit', 'submitExam')->name('student.online_exam.submit');
@@ -2149,6 +2156,8 @@ Route::controller(OnlineExamController::class)->middleware('auth', 'teacher')->g
 
     Route::get('teacher/online-exams/{exam}/attempts', 'teacherAttempts')->name('teacher.online_exams.attempts');
     Route::get('teacher/online-exams/{exam}/proctoring/{submission_id}', 'teacherReviewProctoring')->name('teacher.online_exams.proctoring.review');
+    Route::post('teacher/online-exams/{exam}/proctoring/{submission_id}/request-snapshot', 'requestSnapshot')->name('teacher.online_exams.proctoring.request_snapshot');
+    Route::get('teacher/online-exams/submissions/{submission}/snapshots/{snapshot}', 'snapshotImage')->name('teacher.online_exams.snapshot_image');
     Route::get('teacher/online-exams/{exam}/results', 'teacherResults')->name('teacher.online_exams.results');
     Route::post('teacher/online-exams/answers/{answer}/mark', 'teacherMarkAnswer')->name('teacher.online_exams.answers.mark');
 

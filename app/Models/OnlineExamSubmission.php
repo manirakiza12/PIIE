@@ -81,6 +81,16 @@ class OnlineExamSubmission extends Model
         return $this->hasMany(OnlineExamProctoringEvent::class, 'submission_id');
     }
 
+    public function snapshots()
+    {
+        return $this->hasMany(OnlineExamSnapshot::class, 'submission_id');
+    }
+
+    public function snapshotRequests()
+    {
+        return $this->hasMany(OnlineExamSnapshotRequest::class, 'submission_id');
+    }
+
     public function scopeForSchool($query, int $schoolId)
     {
         return $query->where('school_id', $schoolId);

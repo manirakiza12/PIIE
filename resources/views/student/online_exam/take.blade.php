@@ -119,8 +119,19 @@
                 <ul class="d-flex align-items-center eBreadcrumb-2"><li><a href="{{ route('student.online_exam.list') }}">{{ get_phrase('Exams') }}</a></li><li><a href="#">{{ get_phrase('Take Exam') }}</a></li></ul>
             </div>
             <div class="text-end">
-                <span class="badge bg-danger fs-6" id="timer">--:--</span>
+                <div class="d-inline-flex align-items-center gap-2">
+                    <span class="badge bg-danger fs-6" id="timer">--:--</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleTimerBtn" title="{{ get_phrase('Show/Hide Timer') }}" aria-label="{{ get_phrase('Toggle timer visibility') }}">
+                        <i class="bi bi-eye" id="timerEyeIcon"></i>
+                    </button>
+                </div>
                 <div id="overallSaveStatus" class="save-status mt-1"></div>
+                @if($exam->webcam_required)
+                <div class="d-inline-block ms-3" id="cameraPreviewWrapper" style="position: relative;">
+                    <video id="cameraPreview" width="120" height="90" autoplay muted playsinline style="background:#000; border-radius:4px; border: 1px solid #333; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></video>
+                    <span id="cameraStatusBadge" class="badge bg-secondary position-absolute bottom-0 end-0 m-1 small" style="font-size: 0.65rem;">{{ get_phrase('Camera starting...') }}</span>
+                </div>
+                @endif
             </div>
         </div>
     </div></div></div>
@@ -665,6 +676,27 @@
         timerEl.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }
 
+    // Show/Hide Timer toggle - only hides display, never pauses the deadline
+    var timerVisible = true;
+    var toggleTimerBtn = document.getElementById('toggleTimerBtn');
+    var timerEyeIcon = document.getElementById('timerEyeIcon');
+    if (toggleTimerBtn) {
+        toggleTimerBtn.addEventListener('click', function () {
+            timerVisible = !timerVisible;
+            if (timerVisible) {
+                timerEl.style.display = '';
+                timerEyeIcon.classList.remove('bi-eye-slash');
+                timerEyeIcon.classList.add('bi-eye');
+                toggleTimerBtn.title = "{{ get_phrase('Hide Timer') }}";
+            } else {
+                timerEl.style.display = 'none';
+                timerEyeIcon.classList.remove('bi-eye');
+                timerEyeIcon.classList.add('bi-eye-slash');
+                toggleTimerBtn.title = "{{ get_phrase('Show Timer') }}";
+            }
+        });
+    }
+
     renderTimer();
     // Derived from the deadline, so a throttled interval cannot slow the clock. See the
     // note above `serverRemainingSeconds`.
@@ -776,6 +808,328 @@
             returnBtn.addEventListener('click', requestFullscreen);
         }
     }
+
+    // ── Continuous camera monitoring ────────────────────────────────────────
+    @if($exam->webcam_required)
+    var cameraStream = null;
+    var cameraPreview = document.getElementById('cameraPreview');
+    var cameraStatusBadge = document.getElementById('cameraStatusBadge');
+    var snapshotInterval = null;
+    var pendingRequestInterval = null;
+    var cameraMonitorInterval = null;
+    var snapshotCaptureUrl = "{{ route('student.online_exam.snapshot', $submission->id) }}";
+    var snapshotFailedUrl = "{{ route('student.online_exam.snapshot_failed', $submission->id) }}";
+    var cameraStatusUrl = "{{ route('student.online_exam.camera_status', $submission->id) }}";
+    var pendingSnapshotUrl = "{{ route('student.online_exam.pending_snapshot_request', $submission->id) }}";
+
+    // Configurable snapshot interval (default 30s, can be overridden by exam settings)
+    var SNAPSHOT_INTERVAL_MS = {{ $exam->snapshot_interval_seconds ?? 30 }} * 1000;
+    var PENDING_REQUEST_POLL_MS = 10000; // 10 seconds
+    var CAMERA_MONITOR_MS = 5000;
+
+    async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            updateCameraStatus('{{ get_phrase('Camera not supported') }}', 'danger');
+            logProctoringEvent('camera_permission_denied', { reason: 'not_supported' });
+            return;
+        }
+
+        // Prevent duplicate camera streams
+        if (cameraStream) {
+            return;
+        }
+
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 320 },
+                    height: { ideal: 240 },
+                    facingMode: 'user'
+                }
+            });
+
+            if (cameraPreview) {
+                cameraPreview.srcObject = cameraStream;
+            }
+
+            // Handle track ended event for immediate disconnection detection
+            var videoTracks = cameraStream.getVideoTracks();
+            videoTracks.forEach(function (track) {
+                track.onended = function () {
+                    updateCameraStatus('{{ get_phrase('Camera disconnected') }}', 'danger');
+                    logProctoringEvent('camera_stopped', { reason: 'track_ended' });
+
+                    if (cameraStream) {
+                        cameraStream.getTracks().forEach(function (t) { t.stop(); });
+                        cameraStream = null;
+                    }
+                    if (cameraPreview) {
+                        cameraPreview.srcObject = null;
+                    }
+
+                    setTimeout(function () {
+                        if (document.visibilityState === 'visible' && !cameraStream) {
+                            startCamera();
+                        }
+                    }, 5000);
+                };
+            });
+
+            updateCameraStatus('{{ get_phrase('Camera active') }}', 'success');
+            logProctoringEvent('camera_started', {});
+
+            // Start periodic snapshots
+            startSnapshotCapture();
+
+            // Start polling for invigilator snapshot requests
+            startPendingRequestPoll();
+
+            // Monitor for camera interruptions
+            startCameraMonitor();
+
+        } catch (err) {
+            updateCameraStatus('{{ get_phrase('Camera access denied') }}', 'danger');
+            logProctoringEvent('camera_permission_denied', { reason: err?.name || 'denied' });
+        }
+    }
+
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(function (track) { track.stop(); });
+            cameraStream = null;
+        }
+        if (snapshotInterval) {
+            clearInterval(snapshotInterval);
+            snapshotInterval = null;
+        }
+        if (pendingRequestInterval) {
+            clearInterval(pendingRequestInterval);
+            pendingRequestInterval = null;
+        }
+        if (cameraMonitorInterval) {
+            clearInterval(cameraMonitorInterval);
+            cameraMonitorInterval = null;
+        }
+        if (cameraPreview) {
+            cameraPreview.srcObject = null;
+        }
+        updateCameraStatus('{{ get_phrase('Camera stopped') }}', 'secondary');
+        try {
+            logProctoringEvent('camera_stopped', {});
+        } catch (e) {
+            // Ignore errors during cleanup
+        }
+    }
+
+    function updateCameraStatus(text, variant) {
+        if (cameraStatusBadge) {
+            cameraStatusBadge.textContent = text;
+            cameraStatusBadge.className = 'badge bg-' + variant + ' position-absolute bottom-0 end-0 m-1 small';
+        }
+    }
+
+    function startSnapshotCapture() {
+        // Clear any existing interval first
+        if (snapshotInterval) {
+            clearInterval(snapshotInterval);
+        }
+        snapshotInterval = setInterval(captureSnapshot, SNAPSHOT_INTERVAL_MS);
+        // Initial capture after 5 seconds
+        setTimeout(captureSnapshot, 5000);
+    }
+
+    function startPendingRequestPoll() {
+        if (pendingRequestInterval) {
+            clearInterval(pendingRequestInterval);
+        }
+        pendingRequestInterval = setInterval(checkPendingSnapshotRequest, PENDING_REQUEST_POLL_MS);
+        // Initial check
+        checkPendingSnapshotRequest();
+    }
+
+    function startCameraMonitor() {
+        if (cameraMonitorInterval) {
+            clearInterval(cameraMonitorInterval);
+        }
+        cameraMonitorInterval = setInterval(monitorCamera, CAMERA_MONITOR_MS);
+    }
+
+    var pendingRequestId = null;
+
+    async function captureSnapshot(captureType) {
+        if (!cameraStream || !cameraPreview) {
+            return;
+        }
+
+        var type = captureType || 'automatic';
+        var requestId = null;
+
+        if (type === 'invigilator_requested') {
+            requestId = pendingRequestId;
+        }
+
+        try {
+            var canvas = document.createElement('canvas');
+            canvas.width = cameraPreview.videoWidth || 320;
+            canvas.height = cameraPreview.videoHeight || 240;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
+            var base64 = canvas.toDataURL('image/webp', 0.7);
+
+            var payload = {
+                submission_id: submissionId,
+                image: base64,
+                capture_type: type,
+                metadata: { timestamp: new Date().toISOString() }
+            };
+
+            if (requestId) {
+                payload.request_id = requestId;
+            }
+
+            var response = await fetch(snapshotCaptureUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                throw new Error('Snapshot upload failed');
+            }
+
+            var data = await response.json();
+
+            logProctoringEvent('snapshot_captured', { automatic: type === 'automatic' });
+
+            // Clear pending request ID after successful capture
+            if (type === 'invigilator_requested') {
+                pendingRequestId = null;
+            }
+        } catch (err) {
+            logProctoringEvent('snapshot_failed', { error: err.message, automatic: type === 'automatic' });
+            reportSnapshotFailed('capture_failed');
+        }
+    }
+
+    async function checkPendingSnapshotRequest() {
+        if (!cameraStream) {
+            return; // Camera not active, don't check
+        }
+
+        try {
+            var response = await fetch(pendingSnapshotUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+            });
+
+            if (!response.ok) {
+                return;
+            }
+
+            var data = await response.json();
+            if (data.status === 'success' && data.has_pending) {
+                // Store the request ID and capture snapshot
+                pendingRequestId = data.request.id;
+                await captureSnapshot('invigilator_requested');
+            }
+        } catch (err) {
+            // Silently ignore polling errors
+        }
+    }
+
+    function reportSnapshotFailed(error) {
+        fetch(snapshotFailedUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                submission_id: submissionId,
+                error: error,
+                metadata: { timestamp: new Date().toISOString() }
+            }),
+        }).catch(function () {});
+    }
+
+    function monitorCamera() {
+        if (!cameraStream) {
+            return;
+        }
+
+        var tracks = cameraStream.getVideoTracks();
+        var hasActiveTrack = tracks.some(function (track) {
+            return track.readyState === 'live' && track.enabled;
+        });
+
+        if (!hasActiveTrack && cameraStream.active) {
+            // Camera was disconnected or stopped
+            updateCameraStatus('{{ get_phrase('Camera disconnected') }}', 'danger');
+            logProctoringEvent('camera_stopped', { reason: 'track_ended' });
+
+            // Clean up the dead stream
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(function (track) { track.stop(); });
+                cameraStream = null;
+            }
+            if (cameraPreview) {
+                cameraPreview.srcObject = null;
+            }
+
+            // Try to restart camera
+            setTimeout(function () {
+                if (document.visibilityState === 'visible' && !cameraStream) {
+                    startCamera();
+                }
+            }, 5000);
+        }
+    }
+
+    // Monitor visibility for camera permission changes
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible' && !cameraStream) {
+            startCamera();
+        }
+    });
+
+    // Stop camera on exam expiry or terminal state
+    function handleExamEnd() {
+        stopCamera();
+    }
+
+    // Listen for exam expiry from heartbeat
+    window.addEventListener('examExpired', handleExamEnd);
+    window.addEventListener('examSubmitted', handleExamEnd);
+
+    // Start camera when page loads
+    document.addEventListener('DOMContentLoaded', function () {
+        startCamera();
+    });
+
+    // Stop camera on page unload
+    window.addEventListener('beforeunload', function () {
+        stopCamera();
+    });
+
+    // Also stop camera when exam is submitted
+    var originalSubmitViaForm = window.submitViaForm;
+    if (originalSubmitViaForm) {
+        window.submitViaForm = function (formId) {
+            stopCamera();
+            // Dispatch custom event for any other cleanup
+            window.dispatchEvent(new CustomEvent('examSubmitted'));
+            originalSubmitViaForm(formId);
+        };
+    }
+    @endif
 
     // ── Editor content must be VISIBLE to autosave even with no bridge ──────
     //
