@@ -30,7 +30,7 @@
                 @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
                     <td>{{ optional($exam->classRoom)->name ?? '—' }}</td>
                 @endif
-                    <td>{{ optional($exam->end_datetime)->format('d M Y H:i') ?? '—' }}</td>
+                    <td>{{ optional($exam->scheduledEndAt())->format('d M Y, g:i A') ?? '—' }}</td>
                     <td>
                         <span class="badge {{ $exam->in_progress_count > 0 ? 'bg-success' : 'bg-secondary' }}">{{ $exam->in_progress_count }}</span>
                     </td>
@@ -73,8 +73,8 @@
                 @if(academic_education_level((int) auth()->user()->school_id) !== 'tertiary')
                     <td>{{ optional($exam->classRoom)->name ?? '—' }}</td>
                 @endif
-                    <td>{{ optional($exam->start_datetime)->format('d M Y H:i') ?? '—' }}</td>
-                    <td>{{ $exam->start_datetime ? $exam->start_datetime->diffForHumans(null, true) : '—' }}</td>
+                    <td>{{ optional($exam->scheduledStartAt())->format('d M Y, g:i A') ?? '—' }}</td>
+                    <td>{{ $exam->scheduledStartAt() ? $exam->scheduledStartAt()->diffForHumans(null, true) : '—' }}</td>
                     <td>
                         <a class="eBtn eBtn-sm eBtn-secondary" href="{{ route('teacher.online_exams.show', $exam->id) }}">{{ get_phrase('View') }}</a>
                     </td>

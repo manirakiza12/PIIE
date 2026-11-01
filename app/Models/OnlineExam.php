@@ -105,6 +105,30 @@ class OnlineExam extends Model
         $this->attributes['instructions'] = app(HtmlSanitizer::class)->sanitize((string) $value);
     }
 
+    public function setStartDatetimeAttribute($value): void
+    {
+        if ($value === null || $value === '') {
+            $this->attributes['start_datetime'] = null;
+
+            return;
+        }
+
+        $carbon = \Carbon\Carbon::parse($value, $this->scheduleTimezone());
+        $this->attributes['start_datetime'] = $carbon->setTimezone('UTC');
+    }
+
+    public function setEndDatetimeAttribute($value): void
+    {
+        if ($value === null || $value === '') {
+            $this->attributes['end_datetime'] = null;
+
+            return;
+        }
+
+        $carbon = \Carbon\Carbon::parse($value, $this->scheduleTimezone());
+        $this->attributes['end_datetime'] = $carbon->setTimezone('UTC');
+    }
+
     protected $casts = [
         'start_datetime' => 'datetime',
         'end_datetime'   => 'datetime',
@@ -202,8 +226,8 @@ class OnlineExam extends Model
      */
     public function windowSummary(): string
     {
-        $start = $this->start_datetime?->format('j M Y, H:i');
-        $end = $this->end_datetime?->format('j M Y, H:i');
+        $start = $this->scheduledStartAt()?->format('j M Y, g:i A');
+        $end = $this->scheduledEndAt()?->format('j M Y, g:i A');
 
         if (! $start || ! $end) {
             return 'No scheduled window yet.';
@@ -273,25 +297,25 @@ class OnlineExam extends Model
     public function scheduleTimezone(): string
     {
         $timezone = function_exists('get_settings') ? get_settings('timezone') : null;
-        $timezone = $timezone ?: config('app.timezone', 'UTC');
+        $timezone = $timezone ?: 'Africa/Kampala';
 
         return in_array($timezone, timezone_identifiers_list(), true)
             ? $timezone
-            : config('app.timezone', 'UTC');
+            : 'Africa/Kampala';
     }
 
     public function scheduledStartAt(): ?Carbon
     {
         $value = $this->getRawOriginal('start_datetime');
 
-        return $value ? Carbon::parse($value, $this->scheduleTimezone()) : null;
+        return $value ? Carbon::parse($value, 'UTC')->setTimezone($this->scheduleTimezone()) : null;
     }
 
     public function scheduledEndAt(): ?Carbon
     {
         $value = $this->getRawOriginal('end_datetime');
 
-        return $value ? Carbon::parse($value, $this->scheduleTimezone()) : null;
+        return $value ? Carbon::parse($value, 'UTC')->setTimezone($this->scheduleTimezone()) : null;
     }
 
     public function isWithinScheduledWindow(?Carbon $at = null): bool

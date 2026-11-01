@@ -227,8 +227,8 @@
                             <div class="text-muted small">{{ optional($exam->classRoom)->name ?? get_phrase('All classes') }}</div>
                         @endif
                     </td>
-                    <td>{{ optional($exam->start_datetime)->format('d M Y H:i') ?? '—' }}</td>
-                    <td>{{ optional($exam->end_datetime)->format('d M Y H:i') ?? '—' }}</td>
+                    <td>{{ optional($exam->scheduledStartAt())->format('d M Y, g:i A') ?? '—' }}</td>
+                    <td>{{ optional($exam->scheduledEndAt())->format('d M Y, g:i A') ?? '—' }}</td>
                     <td>{{ $exam->duration_mins }}m</td>
                     <td>{{ $exam->questions_count }}</td>
                     <td>{{ $exam->submissions_count }}</td>

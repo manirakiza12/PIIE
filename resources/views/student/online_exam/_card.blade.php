@@ -11,8 +11,8 @@
             <h6 class="mb-1">{{ $exam->title }}</h6>
             <div class="text-muted small mb-2">{{ optional($exam->subject)->name }}</div>
             <div class="d-flex gap-2 flex-wrap mb-2"><span class="badge bg-info">{{ $exam->duration_minutes }} min</span><span class="badge bg-secondary">Pass: {{ $exam->pass_mark }} marks</span></div>
-            @if($examStart)<div class="small text-muted">{{ get_phrase('Starts') }}: {{ $examStart->format('d M Y H:i') }}</div>@endif
-            @if($examEnd)<div class="small text-muted">{{ get_phrase('Closes') }}: {{ $examEnd->format('d M Y H:i') }}</div>@endif
+            @if($examStart)<div class="small text-muted">{{ get_phrase('Starts') }}: {{ $examStart->format('d M Y, g:i A') }}</div>@endif
+            @if($examEnd)<div class="small text-muted">{{ get_phrase('Closes') }}: {{ $examEnd->format('d M Y, g:i A') }}</div>@endif
             @if($exam->instructions)<p class="small mt-2">{{ $exam->plainInstructions(100) }}</p>@endif
             <div class="mt-auto">
             @if($latestSubmission && $latestSubmission->status === 'in_progress')

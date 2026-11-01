@@ -73,15 +73,63 @@
             </div>
 
             <div class="row mt-2">
-                <div class="col-6 fpb-7"><label class="eForm-label">{{ get_phrase('Start Date/Time') }} *</label>
-                    <input type="datetime-local" class="form-control eForm-control" name="start_datetime"
-                           value="{{ $exam && $exam->start_datetime ? $exam->start_datetime->format('Y-m-d\TH:i') : '' }}" required {{ $structureLocked ? 'disabled' : '' }}>
-                    @if($structureLocked && $exam?->start_datetime)<input type="hidden" name="start_datetime" value="{{ $exam->start_datetime->format('Y-m-d H:i:s') }}">@endif
+                <div class="col-3 fpb-7"><label class="eForm-label">{{ get_phrase('Start Date') }} *</label>
+                    <input type="date" class="form-control eForm-control" name="start_date"
+                           value="{{ $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('Y-m-d') : '') : old('start_date') }}" required {{ $structureLocked ? 'disabled' : '' }}>
                 </div>
-                <div class="col-6 fpb-7"><label class="eForm-label">{{ get_phrase('End Date/Time') }} *</label>
-                    <input type="datetime-local" class="form-control eForm-control" name="end_datetime"
-                           value="{{ $exam && $exam->end_datetime ? $exam->end_datetime->format('Y-m-d\TH:i') : '' }}" required {{ $structureLocked ? 'disabled' : '' }}>
-                    @if($structureLocked && $exam?->end_datetime)<input type="hidden" name="end_datetime" value="{{ $exam->end_datetime->format('Y-m-d H:i:s') }}">@endif
+                <div class="col-2 fpb-7"><label class="eForm-label">{{ get_phrase('Hour') }} *</label>
+                    <select class="form-control eForm-control" name="start_hour" required {{ $structureLocked ? 'disabled' : '' }}>
+                        @for ($h = 1; $h <= 12; $h++)
+                            <option value="{{ $h }}" {{ ($exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('h') == $h : false) : (old('start_hour') == $h)) ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
+                        @endfor
+                    </select>
+                </div>
+                <div class="col-2 fpb-7"><label class="eForm-label">{{ get_phrase('Minute') }} *</label>
+                    <select class="form-control eForm-control" name="start_minute" required {{ $structureLocked ? 'disabled' : '' }}>
+                        @for ($m = 0; $m < 60; $m++)
+                            <option value="{{ $m }}" {{ ($exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('i') == $m : false) : (old('start_minute') == $m)) ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                        @endfor
+                    </select>
+                </div>
+                <div class="col-2 fpb-7"><label class="eForm-label">{{ get_phrase('Period') }} *</label>
+                    <select class="form-control eForm-control" name="start_period" required {{ $structureLocked ? 'disabled' : '' }}>
+                        <option value="AM" {{ ($exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('A') === 'AM' : false) : (old('start_period') === 'AM')) ? 'selected' : '' }}>AM</option>
+                        <option value="PM" {{ ($exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('A') === 'PM' : false) : (old('start_period') === 'PM')) ? 'selected' : '' }}>PM</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-3 fpb-7"><label class="eForm-label">{{ get_phrase('End Date') }} *</label>
+                    <input type="date" class="form-control eForm-control" name="end_date"
+                           value="{{ $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('Y-m-d') : '') : old('end_date') }}" required {{ $structureLocked ? 'disabled' : '' }}>
+                </div>
+                <div class="col-2 fpb-7"><label class="eForm-label">{{ get_phrase('Hour') }} *</label>
+                    <select class="form-control eForm-control" name="end_hour" required {{ $structureLocked ? 'disabled' : '' }}>
+                        @for ($h = 1; $h <= 12; $h++)
+                            <option value="{{ $h }}" {{ ($exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('h') == $h : false) : (old('end_hour') == $h)) ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
+                        @endfor
+                    </select>
+                </div>
+                <div class="col-2 fpb-7"><label class="eForm-label">{{ get_phrase('Minute') }} *</label>
+                    <select class="form-control eForm-control" name="end_minute" required {{ $structureLocked ? 'disabled' : '' }}>
+                        @for ($m = 0; $m < 60; $m++)
+                            <option value="{{ $m }}" {{ ($exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('i') == $m : false) : (old('end_minute') == $m)) ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                        @endfor
+                    </select>
+                </div>
+                <div class="col-2 fpb-7"><label class="eForm-label">{{ get_phrase('Period') }} *</label>
+                    <select class="form-control eForm-control" name="end_period" required {{ $structureLocked ? 'disabled' : '' }}>
+                        <option value="AM" {{ ($exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('A') === 'AM' : false) : (old('end_period') === 'AM')) ? 'selected' : '' }}>AM</option>
+                        <option value="PM" {{ ($exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('A') === 'PM' : false) : (old('end_period') === 'PM')) ? 'selected' : '' }}>PM</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-12 fpb-7 alert alert-info">
+                    <strong>{{ get_phrase('Schedule Summary') }}:</strong><br>
+                    <span id="scheduleSummary">{{ $exam ? $exam->windowSummary() : '' }}</span>
                 </div>
             </div>
 
@@ -157,17 +205,105 @@
 document.addEventListener('DOMContentLoaded', function () {
     const programme = document.getElementById('online_exam_programme_id');
     const subject = document.querySelector('select[name="subject_id"]');
-    if (!programme || !subject) return;
-    const filterSubjects = function () {
-        const selected = programme.value;
-        Array.from(subject.options).forEach(function (option) {
-            if (!option.value) return;
-            option.hidden = !!selected && option.dataset.programmeId !== selected;
-            if (option.hidden && option.selected) subject.value = '';
-        });
+    if (programme && subject) {
+        const filterSubjects = function () {
+            const selected = programme.value;
+            Array.from(subject.options).forEach(function (option) {
+                if (!option.value) return;
+                option.hidden = !!selected && option.dataset.programmeId !== selected;
+                if (option.hidden && option.selected) subject.value = '';
+            });
+        };
+        programme.addEventListener('change', filterSubjects);
+        filterSubjects();
+    }
+
+    // ── AM/PM time selection: combine date/hour/minute/period into datetime on submit ──
+    const form = document.querySelector('form.ajaxForm');
+    const combineDateTime = function (dateInput, hourInput, minuteInput, periodSelect, hiddenName) {
+        if (!dateInput || !hourInput || !minuteInput || !periodSelect) return;
+        const date = dateInput.value;
+        const hour = hourInput.value;
+        const minute = minuteInput.value;
+        const period = periodSelect.value;
+        if (!date || !hour || minute === '' || !period) return;
+
+        let hours = parseInt(hour, 10);
+        const minutes = parseInt(minute, 10);
+
+        if (period === 'PM' && hours !== 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+
+        const hh = String(hours).padStart(2, '0');
+        const mm = String(minutes).padStart(2, '0');
+        const datetime = date + 'T' + hh + ':' + mm;
+
+        let hidden = document.querySelector('input[name="' + hiddenName + '"]');
+        if (!hidden) {
+            hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = hiddenName;
+            form.appendChild(hidden);
+        }
+        hidden.value = datetime;
     };
-    programme.addEventListener('change', filterSubjects);
-    filterSubjects();
+
+    const fmtTime = function (h, m) {
+        const h12 = h % 12 || 12;
+        const period = h < 12 ? 'AM' : 'PM';
+        return h12 + ':' + String(m).padStart(2, '0') + ' ' + period;
+    };
+
+    const updateSummary = function () {
+        const startDate = document.querySelector('input[name="start_date"]');
+        const startHour = document.querySelector('select[name="start_hour"]');
+        const startMinute = document.querySelector('select[name="start_minute"]');
+        const startPeriod = document.querySelector('select[name="start_period"]');
+        const endDate = document.querySelector('input[name="end_date"]');
+        const endHour = document.querySelector('select[name="end_hour"]');
+        const endMinute = document.querySelector('select[name="end_minute"]');
+        const endPeriod = document.querySelector('select[name="end_period"]');
+        const summary = document.getElementById('scheduleSummary');
+
+        if (!startDate || !startHour || !startMinute || !startPeriod || !endDate || !endHour || !endMinute || !endPeriod || !summary) return;
+        if (!startDate.value || !startHour.value || !startMinute.value || !endDate.value || !endHour.value || !endMinute.value) return;
+
+        let sh = parseInt(startHour.value, 10);
+        const sm = parseInt(startMinute.value, 10);
+        sh = startPeriod.value === 'PM' && sh !== 12 ? sh + 12 : sh;
+        sh = startPeriod.value === 'AM' && sh === 12 ? 0 : sh;
+
+        let eh = parseInt(endHour.value, 10);
+        const em = parseInt(endMinute.value, 10);
+        eh = endPeriod.value === 'PM' && eh !== 12 ? eh + 12 : eh;
+        eh = endPeriod.value === 'AM' && eh === 12 ? 0 : eh;
+
+        const startLabel = startDate.value + ' at ' + fmtTime(sh, sm);
+        const endLabel = endDate.value + ' at ' + fmtTime(eh, em);
+        summary.textContent = 'This examination will open on ' + startLabel + ' and close at ' + endLabel + ' (Uganda Time).';
+    };
+
+    const startDate = document.querySelector('input[name="start_date"]');
+    const startHour = document.querySelector('select[name="start_hour"]');
+    const startMinute = document.querySelector('select[name="start_minute"]');
+    const startPeriod = document.querySelector('select[name="start_period"]');
+    const endDate = document.querySelector('input[name="end_date"]');
+    const endHour = document.querySelector('select[name="end_hour"]');
+    const endMinute = document.querySelector('select[name="end_minute"]');
+    const endPeriod = document.querySelector('select[name="end_period"]');
+
+    [startDate, startHour, startMinute, startPeriod, endDate, endHour, endMinute, endPeriod].forEach(function (el) {
+        if (el) el.addEventListener('change', updateSummary);
+    });
+
+    if (form) {
+        form.addEventListener('submit', function () {
+            combineDateTime(startDate, startHour, startMinute, startPeriod, 'start_datetime');
+            combineDateTime(endDate, endHour, endMinute, endPeriod, 'end_datetime');
+        });
+    }
+
+    updateSummary();
 });
 </script>
 </div>
