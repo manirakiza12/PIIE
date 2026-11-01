@@ -15,9 +15,6 @@ use Tests\TestCase;
 
 /**
  * FOCUSED PROCTORING SNAPSHOT TESTS.
- *
- * Verifies that snapshot capture, storage, authorization and request lifecycle
- * behave correctly under the supported examination workflow.
  */
 class OnlineExamSnapshotProctoringTest extends TestCase
 {
@@ -29,6 +26,23 @@ class OnlineExamSnapshotProctoringTest extends TestCase
         $this->bootOnlineExamTestSchema();
         Carbon::setTestNow(null);
         Config::set('app.timezone', 'UTC');
+    }
+
+    private function makeTeacherWithPermission(int $schoolId = 1): User
+    {
+        $teacher = $this->makeUser(3, $schoolId);
+
+        DB::table('teacher_permissions')->insert([
+            'class_id' => $this->makeClass($schoolId),
+            'section_id' => 1,
+            'school_id' => $schoolId,
+            'teacher_id' => $teacher->id,
+            'marks' => 1,
+            'attendance' => 1,
+            'updated_at' => now(),
+        ]);
+
+        return $teacher;
     }
 
     private function makeExamAndSubmission(array $examOverrides = [], array $submissionOverrides = []): array
@@ -47,20 +61,19 @@ class OnlineExamSnapshotProctoringTest extends TestCase
             'end_datetime' => now()->addMinutes(25),
         ], $examOverrides));
 
-        $studentId = $this->makeUser(7, 1);
+        $student = $this->makeUser(7, 1);
         $submissionId = (int) $this->makeSubmission(array_merge([
             'online_exam_id' => $examId,
-            'student_id' => $studentId,
+            'student_id' => $student->id,
             'school_id' => 1,
             'status' => 'in_progress',
         ], $submissionOverrides));
 
-        return [$examId, $submissionId, $studentId];
+        return [$examId, $submissionId, $student];
     }
 
     private function validBase64Image(): string
     {
-        // 1x1 white pixel WebP
         $imageData = base64_decode('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA');
         return 'data:image/webp;base64,' . base64_encode($imageData);
     }
@@ -72,16 +85,15 @@ class OnlineExamSnapshotProctoringTest extends TestCase
 
     private function oversizedBase64Image(): string
     {
-        $largeData = str_repeat('A', 6 * 1024 * 1024); // 6MB
+        $largeData = str_repeat('A', 6 * 1024 * 1024);
         return 'data:image/webp;base64,' . base64_encode($largeData);
     }
 
     /** @test */
     public function valid_snapshot_upload_creates_one_record_event_and_image(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
-        $student = User::find($studentId);
         $this->actingAs($student);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
@@ -109,9 +121,8 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function invalid_image_is_rejected(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
-        $student = User::find($studentId);
         $this->actingAs($student);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
@@ -127,9 +138,8 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function oversized_payload_is_rejected(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
-        $student = User::find($studentId);
         $this->actingAs($student);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
@@ -145,10 +155,10 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function unauthorized_user_cannot_upload_snapshot(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
         $otherStudent = $this->makeUser(7, 1);
-        $this->actingAs(User::find($otherStudent));
+        $this->actingAs($otherStudent);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
             'submission_id' => $submissionId,
@@ -163,11 +173,10 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function cross_school_access_is_denied(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
-        // Create a student in a different school
         $otherSchoolStudent = $this->makeUser(7, 2);
-        $this->actingAs(User::find($otherSchoolStudent));
+        $this->actingAs($otherSchoolStudent);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
             'submission_id' => $submissionId,
@@ -182,9 +191,8 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function invigilator_request_matches_correct_request_id(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
-        // Create a pending request
         $teacher = $this->makeTeacherWithPermission(1);
         $request = OnlineExamSnapshotRequest::create([
             'submission_id' => $submissionId,
@@ -195,7 +203,6 @@ class OnlineExamSnapshotProctoringTest extends TestCase
             'metadata' => ['requested_by_name' => $teacher->name],
         ]);
 
-        $student = User::find($studentId);
         $this->actingAs($student);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
@@ -216,7 +223,7 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function expired_request_is_rejected(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
         $teacher = $this->makeTeacherWithPermission(1);
         $request = OnlineExamSnapshotRequest::create([
@@ -224,11 +231,10 @@ class OnlineExamSnapshotProctoringTest extends TestCase
             'requested_by' => $teacher->id,
             'status' => 'pending',
             'requested_at' => now()->subMinutes(5),
-            'expires_at' => now()->subMinutes(3), // Already expired
+            'expires_at' => now()->subMinutes(3),
             'metadata' => ['requested_by_name' => $teacher->name],
         ]);
 
-        $student = User::find($studentId);
         $this->actingAs($student);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
@@ -244,20 +250,19 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function replayed_request_is_rejected(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
         $teacher = $this->makeTeacherWithPermission(1);
         $request = OnlineExamSnapshotRequest::create([
             'submission_id' => $submissionId,
             'requested_by' => $teacher->id,
-            'status' => 'completed', // Already completed
+            'status' => 'completed',
             'requested_at' => now()->subMinutes(5),
             'completed_at' => now()->subMinutes(4),
             'expires_at' => now()->addMinutes(2),
             'metadata' => ['requested_by_name' => $teacher->name, 'snapshot_id' => 1],
         ]);
 
-        $student = User::find($studentId);
         $this->actingAs($student);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
@@ -273,19 +278,17 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function duplicate_pending_request_is_prevented(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
         $teacher = $this->makeTeacherWithPermission(1);
         $this->actingAs($teacher);
 
-        // First request
         $response1 = $this->postJson(route('teacher.online_exams.proctoring.request_snapshot', [
             'exam' => $examId,
             'submission_id' => $submissionId,
         ]));
         $response1->assertOk();
 
-        // Second request should be rejected
         $response2 = $this->postJson(route('teacher.online_exams.proctoring.request_snapshot', [
             'exam' => $examId,
             'submission_id' => $submissionId,
@@ -297,9 +300,8 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function snapshot_capture_requires_webcam_required_exam(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission(['webcam_required' => 0]);
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission(['webcam_required' => 0]);
 
-        $student = User::find($studentId);
         $this->actingAs($student);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
@@ -315,12 +317,10 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function snapshot_capture_requires_in_progress_submission(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission(['status' => 'submitted']);
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
-        // Update submission status
         DB::table('online_exam_submissions')->where('id', $submissionId)->update(['status' => 'submitted']);
 
-        $student = User::find($studentId);
         $this->actingAs($student);
 
         $response = $this->postJson(route('student.online_exam.snapshot', $submissionId), [
@@ -336,7 +336,7 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function invigilator_cannot_request_snapshot_for_non_in_progress_submission(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
         DB::table('online_exam_submissions')->where('id', $submissionId)->update(['status' => 'submitted']);
 
@@ -354,37 +354,8 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     /** @test */
     public function image_access_denied_for_unauthorized_staff(): void
     {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
-        // Create a snapshot
-        $snapshot = OnlineExamSnapshot::create([
-            'submission_id' => $submissionId,
-            'disk' => 'local',
-            'path' => 'snapshots/' . $submissionId . '/test.webp',
-            'size_bytes' => 100,
-            'mime_type' => 'image/webp',
-            'capture_type' => 'automatic',
-            'captured_at' => now(),
-        ]);
-
-        // Create a teacher without view_exam_attempts permission
-        $unauthorizedTeacher = $this->makeUser(3, 1);
-        $this->actingAs(User::find($unauthorizedTeacher));
-
-        $response = $this->get(route('teacher.online_exams.snapshot_image', [
-            'submission' => $submissionId,
-            'snapshot' => $snapshot->id,
-        ]));
-
-        $response->assertStatus(403);
-    }
-
-    /** @test */
-    public function image_access_allowed_for_student_owner(): void
-    {
-        [$examId, $submissionId, $studentId] = $this->makeExamAndSubmission();
-
-        // Create a snapshot file
         \Storage::disk('local')->put('snapshots/' . $submissionId . '/test.webp', 'fake-image-data');
 
         $snapshot = OnlineExamSnapshot::create([
@@ -397,7 +368,34 @@ class OnlineExamSnapshotProctoringTest extends TestCase
             'captured_at' => now(),
         ]);
 
-        $student = User::find($studentId);
+        $unauthorizedTeacher = $this->makeUser(3, 1);
+        $this->actingAs($unauthorizedTeacher);
+
+        $response = $this->get(route('teacher.online_exams.snapshot_image', [
+            'submission' => $submissionId,
+            'snapshot' => $snapshot->id,
+        ]));
+
+        $response->assertStatus(403);
+    }
+
+    /** @test */
+    public function image_access_allowed_for_student_owner(): void
+    {
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
+
+        \Storage::disk('local')->put('snapshots/' . $submissionId . '/test.webp', 'fake-image-data');
+
+        $snapshot = OnlineExamSnapshot::create([
+            'submission_id' => $submissionId,
+            'disk' => 'local',
+            'path' => 'snapshots/' . $submissionId . '/test.webp',
+            'size_bytes' => 15,
+            'mime_type' => 'image/webp',
+            'capture_type' => 'automatic',
+            'captured_at' => now(),
+        ]);
+
         $this->actingAs($student);
 
         $response = $this->get(route('student.online_exam.snapshot_image', [
@@ -408,5 +406,34 @@ class OnlineExamSnapshotProctoringTest extends TestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'image/webp');
         $response->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+    }
+
+    /** @test */
+    public function image_access_denied_cross_school(): void
+    {
+        [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
+
+        \Storage::disk('local')->put('snapshots/' . $submissionId . '/test.webp', 'fake-image-data');
+
+        $snapshot = OnlineExamSnapshot::create([
+            'submission_id' => $submissionId,
+            'disk' => 'local',
+            'path' => 'snapshots/' . $submissionId . '/test.webp',
+            'size_bytes' => 15,
+            'mime_type' => 'image/webp',
+            'capture_type' => 'automatic',
+            'captured_at' => now(),
+        ]);
+
+        // Create student in different school
+        $otherSchoolStudent = $this->makeUser(7, 2);
+        $this->actingAs($otherSchoolStudent);
+
+        $response = $this->get(route('student.online_exam.snapshot_image', [
+            'submission' => $submissionId,
+            'snapshot' => $snapshot->id,
+        ]));
+
+        $response->assertStatus(403);
     }
 }

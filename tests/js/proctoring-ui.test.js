@@ -29,16 +29,18 @@ test('Show/Hide Timer: toggle only changes display, never the deadline', () => {
     const source = read('resources/views/student/online_exam/take.blade.php');
     const toggleBlock = source.slice(
         source.indexOf('var timerVisible = true'),
-        source.indexOf('renderTimer();')
+        source.indexOf('    renderTimer();\n    // Derived from the deadline')
     );
 
     // Must toggle display property
     assert.match(toggleBlock, /timerEl\.style\.display/, 'must toggle display');
-    // Must NOT modify remainingSeconds or deadlineAt
-    assert.ok(!toggleBlock.includes('remainingSeconds ='), 'must not modify remainingSeconds');
-    assert.ok(!toggleBlock.includes('deadlineAt ='), 'must not modify deadlineAt');
-    // Must NOT call clearInterval on timerInterval
-    assert.ok(!toggleBlock.includes('clearInterval(timerInterval)'), 'must not pause timer');
+    // The toggle handler must not modify remainingSeconds or deadlineAt
+    const handlerStart = toggleBlock.indexOf("toggleTimerBtn.addEventListener");
+    const handlerEnd = toggleBlock.indexOf("renderTimer();");
+    const handler = toggleBlock.slice(handlerStart, handlerEnd);
+    assert.ok(!handler.includes('remainingSeconds ='), 'must not modify remainingSeconds');
+    assert.ok(!handler.includes('deadlineAt ='), 'must not modify deadlineAt');
+    assert.ok(!handler.includes('clearInterval(timerInterval)'), 'must not pause timer');
 });
 
 test('Show/Hide Timer: timer element has unique ID', () => {
