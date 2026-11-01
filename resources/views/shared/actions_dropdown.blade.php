@@ -1,6 +1,17 @@
 {{-- Shared Actions Dropdown Component --}}
 {{-- Usage: @include('shared.actions_dropdown', ['actions' => [...]]) --}}
-{{-- Each action: ['label' => '...', 'url' => '...', 'method' => 'GET'|'POST'|'DELETE', 'variant' => 'primary'|'danger'|'secondary', 'confirm' => true|false, 'disabled' => true|false, 'permission' => true|false, 'modal' => 'modalId', 'onclick' => '...'] --}}
+{{-- Each action supports: --}}
+{{--   'label'    => display text (required) --}}
+{{--   'url'      => link URL for GET actions --}}
+{{--   'form'     => ['action' => url, 'method' => 'POST'|'PATCH'|'DELETE', 'fields' => [...]] for form-based actions --}}
+{{--   'method'   => 'GET'|'POST'|'PATCH'|'DELETE' (default: 'GET') --}}
+{{--   'variant'  => 'primary'|'secondary'|'danger' (default: 'secondary') --}}
+{{--   'confirm'  => true|false — wrap in confirmModal() --}}
+{{--   'disabled' => true|false — show as disabled text --}}
+{{--   'permission'=> true|false — hide if false (default: true) --}}
+{{--   'modal'    => modal ID to open --}}
+{{--   'onclick'  => custom JavaScript onclick --}}
+{{--   'target'   => link target attribute --}}
 
 @php
     $actions = $actions ?? [];
@@ -10,7 +21,7 @@
 @if(count($visibleActions) > 0)
 <div class="adminTable-action">
     <button type="button" class="eBtn eBtn-black dropdown-toggle table-action-btn-2"
-            data-bs-toggle="dropdown" aria-expanded="false"
+            data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false"
             aria-label="{{ get_phrase('Actions') }}">
         {{ get_phrase('Actions') }}
     </button>
@@ -21,6 +32,21 @@
                     <span class="dropdown-item-text small text-muted" aria-disabled="true">
                         {{ $action['label'] }}
                     </span>
+                @elseif(isset($action['form']))
+                    {{-- Form-based action (POST/PATCH/DELETE with CSRF) --}}
+                    <form method="POST" action="{{ $action['form']['action'] }}" class="d-inline"
+                          @if(($action['confirm'] ?? false) === true) onsubmit="return confirm('{{ $action['confirm_message'] ?? get_phrase('Are you sure?') }}');" @endif>
+                        @csrf
+                        @if(strtoupper($action['form']['method'] ?? 'POST') !== 'POST')
+                            @method($action['form']['method'])
+                        @endif
+                        @foreach(($action['form']['fields'] ?? []) as $name => $value)
+                            <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                        @endforeach
+                        <button type="submit" class="dropdown-item {{ ($action['variant'] ?? '') === 'danger' ? 'text-danger' : '' }}">
+                            {{ $action['label'] }}
+                        </button>
+                    </form>
                 @elseif(($action['variant'] ?? '') === 'danger' || ($action['method'] ?? 'GET') === 'DELETE')
                     @if(isset($action['modal']))
                         <button class="dropdown-item text-danger" type="button"
