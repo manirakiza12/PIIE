@@ -6,26 +6,44 @@ use App\Http\Controllers\Controller;
 use App\Models\ApplicationPayment;
 use App\Models\PaymentMethods;
 use App\Support\Payments\PesaPalConfiguration;
+use App\Support\Payments\PesaPalCredentialStorage;
 use App\Support\Payments\PesaPalException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final class ApplicantPesaPalSettingsController extends Controller
 {
     public function index(Request $request)
     {
-        $rows = PaymentMethods::where('school_id', $request->user()->school_id)->where('name', 'pesapal')->where('status', 1)->get();
-        abort_if($rows->count() > 1, 422, 'Resolve duplicate PesaPal configurations before proceeding.');
-        $keys = $rows->isEmpty() ? [] : \App\Support\Payments\PesaPalCredentialStorage::read(
-            (string) $rows->first()->payment_keys, (int) $request->user()->school_id);
+        $school = (int) $request->user()->school_id;
+        $rows = PaymentMethods::where('school_id', $school)->where('name', 'pesapal')->where('status', 1)->get();
+        $keys = [];
+        $configurationError = null;
+        // Never choose one of several active rows automatically: that could
+        // display or overwrite credentials belonging to a different order.
+        $configurationWritable = $rows->count() <= 1;
+        if (! $configurationWritable) {
+            $configurationError = 'Multiple active PesaPal configurations exist for this school. Payments are blocked until exactly one is active. Resolve the duplicate rows; this page will not choose one automatically.';
+        } elseif ($rows->isNotEmpty()) {
+            try {
+                $keys = PesaPalCredentialStorage::read((string) $rows->first()->payment_keys, $school);
+            } catch (PesaPalException $exception) {
+                // The page must stay reachable so an administrator can recover
+                // by re-entering both credentials; no secret is displayed.
+                $configurationError = 'Stored PesaPal credentials cannot be read. Payments are blocked until both credentials are re-entered below.';
+            }
+        }
         $notificationStorageReady = \Illuminate\Support\Facades\Schema::hasTable('applicant_notification_deliveries');
         $deliveries = $notificationStorageReady
-            ? DB::table('applicant_notification_deliveries')->where('school_id', $request->user()->school_id)
+            ? DB::table('applicant_notification_deliveries')->where('school_id', $school)
                 ->whereNull('sent_at')->select(['id', 'attempts', 'available_at'])->orderByDesc('id')->limit(20)->get() : collect();
         return view('admin.admissions.pesapal_settings', ['environment' => $keys['environment'] ?? 'sandbox',
-            'configured' => $rows->isNotEmpty() && (isset($keys['encrypted_credentials']) || (filled($keys['consumer_key'] ?? null) && filled($keys['consumer_secret'] ?? null))),
+            'configured' => filled($keys['consumer_key'] ?? null) && filled($keys['consumer_secret'] ?? null),
             'notificationId' => $keys['notification_id'] ?? null, 'deliveries' => $deliveries,
-            'notificationStorageReady' => $notificationStorageReady]);
+            'notificationStorageReady' => $notificationStorageReady,
+            'configurationError' => $configurationError,
+            'configurationWritable' => $configurationWritable]);
     }
 
     public function retryNotification(Request $request, int $delivery)
@@ -46,18 +64,30 @@ final class ApplicantPesaPalSettingsController extends Controller
         DB::transaction(function () use ($request, $data) {
             $school = (int) $request->user()->school_id;
             $rows = PaymentMethods::where('school_id', $school)->where('name', 'pesapal')->where('status', 1)->lockForUpdate()->get();
-            abort_if($rows->count() > 1, 422, 'Duplicate PesaPal configurations.');
+            if ($rows->count() > 1) {
+                throw ValidationException::withMessages(['configuration' => 'Duplicate PesaPal configurations. Resolve them before saving; no configuration was changed.']);
+            }
             // Never strand an outstanding order by switching its credentials.
-            abort_if((ApplicationPayment::where('school_id', $school)->where('method', 'pesapal')->where('status', 'pending')->exists() || \App\Models\TuitionPayment::where('school_id', $school)->where('status', 'pending')->exists()), 422, 'Resolve outstanding PesaPal orders before replacing configuration.');
+            if (ApplicationPayment::where('school_id', $school)->where('method', 'pesapal')->where('status', 'pending')->exists()
+                || \App\Models\TuitionPayment::where('school_id', $school)->where('status', 'pending')->exists()) {
+                throw ValidationException::withMessages(['configuration' => 'Resolve outstanding PesaPal orders before replacing configuration; no configuration was changed.']);
+            }
             $row = $rows->first() ?? new PaymentMethods(['school_id' => $school, 'name' => 'pesapal']);
-            $old = $row->exists ? \App\Support\Payments\PesaPalCredentialStorage::read((string) $row->payment_keys, $school) : [];
+            try {
+                $old = $row->exists ? PesaPalCredentialStorage::read((string) $row->payment_keys, $school) : [];
+            } catch (PesaPalException $exception) {
+                // Unreadable credentials cannot be merged or compared. Treat
+                // them as absent so both fields must be re-entered and the
+                // unreadable value is never reused.
+                $old = [];
+            }
             if (($old['environment'] ?? $data['environment']) !== $data['environment']
                 && (blank($data['consumer_key'] ?? null) || blank($data['consumer_secret'] ?? null))) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['environment' => 'Supply both credentials when changing environment.']);
+                throw ValidationException::withMessages(['environment' => 'Supply both credentials when changing environment.']);
             }
             foreach (['consumer_key', 'consumer_secret'] as $field) {
                 $data[$field] = filled($data[$field] ?? null) ? $data[$field] : ($old[$field] ?? null);
-                if (blank($data[$field])) { throw \Illuminate\Validation\ValidationException::withMessages([$field => 'Credentials are required for initial setup.']); }
+                if (blank($data[$field])) { throw ValidationException::withMessages([$field => 'Credentials are required for initial setup or recovery.']); }
             }
             if ($row->exists && $data['environment'] === ($old['environment'] ?? null)
                 && $data['consumer_key'] === ($old['consumer_key'] ?? null)

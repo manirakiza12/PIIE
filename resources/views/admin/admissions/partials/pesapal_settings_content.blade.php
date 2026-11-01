@@ -14,6 +14,9 @@
 @endif
 @if(session('error'))<div class="alert alert-danger" role="alert">{{ session('error') }}</div>@endif
 @if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}</div>@endif
+@if(!empty($configurationError))
+    <div class="alert alert-danger" role="alert">{{ $configurationError }}</div>
+@endif
 <div class="row g-4">
     <div class="col-12 col-xl-8">
         <div class="eSection-wrap h-100">
@@ -22,6 +25,7 @@
                 <span class="badge {{ $configured ? 'bg-success' : 'bg-secondary' }}">{{ $configured ? 'Credentials configured' : 'Credentials not configured' }}</span>
             </div>
             <p class="text-muted">Used by online and administrator-created applications, and student school fee payments. Resolve outstanding orders before replacing credentials. Configured does not mean sandbox checkout has been tested.</p>
+            @if($configurationWritable ?? true)
             <form method="post" action="{{ route('admin.hei_admissions.payment.pesapal.settings.save') }}">
                 @csrf
                 <div class="row g-3">
@@ -45,6 +49,9 @@
                     <div class="col-12"><button type="submit" class="btn-form">Save configuration</button></div>
                 </div>
             </form>
+            @else
+            <p class="text-muted mb-0">Configuration changes are blocked until the duplicate PesaPal configurations are resolved.</p>
+            @endif
         </div>
     </div>
     <div class="col-12 col-xl-4">
