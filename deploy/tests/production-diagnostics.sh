@@ -124,7 +124,7 @@ done
 # Rollback release (918104a) must pass as legitimate rollback target.
 printf '%s\n' d77e8fa962a9d2ad62bf956e0f0e506c279d6ee6 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/rollback.log" 2>&1
-grep -q 'READINESS PASS: active=27ad70458e1167e632b7432582708a2dba6ab879' "$S/rollback.log" || { echo 'FAIL: rollback release 918104a must pass release gate'; exit 1; }
+grep -q 'READINESS PASS: active=d77e8fa962a9d2ad62bf956e0f0e506c279d6ee6' "$S/rollback.log" || { echo 'FAIL: rollback release 918104a must pass release gate'; exit 1; }
 # Target (5a49e9a) must still pass.
 printf '%s\n' 27ad70458e1167e632b7432582708a2dba6ab879 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/target.log" 2>&1
