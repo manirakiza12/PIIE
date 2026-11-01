@@ -183,6 +183,8 @@ grep -Fq "pesapal_pending_orders_read_only" "$ROOT/deploy/diagnostics/production
 grep -Fq "missing_invoice" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal pending orders diagnostic must report missing invoice count'; exit 1; }
 grep -Fq "school_mismatch" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal pending orders diagnostic must report school mismatch count'; exit 1; }
 grep -Fq "with_tracking_id" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal pending orders diagnostic must report tracking ID presence'; exit 1; }
+# Verify null-school invoices are distinguished from missing invoices via primary key.
+grep -Fq "sfm.id AS fee_pk" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal pending orders diagnostic must use invoice primary key to distinguish missing from null-school'; exit 1; }
 # Verify new Pesapal outstanding-orders diagnostic exists.
 grep -Fq "pesapal_outstanding_orders_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal outstanding orders diagnostic must emit read-only JSON output'; exit 1; }
 # Verify the diagnostic uses the read-only transaction (no writes).
