@@ -280,6 +280,18 @@ class OnlineExamSnapshotProctoringTest extends TestCase
     {
         [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
+        DB::table('global_settings')->updateOrInsert(
+            ['key' => 'role_perm_3'],
+            ['value' => json_encode([
+                'view_online_exams',
+                'create_online_exams',
+                'edit_own_online_exams',
+                'manage_exam_questions',
+                'view_exam_attempts',
+                'review_exam_proctoring',
+            ]), 'updated_at' => now(), 'created_at' => now()]
+        );
+
         $teacher = $this->makeTeacherWithPermission(1);
         $this->actingAs($teacher);
 
@@ -339,6 +351,19 @@ class OnlineExamSnapshotProctoringTest extends TestCase
         [$examId, $submissionId, $student] = $this->makeExamAndSubmission();
 
         DB::table('online_exam_submissions')->where('id', $submissionId)->update(['status' => 'submitted']);
+
+        // Set up teacher permissions
+        DB::table('global_settings')->updateOrInsert(
+            ['key' => 'role_perm_3'],
+            ['value' => json_encode([
+                'view_online_exams',
+                'create_online_exams',
+                'edit_own_online_exams',
+                'manage_exam_questions',
+                'view_exam_attempts',
+                'review_exam_proctoring',
+            ]), 'updated_at' => now(), 'created_at' => now()]
+        );
 
         $teacher = $this->makeTeacherWithPermission(1);
         $this->actingAs($teacher);
@@ -405,7 +430,7 @@ class OnlineExamSnapshotProctoringTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('Content-Type', 'image/webp');
-        $response->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+        $response->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private');
     }
 
     /** @test */
