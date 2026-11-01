@@ -3,17 +3,12 @@
 set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
-# Baseline: protected production deployment of PR #132 (student assignment submission).
-# Production SHA 5195eccaf8857c1e05523a13787a851034840fb2 confirmed by
-# production diagnostics run 41085927437 (active release read from
-# /home/piie/deployments/piie/current/RELEASE_SHA). Merged through protected
-# GitHub rules (PR #132).
-# Exact release identity; neither caller input nor arbitrary main is admitted.
-BASELINE=5195eccaf8857c1e05523a13787a851034840fb2
-# Target: protected PR #133 merge (student assignment upload limits and lesson
-# transition). Verified by all 5 CI checks in run 41073596727 (success) and
-# merged through protected GitHub rules. No arbitrary release SHA is admitted.
+# Baseline: current active production release (PR #139 merged, activated 2026-10-31 via run 41178337956).
+BASELINE=d057e8b7fb579ca27d5db3484ed77a01d8cfbc50
+# Target: protected PR #133 merge (student assignment upload limits and lesson transition).
 TARGET=5a49e9a715fd9fb9861395fb7a3dbf72d28af557
+# Rollback: previous approved production release (PR #132) retained for legitimate rollback diagnostics.
+ROLLBACK=918104a843d692e9df952fe67aa263f205b0e175
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
@@ -100,8 +95,11 @@ case "$(readlink "$BASE/current")" in releases/*) ;; *) fail 'Unexpected current
 ACTIVE=$(cat "$BASE/current/RELEASE_SHA")
 [[ "$ACTIVE" =~ ^[0-9a-f]{40}$ ]] || fail 'Invalid live release SHA'
 echo "Active release SHA: $ACTIVE"
-# Only BASELINE and TARGET are approved. LEARNING_RELEASE, COMMUNICATION_RELEASE, LESSON_RELEASE were removed in PR #134.
-[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || fail 'Live release is outside the approved release history'
+# Only BASELINE, TARGET, and ROLLBACK are approved. LEARNING_RELEASE, COMMUNICATION_RELEASE, LESSON_RELEASE were removed in PR #134.
+# BASELINE updated to 918104a (PR #139 merged, activated 2026-10-31 via run 41178337956).
+# ROLLBACK is the previous approved production release (5195ecc, PR #132) retained for legitimate rollback.
+# TARGET remains 5a49e9a (PR #133).
+[ "$ACTIVE" = "$BASELINE" ] || [ "$ACTIVE" = "$TARGET" ] || [ "$ACTIVE" = "$ROLLBACK" ] || fail 'Live release is outside the approved release history'
 echo "Approved target SHA: $TARGET"
 [ -s "$BASE/current/vendor/autoload.php" ] || fail 'Active release cannot be loaded'
 for container in piie-app piie-db; do
@@ -178,7 +176,7 @@ IMAGE=$(docker inspect -f '{{.Image}}' piie-app)
 docker run --rm -i --pull=never --read-only --cap-drop=ALL --security-opt no-new-privileges --pids-limit=64 \
   --mount "type=bind,source=$BASE,target=/srv/piie,readonly" --network container:piie-app \
   --user www-data --workdir /srv/piie/current \
-  -e "DIAG_BASELINE=$BASELINE" -e "DIAG_TARGET=$TARGET" \
+  -e "DIAG_BASELINE=$BASELINE" -e "DIAG_TARGET=$TARGET" -e "DIAG_ROLLBACK=$ROLLBACK" \
   --entrypoint php "$IMAGE" <<'PHP'
 <?php
 require '/srv/piie/current/vendor/autoload.php';
@@ -225,9 +223,9 @@ try {
     }
     $kernel = file_get_contents($root.'/app/Console/Kernel.php');
     $liveClassRetryInstalled = in_array('2026_10_29_150000_add_live_class_notification_revisions', $ran, true);
-    // Approved releases are BASELINE and TARGET (passed via env). Both include the Live Classes retry migration
-    // since it was introduced in PR #127 (452e21a) which precedes both. Any approved release MUST have it.
-    $approvedReleases = array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET')], fn($v) => $v !== false && $v !== '');
+    // Approved releases are BASELINE, TARGET, and ROLLBACK (passed via env). All include the Live Classes retry migration
+    // since it was introduced in PR #127 (452e21a) which precedes all three. Any approved release MUST have it.
+    $approvedReleases = array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET'), getenv('DIAG_ROLLBACK')], fn($v) => $v !== false && $v !== '');
     $isApprovedRelease = in_array($sha, $approvedReleases, true);
     if ($isApprovedRelease && !$liveClassRetryInstalled) throw new LogicException('Approved release missing required Live Classes retry migration');
     if (!$isApprovedRelease && $liveClassRetryInstalled) throw new LogicException('Unexpected release has Live Classes retry migration; release gate should have rejected');
@@ -256,6 +254,45 @@ try {
     $unlinkedLessons = array_values(array_filter($publishedLessons, fn($lesson) => empty($lesson['assignment_id'])));
     echo json_encode(['lesson_publication_read_only'=>true,'association_schema_installed'=>$associationInstalled,'published_lesson_count'=>count($publishedLessons),'unlinked_published_lesson_count'=>count($unlinkedLessons),'unlinked_published_lessons'=>$unlinkedLessons,'historical_records_modified'=>false]).PHP_EOL;
     // Fixed reference-course metadata, inside the existing read-only transaction.
+    // Pesapal duplicate configurations check: read-only, sanitized output only.
+    $pesapalDuplicates = $pdo->query(
+        "SELECT school_id, COUNT(*) AS active_pesapal_configs
+         FROM payment_methods
+         WHERE name = 'pesapal' AND status = 1
+         GROUP BY school_id
+         HAVING COUNT(*) > 1"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    $pesapalDuplicateCount = count($pesapalDuplicates);
+    // Only emit sanitized metadata: school_id and count. No payment_keys, credentials, or IPN identifiers.
+    $pesapalDuplicateSanitized = array_map(fn ($row) => ['school_id' => (int)$row['school_id'], 'active_pesapal_configs' => (int)$row['active_pesapal_configs']], $pesapalDuplicates);
+    echo json_encode(['pesapal_duplicate_configurations_read_only'=>true,'duplicate_school_count'=>$pesapalDuplicateCount,'duplicate_schools'=>$pesapalDuplicateSanitized]).PHP_EOL;
+
+    // Pesapal uniqueness constraint verification (read-only metadata, no rows written).
+    $pesapalConstraintColumn = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='payment_methods' AND COLUMN_NAME='active_pesapal_school_id'")->fetchColumn();
+    $pesapalConstraintIndexRows = $pdo->query("SELECT NON_UNIQUE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='payment_methods' AND INDEX_NAME='payment_methods_single_active_pesapal_unique' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $pesapalConstraintIndexPresent = $pesapalConstraintIndexRows !== false;
+    $pesapalConstraintUnique = $pesapalConstraintIndexPresent && ((int)$pesapalConstraintIndexRows['NON_UNIQUE'] === 0);
+    echo json_encode(['pesapal_constraint_read_only'=>true,'generated_column_present'=>$pesapalConstraintColumn>0,'unique_index_present'=>$pesapalConstraintIndexPresent,'unique_index_enforced'=>$pesapalConstraintUnique]).PHP_EOL;
+
+    // Pesapal environment check (metadata only; credentials are never decoded or emitted).
+    $pesapalEnvRows = $pdo->query("SELECT school_id, payment_keys FROM payment_methods WHERE name='pesapal' AND status=1")->fetchAll(PDO::FETCH_ASSOC);
+    $pesapalEnvs = [];
+    foreach ($pesapalEnvRows as $er) {
+        $keys = json_decode((string)$er['payment_keys'], true);
+        $pesapalEnvs[] = ['school_id' => (int)$er['school_id'], 'environment' => is_array($keys) ? (string)($keys['environment'] ?? 'unknown') : 'unreadable'];
+    }
+    echo json_encode(['pesapal_environment_read_only'=>true,'configured_schools'=>$pesapalEnvs]).PHP_EOL;
+
+    // Outstanding Pesapal order counts (read-only).
+    $applicantPending = (int)$pdo->query("SELECT COUNT(*) FROM application_payments WHERE method='pesapal' AND status='pending'")->fetchColumn();
+    $tuitionPending = (int)$pdo->query("SELECT COUNT(*) FROM tuition_payments WHERE method='pesapal' AND status='pending'")->fetchColumn();
+    echo json_encode(['pesapal_outstanding_orders_read_only'=>true,'applicant_pending'=>$applicantPending,'tuition_pending'=>$tuitionPending]).PHP_EOL;
+
+    // Duplicate settlement detection (aggregate counts only; no identifiers emitted).
+    $appDupSettled = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT gateway_txn_id FROM application_payments WHERE method='pesapal' AND status='paid' AND gateway_txn_id IS NOT NULL AND gateway_txn_id <> '' GROUP BY gateway_txn_id HAVING COUNT(*) > 1) d")->fetchColumn();
+    $tuitionDupSettled = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT gateway_txn_id FROM tuition_payments WHERE method='pesapal' AND status='paid' AND gateway_txn_id IS NOT NULL AND gateway_txn_id <> '' GROUP BY gateway_txn_id HAVING COUNT(*) > 1) d")->fetchColumn();
+    echo json_encode(['pesapal_duplicate_settlements_read_only'=>true,'duplicate_application_settled_txn'=>$appDupSettled,'duplicate_tuition_settled_txn'=>$tuitionDupSettled]).PHP_EOL;
+
     $course = $pdo->query('SELECT c.id,c.school_id,c.reference,s.timezone FROM course_offerings c JOIN schools s ON s.id=c.school_id WHERE c.id=30')->fetch(PDO::FETCH_ASSOC);
     if ($course) {
         $lessons = $pdo->query('SELECT l.id,l.title,l.status,l.released_at,l.content_type,m.id AS module_id,m.status AS module_status,m.released_at AS module_released_at FROM course_offering_lessons l JOIN course_offering_modules m ON m.id=l.course_offering_module_id AND m.course_offering_id=l.course_offering_id AND m.school_id=l.school_id WHERE l.course_offering_id=30 ORDER BY m.sequence,m.id,l.sequence,l.id')->fetchAll(PDO::FETCH_ASSOC);

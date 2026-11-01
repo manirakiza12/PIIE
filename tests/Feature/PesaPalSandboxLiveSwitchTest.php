@@ -107,9 +107,11 @@ class PesaPalSandboxLiveSwitchTest extends TestCase
         ]);
 
         // Replacing the configuration under a live order would strand it.
+        // A browser refusal is a validation redirect with an explanation, not
+        // a bare 422 error page; nothing may be written.
         $this->actingAs($this->admin)->post(route('admin.hei_admissions.payment.pesapal.settings.save'), [
             'environment' => 'live', 'consumer_key' => self::LIVE_KEY, 'consumer_secret' => 'live-secret',
-        ])->assertStatus(422);
+        ])->assertRedirect()->assertSessionHasErrors('configuration');
 
         $this->assertSame('sandbox', PesaPalConfiguration::forSchool($this->school)->environment);
     }

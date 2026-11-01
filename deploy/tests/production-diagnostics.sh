@@ -13,7 +13,8 @@ cleanup() {
 trap cleanup EXIT
 BASE="$S/host"
 mkdir -p "$S/bin" "$BASE/releases/old/vendor" "$BASE/releases/previous/vendor" "$BASE/shared/storage/logs" "$BASE/backups/20261029-000000-0b1924ca54ed"
-printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
+# Baseline updated to 918104a (activated via run 41178337956). This fixture must match BASELINE in production-readiness.sh.
+printf '%s\n' d057e8b7fb579ca27d5db3484ed77a01d8cfbc50 > "$BASE/releases/old/RELEASE_SHA"
 printf '%040d\n' 1 > "$BASE/releases/previous/RELEASE_SHA"
 printf 'synthetic autoloader\n' | tee "$BASE/releases/old/vendor/autoload.php" > "$BASE/releases/previous/vendor/autoload.php"
 ln -s releases/old "$BASE/current"
@@ -93,6 +94,18 @@ reject() {
   echo "PASS: rejects $name"
 }
 reject 'caller arguments' bash "$S/inspect.sh" arbitrary-command
+# Assert a release-gate rejection without piping the diagnostic into grep: under
+# set -o pipefail an expected exit 1 would otherwise fail the pipeline even when
+# grep matched the rejection message. Check the exit status and message separately.
+assert_release_rejected() {
+  local name=$1 expected=${2:-'Live release is outside the approved release history'}
+  if bash "$S/inspect.sh" > "$S/rejected.log" 2>&1; then
+    echo "FAIL: accepted $name"; exit 1
+  fi
+  grep -Fq -- "$expected" "$S/rejected.log" \
+    || { echo "FAIL: $name did not fail the release gate with: $expected"; exit 1; }
+  [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: rejected SHA reached production probes'; exit 1; }
+}
 printf '%s\n' 5a49e9a715fd9fb9861395fb7a3dbf72d28af557 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/target.log" 2>&1
 grep -q 'READINESS PASS: active=5a49e9a715fd9fb9861395fb7a3dbf72d28af557' "$S/target.log"
@@ -100,22 +113,73 @@ grep -q 'READINESS PASS: active=5a49e9a715fd9fb9861395fb7a3dbf72d28af557' "$S/ta
 for sha in 67be85e70349287f58ffeb4bfaafabccb9e953ff 452e21ac5d59ea582357914f2045d558816a1776 7838f3c534d3a08fc38d3ef838bba925e2ddca43 9a5f3b05b3fbafcb10ccda36a6b48d567cf78529 d2fa0a15c61618f996d1f0bfc1c786745eba52bd ad5f0190e68d912a06923fc6ceba623883fb0732 0b1924ca54ed89c72400d08a3e80476888b1e719 452e21ac5d59ea582357914f2045d558816a1777 '452e21ac' '452e21ac5d59ea582357914f2045d558816a1776;id'; do
   printf '%s\n' "$sha" > "$BASE/releases/old/RELEASE_SHA"
   : > "$DOCKER_LOG"
-  reject 'unexpected, obsolete, abbreviated or tampered release' env BASELINE="$sha" TARGET="$sha" bash "$S/inspect.sh"
-  [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: rejected SHA reached production probes'; exit 1; }
+  # Use default BASELINE/TARGET/ROLLBACK (hardcoded in script) to test rejection.
+  # Malformed/abbreviated SHAs are rejected by format validation before the history gate.
+  if [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+    assert_release_rejected "release SHA $sha"
+  else
+    assert_release_rejected "malformed release SHA $sha" 'Invalid live release SHA'
+  fi
 done
-printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
-echo 'PASS: only exact approved baseline and target accepted; environment overrides cannot broaden the gate'
+# Rollback release (918104a) must pass as legitimate rollback target.
+printf '%s\n' 918104a843d692e9df952fe67aa263f205b0e175 > "$BASE/releases/old/RELEASE_SHA"
+bash "$S/inspect.sh" > "$S/rollback.log" 2>&1
+grep -q 'READINESS PASS: active=918104a843d692e9df952fe67aa263f205b0e175' "$S/rollback.log" || { echo 'FAIL: rollback release 918104a must pass release gate'; exit 1; }
+# Target (5a49e9a) must still pass.
+printf '%s\n' 5a49e9a715fd9fb9861395fb7a3dbf72d28af557 > "$BASE/releases/old/RELEASE_SHA"
+bash "$S/inspect.sh" > "$S/target.log" 2>&1
+grep -q 'READINESS PASS: active=5a49e9a715fd9fb9861395fb7a3dbf72d28af557' "$S/target.log"
+# New baseline (d057e8b) must pass.
+printf '%s\n' d057e8b7fb579ca27d5db3484ed77a01d8cfbc50 > "$BASE/releases/old/RELEASE_SHA"
+bash "$S/inspect.sh" > "$S/new_baseline.log" 2>&1
+grep -q 'READINESS PASS: active=d057e8b7fb579ca27d5db3484ed77a01d8cfbc50' "$S/new_baseline.log" || { echo 'FAIL: new baseline d057e8b must pass release gate'; exit 1; }
+# Unexpected SHA must still fail.
+printf '%s\n' 67be85e70349287f58ffeb4bfaafabccb9e953ff > "$BASE/releases/old/RELEASE_SHA"
+: > "$DOCKER_LOG"
+# Use default BASELINE/TARGET/ROLLBACK (hardcoded in script) to test rejection of unknown SHA
+assert_release_rejected 'unexpected SHA 67be85e'
+echo 'PASS: release gate correctly accepts baseline, target, rollback; rejects unexpected SHAs'
 # Regression (PR #137): Live Classes retry migration approved-release gate.
 grep -Fq "getenv('DIAG_BASELINE')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved-release gate must read DIAG_BASELINE from probe environment'; exit 1; }
 grep -Fq "getenv('DIAG_TARGET')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved-release gate must read DIAG_TARGET from probe environment'; exit 1; }
+grep -Fq "getenv('DIAG_ROLLBACK')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved-release gate must read DIAG_ROLLBACK from probe environment'; exit 1; }
 grep -Fq 'Approved release missing required Live Classes retry migration' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved release missing Live Classes retry migration must fail'; exit 1; }
 grep -Fq 'Unexpected release has Live Classes retry migration' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: unapproved release with Live Classes retry migration must fail'; exit 1; }
 if grep -Fq 'Live Classes release and retry migration disagree' "$ROOT/deploy/diagnostics/production-readiness.sh"; then echo 'FAIL: stale Live Classes release/migration disagreement gate reintroduced'; exit 1; fi
-# Verify the approved-release array is built from DIAG_BASELINE and DIAG_TARGET only.
-grep -Fq "array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved releases must be filtered from DIAG_BASELINE and DIAG_TARGET only'; exit 1; }
+# Verify the approved-release array is built from DIAG_BASELINE, DIAG_TARGET, and DIAG_ROLLBACK.
+grep -Fq "array_filter([getenv('DIAG_BASELINE'), getenv('DIAG_TARGET'), getenv('DIAG_ROLLBACK')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved releases must be filtered from DIAG_BASELINE, DIAG_TARGET, and DIAG_ROLLBACK'; exit 1; }
 # Verify no hardcoded SHA list remains in the Live Classes check.
 ! grep -Eq 'in_array\(\$sha, \[.*452e21ac.*7838f3c5.*9a5f3b05.*d2fa0a15.*e46dafa' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: hardcoded SHA list must not be present in Live Classes check'; exit 1; }
 echo 'PASS: Live Classes retry migration approved-release gate is env-driven and fail-closed'
+# Regression (Pesapal admin 422): duplicate configurations diagnostic.
+grep -Fq "payment_methods" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate configurations diagnostic must query payment_methods table'; exit 1; }
+grep -Fq "name = 'pesapal' AND status = 1" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must filter by name and status'; exit 1; }
+# Use grep -z to match across newlines in the heredoc SQL query.
+grep -Pzq "GROUP BY school_id\s+HAVING COUNT\(\*\) > 1" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must group by school and find duplicates'; exit 1; }
+grep -Fq "pesapal_duplicate_configurations_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must emit read-only JSON output'; exit 1; }
+grep -Fq "duplicate_schools" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output duplicate_schools array'; exit 1; }
+# Verify the diagnostic SQL only selects safe fields (school_id, count) and no sensitive fields.
+grep -Fq "SELECT school_id, COUNT(*) AS active_pesapal_configs" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must select only school_id and count'; exit 1; }
+# Verify the JSON output only contains safe keys.
+grep -Fq "school_id" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output school_id'; exit 1; }
+grep -Fq "active_pesapal_configs" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output active_pesapal_configs'; exit 1; }
+# Verify new Pesapal constraint diagnostic exists and is read-only.
+grep -Fq "pesapal_constraint_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal constraint diagnostic must emit read-only JSON output'; exit 1; }
+grep -Fq "information_schema.COLUMNS" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal constraint diagnostic must query information_schema'; exit 1; }
+grep -Fq "active_pesapal_school_id" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal constraint diagnostic must reference generated column'; exit 1; }
+grep -Fq "payment_methods_single_active_pesapal_unique" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal constraint diagnostic must reference unique index'; exit 1; }
+# Verify new Pesapal environment diagnostic exists.
+grep -Fq "pesapal_environment_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal environment diagnostic must emit read-only JSON output'; exit 1; }
+# Verify new Pesapal duplicate-settlement diagnostic exists.
+grep -Fq "pesapal_duplicate_settlements_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate settlement diagnostic must emit read-only JSON output'; exit 1; }
+# Verify new Pesapal outstanding-orders diagnostic exists.
+grep -Fq "pesapal_outstanding_orders_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal outstanding orders diagnostic must emit read-only JSON output'; exit 1; }
+# Verify the diagnostic uses the read-only transaction (no writes).
+! grep -Eq '\$pdo->(exec|query|prepare)\(.?(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE)' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must not contain write operations'; exit 1; }
+echo 'PASS: Pesapal duplicate configurations diagnostic is read-only, sanitized, and write-free'
+# Restore an approved live release so the remaining cases exercise their intended
+# failure modes instead of being rejected by the release gate first.
+printf '%s\n' d057e8b7fb579ca27d5db3484ed77a01d8cfbc50 > "$BASE/releases/old/RELEASE_SHA"
 reject 'unhealthy runtime' env BAD_CONTAINER=1 bash "$S/inspect.sh"
 reject 'unhealthy database despite evidence collection' env BAD_DB_HEALTH=1 bash "$S/inspect.sh"
 grep -q 'FAIL: piie-db health is unhealthy' "$S/rejected.log"
@@ -134,7 +198,7 @@ reject 'corrupt backup' bash "$S/inspect.sh"
 cp "$S/saved.gz" "$B/database.sql.gz"
 printf '%040d\n' 2 > "$BASE/releases/old/RELEASE_SHA"
 reject 'unapproved live release' bash "$S/inspect.sh"
-printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' 918104a843d692e9df952fe67aa263f205b0e175 > "$BASE/releases/old/RELEASE_SHA"
 cp "$B/SHA256SUMS" "$S/saved-manifest"
 sed 's|environment.backup|../../shared/.env|' "$S/saved-manifest" > "$B/SHA256SUMS"
 reject 'unsafe backup manifest path' bash "$S/inspect.sh"

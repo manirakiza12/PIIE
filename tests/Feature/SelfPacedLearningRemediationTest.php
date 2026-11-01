@@ -98,6 +98,11 @@ class SelfPacedLearningRemediationTest extends TestCase
         DB::table('schools')->where('id', $this->school)->update(['timezone' => 'Africa/Kampala']);
         config(['app.timezone' => 'UTC']);
         $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-29 14:31:59', 'UTC'));
+        // Ensure lecturer allocation is active at the traveled date (starts_on must be <= 2026-10-29)
+        DB::table('course_offering_lecturer_allocations')
+            ->where('course_offering_id', $this->offering->id)
+            ->where('user_id', $this->lecturer->id)
+            ->update(['starts_on' => '2026-10-28']);
         $module = $this->module(['title' => 'Introduction to Administrative Logs']);
         $lesson = app(CourseContentService::class)->createLesson($this->lecturer, $module, [
             'title' => 'Introduction to Administrative Logs', 'body' => '<p>How to maintain administrative logs.</p>',
