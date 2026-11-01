@@ -205,6 +205,39 @@ class StoreOnlineExamRequest extends FormRequest
             'auto_submit' => $this->has('auto_submit') ? $this->boolean('auto_submit') : true,
         ]);
 
+        // ── AM/PM time selection: combine date/hour/minute/period into datetime ──
+        $combine = function ($dateField, $hourField, $minuteField, $periodField, $targetField) {
+            if ($this->filled($targetField)) {
+                return;
+            }
+            $date = $this->input($dateField);
+            $hour = $this->input($hourField);
+            $minute = $this->input($minuteField);
+            $period = $this->input($periodField);
+            if (!$date || !$hour || $minute === null || $minute === '' || !$period) {
+                return;
+            }
+            $hours = (int) $hour;
+            $minutes = (int) $minute;
+
+            // Validate hour 1-12, minute 0-59
+            if ($hours < 1 || $hours > 12 || $minutes < 0 || $minutes > 59) {
+                return;
+            }
+
+            // Convert 12-hour to 24-hour
+            if ($period === 'PM' && $hours !== 12) {
+                $hours += 12;
+            }
+            if ($period === 'AM' && $hours === 12) {
+                $hours = 0;
+            }
+            $this->merge([$targetField => $date . 'T' . str_pad((string) $hours, 2, '0', STR_PAD_LEFT) . ':' . str_pad((string) $minutes, 2, '0', STR_PAD_LEFT)]);
+        };
+
+        $combine('start_date', 'start_hour', 'start_minute', 'start_period', 'start_datetime');
+        $combine('end_date', 'end_hour', 'end_minute', 'end_period', 'end_datetime');
+
         // ── THE OFFERING SCOPED ROUTE IS THE AUTHORITY, NOT THE BODY ──────────
         //
         // `POST /teacher/course-offerings/{id}/exams` carries the Allocation in the

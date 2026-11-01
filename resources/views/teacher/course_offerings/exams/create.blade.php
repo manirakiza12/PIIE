@@ -100,20 +100,71 @@
             <div class="card-header">Window, marks and attempts</div>
             <div class="card-body">
                 <div class="row g-3">
-                    <div class="col-md-6">
-                        <label for="exam-start" class="form-label">Opens <span aria-hidden="true">*</span></label>
-                        <input type="datetime-local" class="form-control @error('start_datetime') is-invalid @enderror"
-                               id="exam-start" name="start_datetime" required
-                               value="{{ old('start_datetime') }}">
-                        @error('start_datetime') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        <div class="form-text">No student may start before this moment.</div>
+                    <div class="col-md-3">
+                        <label for="exam-start-date" class="form-label">Opens Date <span aria-hidden="true">*</span></label>
+                        <input type="date" class="form-control @error('start_date') is-invalid @enderror"
+                               id="exam-start-date" name="start_date" required
+                               value="{{ old('start_date') }}">
+                        @error('start_date') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
-                    <div class="col-md-6">
-                        <label for="exam-end" class="form-label">Closes <span aria-hidden="true">*</span></label>
-                        <input type="datetime-local" class="form-control @error('end_datetime') is-invalid @enderror"
-                               id="exam-end" name="end_datetime" required
-                               value="{{ old('end_datetime') }}">
-                        @error('end_datetime') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    <div class="col-md-2">
+                        <label for="exam-start-hour" class="form-label">Hour <span aria-hidden="true">*</span></label>
+                        <select class="form-select @error('start_hour') is-invalid @enderror" id="exam-start-hour" name="start_hour" required>
+                            @for ($h = 1; $h <= 12; $h++)
+                                <option value="{{ $h }}" {{ old('start_hour') == $h ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
+                            @endfor
+                        </select>
+                        @error('start_hour') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label for="exam-start-minute" class="form-label">Minute <span aria-hidden="true">*</span></label>
+                        <select class="form-select @error('start_minute') is-invalid @enderror" id="exam-start-minute" name="start_minute" required>
+                            @for ($m = 0; $m < 60; $m++)
+                                <option value="{{ $m }}" {{ old('start_minute') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                            @endfor
+                        </select>
+                        @error('start_minute') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label for="exam-start-period" class="form-label">Period <span aria-hidden="true">*</span></label>
+                        <select class="form-select @error('start_period') is-invalid @enderror" id="exam-start-period" name="start_period" required>
+                            <option value="AM" {{ old('start_period', 'AM') === 'AM' ? 'selected' : '' }}>AM</option>
+                            <option value="PM" {{ old('start_period', 'AM') === 'PM' ? 'selected' : '' }}>PM</option>
+                        </select>
+                        @error('start_period') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label for="exam-end-date" class="form-label">Closes Date <span aria-hidden="true">*</span></label>
+                        <input type="date" class="form-control @error('end_date') is-invalid @enderror"
+                               id="exam-end-date" name="end_date" required
+                               value="{{ old('end_date') }}">
+                        @error('end_date') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label for="exam-end-hour" class="form-label">Hour <span aria-hidden="true">*</span></label>
+                        <select class="form-select @error('end_hour') is-invalid @enderror" id="exam-end-hour" name="end_hour" required>
+                            @for ($h = 1; $h <= 12; $h++)
+                                <option value="{{ $h }}" {{ old('end_hour') == $h ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
+                            @endfor
+                        </select>
+                        @error('end_hour') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label for="exam-end-minute" class="form-label">Minute <span aria-hidden="true">*</span></label>
+                        <select class="form-select @error('end_minute') is-invalid @enderror" id="exam-end-minute" name="end_minute" required>
+                            @for ($m = 0; $m < 60; $m++)
+                                <option value="{{ $m }}" {{ old('end_minute') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                            @endfor
+                        </select>
+                        @error('end_minute') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label for="exam-end-period" class="form-label">Period <span aria-hidden="true">*</span></label>
+                        <select class="form-select @error('end_period') is-invalid @enderror" id="exam-end-period" name="end_period" required>
+                            <option value="AM" {{ old('end_period', 'AM') === 'AM' ? 'selected' : '' }}>AM</option>
+                            <option value="PM" {{ old('end_period', 'AM') === 'PM' ? 'selected' : '' }}>PM</option>
+                        </select>
+                        @error('end_period') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
                     <div class="col-md-4">
                         <label for="exam-duration" class="form-label">Duration (minutes)</label>

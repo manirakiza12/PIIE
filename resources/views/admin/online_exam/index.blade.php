@@ -52,7 +52,7 @@
                 <td><strong>{{ $exam->title }}</strong></td>
                 <td>{{ optional($exam->subject)->name ?? '—' }}</td>
                 <td>{{ $exam->duration_minutes }} min</td>
-                <td>{{ $exam->start_datetime ? $exam->start_datetime->format('d M Y H:i') : '—' }}</td>
+                <td>{{ $exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('d M Y, g:i A') : '—' }}</td>
                 <td><span class="badge {{ $exam->is_published ? 'bg-success' : 'bg-secondary' }}">{{ $workflowLabel }}</span></td>
                 <td><span class="badge bg-info">{{ $lifecycleLabel }}</span></td>
                 <td>
