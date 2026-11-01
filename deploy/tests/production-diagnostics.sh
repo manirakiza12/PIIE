@@ -94,6 +94,18 @@ reject() {
   echo "PASS: rejects $name"
 }
 reject 'caller arguments' bash "$S/inspect.sh" arbitrary-command
+# Assert a release-gate rejection without piping the diagnostic into grep: under
+# set -o pipefail an expected exit 1 would otherwise fail the pipeline even when
+# grep matched the rejection message. Check the exit status and message separately.
+assert_release_rejected() {
+  local name=$1 expected=${2:-'Live release is outside the approved release history'}
+  if bash "$S/inspect.sh" > "$S/rejected.log" 2>&1; then
+    echo "FAIL: accepted $name"; exit 1
+  fi
+  grep -Fq -- "$expected" "$S/rejected.log" \
+    || { echo "FAIL: $name did not fail the release gate with: $expected"; exit 1; }
+  [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: rejected SHA reached production probes'; exit 1; }
+}
 printf '%s\n' 5a49e9a715fd9fb9861395fb7a3dbf72d28af557 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/target.log" 2>&1
 grep -q 'READINESS PASS: active=5a49e9a715fd9fb9861395fb7a3dbf72d28af557' "$S/target.log"
@@ -101,9 +113,13 @@ grep -q 'READINESS PASS: active=5a49e9a715fd9fb9861395fb7a3dbf72d28af557' "$S/ta
 for sha in 67be85e70349287f58ffeb4bfaafabccb9e953ff 452e21ac5d59ea582357914f2045d558816a1776 7838f3c534d3a08fc38d3ef838bba925e2ddca43 9a5f3b05b3fbafcb10ccda36a6b48d567cf78529 d2fa0a15c61618f996d1f0bfc1c786745eba52bd ad5f0190e68d912a06923fc6ceba623883fb0732 0b1924ca54ed89c72400d08a3e80476888b1e719 452e21ac5d59ea582357914f2045d558816a1777 '452e21ac' '452e21ac5d59ea582357914f2045d558816a1776;id'; do
   printf '%s\n' "$sha" > "$BASE/releases/old/RELEASE_SHA"
   : > "$DOCKER_LOG"
-  # Use default BASELINE/TARGET/ROLLBACK (hardcoded in script) to test rejection
-  bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: rejected SHA must fail release gate'; exit 1; }
-  [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: rejected SHA reached production probes'; exit 1; }
+  # Use default BASELINE/TARGET/ROLLBACK (hardcoded in script) to test rejection.
+  # Malformed/abbreviated SHAs are rejected by format validation before the history gate.
+  if [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+    assert_release_rejected "release SHA $sha"
+  else
+    assert_release_rejected "malformed release SHA $sha" 'Invalid live release SHA'
+  fi
 done
 # Rollback release (5195ecc) must pass as legitimate rollback target.
 printf '%s\n' 5195eccaf8857c1e05523a13787a851034840fb2 > "$BASE/releases/old/RELEASE_SHA"
@@ -121,8 +137,7 @@ grep -q 'READINESS PASS: active=918104a843d692e9df952fe67aa263f205b0e175' "$S/ne
 printf '%s\n' 67be85e70349287f58ffeb4bfaafabccb9e953ff > "$BASE/releases/old/RELEASE_SHA"
 : > "$DOCKER_LOG"
 # Use default BASELINE/TARGET/ROLLBACK (hardcoded in script) to test rejection of unknown SHA
-bash "$S/inspect.sh" 2>&1 | grep -q 'Live release is outside the approved release history' || { echo 'FAIL: unexpected SHA must fail release gate'; exit 1; }
-[ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: unexpected SHA reached production probes'; exit 1; }
+assert_release_rejected 'unexpected SHA 67be85e'
 echo 'PASS: release gate correctly accepts baseline, target, rollback; rejects unexpected SHAs'
 # Regression (PR #137): Live Classes retry migration approved-release gate.
 grep -Fq "getenv('DIAG_BASELINE')" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: approved-release gate must read DIAG_BASELINE from probe environment'; exit 1; }
@@ -151,6 +166,9 @@ grep -Fq "active_pesapal_configs" "$ROOT/deploy/diagnostics/production-readiness
 # Verify the diagnostic uses the read-only transaction (no writes).
 ! grep -Eq '\$pdo->(exec|query|prepare)\(.?(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE)' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must not contain write operations'; exit 1; }
 echo 'PASS: Pesapal duplicate configurations diagnostic is read-only, sanitized, and write-free'
+# Restore an approved live release so the remaining cases exercise their intended
+# failure modes instead of being rejected by the release gate first.
+printf '%s\n' 918104a843d692e9df952fe67aa263f205b0e175 > "$BASE/releases/old/RELEASE_SHA"
 reject 'unhealthy runtime' env BAD_CONTAINER=1 bash "$S/inspect.sh"
 reject 'unhealthy database despite evidence collection' env BAD_DB_HEALTH=1 bash "$S/inspect.sh"
 grep -q 'FAIL: piie-db health is unhealthy' "$S/rejected.log"
