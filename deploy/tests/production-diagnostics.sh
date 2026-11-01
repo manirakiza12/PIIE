@@ -163,6 +163,17 @@ grep -Fq "SELECT school_id, COUNT(*) AS active_pesapal_configs" "$ROOT/deploy/di
 # Verify the JSON output only contains safe keys.
 grep -Fq "school_id" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output school_id'; exit 1; }
 grep -Fq "active_pesapal_configs" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must output active_pesapal_configs'; exit 1; }
+# Verify new Pesapal constraint diagnostic exists and is read-only.
+grep -Fq "pesapal_constraint_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal constraint diagnostic must emit read-only JSON output'; exit 1; }
+grep -Fq "information_schema.COLUMNS" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal constraint diagnostic must query information_schema'; exit 1; }
+grep -Fq "active_pesapal_school_id" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal constraint diagnostic must reference generated column'; exit 1; }
+grep -Fq "payment_methods_single_active_pesapal_unique" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal constraint diagnostic must reference unique index'; exit 1; }
+# Verify new Pesapal environment diagnostic exists.
+grep -Fq "pesapal_environment_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal environment diagnostic must emit read-only JSON output'; exit 1; }
+# Verify new Pesapal duplicate-settlement diagnostic exists.
+grep -Fq "pesapal_duplicate_settlements_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate settlement diagnostic must emit read-only JSON output'; exit 1; }
+# Verify new Pesapal outstanding-orders diagnostic exists.
+grep -Fq "pesapal_outstanding_orders_read_only" "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal outstanding orders diagnostic must emit read-only JSON output'; exit 1; }
 # Verify the diagnostic uses the read-only transaction (no writes).
 ! grep -Eq '\$pdo->(exec|query|prepare)\(.?(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE)' "$ROOT/deploy/diagnostics/production-readiness.sh" || { echo 'FAIL: Pesapal duplicate diagnostic must not contain write operations'; exit 1; }
 echo 'PASS: Pesapal duplicate configurations diagnostic is read-only, sanitized, and write-free'
