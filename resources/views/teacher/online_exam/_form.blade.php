@@ -201,14 +201,15 @@
         @endunless
     @endif
 
+    @if(empty($structureLocked))
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Start Date') }}</label>
-        <input type="date" class="form-control eForm-control" name="start_date" value="{{ old('start_date', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('Y-m-d') : '') : '') }}" required {{ !empty($structureLocked) ? 'disabled' : '' }}>
+        <input type="date" class="form-control eForm-control" name="start_date" value="{{ old('start_date', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('Y-m-d') : '') : '') }}" required>
     </div>
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Hour') }}</label>
-        <select class="form-select eForm-select" name="start_hour" required {{ !empty($structureLocked) ? 'disabled' : '' }}>
+        <select class="form-select eForm-select" name="start_hour" required>
             @for ($h = 1; $h <= 12; $h++)
                 <option value="{{ $h }}" {{ old('start_hour', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('h') : '') : '') == $h ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
             @endfor
@@ -217,7 +218,7 @@
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Minute') }}</label>
-        <select class="form-select eForm-select" name="start_minute" required {{ !empty($structureLocked) ? 'disabled' : '' }}>
+        <select class="form-select eForm-select" name="start_minute" required>
             @for ($m = 0; $m < 60; $m++)
                 <option value="{{ $m }}" {{ old('start_minute', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('i') : '') : '') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
             @endfor
@@ -226,7 +227,7 @@
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Period') }}</label>
-        <select class="form-select eForm-select" name="start_period" required {{ !empty($structureLocked) ? 'disabled' : '' }}>
+        <select class="form-select eForm-select" name="start_period" required>
             <option value="AM" {{ old('start_period', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('A') : 'AM') : 'AM') === 'AM' ? 'selected' : '' }}>AM</option>
             <option value="PM" {{ old('start_period', $exam ? ($exam->scheduledStartAt() ? $exam->scheduledStartAt()->format('A') : 'AM') : 'AM') === 'PM' ? 'selected' : '' }}>PM</option>
         </select>
@@ -234,12 +235,12 @@
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('End Date') }}</label>
-        <input type="date" class="form-control eForm-control" name="end_date" value="{{ old('end_date', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('Y-m-d') : '') : '') }}" required {{ !empty($structureLocked) ? 'disabled' : '' }}>
+        <input type="date" class="form-control eForm-control" name="end_date" value="{{ old('end_date', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('Y-m-d') : '') : '') }}" required>
     </div>
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Hour') }}</label>
-        <select class="form-select eForm-select" name="end_hour" required {{ !empty($structureLocked) ? 'disabled' : '' }}>
+        <select class="form-select eForm-select" name="end_hour" required>
             @for ($h = 1; $h <= 12; $h++)
                 <option value="{{ $h }}" {{ old('end_hour', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('h') : '') : '') == $h ? 'selected' : '' }}>{{ str_pad($h, 2, '0', STR_PAD_LEFT) }}</option>
             @endfor
@@ -248,7 +249,7 @@
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Minute') }}</label>
-        <select class="form-select eForm-select" name="end_minute" required {{ !empty($structureLocked) ? 'disabled' : '' }}>
+        <select class="form-select eForm-select" name="end_minute" required>
             @for ($m = 0; $m < 60; $m++)
                 <option value="{{ $m }}" {{ old('end_minute', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('i') : '') : '') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
             @endfor
@@ -257,11 +258,25 @@
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Period') }}</label>
-        <select class="form-select eForm-select" name="end_period" required {{ !empty($structureLocked) ? 'disabled' : '' }}>
+        <select class="form-select eForm-select" name="end_period" required>
             <option value="AM" {{ old('end_period', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('A') : 'AM') : 'AM') === 'AM' ? 'selected' : '' }}>AM</option>
             <option value="PM" {{ old('end_period', $exam ? ($exam->scheduledEndAt() ? $exam->scheduledEndAt()->format('A') : 'AM') : 'AM') === 'PM' ? 'selected' : '' }}>PM</option>
         </select>
     </div>
+@else
+    @if($exam?->scheduledStartAt())
+        <input type="hidden" name="start_date" value="{{ $exam->scheduledStartAt()->format('Y-m-d') }}">
+        <input type="hidden" name="start_hour" value="{{ $exam->scheduledStartAt()->format('h') }}">
+        <input type="hidden" name="start_minute" value="{{ $exam->scheduledStartAt()->format('i') }}">
+        <input type="hidden" name="start_period" value="{{ $exam->scheduledStartAt()->format('A') }}">
+    @endif
+    @if($exam?->scheduledEndAt())
+        <input type="hidden" name="end_date" value="{{ $exam->scheduledEndAt()->format('Y-m-d') }}">
+        <input type="hidden" name="end_hour" value="{{ $exam->scheduledEndAt()->format('h') }}">
+        <input type="hidden" name="end_minute" value="{{ $exam->scheduledEndAt()->format('i') }}">
+        <input type="hidden" name="end_period" value="{{ $exam->scheduledEndAt()->format('A') }}">
+    @endif
+@endif
 
     <div class="col-12">
         <div class="alert alert-info mt-2">
@@ -269,19 +284,6 @@
             <span id="examScheduleSummary">{{ $exam ? $exam->windowSummary() : '' }}</span>
         </div>
     </div>
-
-    @if(!empty($structureLocked) && $exam?->scheduledStartAt())
-        <input type="hidden" name="start_date" value="{{ $exam->scheduledStartAt()->format('Y-m-d') }}">
-        <input type="hidden" name="start_hour" value="{{ $exam->scheduledStartAt()->format('h') }}">
-        <input type="hidden" name="start_minute" value="{{ $exam->scheduledStartAt()->format('i') }}">
-        <input type="hidden" name="start_period" value="{{ $exam->scheduledStartAt()->format('A') }}">
-    @endif
-    @if(!empty($structureLocked) && $exam?->scheduledEndAt())
-        <input type="hidden" name="end_date" value="{{ $exam->scheduledEndAt()->format('Y-m-d') }}">
-        <input type="hidden" name="end_hour" value="{{ $exam->scheduledEndAt()->format('h') }}">
-        <input type="hidden" name="end_minute" value="{{ $exam->scheduledEndAt()->format('i') }}">
-        <input type="hidden" name="end_period" value="{{ $exam->scheduledEndAt()->format('A') }}">
-    @endif
 
     <div class="col-md-2">
         <label class="eForm-label">{{ get_phrase('Duration (min)') }}</label>
