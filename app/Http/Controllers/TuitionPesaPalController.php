@@ -145,8 +145,11 @@ final class TuitionPesaPalController extends Controller
     public static function notification(Request $request): string
     {
         $data = $request->validate(['OrderTrackingId' => 'required|uuid', 'OrderMerchantReference' => 'required|string|max:191']);
-        $payment = TuitionPayment::where('reference', $data['OrderMerchantReference'])->sole();
-        return TuitionPesaPalPayment::reconcile($payment, $data['OrderTrackingId']);
+        // Unknown and ambiguous references are client errors, not server
+        // faults. Never reconcile a row the provider did not identify exactly.
+        $payments = TuitionPayment::where('reference', $data['OrderMerchantReference'])->limit(2)->get();
+        if ($payments->count() !== 1) { abort(404); }
+        return TuitionPesaPalPayment::reconcile($payments->first(), $data['OrderTrackingId']);
     }
 
     public function callback(Request $request)
