@@ -330,29 +330,29 @@ class OnlineExam extends Model
 
     public function scopeActive($query, ?Carbon $at = null)
     {
-        $at = $at ?: now();
+        $at = $at ?: Carbon::now($this->scheduleTimezone())->setTimezone('UTC');
 
         return $query->where('workflow_state', 'published')
             ->where(function ($q) use ($at) {
                 $q->whereNull('start_datetime')->orWhere('start_datetime', '<=', $at);
             })
             ->where(function ($q) use ($at) {
-                $q->whereNull('end_datetime')->orWhere('end_datetime', '>=', $at);
+                $q->whereNull('end_datetime')->orWhere('end_datetime', '>', $at);
             });
     }
 
     public function scopeEnded($query, ?Carbon $at = null)
     {
-        $at = $at ?: now();
+        $at = $at ?: Carbon::now($this->scheduleTimezone())->setTimezone('UTC');
 
         return $query->where('workflow_state', 'published')
             ->whereNotNull('end_datetime')
-            ->where('end_datetime', '<', $at);
+            ->where('end_datetime', '<=', $at);
     }
 
     public function scopeUpcoming($query, ?Carbon $at = null)
     {
-        $at = $at ?: now();
+        $at = $at ?: Carbon::now($this->scheduleTimezone())->setTimezone('UTC');
 
         return $query->where('workflow_state', 'published')
             ->whereNotNull('start_datetime')

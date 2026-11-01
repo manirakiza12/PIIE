@@ -21,6 +21,7 @@ class OnlineExamProctoringEvent extends Model
         'connection_restored',
         'snapshot_captured',
         'snapshot_failed',
+        'snapshot_requested',
 
         // Restricted-interaction events. Distinct from `focus_lost` because they are
         // different facts: a student reaching for the clipboard inside the exam is not
