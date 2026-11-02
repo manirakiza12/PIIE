@@ -14,7 +14,7 @@ trap cleanup EXIT
 BASE="$S/host"
 mkdir -p "$S/bin" "$BASE/releases/old/vendor" "$BASE/releases/previous/vendor" "$BASE/shared/storage/logs" "$BASE/backups/20261029-000000-0b1924ca54ed"
 # Baseline updated to 918104a (activated via run 41178337956). This fixture must match BASELINE in production-readiness.sh.
-printf '%s\n' 1d3b699152b26b756403849977b9974e715d4faf > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' a914721a1230600be59f60375c589d7575ce7c81 > "$BASE/releases/old/RELEASE_SHA"
 printf '%040d\n' 1 > "$BASE/releases/previous/RELEASE_SHA"
 printf 'synthetic autoloader\n' | tee "$BASE/releases/old/vendor/autoload.php" > "$BASE/releases/previous/vendor/autoload.php"
 ln -s releases/old "$BASE/current"
@@ -106,9 +106,9 @@ assert_release_rejected() {
     || { echo "FAIL: $name did not fail the release gate with: $expected"; exit 1; }
   [ ! -s "$DOCKER_LOG" ] || { echo 'FAIL: rejected SHA reached production probes'; exit 1; }
 }
-printf '%s\n' 1d3b699152b26b756403849977b9974e715d4faf > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' a914721a1230600be59f60375c589d7575ce7c81 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/target.log" 2>&1
-grep -q 'READINESS PASS: active=1d3b699152b26b756403849977b9974e715d4faf' "$S/target.log"
+grep -q 'READINESS PASS: active=a914721a1230600be59f60375c589d7575ce7c81' "$S/target.log"
 # Rejections must precede Docker, database, backup or application probes.
 for sha in 67be85e70349287f58ffeb4bfaafabccb9e953ff 452e21ac5d59ea582357914f2045d558816a1776 7838f3c534d3a08fc38d3ef838bba925e2ddca43 9a5f3b05b3fbafcb10ccda36a6b48d567cf78529 d2fa0a15c61618f996d1f0bfc1c786745eba52bd ad5f0190e68d912a06923fc6ceba623883fb0732 0b1924ca54ed89c72400d08a3e80476888b1e719 452e21ac5d59ea582357914f2045d558816a1777 '452e21ac' '452e21ac5d59ea582357914f2045d558816a1776;id'; do
   printf '%s\n' "$sha" > "$BASE/releases/old/RELEASE_SHA"
@@ -122,17 +122,17 @@ for sha in 67be85e70349287f58ffeb4bfaafabccb9e953ff 452e21ac5d59ea582357914f2045
   fi
 done
 # Rollback release (918104a) must pass as legitimate rollback target.
-printf '%s\n' 9e0381df210fd590c9120b1eff8df49d51206de5 > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' 1d3b699152b26b756403849977b9974e715d4faf > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/rollback.log" 2>&1
-grep -q 'READINESS PASS: active=9e0381df210fd590c9120b1eff8df49d51206de5' "$S/rollback.log" || { echo 'FAIL: rollback release 918104a must pass release gate'; exit 1; }
+grep -q 'READINESS PASS: active=1d3b699152b26b756403849977b9974e715d4faf' "$S/rollback.log" || { echo 'FAIL: rollback release 918104a must pass release gate'; exit 1; }
 # Target (5a49e9a) must still pass.
-printf '%s\n' 1d3b699152b26b756403849977b9974e715d4faf > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' a914721a1230600be59f60375c589d7575ce7c81 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/target.log" 2>&1
-grep -q 'READINESS PASS: active=1d3b699152b26b756403849977b9974e715d4faf' "$S/target.log"
+grep -q 'READINESS PASS: active=a914721a1230600be59f60375c589d7575ce7c81' "$S/target.log"
 # New baseline (d057e8b) must pass.
-printf '%s\n' 1d3b699152b26b756403849977b9974e715d4faf > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' a914721a1230600be59f60375c589d7575ce7c81 > "$BASE/releases/old/RELEASE_SHA"
 bash "$S/inspect.sh" > "$S/new_baseline.log" 2>&1
-grep -q 'READINESS PASS: active=1d3b699152b26b756403849977b9974e715d4faf' "$S/new_baseline.log" || { echo 'FAIL: new baseline d057e8b must pass release gate'; exit 1; }
+grep -q 'READINESS PASS: active=a914721a1230600be59f60375c589d7575ce7c81' "$S/new_baseline.log" || { echo 'FAIL: new baseline d057e8b must pass release gate'; exit 1; }
 # Unexpected SHA must still fail.
 printf '%s\n' 67be85e70349287f58ffeb4bfaafabccb9e953ff > "$BASE/releases/old/RELEASE_SHA"
 : > "$DOCKER_LOG"
@@ -192,7 +192,7 @@ grep -Fq "pesapal_outstanding_orders_read_only" "$ROOT/deploy/diagnostics/produc
 echo 'PASS: Pesapal duplicate configurations diagnostic is read-only, sanitized, and write-free'
 # Restore an approved live release so the remaining cases exercise their intended
 # failure modes instead of being rejected by the release gate first.
-printf '%s\n' 1d3b699152b26b756403849977b9974e715d4faf > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' a914721a1230600be59f60375c589d7575ce7c81 > "$BASE/releases/old/RELEASE_SHA"
 reject 'unhealthy runtime' env BAD_CONTAINER=1 bash "$S/inspect.sh"
 reject 'unhealthy database despite evidence collection' env BAD_DB_HEALTH=1 bash "$S/inspect.sh"
 grep -q 'FAIL: piie-db health is unhealthy' "$S/rejected.log"
@@ -211,7 +211,7 @@ reject 'corrupt backup' bash "$S/inspect.sh"
 cp "$S/saved.gz" "$B/database.sql.gz"
 printf '%040d\n' 2 > "$BASE/releases/old/RELEASE_SHA"
 reject 'unapproved live release' bash "$S/inspect.sh"
-printf '%s\n' 9e0381df210fd590c9120b1eff8df49d51206de5 > "$BASE/releases/old/RELEASE_SHA"
+printf '%s\n' 1d3b699152b26b756403849977b9974e715d4faf > "$BASE/releases/old/RELEASE_SHA"
 cp "$B/SHA256SUMS" "$S/saved-manifest"
 sed 's|environment.backup|../../shared/.env|' "$S/saved-manifest" > "$B/SHA256SUMS"
 reject 'unsafe backup manifest path' bash "$S/inspect.sh"
