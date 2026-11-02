@@ -20,6 +20,132 @@ final class TuitionPesaPalController extends Controller
         return view('admin.student_fee_manager.pesapal_payments', compact('payments', 'status'));
     }
 
+    public function verifyPesapalPayment(Request $request, int $paymentId)
+    {
+        $user = $request->user();
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($user, 'finance.payments'), 403);
+
+        $payment = TuitionPayment::where('id', $paymentId)
+            ->where('school_id', $user->school_id)
+            ->firstOrFail();
+
+        if (! in_array($payment->status, ['pending', 'failed'], true)) {
+            return back()->with('error', 'Only pending or failed payments can be verified.');
+        }
+
+        if (empty($payment->gateway_txn_id)) {
+            return back()->with('error', 'No PesaPal tracking ID found. The order was never submitted to PesaPal.');
+        }
+
+        // Verify Sandbox environment
+        $payload = $payment->gateway_payload ?? [];
+        if (($payload['environment'] ?? null) !== 'sandbox') {
+            return back()->with('error', 'Only Sandbox test payments can be verified.');
+        }
+
+        try {
+            $classification = TuitionPesaPalPayment::reconcile($payment, $payment->gateway_txn_id);
+            $payment->refresh();
+            $newStatus = $payment->status;
+            return back()->with('success', "PesaPal verification complete. Provider status: {$classification}. Payment status: {$newStatus}.");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'PesaPal verification failed: ' . $e->getMessage());
+        }
+    }
+
+    public function archiveTestPayment(Request $request, int $paymentId)
+    {
+        $user = $request->user();
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($user, 'finance.payments'), 403);
+
+        $validated = $request->validate([
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+
+        DB::transaction(function () use ($user, $paymentId, $validated) {
+            $payment = TuitionPayment::where('id', $paymentId)
+                ->where('school_id', $user->school_id)
+                ->lockForUpdate()->firstOrFail();
+
+            if ($payment->isResolved()) {
+                throw ValidationException::withMessages(['payment' => 'This payment has already been resolved.']);
+            }
+
+            // Must be a verified failed payment (reconciled by PesaPal)
+            if ($payment->status !== 'failed') {
+                throw ValidationException::withMessages(['payment' => 'Only payments confirmed as FAILED by PesaPal can be archived. Run "Verify with PesaPal" first.']);
+            }
+
+            // Verify Sandbox environment
+            $payload = $payment->gateway_payload ?? [];
+            if (($payload['environment'] ?? null) !== 'sandbox') {
+                throw ValidationException::withMessages(['payment' => 'Only Sandbox test payments can be archived.']);
+            }
+
+            // Verify classification from reconcile
+            if (($payload['classification'] ?? null) !== 'FAILED') {
+                throw ValidationException::withMessages(['payment' => 'Payment must have classification=FAILED from PesaPal verification.']);
+            }
+
+            // Verify no settlement records
+            $hasSettlement = \App\Models\AuditLog::where('record_type', TuitionPayment::class)
+                ->where('record_id', $payment->id)
+                ->where('action', 'update')
+                ->where('description', 'like', '%paid%')
+                ->exists();
+            if ($hasSettlement) {
+                throw ValidationException::withMessages(['payment' => 'Cannot archive: this payment has an existing settlement record.']);
+            }
+
+            // Verify fee paid_amount is not inflated
+            $fee = StudentFeeManager::where('id', $payment->fee_id)->where('school_id', $user->school_id)->first();
+            if ($fee) {
+                $otherPaidCount = TuitionPayment::where('fee_id', $payment->fee_id)
+                    ->where('school_id', $user->school_id)
+                    ->where('status', 'paid')
+                    ->where('id', '!=', $payment->id)
+                    ->count();
+                if ($otherPaidCount === 0 && DecimalAmount::minorUnits($fee->paid_amount) > 0) {
+                    throw ValidationException::withMessages(['payment' => 'Cannot archive: invoice has unexplained payment credits.']);
+                }
+            }
+
+            // Create immutable audit record
+            $resolution = TuitionPaymentResolution::create([
+                'payment_id' => $payment->id,
+                'school_id' => $user->school_id,
+                'resolved_by' => $user->id,
+                'resolved_by_name' => $user->name,
+                'reason' => $validated['reason'],
+                'resolution_type' => 'test_payment_archived',
+                'payment_snapshot' => $payment->toArray(),
+                'verification_evidence' => [
+                    'provider_status' => 'failed',
+                    'provider_evidence' => 'PesaPal verified FAILED',
+                    'gateway_txn_id' => $payment->gateway_txn_id,
+                    'environment' => $payload['environment'] ?? null,
+                    'classification' => $payload['classification'] ?? null,
+                    'last_checked_at' => $payload['last_checked_at'] ?? null,
+                    'resolved_at' => now()->toIso8601String(),
+                ],
+                'resolved_at' => now(),
+            ]);
+
+            // Archive the payment
+            $payment->update([
+                'resolved_at' => now(),
+                'resolution_id' => $resolution->id,
+                'status' => 'archived',
+            ]);
+
+            // Audit log
+            \App\Models\AuditLog::record('resolve', 'Tuition Payments',
+                'Test payment archived #' . $payment->id . ': ' . $validated['reason'],
+                ['school_id' => $user->school_id, 'event_type' => 'DATA', 'record_type' => TuitionPayment::class, 'record_id' => $payment->id]);
+        });
+
+        return back()->with('success', 'Test payment verified and archived. It will no longer block configuration changes.');
+    }
     public function resolveTestPayment(Request $request, int $paymentId)
     {
         $user = $request->user();
