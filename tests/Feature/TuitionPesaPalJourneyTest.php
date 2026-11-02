@@ -395,7 +395,20 @@ class TuitionPesaPalJourneyTest extends TestCase
         $this->assertSame('paid', $fee->fresh()->status);
     }
 
-    public function test_parent_can_only_pay_invoices_linked_to_them(): void
+    public function test_admin_verify_with_pesapal_button_reaches_controller_and_reports_result(): void
+    {
+        $fee = $this->fee(); $payment = TuitionPesaPalPayment::start($fee);
+        $admin = $this->makeAdminUser($this->school);
+        $this->code = 2; $this->description = 'FAILED';
+        $this->actingAs($admin)
+            ->post(route('admin.tuition_payments.verify_pesapal', $payment->id))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+        $this->actingAs($admin)
+            ->get(route('admin.tuition_payments.index'))
+            ->assertOk();
+    }
+
     {
         $parent = User::create(['school_id' => $this->school, 'role_id' => 6, 'name' => 'Parent', 'email' => 'parent@example.test']);
         $fee = $this->fee(['parent_id' => $parent->id]);

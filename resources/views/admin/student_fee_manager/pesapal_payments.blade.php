@@ -1,6 +1,18 @@
 @extends('admin.navigation')
 @section('content')
 <div class="mainSection-title"><h1 class="h4">Fee Payments</h1><p>PesaPal school fee payments and verification history</p></div>
+@if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+@if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
 <div class="eSection-wrap">
 <form method="get" class="mb-3 d-flex gap-2 align-items-end flex-wrap">
     <div>
