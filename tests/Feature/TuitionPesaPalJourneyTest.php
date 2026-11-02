@@ -409,6 +409,7 @@ class TuitionPesaPalJourneyTest extends TestCase
             ->assertOk();
     }
 
+    public function test_parent_can_only_pay_invoices_linked_to_them(): void
     {
         $parent = User::create(['school_id' => $this->school, 'role_id' => 6, 'name' => 'Parent', 'email' => 'parent@example.test']);
         $fee = $this->fee(['parent_id' => $parent->id]);
