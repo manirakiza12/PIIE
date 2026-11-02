@@ -87,7 +87,7 @@
                                 @if($payment->gateway_txn_id && $environment === 'sandbox')
                                     <form method="POST" action="{{ route('admin.tuition_payments.verify_pesapal', $payment->id) }}" class="d-inline">
                                         @csrf
-                                        <button type="submit" class="btn btn-sm btn-outline-info" onclick="return confirm('Verify this payment with PesaPal Sandbox? This will query the provider for the definitive status.');">
+                                        <button type="submit" class="btn btn-sm btn-outline-info" onclick="return confirm('Verify this payment with PesaPal Sandbox? This will query the provider using the original Sandbox credentials for the definitive status. Reconciliation may update financial records (invoice paid amount and status) based on the provider result.');">
                                             Verify with Pesapal
                                         </button>
                                     </form>
