@@ -193,6 +193,7 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         // PesaPal's getTransactionStatus() API and stores the result in gateway_payload.
         $payment = $this->makePayment([
             'status' => 'failed',
+            'gateway_txn_id' => 'verified-tracking-' . uniqid(),
             'gateway_payload' => [
                 'environment' => 'sandbox',
                 'classification' => 'FAILED',
@@ -254,6 +255,7 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         // Failed payment (reconciled): can be archived
         $failedPayment = $this->makePayment([
             'status' => 'failed',
+            'gateway_txn_id' => 'failed-tracking-' . uniqid(),
             'gateway_payload' => [
                 'environment' => 'sandbox',
                 'classification' => 'FAILED',
