@@ -27,14 +27,15 @@ final class TuitionPesaPalController extends Controller
 
         $validated = $request->validate([
             'reason' => 'required|string|min:10|max:500',
-            'provider_status' => 'required|in:failed,expired,cancelled,never_submitted,review_only',
+            'provider_status' => 'required|in:failed,expired,cancelled,review_only',
             'provider_evidence' => 'nullable|string|max:1000',
         ]);
 
         // review_only records an audit note but does NOT archive or change status
         $isReviewOnly = $validated['provider_status'] === 'review_only';
 
-        DB::transaction(function () use ($user, $paymentId, $validated, $isReviewOnly) {
+        try {
+            DB::transaction(function () use ($user, $paymentId, $validated, $isReviewOnly) {
             $payment = TuitionPayment::where('id', $paymentId)
                 ->where('school_id', $user->school_id)
                 ->lockForUpdate()->firstOrFail();
@@ -62,20 +63,17 @@ final class TuitionPesaPalController extends Controller
                 throw ValidationException::withMessages(['payment' => 'Only Sandbox test payments can be resolved. Live payments are not eligible.']);
             }
 
-            // 5. never_submitted requires null gateway_txn_id (demonstrably never submitted)
-            if ($validated['provider_status'] === 'never_submitted' && $payment->gateway_txn_id !== null) {
-                throw ValidationException::withMessages(['provider_status' => 'Cannot mark as never submitted: a provider tracking ID exists. Verify with PesaPal first.']);
-            }
-
-            // 6. Terminal statuses (failed/expired/cancelled) require INDEPENDENT provider verification.
+            // 5. Terminal statuses (failed/expired/cancelled) require INDEPENDENT provider verification.
             //    The admin's selection alone does NOT authorize archiving.
-            //    The payment's gateway_payload must contain classification='FAILED' from a prior PesaPal reconciliation.
-            //    Alternatively, if gateway_txn_id is null, the order was never submitted (never_submitted path).
+            //    The payment's gateway_payload must contain classification=FAILED with a last_checked_at
+            //    timestamp from a prior PesaPal reconciliation (a trusted provider verification event).
+            //    Arbitrary stored data without a reconcile timestamp is not trusted.
             $terminalStatuses = ['failed', 'expired', 'cancelled'];
             if (in_array($validated['provider_status'], $terminalStatuses, true)) {
                 $classification = $payload['classification'] ?? null;
-                if ($classification !== 'FAILED') {
-                    throw ValidationException::withMessages(['provider_status' => 'Provider status not independently verified. Run PesaPal reconciliation or use "Check payment status" first. The payment gateway payload must contain classification=FAILED.']);
+                $lastCheckedAt = $payload['last_checked_at'] ?? null;
+                if ($classification !== 'FAILED' || ! $lastCheckedAt) {
+                    throw ValidationException::withMessages(['provider_status' => 'Provider status not independently verified. Run PesaPal reconciliation or use "Check payment status" first. The payment gateway payload must contain classification=FAILED with a last_checked_at timestamp from a trusted provider verification.']);
                 }
                 // Additional: require provider evidence for terminal statuses
                 if (empty($validated['provider_evidence'])) {
@@ -149,6 +147,9 @@ final class TuitionPesaPalController extends Controller
                 ($isReviewOnly ? 'Admin review' : 'Test payment archived') . ' #' . $payment->id . ': ' . $validated['reason'],
                 ['school_id' => $user->school_id, 'event_type' => 'DATA', 'record_type' => TuitionPayment::class, 'record_id' => $payment->id]);
         });
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
 
         if ($isReviewOnly) {
             return back()->with('success', 'Admin review recorded. The payment remains pending and will still block configuration changes until definitively resolved.');

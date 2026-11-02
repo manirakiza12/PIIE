@@ -61,13 +61,43 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
     public function test_forged_failed_status_without_classification_is_rejected(): void
     {
         $payment = $this->makePayment([
-            'gateway_payload' => ['environment' => 'sandbox', 'classification' => 'FAILED'],
+            'gateway_payload' => ['environment' => 'sandbox'], // No classification — forged
         ]);
         $this->actingAs($this->admin);
         $response = $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
             'reason' => 'Testing forged classification rejection',
             'provider_status' => 'failed',
             'provider_evidence' => 'forged evidence',
+        ]);
+        $response->assertSessionHasErrors('provider_status');
+        $this->assertDatabaseCount('tuition_payment_resolutions', 0);
+        $this->assertNull($payment->fresh()->resolved_at);
+    }
+
+    public function test_forged_failed_status_with_classification_but_no_timestamp_is_rejected(): void
+    {
+        $payment = $this->makePayment([
+            'gateway_payload' => ['environment' => 'sandbox', 'classification' => 'FAILED'], // Forged — no last_checked_at
+        ]);
+        $this->actingAs($this->admin);
+        $response = $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
+            'reason' => 'Testing forged classification without timestamp',
+            'provider_status' => 'failed',
+            'provider_evidence' => 'forged evidence',
+        ]);
+        $response->assertSessionHasErrors('provider_status');
+        $this->assertDatabaseCount('tuition_payment_resolutions', 0);
+        $this->assertNull($payment->fresh()->resolved_at);
+    }
+
+    public function test_missing_tracking_id_alone_cannot_authorize_archival(): void
+    {
+        $payment = $this->makePayment(['gateway_txn_id' => null]);
+        $this->actingAs($this->admin);
+        $response = $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
+            'reason' => 'Testing missing tracking ID cannot archive',
+            'provider_status' => 'failed',
+            'provider_evidence' => 'no tracking id',
         ]);
         $response->assertSessionHasErrors('provider_status');
         $this->assertDatabaseCount('tuition_payment_resolutions', 0);
@@ -90,35 +120,6 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         $this->assertSame('pending', $payment->fresh()->status);
     }
 
-    public function test_never_submitted_requires_null_tracking_id(): void
-    {
-        $payment = $this->makePayment(['gateway_txn_id' => 'test-tracking-id']);
-        $this->actingAs($this->admin);
-        $response = $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
-            'reason' => 'Testing never submitted with tracking ID',
-            'provider_status' => 'never_submitted',
-            'provider_evidence' => 'evidence',
-        ]);
-        $response->assertSessionHasErrors('provider_status');
-        $this->assertDatabaseCount('tuition_payment_resolutions', 0);
-    }
-
-    public function test_never_submitted_with_null_tracking_id_succeeds(): void
-    {
-        $payment = $this->makePayment(['gateway_txn_id' => null]);
-        $this->actingAs($this->admin);
-        $response = $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
-            'reason' => 'Testing never submitted without tracking ID',
-            'provider_status' => 'never_submitted',
-            'provider_evidence' => 'No tracking ID found',
-        ]);
-        $response->assertRedirect();
-        $response->assertSessionHasNoErrors();
-        $this->assertDatabaseCount('tuition_payment_resolutions', 1);
-        $this->assertNotNull($payment->fresh()->resolved_at);
-        $this->assertSame('archived', $payment->fresh()->status);
-    }
-
     public function test_school_isolation(): void
     {
         $otherSchool = $this->makeSchool();
@@ -136,7 +137,7 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         $this->actingAs($this->admin);
         $response = $this->post(route('admin.tuition_payments.resolve_test', $otherPayment->id), [
             'reason' => 'Testing school isolation',
-            'provider_status' => 'never_submitted',
+            'provider_status' => 'review_only',
             'provider_evidence' => 'evidence',
         ]);
         $response->assertStatus(404);
@@ -176,7 +177,7 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         $this->actingAs($this->admin);
         $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
             'reason' => 'Testing audit retention',
-            'provider_status' => 'never_submitted',
+            'provider_status' => 'review_only',
             'provider_evidence' => 'No tracking ID',
         ])->assertRedirect();
         

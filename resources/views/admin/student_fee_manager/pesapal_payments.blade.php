@@ -15,7 +15,6 @@
     <option value="failed">Provider confirmed FAILED (requires reconcile)</option>
     <option value="expired">Provider confirmed EXPIRED (requires reconcile)</option>
     <option value="cancelled">Provider confirmed CANCELLED (requires reconcile)</option>
-    <option value="never_submitted">Never submitted (no tracking ID)</option>
     <option value="review_only">Admin review only (no status change)</option>
 </select>
 <input type="text" name="reason" class="form-control form-control-sm mb-1" placeholder="Reason (min 10 chars)" required minlength="10" maxlength="500">
