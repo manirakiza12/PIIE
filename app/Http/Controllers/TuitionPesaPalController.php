@@ -67,7 +67,23 @@ final class TuitionPesaPalController extends Controller
                 throw ValidationException::withMessages(['provider_status' => 'Cannot mark as never submitted: a provider tracking ID exists. Verify with PesaPal first.']);
             }
 
-            // 6. review_only and terminal statuses require evidence
+            // 6. Terminal statuses (failed/expired/cancelled) require INDEPENDENT provider verification.
+            //    The admin's selection alone does NOT authorize archiving.
+            //    The payment's gateway_payload must contain classification='FAILED' from a prior PesaPal reconciliation.
+            //    Alternatively, if gateway_txn_id is null, the order was never submitted (never_submitted path).
+            $terminalStatuses = ['failed', 'expired', 'cancelled'];
+            if (in_array($validated['provider_status'], $terminalStatuses, true)) {
+                $classification = $payload['classification'] ?? null;
+                if ($classification !== 'FAILED') {
+                    throw ValidationException::withMessages(['provider_status' => 'Provider status not independently verified. Run PesaPal reconciliation or use "Check payment status" first. The payment gateway payload must contain classification=FAILED.']);
+                }
+                // Additional: require provider evidence for terminal statuses
+                if (empty($validated['provider_evidence'])) {
+                    throw ValidationException::withMessages(['provider_evidence' => 'Provider evidence (tracking ID, dashboard screenshot reference) is required for terminal status resolution.']);
+                }
+            }
+
+            // 7. review_only requires evidence
             if ($isReviewOnly && empty($validated['provider_evidence'])) {
                 throw ValidationException::withMessages(['provider_evidence' => 'Provider evidence is required for review-only resolution.']);
             }

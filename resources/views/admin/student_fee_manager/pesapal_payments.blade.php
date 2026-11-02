@@ -12,9 +12,9 @@
 @csrf
 <select name="provider_status" class="form-select form-select-sm mb-1" required>
     <option value="">-- Select provider status --</option>
-    <option value="failed">Provider confirmed FAILED</option>
-    <option value="expired">Provider confirmed EXPIRED</option>
-    <option value="cancelled">Provider confirmed CANCELLED</option>
+    <option value="failed">Provider confirmed FAILED (requires reconcile)</option>
+    <option value="expired">Provider confirmed EXPIRED (requires reconcile)</option>
+    <option value="cancelled">Provider confirmed CANCELLED (requires reconcile)</option>
     <option value="never_submitted">Never submitted (no tracking ID)</option>
     <option value="review_only">Admin review only (no status change)</option>
 </select>
