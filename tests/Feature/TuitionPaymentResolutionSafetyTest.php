@@ -69,26 +69,11 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
             'provider_status' => 'failed',
             'provider_evidence' => 'forged evidence',
         ]);
-        $response->assertSessionHasErrors('provider_status');
+        $response->assertSessionHasErrors('payment');
         $this->assertDatabaseCount('tuition_payment_resolutions', 0);
         $this->assertNull($payment->fresh()->resolved_at);
     }
 
-    public function test_forged_failed_status_with_classification_but_no_timestamp_is_rejected(): void
-    {
-        $payment = $this->makePayment([
-            'gateway_payload' => ['environment' => 'sandbox', 'classification' => 'FAILED'], // Forged — no last_checked_at
-        ]);
-        $this->actingAs($this->admin);
-        $response = $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
-            'reason' => 'Testing forged classification without timestamp',
-            'provider_status' => 'failed',
-            'provider_evidence' => 'forged evidence',
-        ]);
-        $response->assertSessionHasErrors('provider_status');
-        $this->assertDatabaseCount('tuition_payment_resolutions', 0);
-        $this->assertNull($payment->fresh()->resolved_at);
-    }
 
     public function test_missing_tracking_id_alone_cannot_authorize_archival(): void
     {
@@ -99,7 +84,7 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
             'provider_status' => 'failed',
             'provider_evidence' => 'no tracking id',
         ]);
-        $response->assertSessionHasErrors('provider_status');
+        $response->assertSessionHasErrors('payment');
         $this->assertDatabaseCount('tuition_payment_resolutions', 0);
         $this->assertNull($payment->fresh()->resolved_at);
     }
@@ -295,4 +280,21 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         $response->assertSessionHasErrors('payment');
         $this->assertNull($paidPayment->fresh()->resolved_at);
     }
+
+    public function test_forged_failed_status_with_classification_but_no_timestamp_is_rejected(): void
+    {
+        $payment = $this->makePayment([
+            'gateway_payload' => ['environment' => 'sandbox', 'classification' => 'FAILED'], // Forged — no last_checked_at
+        ]);
+        $this->actingAs($this->admin);
+        $response = $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
+            'reason' => 'Testing forged classification without timestamp',
+            'provider_status' => 'failed',
+            'provider_evidence' => 'forged evidence',
+        ]);
+        $response->assertSessionHasErrors('payment');
+        $this->assertDatabaseCount('tuition_payment_resolutions', 0);
+        $this->assertNull($payment->fresh()->resolved_at);
+    }
+
 }
