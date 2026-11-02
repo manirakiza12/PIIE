@@ -122,11 +122,13 @@ final class TuitionPesaPalController extends Controller
                 'reason' => $validated['reason'],
                 'resolution_type' => $isReviewOnly ? 'admin_review' : 'test_payment_archived',
                 'payment_snapshot' => $payment->toArray(),
-                'verification_evidence' => [
+'verification_evidence' => [
                     'provider_status' => $validated['provider_status'],
                     'provider_evidence' => $validated['provider_evidence'] ?? null,
                     'gateway_txn_id' => $payment->gateway_txn_id,
                     'environment' => $environment,
+                    'classification' => $payload['classification'] ?? null,
+                    'last_checked_at' => $payload['last_checked_at'] ?? null,
                     'resolved_at' => now()->toIso8601String(),
                 ],
                 'resolved_at' => now(),
