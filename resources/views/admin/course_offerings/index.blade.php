@@ -37,7 +37,7 @@
     @endphp
     <div class="table-responsive table-responsive-actions">
         <table class="table eTable table-compact">
-            <thead><tr><th scope="col">Reference</th><th scope="col">{{ $courseUnitLabel }}</th><th scope="col">Academic Year</th><th scope="col">{{ $periodLabel }}</th><th scope="col">Programme Curriculum</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col" class="table-actions-nowrap"><span class="visually-hidden">Actions</span></th></tr></thead>
+            <thead><tr><th scope="col">Reference</th><th scope="col">{{ $courseUnitLabel }}</th><th scope="col">Academic Year</th><th scope="col">{{ $periodLabel }}</th><th scope="col">Applicable Programme Curriculum</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col" class="table-actions-nowrap"><span class="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
                 @forelse($offerings as $offering)
                     <tr>
@@ -56,7 +56,7 @@
                         <td>
                             <span class="badge compact-badge bg-{{ $offering->status==='open'?'success':($offering->status==='draft'?'warning text-dark':($offering->status==='cancelled'?'secondary':'primary')) }}">{{ str_replace('_',' ',ucfirst($offering->status)) }}</span>
                             @if($offering->lecturer_required)
-                                <br><small class="text-warning" role="status"><i class="bi bi-exclamation-triangle"></i> Lecturer required</small>
+                                <br><small class="text-warning" role="status"><i class="bi bi-exclamation-triangle"></i> Lecturer required — students can enrol</small>
                             @endif
                         </td>
                         <td class="text-nowrap">{{ $offering->updated_at?->format('Y-m-d') }}</td>
