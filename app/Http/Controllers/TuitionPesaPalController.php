@@ -2,19 +2,108 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{StudentFeeManager, TuitionPayment};
+use App\Models\{StudentFeeManager, TuitionPayment, TuitionPaymentResolution, User};
 use App\Support\Payments\{PesaPalConfiguration, PesaPalException, PesaPalService, TuitionPesaPalPayment};
-use Illuminate\Http\Request;
+use App\Support\Payments\DecimalAmount;
+use Illuminate\Support\Facades\{DB, Log};
+use Illuminate\Validation\ValidationException;
 
 final class TuitionPesaPalController extends Controller
 {
     public function payments(Request $request)
     {
         abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.view'), 403);
-        $status = $request->validate(['status' => 'nullable|in:pending,paid,failed,reversed'])['status'] ?? null;
+        $status = $request->validate(['status' => 'nullable|in:pending,paid,failed,reversed,archived'])['status'] ?? null;
         $payments = TuitionPayment::where('school_id', $request->user()->school_id)
             ->when($status, fn ($q) => $q->where('status', $status))->with('fee.student')->latest('id')->paginate(30)->withQueryString();
         return view('admin.student_fee_manager.pesapal_payments', compact('payments', 'status'));
+    }
+
+    public function resolveTestPayment(Request $request, int $paymentId)
+    {
+        $user = $request->user();
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($user, 'finance.payments'), 403);
+
+        $validated = $request->validate([
+            'reason' => 'required|string|min:10|max:500',
+            'provider_status' => 'required|in:failed,expired,cancelled,never_submitted,unknown',
+            'provider_evidence' => 'nullable|string|max:1000',
+        ]);
+
+        DB::transaction(function () use ($user, $paymentId, $validated) {
+            $payment = TuitionPayment::where('id', $paymentId)
+                ->where('school_id', $user->school_id)
+                ->lockForUpdate()->firstOrFail();
+
+            // 1. Must be pending (not paid, failed, or reversed)
+            if ($payment->status !== 'pending') {
+                throw ValidationException::withMessages(['payment' => 'Only pending payments can be resolved as test payments.']);
+            }
+
+            // 2. Must not already be resolved
+            if ($payment->isResolved()) {
+                throw ValidationException::withMessages(['payment' => 'This payment has already been resolved.']);
+            }
+
+            // 3. Must have no financial postings (paid_amount not affected)
+            $fee = StudentFeeManager::where('id', $payment->fee_id)->where('school_id', $user->school_id)->first();
+            if ($fee && $fee->paid_amount > 0) {
+                // Check if this specific payment contributed to paid_amount
+                // Since reconcile() only credits on COMPLETED, a pending payment
+                // should not have contributed. But verify anyway.
+                $otherPaidPayments = TuitionPayment::where('fee_id', $payment->fee_id)
+                    ->where('school_id', $user->school_id)
+                    ->where('status', 'paid')
+                    ->where('id', '!=', $payment->id)
+                    ->exists();
+                // If there are other paid payments, this pending one didn't contribute
+                // If there are NO other paid payments but paid_amount > 0, something is wrong
+                if (! $otherPaidPayments && DecimalAmount::minorUnits($fee->paid_amount) > 0) {
+                    throw ValidationException::withMessages(['payment' => 'Cannot resolve: invoice has unexplained payment credits.']);
+                }
+            }
+
+            // 4. If provider status is 'unknown', require evidence of admin review
+            if ($validated['provider_status'] === 'unknown' && empty($validated['provider_evidence'])) {
+                throw ValidationException::withMessages(['provider_evidence' => 'Provider evidence is required when status is unknown.']);
+            }
+
+            // 5. If provider status is 'never_submitted', require that gateway_txn_id is null
+            if ($validated['provider_status'] === 'never_submitted' && $payment->gateway_txn_id !== null) {
+                throw ValidationException::withMessages(['provider_status' => 'Cannot mark as never submitted: a provider tracking ID exists. Verify with PesaPal first.']);
+            }
+
+            // 6. Create immutable audit record
+            $resolution = TuitionPaymentResolution::create([
+                'payment_id' => $payment->id,
+                'school_id' => $user->school_id,
+                'resolved_by' => $user->id,
+                'resolved_by_name' => $user->name,
+                'reason' => $validated['reason'],
+                'resolution_type' => 'test_payment_archived',
+                'payment_snapshot' => $payment->toArray(),
+                'verification_evidence' => [
+                    'provider_status' => $validated['provider_status'],
+                    'provider_evidence' => $validated['provider_evidence'] ?? null,
+                    'gateway_txn_id' => $payment->gateway_txn_id,
+                    'resolved_at' => now()->toIso8601String(),
+                ],
+                'resolved_at' => now(),
+            ]);
+
+            // 7. Mark payment as resolved (soft archive, not deletion)
+            $payment->update([
+                'resolved_at' => now(),
+                'resolution_id' => $resolution->id,
+                'status' => 'archived',
+            ]);
+
+            // 8. Audit log
+            \App\Models\AuditLog::record('resolve', 'Tuition Payments', 'Test payment #' . $payment->id . ' resolved: ' . $validated['reason'],
+                ['school_id' => $user->school_id, 'event_type' => 'DATA', 'record_type' => TuitionPayment::class, 'record_id' => $payment->id]);
+        });
+
+        return back()->with('success', 'Test payment resolved and archived. It will no longer block configuration changes.');
     }
 
     private function fee(Request $request, int $id): StudentFeeManager

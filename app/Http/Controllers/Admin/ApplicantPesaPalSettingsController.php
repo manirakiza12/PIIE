@@ -67,11 +67,12 @@ final class ApplicantPesaPalSettingsController extends Controller
             if ($rows->count() > 1) {
                 throw ValidationException::withMessages(['configuration' => 'Duplicate PesaPal configurations. Resolve them before saving; no configuration was changed.']);
             }
-            // Never strand an outstanding order by switching its credentials.
-            if (ApplicationPayment::where('school_id', $school)->where('method', 'pesapal')->where('status', 'pending')->exists()
-                || \App\Models\TuitionPayment::where('school_id', $school)->where('status', 'pending')->exists()) {
-                throw ValidationException::withMessages(['configuration' => 'Resolve outstanding PesaPal orders before replacing configuration; no configuration was changed.']);
-            }
+// Never strand an outstanding order by switching its credentials.
+// Resolved test payments (archived) are excluded from this check.
+if (ApplicationPayment::where('school_id', $school)->where('method', 'pesapal')->where('status', 'pending')->exists()
+    || \App\Models\TuitionPayment::where('school_id', $school)->where('status', 'pending')->whereNull('resolved_at')->exists()) {
+    throw ValidationException::withMessages(['configuration' => 'Resolve outstanding PesaPal orders before replacing configuration; no configuration was changed.']);
+}
             $row = $rows->first() ?? new PaymentMethods(['school_id' => $school, 'name' => 'pesapal']);
             try {
                 $old = $row->exists ? PesaPalCredentialStorage::read((string) $row->payment_keys, $school) : [];
