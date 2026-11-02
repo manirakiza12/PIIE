@@ -207,6 +207,7 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         // The classification and last_checked_at originate from TuitionPesaPalPayment::reconcile() which calls
         // PesaPal's getTransactionStatus() API and stores the result in gateway_payload.
         $payment = $this->makePayment([
+            'status' => 'failed',
             'gateway_payload' => [
                 'environment' => 'sandbox',
                 'classification' => 'FAILED',
@@ -249,5 +250,49 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         $this->assertSame($this->admin->id, $resolution->resolved_by);
         $this->assertNotNull($resolution->resolved_at);
         $this->assertNotNull($resolution->payment_snapshot['reference']);
+    }
+
+    public function test_lifecycle_regression_pending_only_review_failed_archivable(): void
+    {
+        // Pending payment: only review_only allowed, no archiving
+        $pendingPayment = $this->makePayment(['status' => 'pending']);
+        $this->actingAs($this->admin);
+        $response = $this->post(route('admin.tuition_payments.resolve_test', $pendingPayment->id), [
+            'reason' => 'Testing pending payment cannot archive',
+            'provider_status' => 'failed',
+            'provider_evidence' => 'evidence',
+        ]);
+        $response->assertSessionHasErrors('payment');
+        $this->assertNull($pendingPayment->fresh()->resolved_at);
+        $this->assertSame('pending', $pendingPayment->fresh()->status);
+
+        // Failed payment (reconciled): can be archived
+        $failedPayment = $this->makePayment([
+            'status' => 'failed',
+            'gateway_payload' => [
+                'environment' => 'sandbox',
+                'classification' => 'FAILED',
+                'last_checked_at' => now()->toIso8601String(),
+            ],
+        ]);
+        $response = $this->post(route('admin.tuition_payments.resolve_test', $failedPayment->id), [
+            'reason' => 'Testing failed payment can be archived',
+            'provider_status' => 'failed',
+            'provider_evidence' => 'PesaPal confirmed FAILED',
+        ]);
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $this->assertNotNull($failedPayment->fresh()->resolved_at);
+        $this->assertSame('archived', $failedPayment->fresh()->status);
+
+        // Paid payment: cannot be resolved
+        $paidPayment = $this->makePayment(['status' => 'paid']);
+        $response = $this->post(route('admin.tuition_payments.resolve_test', $paidPayment->id), [
+            'reason' => 'Testing paid payment cannot be resolved',
+            'provider_status' => 'review_only',
+            'provider_evidence' => 'evidence',
+        ]);
+        $response->assertSessionHasErrors('payment');
+        $this->assertNull($paidPayment->fresh()->resolved_at);
     }
 }

@@ -41,8 +41,8 @@ final class TuitionPesaPalController extends Controller
                 ->lockForUpdate()->firstOrFail();
 
             // 1. Must be pending (not paid, failed, or reversed)
-            if ($payment->status !== 'pending') {
-                throw ValidationException::withMessages(['payment' => 'Only pending payments can be resolved as test payments.']);
+            if (! in_array($payment->status, ['pending', 'failed'])) {
+                throw ValidationException::withMessages(['payment' => 'Only pending or failed payments can be resolved as test payments.']);
             }
 
             // 2. Must not already be resolved
@@ -52,7 +52,7 @@ final class TuitionPesaPalController extends Controller
 
             // 3. Race condition check: re-verify still pending after lock
             $freshPayment = TuitionPayment::where('id', $paymentId)->lockForUpdate()->first();
-            if ($freshPayment->status !== 'pending') {
+            if (! in_array($freshPayment->status, ['pending', 'failed'])) {
                 throw ValidationException::withMessages(['payment' => 'Payment status changed during processing. Reload and retry.']);
             }
 
@@ -63,7 +63,12 @@ final class TuitionPesaPalController extends Controller
                 throw ValidationException::withMessages(['payment' => 'Only Sandbox test payments can be resolved. Live payments are not eligible.']);
             }
 
-            // 5. Terminal statuses (failed/expired/cancelled) require INDEPENDENT provider verification.
+            // 5. For pending payments, only review_only is available (no archiving of unreconciled payments).
+            if ($payment->status === 'pending' && ! $isReviewOnly) {
+                throw ValidationException::withMessages(['payment' => 'Pending payments cannot be archived. Use review_only to record a note, or reconcile the payment first.']);
+            }
+
+            // 6. Terminal statuses (failed/expired/cancelled) require INDEPENDENT provider verification.
             //    The admin's selection alone does NOT authorize archiving.
             //    The payment's gateway_payload must contain classification=FAILED with a last_checked_at
             //    timestamp from a prior PesaPal reconciliation (a trusted provider verification event).
