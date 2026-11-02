@@ -409,6 +409,30 @@ class TuitionPesaPalJourneyTest extends TestCase
             ->assertOk();
     }
 
+    public function test_verify_with_pesapal_handles_missing_invoice_safely(): void
+    {
+        $fee = $this->fee(); $payment = TuitionPesaPalPayment::start($fee);
+        \App\Models\StudentFeeManager::whereKey($fee->id)->delete();
+        $admin = $this->makeAdminUser($this->school);
+        $this->actingAs($admin)
+            ->post(route('admin.tuition_payments.verify_pesapal', $payment->id))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+    }
+
+    public function test_old_sandbox_payment_cannot_be_verified_with_live_credentials(): void
+    {
+        $fee = $this->fee(); $payment = TuitionPesaPalPayment::start($fee);
+        \App\Models\PaymentMethods::where('school_id', $this->school)->update([
+            'payment_keys' => json_encode(['environment' => 'live', 'consumer_key' => 'live-key', 'consumer_secret' => 'live-secret', 'notification_id' => self::GUID]),
+        ]);
+        $admin = $this->makeAdminUser($this->school);
+        $this->actingAs($admin)
+            ->post(route('admin.tuition_payments.verify_pesapal', $payment->id))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+    }
+
     public function test_parent_can_only_pay_invoices_linked_to_them(): void
     {
         $parent = User::create(['school_id' => $this->school, 'role_id' => 6, 'name' => 'Parent', 'email' => 'parent@example.test']);

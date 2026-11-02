@@ -110,9 +110,25 @@ final class TuitionPesaPalPayment
             || DecimalAmount::minorUnits($status->amount) !== DecimalAmount::minorUnits($payment->amount)) { throw new PesaPalException(); }
         if (filled($confirmation) && ($status->classification() !== 'COMPLETED' || blank($status->confirmationCode)
             || ! hash_equals($status->confirmationCode, trim($confirmation)))) { self::reject('The confirmation code does not match this completed PesaPal payment.'); }
-        return DB::transaction(function () use ($payment, $status) {
-            // Always lock invoice before attempt, matching checkout lock order.
-            $fee = StudentFeeManager::whereKey($payment->fee_id)->where('school_id', $payment->school_id)->lockForUpdate()->firstOrFail();
+        $fee = StudentFeeManager::whereKey($payment->fee_id)->where('school_id', $payment->school_id)->first();
+        if (! $fee) {
+            // The invoice is missing or inaccessible. We may still record provider evidence,
+            // but never credit, debit, or otherwise mutate financial records.
+            DB::transaction(function () use ($payment, $status) {
+                $locked = TuitionPayment::whereKey($payment->id)->where('school_id', $payment->school_id)->lockForUpdate()->firstOrFail();
+                $payload = array_merge($locked->gateway_payload ?? [], [
+                    'classification' => $status->classification(),
+                    'provider_confirmation_code' => $status->confirmationCode,
+                    'last_checked_at' => now()->toIso8601String(),
+                ]);
+                if (filled($status->paymentMethod)) {
+                    $payload['payment_channel'] = mb_substr(trim(strip_tags($status->paymentMethod)), 0, 100);
+                }
+                $locked->update(['gateway_txn_id' => $status->orderTrackingId, 'gateway_payload' => $payload]);
+            });
+            return 'invoice_missing';
+        }
+        return DB::transaction(function () use ($payment, $status, $fee) {
             $locked = TuitionPayment::whereKey($payment->id)->where('school_id', $fee->school_id)->lockForUpdate()->firstOrFail();
             if ($locked->gateway_txn_id && $locked->gateway_txn_id !== $status->orderTrackingId) { throw new PesaPalException(); }
             $previous = $locked->gateway_payload['classification'] ?? null;
