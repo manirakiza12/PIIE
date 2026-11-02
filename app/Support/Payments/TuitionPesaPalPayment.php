@@ -102,6 +102,9 @@ final class TuitionPesaPalPayment
 
     public static function reconcile(TuitionPayment $payment, ?string $notifiedId = null, ?string $confirmation = null): string
     {
+        if (\App\Models\TuitionPaymentTombstone::where('payment_id', $payment->id)->exists()) {
+            throw new PesaPalException('This payment has been permanently deleted and cannot be reconciled.');
+        }
         $id = $payment->gateway_txn_id ?: $notifiedId;
         if (! is_string($id) || ! PesaPalService::isGuid($id)
             || ($payment->gateway_txn_id && $notifiedId !== null && strtolower($notifiedId) !== strtolower($payment->gateway_txn_id))) { throw new PesaPalException(); }
@@ -167,3 +170,5 @@ final class TuitionPesaPalPayment
         });
     }
 }
+
+
