@@ -39,7 +39,7 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
             'method' => 'pesapal',
             'status' => 'pending',
             'reference' => 'TEST-' . uniqid(),
-            'gateway_txn_id' => 'test-tracking-id-123',
+            'gateway_txn_id' => 'test-tracking-' . uniqid(),
             'gateway_payload' => ['environment' => 'sandbox'],
         ], $overrides));
     }
