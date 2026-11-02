@@ -34,31 +34,31 @@ class DeleteSandboxTestPayments extends Command
         // Strictly restrict --force to non-production (testing) environments.
         if ($this->option('force') && ! app()->environment('testing')) {
             $this->error('--force is only permitted in testing environments. In production, confirm interactively.');
-            return self::FAILURE;
+            return 1;
         }
 
         $ids = array_values(array_unique(array_map('intval', explode(',', (string) $this->option('ids')))));
         foreach ($ids as $id) {
             if (! in_array($id, self::ALLOWED_IDS, true)) {
                 $this->error("Payment ID {$id} is not in the allowed set {" . implode(',', self::ALLOWED_IDS) . "}.");
-                return self::FAILURE;
+                return 1;
             }
         }
         if (empty($ids)) {
             $this->error('No payment IDs specified.');
-            return self::FAILURE;
+            return 1;
         }
 
         $schoolId = (int) $this->option('school');
         if ($schoolId <= 0) {
             $this->error('--school is required and must be a positive integer.');
-            return self::FAILURE;
+            return 1;
         }
 
         $reason = (string) ($this->option('reason') ?: '');
         if (strlen($reason) < 10) {
             $this->error('--reason is required (min 10 chars).');
-            return self::FAILURE;
+            return 1;
         }
 
         $dryRun = (bool) $this->option('dry-run') || ! (bool) $this->option('confirm');
@@ -107,7 +107,7 @@ class DeleteSandboxTestPayments extends Command
 
         if (! $allOk) {
             $this->error('One or more safeguards FAILED. Aborting. No changes made.');
-            return self::FAILURE;
+            return 1;
         }
 
         $alreadyDeleted = [];
@@ -122,24 +122,24 @@ class DeleteSandboxTestPayments extends Command
         $toDelete = array_values(array_diff($ids, $alreadyDeleted));
         if (empty($toDelete)) {
             $this->info('All target payments already deleted. Nothing to do (idempotent).');
-            return self::SUCCESS;
+            return 0;
         }
 
         if ($dryRun) {
             $this->info('DRY-RUN complete. No records modified.');
             $this->info('To execute, re-run with --confirm --backup="<verified backup id>" --reason="..."');
-            return self::SUCCESS;
+            return 0;
         }
 
         if (trim($backupRef) === '') {
             $this->error('--backup is required in execute mode (reference of verified production backup).');
-            return self::FAILURE;
+            return 1;
         }
 
         $this->warn('EXECUTING deletion of payments: ' . implode(', ', $toDelete));
         if (! $this->option('force') && ! $this->confirm('Are you absolutely sure? This is irreversible (recoverable only from backup).')) {
             $this->info('Aborted by operator.');
-            return self::FAILURE;
+            return 1;
         }
 
         try {
@@ -193,12 +193,12 @@ class DeleteSandboxTestPayments extends Command
             });
         } catch (\RuntimeException $e) {
             $this->error('Deletion aborted: ' . $e->getMessage());
-            return self::FAILURE;
+            return 1;
         }
 
         $this->info('Deletion complete. Tombstones created for: ' . implode(', ', $toDelete));
         $this->info('Late Sandbox callbacks for these payments will find no payment row and cannot credit invoices.');
-        return self::SUCCESS;
+        return 0;
     }
 
     private function validatePayment(int $id, int $schoolId): array
