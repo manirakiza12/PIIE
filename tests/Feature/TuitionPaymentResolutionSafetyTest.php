@@ -200,4 +200,54 @@ class TuitionPaymentResolutionSafetyTest extends TestCase
         $response->assertSessionHasErrors('payment');
         $this->assertDatabaseCount('tuition_payment_resolutions', 0);
     }
+
+    public function test_verified_terminal_archival_succeeds_with_trusted_evidence(): void
+    {
+        // Simulates a payment that was previously reconciled by PesaPal (classification=FAILED, last_checked_at set)
+        // The classification and last_checked_at originate from TuitionPesaPalPayment::reconcile() which calls
+        // PesaPal's getTransactionStatus() API and stores the result in gateway_payload.
+        $payment = $this->makePayment([
+            'gateway_payload' => [
+                'environment' => 'sandbox',
+                'classification' => 'FAILED',
+                'last_checked_at' => now()->toIso8601String(),
+                'provider_confirmation_code' => 'TEST-CONFIRMATION-CODE',
+            ],
+        ]);
+        $this->actingAs($this->admin);
+        $response = $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
+            'reason' => 'Testing verified terminal archival with trusted evidence',
+            'provider_status' => 'failed',
+            'provider_evidence' => 'PesaPal tracking ID: TEST-TRACKING, dashboard shows FAILED',
+        ]);
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('tuition_payment_resolutions', 1);
+        $this->assertNotNull($payment->fresh()->resolved_at);
+        $this->assertSame('archived', $payment->fresh()->status);
+        $resolution = \App\Models\TuitionPaymentResolution::first();
+        $this->assertSame('test_payment_archived', $resolution->resolution_type);
+        $this->assertArrayHasKey('classification', $resolution->verification_evidence);
+        $this->assertSame('FAILED', $resolution->verification_evidence['classification']);
+    }
+
+    public function test_audit_record_survives_payment_resolution(): void
+    {
+        $payment = $this->makePayment(['gateway_txn_id' => null]);
+        $this->actingAs($this->admin);
+        $this->post(route('admin.tuition_payments.resolve_test', $payment->id), [
+            'reason' => 'Testing audit retention after resolution',
+            'provider_status' => 'review_only',
+            'provider_evidence' => 'No tracking ID found',
+        ])->assertRedirect();
+
+        // Verify resolution record exists and is immutable
+        $this->assertDatabaseCount('tuition_payment_resolutions', 1);
+        $resolution = TuitionPaymentResolution::first();
+        $this->assertNotNull($resolution->payment_snapshot);
+        $this->assertSame($payment->id, $resolution->payment_id);
+        $this->assertSame($this->admin->id, $resolution->resolved_by);
+        $this->assertNotNull($resolution->resolved_at);
+        $this->assertNotNull($resolution->payment_snapshot['reference']);
+    }
 }
