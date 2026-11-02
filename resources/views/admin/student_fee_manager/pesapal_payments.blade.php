@@ -43,7 +43,7 @@
                         && $environment === 'sandbox';
                 @endphp
                 <tr>
-                    <td class="text-nowrap">#{{ $payment->id }}</td>
+                    <td class="text-nowrap">#{{ $payment->id }}<br><small class="text-muted">{{ $payment->reference }}</small></td>
                     <td>
                         @if($fee)
                             <strong>#{{ $payment->fee_id }}</strong>
