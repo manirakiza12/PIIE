@@ -34,129 +34,128 @@ final class TuitionPesaPalController extends Controller
         // review_only records an audit note but does NOT archive or change status
         $isReviewOnly = $validated['provider_status'] === 'review_only';
 
-        try {
-            DB::transaction(function () use ($user, $paymentId, $validated, $isReviewOnly) {
-            $payment = TuitionPayment::where('id', $paymentId)
+        // Read payment outside transaction for validation
+        $payment = TuitionPayment::where('id', $paymentId)
+            ->where('school_id', $user->school_id)
+            ->firstOrFail();
+
+        // 1. Must be pending or failed (not paid, reversed, or archived)
+        if (! in_array($payment->status, ['pending', 'failed'])) {
+            throw ValidationException::withMessages(['payment' => 'Only pending or failed payments can be resolved as test payments.']);
+        }
+
+        // 2. Must not already be resolved
+        if ($payment->isResolved()) {
+            throw ValidationException::withMessages(['payment' => 'This payment has already been resolved.']);
+        }
+
+        // 3. For pending payments, only review_only is available (no archiving of unreconciled payments)
+        if ($payment->status === 'pending' && ! $isReviewOnly) {
+            throw ValidationException::withMessages(['payment' => 'Pending payments cannot be archived. Use review_only to record a note, or reconcile the payment first.']);
+        }
+
+        // 4. Verify Sandbox environment â€” must be a Sandbox test transaction
+        $payload = $payment->gateway_payload ?? [];
+        $environment = $payload['environment'] ?? null;
+        if ($environment !== 'sandbox') {
+            throw ValidationException::withMessages(['payment' => 'Only Sandbox test payments can be resolved. Live payments are not eligible.']);
+        }
+
+        // 5. Terminal statuses (failed/expired/cancelled) require INDEPENDENT provider verification.
+        //    The admin's selection alone does NOT authorize archiving.
+        //    The payment's gateway_payload must contain classification=FAILED with a last_checked_at
+        //    timestamp from a prior PesaPal reconciliation (a trusted provider verification event).
+        $terminalStatuses = ['failed', 'expired', 'cancelled'];
+        if (in_array($validated['provider_status'], $terminalStatuses, true)) {
+            $classification = $payload['classification'] ?? null;
+            $lastCheckedAt = $payload['last_checked_at'] ?? null;
+            if ($classification !== 'FAILED' || ! $lastCheckedAt) {
+                throw ValidationException::withMessages(['provider_status' => 'Provider status not independently verified. Run PesaPal reconciliation or use "Check payment status" first. The payment gateway payload must contain classification=FAILED with a last_checked_at timestamp from a trusted provider verification.']);
+            }
+            // Additional: require provider evidence for terminal statuses
+            if (empty($validated['provider_evidence'])) {
+                throw ValidationException::withMessages(['provider_evidence' => 'Provider evidence (tracking ID, dashboard screenshot reference) is required for terminal status resolution.']);
+            }
+        }
+
+        // 6. review_only requires evidence
+        if ($isReviewOnly && empty($validated['provider_evidence'])) {
+            throw ValidationException::withMessages(['provider_evidence' => 'Provider evidence is required for review-only resolution.']);
+        }
+
+        // 7. Verify no settlement/credit/reversal for THIS specific payment
+        $hasSettlement = \App\Models\AuditLog::where('record_type', TuitionPayment::class)
+            ->where('record_id', $payment->id)
+            ->where('action', 'update')
+            ->where('description', 'like', '%paid%')
+            ->exists();
+        if ($hasSettlement) {
+            throw ValidationException::withMessages(['payment' => 'Cannot resolve: this payment has an existing settlement record.']);
+        }
+
+        // 8. Verify fee paid_amount is not inflated by this payment
+        $fee = StudentFeeManager::where('id', $payment->fee_id)->where('school_id', $user->school_id)->first();
+        if ($fee) {
+            $otherPaidCount = TuitionPayment::where('fee_id', $payment->fee_id)
+                ->where('school_id', $user->school_id)
+                ->where('status', 'paid')
+                ->where('id', '!=', $payment->id)
+                ->count();
+            if ($otherPaidCount === 0 && DecimalAmount::minorUnits($fee->paid_amount) > 0) {
+                throw ValidationException::withMessages(['payment' => 'Cannot resolve: invoice has unexplained payment credits.']);
+            }
+        }
+
+        // Write operations in transaction
+        DB::transaction(function () use ($user, $paymentId, $validated, $isReviewOnly, $payment) {
+            // Re-lock and re-verify
+            $lockedPayment = TuitionPayment::where('id', $paymentId)
                 ->where('school_id', $user->school_id)
                 ->lockForUpdate()->firstOrFail();
 
-            // 1. Must be pending (not paid, failed, or reversed)
-            if (! in_array($payment->status, ['pending', 'failed'])) {
-                throw ValidationException::withMessages(['payment' => 'Only pending or failed payments can be resolved as test payments.']);
-            }
-
-            // 2. Must not already be resolved
-            if ($payment->isResolved()) {
-                throw ValidationException::withMessages(['payment' => 'This payment has already been resolved.']);
-            }
-
-            // 3. Race condition check: re-verify still pending after lock
-            $freshPayment = TuitionPayment::where('id', $paymentId)->lockForUpdate()->first();
-            if (! in_array($freshPayment->status, ['pending', 'failed'])) {
+            if (! in_array($lockedPayment->status, ['pending', 'failed'])) {
                 throw ValidationException::withMessages(['payment' => 'Payment status changed during processing. Reload and retry.']);
             }
 
-            // 4. Verify Sandbox environment — must be a Sandbox test transaction
-            $payload = $payment->gateway_payload ?? [];
-            $environment = $payload['environment'] ?? null;
-            if ($environment !== 'sandbox') {
-                throw ValidationException::withMessages(['payment' => 'Only Sandbox test payments can be resolved. Live payments are not eligible.']);
+            if ($lockedPayment->isResolved()) {
+                throw ValidationException::withMessages(['payment' => 'This payment has already been resolved.']);
             }
 
-            // 5. For pending payments, only review_only is available (no archiving of unreconciled payments).
-            if ($payment->status === 'pending' && ! $isReviewOnly) {
-                throw ValidationException::withMessages(['payment' => 'Pending payments cannot be archived. Use review_only to record a note, or reconcile the payment first.']);
-            }
-
-            // 6. Terminal statuses (failed/expired/cancelled) require INDEPENDENT provider verification.
-            //    The admin's selection alone does NOT authorize archiving.
-            //    The payment's gateway_payload must contain classification=FAILED with a last_checked_at
-            //    timestamp from a prior PesaPal reconciliation (a trusted provider verification event).
-            //    Arbitrary stored data without a reconcile timestamp is not trusted.
-            $terminalStatuses = ['failed', 'expired', 'cancelled'];
-            if (in_array($validated['provider_status'], $terminalStatuses, true)) {
-                $classification = $payload['classification'] ?? null;
-                $lastCheckedAt = $payload['last_checked_at'] ?? null;
-                if ($classification !== 'FAILED' || ! $lastCheckedAt) {
-                    throw ValidationException::withMessages(['provider_status' => 'Provider status not independently verified. Run PesaPal reconciliation or use "Check payment status" first. The payment gateway payload must contain classification=FAILED with a last_checked_at timestamp from a trusted provider verification.']);
-                }
-                // Additional: require provider evidence for terminal statuses
-                if (empty($validated['provider_evidence'])) {
-                    throw ValidationException::withMessages(['provider_evidence' => 'Provider evidence (tracking ID, dashboard screenshot reference) is required for terminal status resolution.']);
-                }
-            }
-
-            // 7. review_only requires evidence
-            if ($isReviewOnly && empty($validated['provider_evidence'])) {
-                throw ValidationException::withMessages(['provider_evidence' => 'Provider evidence is required for review-only resolution.']);
-            }
-
-            // 7. Verify no settlement/credit/reversal for THIS specific payment
-            // Check AuditLog for any settlement record referencing this payment
-            $hasSettlement = \App\Models\AuditLog::where('record_type', TuitionPayment::class)
-                ->where('record_id', $payment->id)
-                ->where('action', 'update')
-                ->where('description', 'like', '%paid%')
-                ->exists();
-            if ($hasSettlement) {
-                throw ValidationException::withMessages(['payment' => 'Cannot resolve: this payment has an existing settlement record.']);
-            }
-
-            // 8. Verify fee paid_amount is not inflated by this payment
-            // A pending payment should never have contributed to paid_amount.
-            // But verify: if no other paid payments exist for this fee and paid_amount > 0,
-            // something is inconsistent.
-            $fee = StudentFeeManager::where('id', $payment->fee_id)->where('school_id', $user->school_id)->first();
-            if ($fee) {
-                $otherPaidCount = TuitionPayment::where('fee_id', $payment->fee_id)
-                    ->where('school_id', $user->school_id)
-                    ->where('status', 'paid')
-                    ->where('id', '!=', $payment->id)
-                    ->count();
-                if ($otherPaidCount === 0 && DecimalAmount::minorUnits($fee->paid_amount) > 0) {
-                    throw ValidationException::withMessages(['payment' => 'Cannot resolve: invoice has unexplained payment credits.']);
-                }
-            }
-
-            // 9. Create immutable audit record
+            // Create immutable audit record
             $resolution = TuitionPaymentResolution::create([
-                'payment_id' => $payment->id,
+                'payment_id' => $lockedPayment->id,
                 'school_id' => $user->school_id,
                 'resolved_by' => $user->id,
                 'resolved_by_name' => $user->name,
                 'reason' => $validated['reason'],
                 'resolution_type' => $isReviewOnly ? 'admin_review' : 'test_payment_archived',
-                'payment_snapshot' => $payment->toArray(),
-'verification_evidence' => [
+                'payment_snapshot' => $lockedPayment->toArray(),
+                'verification_evidence' => [
                     'provider_status' => $validated['provider_status'],
                     'provider_evidence' => $validated['provider_evidence'] ?? null,
-                    'gateway_txn_id' => $payment->gateway_txn_id,
-                    'environment' => $environment,
-                    'classification' => $payload['classification'] ?? null,
-                    'last_checked_at' => $payload['last_checked_at'] ?? null,
+                    'gateway_txn_id' => $lockedPayment->gateway_txn_id,
+                    'environment' => $lockedPayment->gateway_payload['environment'] ?? null,
+                    'classification' => $lockedPayment->gateway_payload['classification'] ?? null,
+                    'last_checked_at' => $lockedPayment->gateway_payload['last_checked_at'] ?? null,
                     'resolved_at' => now()->toIso8601String(),
                 ],
                 'resolved_at' => now(),
             ]);
 
-            // 10. Only archive (mark resolved) if provider status is definitively terminal
-            // review_only records the note but does NOT archive or change status
+            // Only archive (mark resolved) if not review_only
             if (! $isReviewOnly) {
-                $payment->update([
+                $lockedPayment->update([
                     'resolved_at' => now(),
                     'resolution_id' => $resolution->id,
                     'status' => 'archived',
                 ]);
             }
 
-            // 11. Audit log
+            // Audit log
             \App\Models\AuditLog::record('resolve', 'Tuition Payments',
-                ($isReviewOnly ? 'Admin review' : 'Test payment archived') . ' #' . $payment->id . ': ' . $validated['reason'],
-                ['school_id' => $user->school_id, 'event_type' => 'DATA', 'record_type' => TuitionPayment::class, 'record_id' => $payment->id]);
+                ($isReviewOnly ? 'Admin review' : 'Test payment archived') . ' #' . $lockedPayment->id . ': ' . $validated['reason'],
+                ['school_id' => $user->school_id, 'event_type' => 'DATA', 'record_type' => TuitionPayment::class, 'record_id' => $lockedPayment->id]);
         });
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return back()->withErrors($e->errors());
-        }
 
         if ($isReviewOnly) {
             return back()->with('success', 'Admin review recorded. The payment remains pending and will still block configuration changes until definitively resolved.');
@@ -164,6 +163,7 @@ final class TuitionPesaPalController extends Controller
 
         return back()->with('success', 'Test payment resolved and archived. It will no longer block configuration changes.');
     }
+
     private function fee(Request $request, int $id): StudentFeeManager
     {
         $user = $request->user();
