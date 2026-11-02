@@ -197,20 +197,21 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                           <p class="row-number">{{ $students->firstItem() + $key }}</p>
                         </th>
                         <td>
-                          <div
-                            class="dAdmin_profile d-flex align-items-center min-w-200px"
-                          >
-                            <div class="dAdmin_profile_img">
-                              <img
-                                class="img-fluid"
-                                width="50"
-                                height="50"
-                                src="{{ $user_image }}"
-                              />
-                            </div>
-                            <div class="dAdmin_profile_name dAdmin_info_name">
-                              <h4>{{ $student->name }}</h4>
-                              <p>
+                            <div
+                              class="dAdmin_profile d-flex align-items-center min-w-160px"
+                            >
+                              <div class="dAdmin_profile_img">
+                                <img
+                                  class="img-fluid rounded-circle"
+                                  width="36"
+                                  height="36"
+                                  src="{{ $user_image }}"
+                                  alt="{{ $student->name }}"
+                                />
+                              </div>
+                              <div class="dAdmin_profile_name dAdmin_info_name">
+                                <h4 class="text-truncate mb-0" style="max-width:180px;" title="{{ $student->name }}">{{ $student->name }}</h4>
+                                <p class="mb-0 small text-muted text-truncate" style="max-width:180px;">
                                 @if(academic_education_level(auth()->user()->school_id) !== 'tertiary' && !empty($student_details->class_name))
                                 <span>{{ academic_term('class', auth()->user()->school_id) }}:</span> {{ $student_details->class_name }}
                                 <br>
@@ -220,27 +221,23 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                                 @elseif(academic_education_level(auth()->user()->school_id) === 'tertiary')
                                 <span>Programme:</span> {{ get_phrase('Placement pending') }}
                                 @else
-                                <span>{{ academic_term('class', auth()->user()->school_id) }}:</span>
-                                 {{ get_phrase('Removed') }}
-                                 <br>
-                                <span>{{ academic_term('section', auth()->user()->school_id) }}:</span>
-                                {{ get_phrase('Removed') }}
+                                <span>{{ academic_term('class', auth()->user()->school_id) }}:</span> {{ get_phrase('Removed') }}
+                                <br>
+                                <span>{{ academic_term('section', auth()->user()->school_id) }}:</span> {{ get_phrase('Removed') }}
                                 @endif
-                              </p>
+                                </p>
                             </div>
                           </div>
                         </td>
                         <td>
-                          <div class="dAdmin_info_name min-w-250px">
-                            <p>{{ $student->email }}</p>
+                          <div class="dAdmin_info_name min-w-160px">
+                            <p class="mb-0 text-truncate" style="max-width:160px;" title="{{ $student->email }}">{{ $student->email }}</p>
                           </div>
                         </td>
                         <td>
-                          <div class="dAdmin_info_name min-w-250px">
-                            <p><span>{{ get_phrase('Phone') }}:</span> {{ $info->phone }}</p>
-                            <p>
-                              <span>{{ get_phrase('Address') }}:</span> {{ $info->address }}
-                            </p>
+                          <div class="dAdmin_info_name min-w-180px">
+                            <p class="mb-0 small"><span>{{ get_phrase('Phone') }}:</span> <span class="text-truncate d-inline-block align-bottom" style="max-width:150px;" title="{{ $info->phone }}">{{ $info->phone }}</span></p>
+                            <p class="mb-0 small text-truncate" style="max-width:180px;" title="{{ $info->address }}"><span>{{ get_phrase('Address') }}:</span> {{ $info->address }}</p>
                           </div>
                         </td>
                         <td>
