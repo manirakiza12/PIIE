@@ -47,12 +47,12 @@ class DeleteSandboxLateCallbackTest extends TestCase
             'gateway_payload' => ['environment' => 'sandbox'],
         ]);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'missing invoice cleanup',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'BACKUP-MI',
+            '--backup' => 'BACKUP-MI',
         ])->assertExitCode(0);
         $this->assertDatabaseMissing('tuition_payments', ['id' => 1]);
         $this->assertDatabaseHas('tuition_payment_tombstones', ['payment_id' => 1]);
@@ -73,12 +73,12 @@ class DeleteSandboxLateCallbackTest extends TestCase
             'gateway_payload' => ['environment' => 'sandbox', 'classification' => 'FAILED', 'last_checked_at' => now()->toIso8601String()],
         ]);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '6',
             '--reason' => 'late callback test',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'BACKUP-LC',
+            '--backup' => 'BACKUP-LC',
         ])->assertExitCode(0);
 
         $stale = new TuitionPayment();

@@ -52,7 +52,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         $this->makePayment(6);
         $this->makePayment(1);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'dry run test reason',
         ])->assertExitCode(0);
@@ -65,12 +65,12 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         $this->makePayment(6);
         $this->makePayment(1);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => 9999,
+            '--school' => 9999,
             '--ids' => '1,6',
             '--reason' => 'wrong school test',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'BACKUP-1',
+            '--backup' => 'BACKUP-1',
         ])->assertExitCode(1);
         $this->assertDatabaseCount('tuition_payments', 2);
     }
@@ -80,12 +80,12 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         $this->makePayment(6, ['amount' => 100]);
         $this->makePayment(1);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'wrong amount test',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'BACKUP-1',
+            '--backup' => 'BACKUP-1',
         ])->assertExitCode(1);
         $this->assertDatabaseCount('tuition_payments', 2);
     }
@@ -95,12 +95,12 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         $this->makePayment(6, ['gateway_payload' => ['environment' => 'live']]);
         $this->makePayment(1);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'live env test',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'BACKUP-1',
+            '--backup' => 'BACKUP-1',
         ])->assertExitCode(1);
         $this->assertDatabaseCount('tuition_payments', 2);
     }
@@ -108,7 +108,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     public function test_disallowed_id_aborts(): void
     {
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '2,6',
             '--reason' => 'disallowed id test',
         ])->assertExitCode(1);
@@ -119,12 +119,12 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         $this->makePayment(6);
         $this->makePayment(1);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'one-time sandbox cleanup',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'BACKUP-TEST-1',
+            '--backup' => 'BACKUP-TEST-1',
         ])->assertExitCode(0);
         $this->assertDatabaseCount('tuition_payments', 0);
         $this->assertDatabaseCount('tuition_payment_tombstones', 2);
@@ -140,21 +140,21 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         $this->makePayment(6);
         $this->makePayment(1);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'first run',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'B1',
+            '--backup' => 'B1',
         ])->assertExitCode(0);
         // Second run: nothing to delete
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'second run',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'B2',
+            '--backup' => 'B2',
         ])->assertExitCode(0);
         $this->assertDatabaseCount('tuition_payment_tombstones', 2);
     }
@@ -164,7 +164,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         $this->makePayment(6);
         $this->makePayment(1);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'no backup ref',
             '--confirm' => true,
@@ -181,12 +181,12 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
             'school_id' => $this->school, 'event_type' => 'DATA', 'record_type' => \App\Models\TuitionPayment::class, 'record_id' => $p->id,
         ]);
         $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school-id' => $this->school,
+            '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'settlement test',
             '--confirm' => true,
             '--force' => true,
-            '--backup-ref' => 'B',
+            '--backup' => 'B',
         ])->assertExitCode(1);
         $this->assertDatabaseCount('tuition_payments', 2);
     }

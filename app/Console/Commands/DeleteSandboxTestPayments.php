@@ -11,10 +11,10 @@ class DeleteSandboxTestPayments extends Command
 {
     protected $signature = 'pesapal:delete-sandbox-test-payments
         {--ids=1,6 : Comma-separated payment IDs (must be subset of the allowed set)}
-        {--school-id= : Required school ownership (both payments must belong to this school)}
+        {--school= : Required school ownership (both payments must belong to this school)}
         {--dry-run : Show what would be deleted without mutating (default)}
         {--confirm : Actually perform the deletion}
-        {--backup-ref= : Reference/identifier of the verified production backup (required to execute)}
+        {--backup= : Reference/identifier of the verified production backup (required to execute)}
         {--reason= : Deletion reason (min 10 chars)}
         {--force : Skip interactive confirmation (automated/CI only)}';
 
@@ -49,9 +49,9 @@ class DeleteSandboxTestPayments extends Command
             return self::FAILURE;
         }
 
-        $schoolId = (int) $this->option('school-id');
+        $schoolId = (int) $this->option('school');
         if ($schoolId <= 0) {
-            $this->error('--school-id is required and must be a positive integer.');
+            $this->error('--school is required and must be a positive integer.');
             return self::FAILURE;
         }
 
@@ -62,7 +62,7 @@ class DeleteSandboxTestPayments extends Command
         }
 
         $dryRun = (bool) $this->option('dry-run') || ! (bool) $this->option('confirm');
-        $backupRef = (string) ($this->option('backup-ref') ?: '');
+        $backupRef = (string) ($this->option('backup') ?: '');
 
         $this->info('=== Sandbox Test Payment Deletion ===');
         $this->info('Mode: ' . ($dryRun ? 'DRY-RUN (no mutations)' : 'EXECUTE'));
@@ -127,12 +127,12 @@ class DeleteSandboxTestPayments extends Command
 
         if ($dryRun) {
             $this->info('DRY-RUN complete. No records modified.');
-            $this->info('To execute, re-run with --confirm --backup-ref="<verified backup id>" --reason="..."');
+            $this->info('To execute, re-run with --confirm --backup="<verified backup id>" --reason="..."');
             return self::SUCCESS;
         }
 
         if (trim($backupRef) === '') {
-            $this->error('--backup-ref is required in execute mode (reference of verified production backup).');
+            $this->error('--backup is required in execute mode (reference of verified production backup).');
             return self::FAILURE;
         }
 
@@ -305,3 +305,5 @@ class DeleteSandboxTestPayments extends Command
         return $data;
     }
 }
+
+
