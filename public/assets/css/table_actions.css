@@ -1,0 +1,81 @@
+/* Scoped responsive table improvements for PIIE listing pages */
+/* Applied via .table-compact and .table-responsive-actions classes */
+
+/* Compact row padding for dense tables */
+.table-compact.table > :not(caption) > * > * {
+    padding: 6px 10px !important;
+}
+
+.table-compact.table > :not(caption) > * > *:first-child {
+    padding-left: 16px !important;
+}
+
+/* Ensure Actions dropdown is not clipped by scrollable containers */
+.table-responsive-actions {
+    position: relative;
+    overflow: visible;
+}
+
+.table-responsive-actions .adminTable-action {
+    position: relative;
+    z-index: 1;
+}
+
+/* Dropdown menu positioning fix for scrollable table containers */
+/* data-bs-display="static" on the toggle button prevents Popper.js from
+   repositioning the menu relative to the viewport, keeping it anchored
+   to the toggle inside the table cell */
+.table-responsive-actions .dropdown-menu {
+    z-index: 1055;
+}
+
+/* Touch target minimum for mobile */
+@media (max-width: 768px) {
+    .table-action-btn-2 {
+        min-height: 40px;
+        padding: 6px 12px;
+    }
+
+    .table-compact.table > :not(caption) > * > * {
+        padding: 4px 8px !important;
+    }
+}
+
+/* Text truncation utility for long content in table cells */
+.text-truncate-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Status badge compact layout */
+.compact-badge {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    line-height: 1.2;
+}
+
+/* Ensure table actions column doesn't wrap */
+.table-actions-nowrap {
+    white-space: nowrap;
+    width: 1%;
+}
+
+/* Form-based dropdown items (for POST/PATCH/DELETE with CSRF) */
+.dropdown-menu .dropdown-item-form {
+    margin: 0;
+    padding: 0;
+}
+
+.dropdown-menu .dropdown-item-form button.dropdown-item {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+.dropdown-menu .dropdown-item-form button.dropdown-item:hover {
+    background-color: #f8f9fa;
+}

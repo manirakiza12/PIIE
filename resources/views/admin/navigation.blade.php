@@ -247,6 +247,7 @@
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/vendors/bootstrap-5.1.3/css/bootstrap.min.css') }}" />
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/swiper-bundle.min.css') }}" />
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/style.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/table_actions.css') }}" />
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/main.css') }}" />
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/custom.css') }}" />
     <link rel="stylesheet" href="{{ asset('assets/css/daterangepicker.css') }}" />

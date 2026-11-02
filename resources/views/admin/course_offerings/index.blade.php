@@ -30,22 +30,47 @@
             @if(request()->hasAny(['search','subject_id','year_id','period_id','programme_id','curriculum_id','department_id','status','reference']))<a class="btn btn-outline-secondary" href="{{ route('admin.course_offerings.index') }}">Clear filters</a>@endif
         </div>
     </form>
-    <div class="table-responsive">
-        <table class="table eTable">
-            <thead><tr><th scope="col">Reference / ID</th><th scope="col">{{ $courseUnitLabel }}</th><th scope="col">Academic Year</th><th scope="col">{{ $periodLabel }}</th><th scope="col">Applicable Programme Curriculum</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+    @php
+        $user = auth()->user();
+        $canManage = $user->hasPermission('academic.course_offering.manage');
+        $canViewLecturers = $user->hasPermission('academic.course_offering.lecturer.view');
+    @endphp
+    <div class="table-responsive table-responsive-actions">
+        <table class="table eTable table-compact">
+            <thead><tr><th scope="col">Reference</th><th scope="col">{{ $courseUnitLabel }}</th><th scope="col">Academic Year</th><th scope="col">{{ $periodLabel }}</th><th scope="col">Applicable Programme Curriculum</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col" class="table-actions-nowrap"><span class="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
                 @forelse($offerings as $offering)
-                    <tr><td>{{ $offering->reference ?: '#'.$offering->id }}</td><td>{{ $offering->subject->code ? $offering->subject->code.' — ' : '' }}{{ $offering->subject->name }}</td><td>{{ $offering->academicYear->label }}</td><td>{{ $offering->academicPeriod->label }}</td><td>{{ $offering->applicability_summary ?: '—' }}</td><td><span class="badge bg-{{ $offering->status==='open'?'success':($offering->status==='draft'?'warning text-dark':($offering->status==='cancelled'?'secondary':'primary')) }}">{{ str_replace('_',' ',ucfirst($offering->status)) }}</span></td><td>{{ $offering->updated_at?->format('Y-m-d') }}</td><td><a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ route('admin.course_offerings.show',$offering->id) }}">View</a>
-@if($offering->lecturer_required)<div class="small text-warning mt-2" role="status">Lecturer required — students can enrol</div>@endif
-@if(auth()->user()->hasPermission('academic.course_offering.lecturer.view'))<a class="btn btn-sm btn-outline-secondary mt-2" href="{{ route('admin.course_offerings.lecturers.index', $offering->id) }}">Lecturers</a>@endif
-
-<div class="d-flex flex-wrap gap-2 mt-2" aria-label="Allocation actions">
-    @if(auth()->user()->hasPermission('academic.course_offering.manage'))
-        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.course_offerings.show', $offering->id) }}#offering-details">Edit</a>
-        <a class="btn btn-sm btn-outline-danger" href="{{ route('admin.course_offerings.show', $offering->id) }}#delete-allocation">Delete</a>
-    @endif
-</div>
-</td></tr>
+                    <tr>
+                        <td class="text-nowrap">{{ $offering->reference ?: '#'.$offering->id }}</td>
+                        <td>
+                            @if($offering->subject->code)
+                                <span class="fw-semibold">{{ $offering->subject->code }}</span>
+                                <br><small class="text-muted" title="{{ $offering->subject->name }}">{{ \Illuminate\Support\Str::limit($offering->subject->name, 30) }}</small>
+                            @else
+                                <span title="{{ $offering->subject->name }}">{{ \Illuminate\Support\Str::limit($offering->subject->name, 40) }}</span>
+                            @endif
+                        </td>
+                        <td class="text-nowrap">{{ $offering->academicYear->label }}</td>
+                        <td class="text-nowrap">{{ $offering->academicPeriod->label }}</td>
+                        <td class="text-truncate-cell" title="{{ $offering->applicability_summary }}">{{ $offering->applicability_summary ?: '—' }}</td>
+                        <td>
+                            <span class="badge compact-badge bg-{{ $offering->status==='open'?'success':($offering->status==='draft'?'warning text-dark':($offering->status==='cancelled'?'secondary':'primary')) }}">{{ str_replace('_',' ',ucfirst($offering->status)) }}</span>
+                            @if($offering->lecturer_required)
+                                <br><small class="text-warning" role="status"><i class="bi bi-exclamation-triangle"></i> Lecturer required — students can enrol</small>
+                            @endif
+                        </td>
+                        <td class="text-nowrap">{{ $offering->updated_at?->format('Y-m-d') }}</td>
+                        <td class="table-actions-nowrap">
+                            <div class="d-flex align-items-center gap-1">
+                                <a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ route('admin.course_offerings.show',$offering->id) }}">{{ get_phrase('View') }}</a>
+                                @include('shared.actions_dropdown', ['actions' => array_filter([
+                                    $canViewLecturers ? ['label' => get_phrase('Lecturers'), 'url' => route('admin.course_offerings.lecturers.index', $offering->id), 'variant' => 'secondary'] : null,
+                                    $canManage ? ['label' => get_phrase('Edit'), 'url' => route('admin.course_offerings.show', $offering->id).'#offering-details', 'variant' => 'primary'] : null,
+                                    $canManage ? ['label' => get_phrase('Delete'), 'url' => route('admin.course_offerings.show', $offering->id).'#delete-allocation', 'variant' => 'danger'] : null,
+                                ])] )
+                            </div>
+                        </td>
+                    </tr>
                 @empty
                     @if($hasAnyOfferings)
                         <tr><td colspan="8" class="text-center py-4"><p class="mb-2">No Course Allocations match these filters.</p><a class="btn btn-outline-secondary btn-sm" href="{{ route('admin.course_offerings.index') }}">Clear filters</a></td></tr>
