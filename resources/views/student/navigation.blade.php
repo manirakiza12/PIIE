@@ -57,7 +57,19 @@
         .home-header { background: #0E4C87 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
         .home-header .header_notification p { color: #fff; }
         .home-header .sidebar_menu_icon svg path { fill: #fff; }
-        .home-header .eBtn, .home-header .dropdown-toggle { color: #fff; }
+        .home-header .eBtn, .home-header .dropdown-toggle { color: #fff; background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+        .home-header .eBtn:hover, .home-header .dropdown-toggle:hover { color: #fff; background: rgba(255,255,255,0.25); }
+        .home-header i.bi { color: #fff; font-size: 18px; }
+        .home-header .btn-light { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); color: #fff; }
+        .home-header .btn-light:hover { background: rgba(255,255,255,0.25); color: #fff; }
+        .home-header .table-action-btn-2 { color: #fff; background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+        .home-header .table-action-btn-2:hover { color: #fff; background: rgba(255,255,255,0.25); }
+        .home-header .adminTable-action .dropdown-toggle::after { border-top-color: #fff; }
+        .home-header .user-profile, .home-header .user-profile * { color: #fff; }
+        .home-header .btn-secondary { background: transparent; border-color: transparent; color: #fff; }
+        .home-header .btn-secondary:hover, .home-header .btn-secondary:focus { background: rgba(255,255,255,0.15); color: #fff; }
+        .home-header .user-name { color: #fff; font-weight: 600; }
+        .home-header .user-title { color: rgba(255,255,255,0.85); }
     </style></head>
 
 <body>
