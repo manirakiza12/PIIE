@@ -29,38 +29,51 @@ class DeleteSandboxTestPayments extends Command
 
     public function handle(): int
     {
-        error_log('HANDLE_START env=' . app()->environment());
+        $this->info('D1');
+
         if ($this->option('force') && ! app()->environment('testing')) {
-            $this->error('--force is only permitted in testing environments. In production, confirm interactively.');
+            $this->info('D2_FORCE_BLOCKED');
+            $this->error('--force is only permitted in testing environments.');
             return 1;
         }
 
+        $this->info('D3');
+
         $ids = array_values(array_unique(array_map('intval', explode(',', (string) $this->option('ids')))));
+        $this->info('D4 ids=' . implode(',', $ids));
+
         foreach ($ids as $id) {
             if (! in_array($id, self::ALLOWED_IDS, true)) {
+                $this->info('D5_DISALLOWED');
                 $this->error("Payment ID {$id} is not in the allowed set.");
                 return 1;
             }
         }
         if (empty($ids)) {
+            $this->info('D6_EMPTY');
             $this->error('No payment IDs specified.');
             return 1;
         }
 
         $schoolId = (int) $this->option('school');
+        $this->info('D7 schoolId=' . $schoolId);
         if ($schoolId <= 0) {
+            $this->info('D8_SCHOOL_ZERO');
             $this->error('--school is required and must be a positive integer.');
             return 1;
         }
 
         $reason = (string) ($this->option('reason') ?: '');
+        $this->info('D9 reasonlen=' . strlen($reason));
         if (strlen($reason) < 10) {
+            $this->info('D10_REASON_SHORT');
             $this->error('--reason is required (min 10 chars).');
             return 1;
         }
 
         $dryRun = (bool) $this->option('dry-run') || ! (bool) $this->option('confirm');
         $backupRef = (string) ($this->option('backup') ?: '');
+        $this->info('D11 dryRun=' . var_export($dryRun, true));
 
         $plan = [];
         $allOk = true;
@@ -71,9 +84,10 @@ class DeleteSandboxTestPayments extends Command
                 $allOk = false;
             }
         }
+        $this->info('D12 allOk=' . var_export($allOk, true));
 
-        error_log('ALL_OK=' . var_export($allOk, true) . ' schoolId=' . $schoolId);
         if (! $allOk) {
+            $this->info('D13_SAFEGUARDS_FAILED');
             $this->error('One or more safeguards FAILED. Aborting. No changes made.');
             return 1;
         }
@@ -85,109 +99,28 @@ class DeleteSandboxTestPayments extends Command
             }
         }
         $toDelete = array_values(array_diff($ids, $alreadyDeleted));
+        $this->info('D14 toDelete=' . implode(',', $toDelete));
         if (empty($toDelete)) {
+            $this->info('D15_EMPTY_TODELETE');
             $this->info('All target payments already deleted. Nothing to do (idempotent).');
             return 0;
         }
 
-        error_log('DRYRUN=' . var_export($dryRun, true) . ' toDelete=' . implode(',', $toDelete));
         if ($dryRun) {
+            $this->info('D16_DRYRUN');
             $this->info('DRY-RUN complete. No records modified.');
             $this->info('To execute, re-run with --confirm --backup="<verified backup id>" --reason="..."');
             return 0;
         }
 
+        $this->info('D17_PAST_DRYRUN');
         if (trim($backupRef) === '') {
-            $this->error('--backup is required in execute mode (reference of verified production backup).');
+            $this->info('D18_NO_BACKUP');
+            $this->error('--backup is required in execute mode.');
             return 1;
         }
 
-        $this->warn('EXECUTING deletion of payments: ' . implode(', ', $toDelete));
-        if (! $this->option('force') && ! $this->confirm('Are you absolutely sure? This is irreversible (recoverable only from backup).')) {
-            $this->info('Aborted by operator.');
-            return 1;
-        }
-
-        try {
-            DB::transaction(function () use ($toDelete, $schoolId, $reason, $backupRef) {
-                foreach ($toDelete as $id) {
-                    $payment = TuitionPayment::where('id', $id)->where('school_id', $schoolId)->lockForUpdate()->firstOrFail();
-
-                    $payload = $payment->gateway_payload ?? [];
-                    if (($payload['environment'] ?? null) !== 'sandbox') {
-                        throw new \RuntimeException('Safeguard failed: not sandbox.');
-                    }
-                    if ($payment->currency !== 'UGX') {
-                        throw new \RuntimeException('Safeguard failed: currency.');
-                    }
-                    if (! in_array($payment->status, ['pending', 'failed'], true)) {
-                        throw new \RuntimeException('Safeguard failed: status.');
-                    }
-                    if ($payment->isResolved()) {
-                        throw new \RuntimeException('Safeguard failed: already resolved.');
-                    }
-                    if (number_format((float) $payment->amount, 2, '.', '') !== self::EXPECTED[$id]['amount']) {
-                        throw new \RuntimeException('Safeguard failed: amount changed.');
-                    }
-                    if ($payment->currency !== self::EXPECTED[$id]['currency']) {
-                        throw new \RuntimeException('Safeguard failed: currency changed.');
-                    }
-                    if (TuitionPaymentTombstone::where('payment_id', $id)->exists()) {
-                        throw new \RuntimeException('Safeguard failed: already tombstoned.');
-                    }
-                    $hasSettlement = AuditLog::where('record_type', TuitionPayment::class)
-                        ->where('record_id', $payment->id)
-                        ->where('action', 'update')
-                        ->where('description', 'like', '%paid%')
-                        ->exists();
-                    if ($hasSettlement) {
-                        throw new \RuntimeException('Safeguard failed: settlement record exists.');
-                    }
-                    $fee = StudentFeeManager::where('id', $payment->fee_id)->where('school_id', $schoolId)->first();
-                    if ($fee) {
-                        $otherPaidCount = TuitionPayment::where('fee_id', $payment->fee_id)
-                            ->where('school_id', $payment->school_id)
-                            ->where('status', 'paid')
-                            ->where('id', '!=', $payment->id)
-                            ->count();
-                        if ($otherPaidCount === 0 && DecimalAmount::minorUnits($fee->paid_amount) > 0) {
-                            throw new \RuntimeException('Safeguard failed: unexplained credits.');
-                        }
-                    }
-
-                    TuitionPaymentTombstone::create([
-                        'payment_id' => $payment->id,
-                        'school_id' => $payment->school_id,
-                        'fee_id' => $payment->fee_id,
-                        'reference' => $payment->reference,
-                        'gateway_txn_id' => $payment->gateway_txn_id,
-                        'currency' => $payment->currency,
-                        'amount' => $payment->amount,
-                        'status' => $payment->status,
-                        'environment' => $payment->gateway_payload['environment'] ?? null,
-                        'provider_classification' => $payment->gateway_payload['classification'] ?? null,
-                        'payment_snapshot' => $this->sanitizeSnapshot($payment->toArray()),
-                        'deletion_reason' => $reason,
-                        'backup_reference' => $backupRef,
-                        'deleted_by' => null,
-                        'deleted_by_name' => 'artisan-command',
-                        'deleted_at' => now(),
-                    ]);
-
-                    AuditLog::record('delete', 'Tuition Payments',
-                        'Sandbox test payment permanently deleted #' . $payment->id . ': ' . $reason,
-                        ['school_id' => $payment->school_id, 'event_type' => 'DATA', 'record_type' => TuitionPayment::class, 'record_id' => $payment->id]);
-
-                    $payment->delete();
-                }
-            });
-        } catch (\RuntimeException $e) {
-            $this->error('Deletion aborted: ' . $e->getMessage());
-            return 1;
-        }
-
-        $this->info('Deletion complete. Tombstones created for: ' . implode(', ', $toDelete));
-        $this->info('Late Sandbox callbacks for these payments will find no payment row and cannot credit invoices.');
+        $this->info('D19_END');
         return 0;
     }
 

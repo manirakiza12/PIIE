@@ -50,11 +50,15 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6);
         $this->makePayment(1);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $kernel = $this->app->make(\Illuminate\Contracts\Console\Kernel::class);
+        $output = new \Symfony\Component\Console\Output\BufferedOutput();
+        $code = $kernel->call('pesapal:delete-sandbox-test-payments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'dry run test reason',
-        ])->assertExitCode(0);
+        ], $output);
+        fwrite(STDERR, 'EXITCODE=' . $code . "\n" . 'OUTPUT=' . $output->fetch() . "\n");
+        $this->assertSame(0, $code);
         $this->assertDatabaseCount('tuition_payments', 2);
         $this->assertDatabaseCount('tuition_payment_tombstones', 0);
     }
