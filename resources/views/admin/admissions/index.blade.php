@@ -162,7 +162,7 @@
                                 @unless(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
                                     <li><a class="dropdown-item text-danger" href="{{ route('admin.hei_admissions.destroy', $app->id) }}" onclick="return confirm('Delete?')">{{ get_phrase('Delete') }}</a></li>
                                 @endunless
-                                @unless(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
+                                @unless(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled() || $app->status === \App\Models\Admission::STATUS_DRAFT)
                                     <li><hr class="dropdown-divider"></li>
                                     <li class="px-3 py-1">
                                         <form action="{{ route('admin.hei_admissions.status', $app->id) }}" method="POST" class="d-inline">
