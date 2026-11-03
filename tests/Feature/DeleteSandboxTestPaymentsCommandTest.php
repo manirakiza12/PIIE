@@ -51,11 +51,15 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6);
         $this->makePayment(1);
-        $this->artisan('pesapaldeletetestpayments', [
+        $kernel = $this->app->make(\Illuminate\Contracts\Console\Kernel::class);
+        $output = new \Symfony\Component\Console\Output\BufferedOutput();
+        $code = $kernel->call('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'dry run test reason',
-        ])->expectsOutputToContain('ZZZNOTPRINTED')->assertExitCode(0);
+        ], $output);
+        fwrite(STDERR, "EXITCODE=" . $code . "\nOUTPUT=" . $output->fetch() . "\n");
+        $this->assertSame(0, $code);
         $this->assertDatabaseCount('tuition_payments', 2);
         $this->assertDatabaseCount('tuition_payment_tombstones', 0);
     }
