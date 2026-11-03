@@ -1,6 +1,7 @@
 @extends('admin.navigation')
 
-@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">
+@section('page_styles')
+<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">
 <style>
     .course-unit-view .eSection-wrap { padding: 24px; }
     .course-unit-view .view-summary { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 20px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 16px; }
