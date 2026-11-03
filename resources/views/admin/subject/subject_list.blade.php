@@ -1,8 +1,22 @@
 @extends('admin.navigation')
 
-@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">@endsection
+@section('page_styles')
+<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">
+<style>
+    .course-units-compact .table.eTable { margin-bottom: 0; }
+    .course-units-compact .table.eTable thead th { padding: 10px 12px; font-size: 13px; white-space: nowrap; }
+    .course-units-compact .table.eTable tbody td { padding: 8px 12px; vertical-align: middle; font-size: 14px; }
+    .course-units-compact .table.eTable tbody tr { height: auto; }
+    .course-units-compact .adminTable-action { margin: 0; }
+    .course-units-compact .adminTable-action .table-action-btn-2 { padding: 4px 12px; font-size: 13px; }
+    .course-units-filter .form-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .course-units-filter .form-control, .course-units-filter .form-select { height: 38px; font-size: 14px; }
+</style>
+@endsection
+</style>
+@endsection
 @section('content')
-<div class="curriculum-workspace">
+<div class="curriculum-workspace course-units-compact">
 @php
     $pageLabel = $isHigherEducation ? 'Course Units' : ($isMixed ? 'Subjects / Course Units' : 'Subjects');
     $createLabel = $isHigherEducation ? 'Create Course Unit' : ($isMixed ? 'Create Subject / Course Unit' : 'Create Subject');
@@ -35,7 +49,7 @@
 @endif
 
 <div class="eSection-wrap mt-3">
-    <form method="GET" class="row g-3 align-items-end" action="{{ route('admin.subject_list') }}" aria-label="{{ get_phrase('Filter catalogue') }}">
+    <form method="GET" class="row g-3 align-items-end course-units-filter" action="{{ route('admin.subject_list') }}" aria-label="{{ get_phrase('Filter catalogue') }}">
         <div class="col-12 col-md-6 {{ $isHigherEducation ? 'col-lg-6' : 'col-lg-5' }}">
             <label for="catalogue-search" class="form-label">{{ get_phrase($isHigherEducation ? 'Search Course Units' : 'Search Subjects / Course Units') }}</label>
             <input type="search" name="search" id="catalogue-search" class="form-control" value="{{ $search }}" placeholder="{{ get_phrase('Search by name or code') }}">
@@ -115,12 +129,11 @@
                                 <td>{{ $subject->classes->name ?? '—' }}</td>
                             @endif
                             <td class="text-end">
-                                @if($isHigherEducation || $isMixed)<a class="btn btn-sm btn-outline-primary mb-1" href="{{ route('admin.subject.setup', ['id' => $subject->id] + request()->only('curriculum_id')) }}">{{ get_phrase('Edit Course Unit') }}</a>@endif
                                 <div class="adminTable-action">
                                     <button type="button" class="eBtn eBtn-black dropdown-toggle table-action-btn-2" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ get_phrase('Actions for') }} {{ $subject->name }}">{{ get_phrase('Actions') }}</button>
                                     <ul class="dropdown-menu dropdown-menu-end eDropdown-menu-2 eDropdown-table-action">
                                         <li><a class="dropdown-item" href="{{ ($isHigherEducation || $isMixed) ? route('admin.subject.setup', ['id' => $subject->id] + request()->only('curriculum_id')) : 'javascript:;' }}" @if(!$isHigherEducation && !$isMixed) onclick="rightModal('{{ route('admin.edit.subject', ['id' => $subject->id, 'modal' => 1]) }}', '{{ get_phrase('Edit Subject') }}')" @endif>{{ get_phrase('Edit') }}</a></li>
-                                        @if($isHigherEducation || $isMixed)<li><a class="dropdown-item" href="{{ route('admin.subject.setup', ['id' => $subject->id, 'view' => '1']) }}">View</a></li>@endif
+                                        @if($isHigherEducation || $isMixed)<li><a class="dropdown-item" href="{{ route('admin.subject.setup', ['id' => $subject->id, 'view' => '1']) }}">{{ get_phrase('View') }}</a></li>@endif
                                         <li><a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.subject.delete', ['id' => $subject->id]) }}', 'undefined');">{{ get_phrase('Delete') }}</a></li>
                                     </ul>
                                 </div>
