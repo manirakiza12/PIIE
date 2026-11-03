@@ -42,7 +42,7 @@
 
 {{-- Horizontal row of requirement cards --}}
 <div class="eSection-wrap mb-3">
-    <div class="d-flex align-items-stretch gap-3 overflow-auto pb-2" style="flex-wrap:nowrap;">
+    <div class="d-flex flex-wrap align-items-stretch gap-3">
         @forelse($requirements as $requirement)
             <div class="card flex-shrink-0" style="min-width:260px; max-width:300px;">
                 <div class="card-body p-3">
@@ -159,7 +159,7 @@
                 </div>
 
                 <div class="d-flex gap-2 mt-3">
-                    <button type="submit" class="eBtn">{{ get_phrase('Save') }}</button>
+                    <button type="submit" class="eBtn eBtn-primary">{{ get_phrase('Save') }}</button>
                     <button type="button" class="eBtn eBtn-outline d-none" id="cancelEdit" onclick="resetRequirementForm()">
                         {{ get_phrase('Cancel') }}
                     </button>
