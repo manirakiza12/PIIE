@@ -37,8 +37,8 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
             'gateway_txn_id' => 'tracking-' . $id,
             'gateway_payload' => ['environment' => 'sandbox'],
         ], $overrides));
-        ], $overrides));
         \App\Models\TuitionPayment::reguard();
+        return $p;
     }
 
     private function makeFee(): int
