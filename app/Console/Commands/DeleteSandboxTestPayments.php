@@ -106,7 +106,7 @@ class DeleteSandboxTestPayments extends Command
             $this->info('DEBUG: ' . "DRYRUN branch, returning 0\n");
             $this->info('DRY-RUN complete. No records modified.');
             $this->info('To execute, re-run with --confirm --backup="<verified backup id>" --reason="..."');
-            return 0;
+            throw new \RuntimeException('DEBUG: env=' . app()->environment() . ' schoolId=' . $schoolId . ' allOk=' . var_export($allOk, true) . ' toDelete=' . implode(',', $toDelete) . ' dryRun=' . var_export($dryRun, true));
         }
 
         $this->info('DEBUG: ' . "past dryrun, backupRef=" . $backupRef . "\n");
