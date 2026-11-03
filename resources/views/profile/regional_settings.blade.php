@@ -1,4 +1,4 @@
-@extends(request()->routeIs('superadmin.*') ? 'superadmin.navigation' : (request()->routeIs('admin.*') ? 'admin.navigation' : (request()->routeIs('teacher.*') ? 'teacher.navigation' : (request()->routeIs('student.*') ? 'student.navigation' : (request()->routeIs('parent.*') ? 'parent.navigation' : 'admin.navigation')))))
+@extends(auth()->user()->role_id == 1 ? 'superadmin.navigation' : (auth()->user()->role_id == 3 ? 'teacher.navigation' : (auth()->user()->role_id == 4 ? 'accountant.navigation' : (auth()->user()->role_id == 5 ? 'librarian.navigation' : (auth()->user()->role_id == 6 ? 'parent.navigation' : (auth()->user()->role_id == 7 ? 'student.navigation' : (auth()->user()->role_id == 10 ? 'warden.navigation' : 'admin.navigation')))))))
 @section('content')
 
 @php
