@@ -46,8 +46,18 @@ final class TuitionPesaPalController extends Controller
         try {
             $classification = TuitionPesaPalPayment::reconcile($payment, $payment->gateway_txn_id);
             $payment->refresh();
+            if ($classification === 'invoice_missing') {
+                return back()->with('error', 'PesaPal verification complete. Provider status: ' . ($payment->gateway_payload['classification'] ?? 'UNKNOWN') . '. The invoice record is missing or inaccessible, so no financial update was made.');
+            }
             $newStatus = $payment->status;
             return back()->with('success', "PesaPal verification complete. Provider status: {$classification}. Payment status: {$newStatus}.");
+        } catch (\App\Support\Payments\PesaPalException $e) {
+            $paymentEnvironment = $payment->gateway_payload['environment'] ?? null;
+            if ($paymentEnvironment === 'sandbox' && $paymentEnvironment !== 'live') {
+                // Old Sandbox orders must never be verified with Live credentials.
+                return back()->with('error', 'This Sandbox payment cannot be verified with the current Live PesaPal configuration. Restore the original Sandbox credentials/configuration or leave it pending.');
+            }
+            return back()->with('error', 'PesaPal verification failed: ' . $e->getMessage());
         } catch (\Throwable $e) {
             return back()->with('error', 'PesaPal verification failed: ' . $e->getMessage());
         }
