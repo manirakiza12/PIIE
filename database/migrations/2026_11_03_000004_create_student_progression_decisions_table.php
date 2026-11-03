@@ -36,8 +36,8 @@ return new class extends Migration
 
             $table->foreign('school_id', 'spd_school_fk')
                 ->references('id')->on('schools')->onDelete('restrict')->onUpdate('restrict');
-            $table->foreign(['school_id', 'student_id'], 'spd_student_tenant_fk')
-                ->references(['school_id', 'id'])->on('users')->onDelete('restrict')->onUpdate('restrict');
+            $table->foreign('student_id', 'spd_student_fk')
+                ->references('id')->on('users')->onDelete('restrict')->onUpdate('restrict');
             $table->foreign(['school_id', 'programme_id'], 'spd_programme_tenant_fk')
                 ->references(['school_id', 'id'])->on('programmes')->onDelete('restrict')->onUpdate('restrict');
             $table->foreign(['school_id', 'programme_id', 'curriculum_id'], 'spd_curriculum_programme_fk')
