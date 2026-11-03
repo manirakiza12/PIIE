@@ -33,10 +33,10 @@ return new class extends Migration
                 ->references('id')->on('schools')->onDelete('restrict')->onUpdate('restrict');
             $table->foreign(['school_id', 'exemption_id'], 'saei_exemption_tenant_fk')
                 ->references(['school_id', 'id'])->on('student_academic_exemptions')->onDelete('cascade')->onUpdate('restrict');
-            $table->foreign(['school_id', 'curriculum_membership_id'], 'saei_membership_tenant_fk')
-                ->references(['school_id', 'id'])->on('curriculum_memberships')->onDelete('restrict')->onUpdate('restrict');
-            $table->foreign(['school_id', 'subject_id'], 'saei_subject_tenant_fk')
-                ->references(['school_id', 'id'])->on('subjects')->onDelete('restrict')->onUpdate('restrict');
+            $table->foreign('curriculum_membership_id', 'saei_membership_fk')
+                ->references('id')->on('curriculum_memberships')->onDelete('restrict')->onUpdate('restrict');
+            $table->foreign('subject_id', 'saei_subject_fk')
+                ->references('id')->on('subjects')->onDelete('restrict')->onUpdate('restrict');
         });
     }
 
