@@ -77,91 +77,108 @@
         </form>
 
         <div class="table-responsive">
-            <table class="table eTable">
+            <table class="table eTable align-middle mb-0" style="font-size:12px;">
                 <thead><tr>
-                    <th>#</th><th>{{ get_phrase('App No.') }}</th><th>{{ get_phrase('Applicant') }}</th>
-                    <th>{{ get_phrase('Programme') }}</th><th>{{ get_phrase('Session') }}</th>
-                    <th>{{ get_phrase('Status') }}</th><th>{{ get_phrase('Fee') }}</th><th>{{ get_phrase('Source') }}</th><th>{{ get_phrase('Activation') }}</th><th>{{ get_phrase('Date') }}</th><th>{{ get_phrase('Actions') }}</th>
+                    <th style="width:34px;">#</th>
+                    <th>{{ get_phrase('App No.') }}</th>
+                    <th>{{ get_phrase('Applicant') }}</th>
+                    <th>{{ get_phrase('Programme') }}</th>
+                    <th>{{ get_phrase('Session') }}</th>
+                    <th>{{ get_phrase('Status') }}</th>
+                    <th>{{ get_phrase('Fee') }}</th>
+                    <th>{{ get_phrase('Source') }}</th>
+                    <th>{{ get_phrase('Activation') }}</th>
+                    <th>{{ get_phrase('Date') }}</th>
+                    <th class="text-end">{{ get_phrase('Actions') }}</th>
                 </tr></thead>
                 <tbody>
                 @forelse($admissions as $i => $app)
                 @php $studentUser = $studentsByEmail->get(strtolower($app->email ?? '')); @endphp
                 <tr>
-                    <td>{{ $admissions->firstItem() + $i }}</td>
-                    <td><small class="text-muted">{{ $app->app_number }}</small></td>
-                    <td>
-                        <strong>{{ $app->first_name }} {{ $app->last_name }}</strong><br>
-                        <small class="text-muted">{{ $app->email }}</small>
+                    <td style="width:34px;">{{ $admissions->firstItem() + $i }}</td>
+                    <td class="text-truncate" style="max-width:110px;" title="{{ $app->app_number }}"><small class="text-muted">{{ $app->app_number }}</small></td>
+                    <td style="min-width:150px;">
+                        <div class="text-truncate fw-semibold" style="max-width:170px;" title="{{ $app->first_name }} {{ $app->last_name }}">{{ $app->first_name }} {{ $app->last_name }}</div>
+                        <div class="text-truncate small text-muted" style="max-width:170px;" title="{{ $app->email }}">{{ $app->email }}</div>
                     </td>
-                    <td>{{ $app->programme?->name ?? '—' }}</td>
-                    <td>{{ $app->intakeSession?->name ?? '—' }}</td>
+                    <td class="text-truncate" style="max-width:150px;" title="{{ $app->programme?->name ?? '' }}">
+                        @if(!empty($app->programme?->code))
+                            <span class="fw-semibold">{{ $app->programme->code }}</span>
+                        @else
+                            {{ $app->programme?->name ?? '—' }}
+                        @endif
+                    </td>
+                    <td class="text-truncate" style="max-width:130px;" title="{{ $app->intakeSession?->name ?? '' }}">{{ $app->intakeSession?->name ?? '—' }}</td>
                     <td>
-                        <span class="badge bg-{{ $app->statusColor() }}">{{ $app->statusLabel() }}</span>
+                        <span class="badge bg-{{ $app->statusColor() }}" style="font-size:11px;">{{ $app->statusLabel() }}</span>
                     </td>
                     <td>
-                        <span class="badge bg-{{ $app->isFeeSettled() ? 'success' : ($app->fee_status === 'pending' ? 'primary' : 'light') }} {{ $app->fee_status === 'unpaid' ? 'text-dark' : '' }}">
+                        <span class="badge bg-{{ $app->isFeeSettled() ? 'success' : ($app->fee_status === 'pending' ? 'primary' : 'light') }} {{ $app->fee_status === 'unpaid' ? 'text-dark' : '' }}" style="font-size:11px;">
                             {{ ucfirst($app->fee_status) }}
                         </span>
                     </td>
                     <td>
                         @if($app->source === 'public')
-                            <span class="badge bg-info-subtle text-info" title="{{ get_phrase('Submitted by the applicant through the public apply form') }}">{{ get_phrase('Public') }}</span>
+                            <span class="badge bg-info-subtle text-info" style="font-size:11px;" title="{{ get_phrase('Submitted by the applicant through the public apply form') }}">{{ get_phrase('Public') }}</span>
                         @else
-                            <span class="badge bg-light text-dark" title="{{ get_phrase('Entered by staff in the Admin panel') }}">{{ get_phrase('Staff Entry') }}</span>
+                            <span class="badge bg-light text-dark" style="font-size:11px;" title="{{ get_phrase('Entered by staff in the Admin panel') }}">{{ get_phrase('Staff Entry') }}</span>
                         @endif
                     </td>
                     <td>
                         @if(!$studentUser)
-                            <span class="badge bg-secondary">{{ get_phrase('Not Created') }}</span>
+                            <span class="badge bg-secondary" style="font-size:11px;">{{ get_phrase('Not Created') }}</span>
                         @elseif($studentUser->force_password_change)
-                            <span class="badge bg-warning text-dark">{{ get_phrase('Activation Pending') }}</span>
+                            <span class="badge bg-warning text-dark" style="font-size:11px;">{{ get_phrase('Activation Pending') }}</span>
                         @else
-                            <span class="badge bg-success">{{ get_phrase('Activated') }}</span>
+                            <span class="badge bg-success" style="font-size:11px;">{{ get_phrase('Activated') }}</span>
                         @endif
                     </td>
                     <td><small>{{ $app->created_at->format('d M Y') }}</small></td>
-                    <td>
-                        <div class="d-flex gap-1">
-                            <a href="{{ route('admin.hei_admissions.review', $app->id) }}" class="eBtn eBtn-sm eBtn-primary" title="{{ get_phrase('Review Application') }}"><i class="bi bi-eye" aria-hidden="true"></i> {{ get_phrase('Review') }}</a>
-                            @if(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
-                                <span class="badge bg-warning text-dark align-self-center" title="{{ get_phrase('Admissions actions unlock after payment is confirmed') }}">{{ get_phrase('Awaiting fee') }}</span>
-                            @else
-                            <a href="javascript:;" class="eBtn eBtn-sm eBtn-outline" onclick="rightModal('{{ route('admin.hei_admissions.open_modal', ['id' => $app->id]) }}', '{{ get_phrase('Edit Application') }}')"><i class="bi bi-pencil"></i></a>
-                            @endif
-                            @if($app->status === 'accepted' && (! \App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) || $app->isFeeSettled()))
-                            <a href="{{ route('admin.hei_admissions.offer_letter', $app->id) }}" class="eBtn eBtn-sm eBtn-success" title="{{ get_phrase('Offer Letter') }}"><i class="bi bi-file-pdf"></i></a>
-                            @endif
-                            @if($studentUser && (! \App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) || $app->isFeeSettled()))
-                            <a href="javascript:;" class="eBtn eBtn-sm eBtn-warning" title="{{ get_phrase('Resend Activation Email') }}" onclick="confirmModal('{{ route('admin.student.resend_activation', $studentUser->id) }}', 'undefined');"><i class="bi bi-envelope-arrow-up"></i></a>
-                            @endif
-                            {{-- Quick status change stays here for the common
-                                 "move a batch to Under Review" pass; anything
-                                 needing a note or a document check belongs on
-                                 the review screen. --}}
-                            @if($app->status === \App\Models\Admission::STATUS_DRAFT)
-                                @if($app->source === 'staff_entry')
-                                    <a href="{{ route('admin.hei_admissions.wizard.step', [$app->id, 'personal']) }}" class="eBtn eBtn-sm eBtn-outline">{{ get_phrase('Complete Application') }}</a>
+                    <td class="text-end">
+                        <div class="dropdown">
+                            <button type="button" class="eBtn eBtn-black dropdown-toggle table-action-btn-2" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end eDropdown-menu-2 eDropdown-table-action">
+                                <li><a class="dropdown-item" href="{{ route('admin.hei_admissions.review', $app->id) }}">{{ get_phrase('Review Application') }}</a></li>
+                                @if(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
+                                    <li><span class="dropdown-item-text small text-muted">{{ get_phrase('Applicant payment pending') }}</span></li>
                                 @else
-                                    <span class="text-muted">{{ get_phrase('Awaiting applicant submission') }}</span>
+                                    <li><a class="dropdown-item" href="javascript:;" onclick="rightModal('{{ route('admin.hei_admissions.open_modal', ['id' => $app->id]) }}', '{{ get_phrase('Edit Application') }}')">{{ get_phrase('Edit Application') }}</a></li>
                                 @endif
-                            @elseif(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
-                                <span class="text-muted align-self-center">{{ get_phrase('Applicant payment pending') }}</span>
-                            @else
-                            <form action="{{ route('admin.hei_admissions.status', $app->id) }}" method="POST" class="d-inline">
-                                @csrf
-                                <select name="status" class="form-select form-select-sm" style="width:150px" onchange="this.form.submit()">
-                                    @if(!in_array($app->status, \App\Models\Admission::STAFF_SETTABLE_STATUSES, true))
-                                        <option value="" selected disabled>{{ $app->statusLabel() }}</option>
+                                @if($app->status === 'accepted' && (! \App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) || $app->isFeeSettled()))
+                                    <li><a class="dropdown-item" href="{{ route('admin.hei_admissions.offer_letter', $app->id) }}">{{ get_phrase('Offer Letter') }}</a></li>
+                                @endif
+                                @if($studentUser && (! \App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) || $app->isFeeSettled()))
+                                    <li><a class="dropdown-item" href="javascript:;" onclick="confirmModal('{{ route('admin.student.resend_activation', $studentUser->id) }}', 'undefined');">{{ get_phrase('Resend Activation Email') }}</a></li>
+                                @endif
+                                @if($app->status === \App\Models\Admission::STATUS_DRAFT)
+                                    @if($app->source === 'staff_entry')
+                                        <li><a class="dropdown-item" href="{{ route('admin.hei_admissions.wizard.step', [$app->id, 'personal']) }}">{{ get_phrase('Complete Application') }}</a></li>
+                                    @else
+                                        <li><span class="dropdown-item-text small text-muted">{{ get_phrase('Awaiting applicant submission') }}</span></li>
                                     @endif
-                                    @foreach(\App\Models\Admission::STAFF_SETTABLE_STATUSES as $s)
-                                        <option value="{{ $s }}" {{ $app->status == $s ? 'selected' : '' }}>{{ ucwords(str_replace('_',' ',$s)) }}</option>
-                                    @endforeach
-                                </select>
-                            </form>
-                            @endif
-                            @unless(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
-                                <a href="{{ route('admin.hei_admissions.destroy', $app->id) }}" class="eBtn eBtn-sm eBtn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
-                            @endunless
+                                @endif
+                                @unless(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled())
+                                    <li><a class="dropdown-item text-danger" href="{{ route('admin.hei_admissions.destroy', $app->id) }}" onclick="return confirm('Delete?')">{{ get_phrase('Delete') }}</a></li>
+                                @endunless
+                                @unless(\App\Support\Admissions\ApplicationWorkflow::hasBeenSubmitted($app) && ! $app->isFeeSettled() || $app->status === \App\Models\Admission::STATUS_DRAFT)
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li class="px-3 py-1">
+                                        <form action="{{ route('admin.hei_admissions.status', $app->id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                                @if(!in_array($app->status, \App\Models\Admission::STAFF_SETTABLE_STATUSES, true))
+                                                    <option value="" selected disabled>{{ $app->statusLabel() }}</option>
+                                                @endif
+                                                @foreach(\App\Models\Admission::STAFF_SETTABLE_STATUSES as $s)
+                                                    <option value="{{ $s }}" {{ $app->status == $s ? 'selected' : '' }}>{{ ucwords(str_replace('_',' ',$s)) }}</option>
+                                                @endforeach
+                                            </select>
+                                        </form>
+                                    </li>
+                                @endunless
+                            </ul>
                         </div>
                     </td>
                 </tr>
@@ -171,6 +188,7 @@
                 </tbody>
             </table>
         </div>
+        <div class="mt-3">{{ $admissions->withQueryString()->links() }}</div>
         <div class="mt-3">{{ $admissions->withQueryString()->links() }}</div>
     </div></div>
 </div>

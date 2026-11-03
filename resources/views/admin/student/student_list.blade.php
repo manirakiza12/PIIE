@@ -1,5 +1,24 @@
 @extends('admin.navigation')
-   
+
+@section('page_styles')
+<style>
+@media print {
+    @page { size: A4 landscape; margin: 10mm; }
+    body.report-printing .main_content,
+    body.report-printing .mainSection-title { display: none !important; }
+    .print-hidden, .export-btn-area, .search-filter-area, .admin-tInfo-pagi, .pagination,
+    .adminTable-action, button, .dropdown-menu, .dropdown-toggle,
+    th:last-child, td:last-child { display: none !important; }
+    .table-responsive { overflow: visible !important; }
+    table { width: 100% !important; table-layout: fixed; font-size: 9.5pt; }
+    th, td { padding: 3px 5px !important; vertical-align: top; word-wrap: break-word; overflow-wrap: anywhere; min-width: 0 !important; white-space: normal; }
+    tr { break-inside: auto; page-break-inside: auto; }
+    thead { display: table-header-group; }
+    .eBadge { border: 1px solid #999; color: #000 !important; background: transparent !important; }
+}
+</style>
+@endsection
+
 @section('content')
 
 <?php 
@@ -170,16 +189,27 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
             </div>
             @if(count($students) > 0)
             <!-- Table -->
+            <h4 class="d-none d-print-block mb-2">Students Register</h4>
             <div class="table-responsive">
-              <table class="table eTable eTable-2">
+              <table class="table eTable eTable-2 align-middle mb-0" style="font-size:12px;">
+                <colgroup>
+                  <col style="width:5%">
+                  <col style="width:24%">
+                  <col style="width:20%">
+                  <col style="width:24%">
+                  <col style="width:12%">
+                  <col style="width:10%">
+                  <col style="width:5%" class="print-hidden">
+                 </colgroup>
                 <thead>
                   <tr>
-                    <th scope="col">#</th>
-                    <th scope="col">{{ get_phrase('Name') }}</th>
+                    <th scope="col" style="width:36px;">#</th>
+                    <th scope="col">{{ get_phrase('Student') }}</th>
+                    <th scope="col">{{ get_phrase('Programme / Class') }}</th>
                     <th scope="col">{{ get_phrase('Email') }}</th>
-                    <th scope="col">{{ get_phrase('User Info') }}</th>
-                    <th scope="col">{{ get_phrase('Account Status') }}</th>
-                    <th scope="col">{{ get_phrase('Options') }}</th>
+                    <th scope="col">{{ get_phrase('Phone') }}</th>
+                    <th scope="col">{{ get_phrase('Status') }}</th>
+                    <th scope="col" class="text-end">{{ get_phrase('Options') }}</th>
                 </thead>
                 <tbody>
                     @foreach($students as $key => $user)
@@ -193,61 +223,53 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                         $student_details = (new CommonController)->get_student_academic_info($student->id);
                     ?>
                       <tr>
-                        <th scope="row">
-                          <p class="row-number">{{ $students->firstItem() + $key }}</p>
+                        <th scope="row" style="width:36px;">
+                          <p class="row-number mb-0" style="font-size:12px;">{{ $students->firstItem() + $key }}</p>
                         </th>
-                        <td>
-                            <div
-                              class="dAdmin_profile d-flex align-items-center min-w-160px"
-                            >
-                              <div class="dAdmin_profile_img">
-                                <img
-                                  class="img-fluid rounded-circle"
-                                  width="36"
-                                  height="36"
-                                  src="{{ $user_image }}"
-                                  alt="{{ $student->name }}"
-                                />
-                              </div>
-                              <div class="dAdmin_profile_name dAdmin_info_name">
-                                <h4 class="text-truncate mb-0" style="max-width:180px;" title="{{ $student->name }}">{{ $student->name }}</h4>
-                                <p class="mb-0 small text-muted text-truncate" style="max-width:180px;">
+                        <td style="min-width:150px;">
+                          <div class="d-flex align-items-center gap-2">
+                            <img class="rounded-circle" width="30" height="30" src="{{ $user_image }}" alt="{{ $student->name }}">
+                            <div class="text-truncate" style="max-width:140px;" title="{{ $student->name }}{{ $info->address ? ' — ' . $info->address : '' }}">
+                              <div class="fw-semibold text-truncate" style="font-size:12px;">{{ $student->name }}</div>
+                              <div class="small text-muted text-truncate" style="font-size:11px;">
                                 @if(academic_education_level(auth()->user()->school_id) !== 'tertiary' && !empty($student_details->class_name))
-                                <span>{{ academic_term('class', auth()->user()->school_id) }}:</span> {{ $student_details->class_name }}
-                                <br>
-                                <span>{{ academic_term('section', auth()->user()->school_id) }}:</span> {{ $student_details->section_name }}
+                                {{ academic_term('class', auth()->user()->school_id) }}: {{ $student_details->class_name }} / {{ $student_details->section_name }}
                                 @elseif(!empty($student_details->programme_name))
-                                <span>{{ academic_term('programme', auth()->user()->school_id) }}:</span> {{ $student_details->programme_name }}
+                                {{ academic_term('programme', auth()->user()->school_id) }}: {{ $student_details->programme_name }}
                                 @elseif(academic_education_level(auth()->user()->school_id) === 'tertiary')
-                                <span>Programme:</span> {{ get_phrase('Placement pending') }}
+                                Programme: {{ get_phrase('Placement pending') }}
                                 @else
-                                <span>{{ academic_term('class', auth()->user()->school_id) }}:</span> {{ get_phrase('Removed') }}
-                                <br>
-                                <span>{{ academic_term('section', auth()->user()->school_id) }}:</span> {{ get_phrase('Removed') }}
+                                {{ academic_term('class', auth()->user()->school_id) }}: {{ get_phrase('Removed') }}
                                 @endif
-                                </p>
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td>
-                          <div class="dAdmin_info_name min-w-160px">
-                            <p class="mb-0 text-truncate" style="max-width:160px;" title="{{ $student->email }}">{{ $student->email }}</p>
-                          </div>
-                        </td>
-                        <td>
-                          <div class="dAdmin_info_name min-w-180px">
-                            <p class="mb-0 small"><span>{{ get_phrase('Phone') }}:</span> <span class="text-truncate d-inline-block align-bottom" style="max-width:150px;" title="{{ $info->phone }}">{{ $info->phone }}</span></p>
-                            <p class="mb-0 small text-truncate" style="max-width:180px;" title="{{ $info->address }}"><span>{{ get_phrase('Address') }}:</span> {{ $info->address }}</p>
-                          </div>
-                        </td>
-                        <td>
-                          <div class="dAdmin_info_name min-w-100px">
-                            @if(!empty($student->account_status == 'disable'))
-                            <span class="eBadge ebg-soft-danger">{{get_phrase('Disabled')}}</span>
+                        <td style="min-width:120px;">
+                          <div class="text-truncate" style="max-width:150px; font-size:12px;" title="{{ $student_details->programme_name ?? $student_details->class_name ?? '' }}">
+                            @if(!empty($student_details->programme_name))
+                            {{ $student_details->programme_name }}
+                            @elseif(academic_education_level(auth()->user()->school_id) !== 'tertiary' && !empty($student_details->class_name))
+                            {{ $student_details->class_name }} - {{ $student_details->section_name }}
+                            @elseif(academic_education_level(auth()->user()->school_id) === 'tertiary')
+                            {{ get_phrase('Placement pending') }}
                             @else
-                            <span class="eBadge ebg-soft-success">{{get_phrase('Enable')}}</span>
+                            {{ get_phrase('Removed') }}
                             @endif
                           </div>
+                        </td>
+                        <td style="min-width:150px;">
+                          <div class="text-truncate" style="max-width:160px; font-size:12px;" title="{{ $student->email }}">{{ $student->email }}</div>
+                        </td>
+                        <td style="min-width:110px;">
+                          <div class="text-truncate" style="max-width:120px; font-size:12px;" title="{{ $info->phone }}">{{ $info->phone }}</div>
+                        </td>
+                        <td>
+                          @if(!empty($student->account_status == 'disable'))
+                          <span class="eBadge ebg-soft-danger" style="font-size:11px;">{{get_phrase('Disabled')}}</span>
+                          @else
+                          <span class="eBadge ebg-soft-success" style="font-size:11px;">{{get_phrase('Enable')}}</span>
+                          @endif
                         </td>
                         <td>
                           <div class="adminTable-action">
@@ -358,7 +380,7 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
                     @endforeach
                 </tbody>
               </table>
-              
+
               <div
                   class="admin-tInfo-pagi d-flex justify-content-md-between justify-content-center align-items-center flex-wrap gr-15"
                 >
@@ -399,5 +421,103 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
 </script>
 
 
+<style>
+.pdf-export table { table-layout: fixed !important; width: 100% !important; }
+.pdf-export th, .pdf-export td { min-width: 0 !important; white-space: normal !important; word-wrap: break-word !important; overflow-wrap: anywhere !important; }
+.pdf-export .adminTable-action, .pdf-export button, .pdf-export .dropdown-menu, .pdf-export .dropdown-toggle,
+.pdf-export .export-btn-area, .pdf-export .search-filter-area, .pdf-export .admin-tInfo-pagi, .pdf-export .pagination { display: none !important; }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.html2pdf !== 'function') return;
+    window.exportCurrentPagePdf = function (targetId) {
+        var source = document.getElementById(targetId || 'page-print-area');
+        if (!source) return Promise.resolve();
+        var clone = source.cloneNode(true);
+        var tables = Array.from(clone.querySelectorAll('table'));
+        if (clone.matches('table')) tables.unshift(clone);
+        tables.forEach(function (table) {
+            var header = table.tHead && table.tHead.rows[0];
+            if (!header) return;
+            var columns = [];
+            Array.from(header.cells).forEach(function (cell, index) {
+                if (/^(actions?|options?|manage)$/i.test((cell.textContent || '').trim()) ||
+                    cell.hasAttribute('data-print-exclude') ||
+                    (!(cell.textContent || '').trim() && cell.querySelector('input[type="checkbox"]'))) columns.push(index);
+            });
+            Array.from(table.rows).forEach(function (row) {
+                var column = 0;
+                Array.from(row.cells).forEach(function (cell) {
+                    var span = cell.colSpan || 1;
+                    var removed = columns.filter(function (index) { return index >= column && index < column + span; }).length;
+                    column += span;
+                    if (removed === span) cell.remove();
+                    else if (removed) cell.colSpan = span - removed;
+                });
+            });
+        });
+        clone.querySelectorAll('button, .btn, .eBtn, a[class*="eBtn"], .dropdown-menu, .dropdown-toggle, input, select, textarea, .page-toolbar, .pagination, .admin-tInfo-pagi, .export-btn-area, .search-filter-area, .modal, .modal-backdrop').forEach(function (node) { node.remove(); });
+        clone.style.setProperty('width', '100%', 'important');
+        clone.style.setProperty('min-width', '0', 'important');
+        clone.style.setProperty('max-width', '100%', 'important');
+        clone.style.setProperty('display', 'block', 'important');
+        clone.style.setProperty('position', 'static', 'important');
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'pdf-export';
+        wrapper.style.width = '273mm';
+
+        var header = document.createElement('div');
+        header.className = 'print-header';
+        header.style.display = 'block';
+        header.style.marginBottom = '12px';
+        header.style.borderBottom = '2px solid #333';
+        header.style.paddingBottom = '8px';
+
+        var institution = document.createElement('p');
+        institution.style.fontSize = '16px';
+        institution.style.fontWeight = '700';
+        institution.style.margin = '0';
+        institution.textContent = '{{ institution_name() }}';
+        header.appendChild(institution);
+
+        var meta = document.createElement('div');
+        meta.style.display = 'flex';
+        meta.style.justifyContent = 'space-between';
+        meta.style.fontSize = '12px';
+        meta.style.marginTop = '4px';
+
+        var titleEl = document.createElement('span');
+        titleEl.textContent = 'Students Register';
+        meta.appendChild(titleEl);
+
+        var dateEl = document.createElement('span');
+        dateEl.textContent = '{{ get_phrase('Generated') }}: ' + new Date().toLocaleString();
+        meta.appendChild(dateEl);
+
+        header.appendChild(meta);
+        wrapper.appendChild(header);
+        wrapper.appendChild(clone);
+
+        return window.html2pdf().set({
+            margin: 10,
+            filename: (document.title || 'students-register').toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') + '.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 1.5, scrollX: 0, scrollY: 0, windowWidth: 1123, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h1', 'h2', 'h3', 'h4'] }
+        }).from(wrapper).save();
+    };
+});
+</script>
 <!-- End Students area -->
+<style>
+@media print {
+    @page { size: A4 landscape; margin: 10mm; }
+    .admin-tInfo-pagi, .pagination, .adminTable-action, button, .dropdown-menu, .dropdown-toggle,
+    .print-hidden, .export-btn-area, .search-filter-area { display: none !important; }
+    tr { break-inside: auto !important; page-break-inside: auto !important; }
+    table { table-layout: fixed !important; }
+}
+</style>
 @endsection
