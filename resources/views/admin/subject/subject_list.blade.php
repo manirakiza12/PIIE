@@ -13,8 +13,6 @@
     .course-units-filter .form-control, .course-units-filter .form-select { height: 38px; font-size: 14px; }
 </style>
 @endsection
-</style>
-@endsection
 @section('content')
 <div class="curriculum-workspace course-units-compact">
 @php
