@@ -37,7 +37,8 @@ class DeleteSandboxTestPayments extends Command
             return 1;
         }
 
-        $ids = array_values(array_unique(array_map('intval', explode(',', (string) $this->option('ids')))));
+        $optIds = $this->option('ids');
+        $this->info('DEBUG: optIds=' . var_export($optIds, true) . "\n");
         $this->info('DEBUG: ' . "ids=" . implode(',', $ids) . "\n");
         foreach ($ids as $id) {
             if (! in_array($id, self::ALLOWED_IDS, true)) {
