@@ -117,7 +117,7 @@ class DeleteSandboxTestPayments extends Command
         if ($dryRun) {
             $this->info('DRY-RUN complete. No records modified.');
             $this->info('To execute, re-run with --confirm --backup="<verified backup id>" --reason="..."');
-            return 0;
+            exit(0);
         }
 
         if (trim($backupRef) === '') {
