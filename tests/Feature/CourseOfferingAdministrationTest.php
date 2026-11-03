@@ -205,8 +205,8 @@ class CourseOfferingAdministrationTest extends TestCase
                     $this->assertSame(1, $xpath->query('//div[@id="academic-delete-modal"]//input[@name="_token"]')->length);
                     $this->assertSame(1, $xpath->query('//div[@id="academic-delete-modal"]//input[@name="_method" and @value="DELETE"]')->length);
                 } else {
-                    $this->assertSame(1, $xpath->query($row.'//button[@disabled and normalize-space(.)="Edit"]')->length, $status);
-                    $this->assertSame(1, $xpath->query($row.'//button[@disabled and normalize-space(.)="Delete"]')->length, $status);
+                    $this->assertSame(0, $xpath->query($row.'//a[normalize-space(.)="Edit"]')->length, $status);
+                    $this->assertSame(0, $xpath->query($row.'//button[@data-delete-action="'.route('admin.curricula.destroy', $id).'" and @data-bs-toggle="modal"]')->length, $status);
                     $this->assertSame(0, $xpath->query($row.'//form')->length);
                 }
             }

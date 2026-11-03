@@ -29,7 +29,7 @@
     .curriculum-summary strong { display:block; font-size:1.65rem; line-height:1.2; color:#1e293b; }
     .curriculum-table th { white-space:nowrap; }
     @media(max-width:650px) { .curriculum-progress { grid-template-columns:1fr 1fr; } .curriculum-hero { padding:1rem; } }
-    @media print { .curriculum-no-print { display:none!important; } }
+    @media print { .curriculum-no-print { display:none!important; } @page { size: A4 landscape; margin: 10mm; } table { page-break-inside: auto; } tr { page-break-inside: avoid; page-break-after: auto; } thead { display: table-header-group; } }
 </style>
 <header class="mainSection-title" id="overview">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
