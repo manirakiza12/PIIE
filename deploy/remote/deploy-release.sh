@@ -253,7 +253,8 @@ prepare_public_uploads "$REL/public/assets/uploads"
 
 cd "$REL"
 "$PHP" artisan --version || die "artisan does not boot on $PHP"
-"$PHP" artisan package:discover --ansi
+"$PHP" artisan package:discover > /tmp/piie-pd.out 2>&1 || { echo "PACKAGE_DISCOVER_FAILED:"; cat /tmp/piie-pd.out; exit 1; }
+cat /tmp/piie-pd.out
 
 log "Pending migrations (pretend; nothing executed):"
 PRETEND="$("$PHP" artisan migrate --pretend --force 2>&1)" || die "migration preflight failed; release will not activate"
