@@ -37,8 +37,8 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
             'gateway_txn_id' => 'tracking-' . $id,
             'gateway_payload' => ['environment' => 'sandbox'],
         ], $overrides));
+        ], $overrides));
         \App\Models\TuitionPayment::reguard();
-        return $p;
     }
 
     private function makeFee(): int
@@ -123,18 +123,14 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6);
         $this->makePayment(1);
-        $kernel = $this->app->make(\Illuminate\Contracts\Console\Kernel::class);
-        $output = new \Symfony\Component\Console\Output\BufferedOutput();
-        $code = $kernel->call('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapal:delete-sandbox-test-payments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'one-time sandbox cleanup',
             '--confirm' => true,
             '--force' => true,
             '--backup' => 'BACKUP-TEST-1',
-        ], $output);
-        fwrite(STDERR, 'EXITCODE=' . $code . "\n" . 'OUTPUT=' . $output->fetch() . "\n");
-        $this->assertSame(0, $code);
+        ])->assertExitCode(0);
         $this->assertDatabaseCount('tuition_payments', 0);
         $this->assertDatabaseCount('tuition_payment_tombstones', 2);
         $t = TuitionPaymentTombstone::where('payment_id', 6)->first();
