@@ -29,47 +29,47 @@ class DeleteSandboxTestPayments extends Command
 
     public function handle(): int
     {
-        file_put_contents(storage_path('logs/debug.txt'), "START env=" . app()->environment() . " force=" . var_export($this->option('force'), true) . "\n", FILE_APPEND);
+        $this->info('DEBUG: ' . "START env=" . app()->environment() . " force=" . var_export($this->option('force'), true) . "\n");
 
         if ($this->option('force') && ! app()->environment('testing')) {
-            file_put_contents(storage_path('logs/debug.txt'), "BLOCKED by force check\n", FILE_APPEND);
+            $this->info('DEBUG: ' . "BLOCKED by force check\n");
             $this->error('--force is only permitted in testing environments.');
             return 1;
         }
 
         $ids = array_values(array_unique(array_map('intval', explode(',', (string) $this->option('ids')))));
-        file_put_contents(storage_path('logs/debug.txt'), "ids=" . implode(',', $ids) . "\n", FILE_APPEND);
+        $this->info('DEBUG: ' . "ids=" . implode(',', $ids) . "\n");
         foreach ($ids as $id) {
             if (! in_array($id, self::ALLOWED_IDS, true)) {
-                file_put_contents(storage_path('logs/debug.txt'), "BLOCKED disallowed id\n", FILE_APPEND);
+                $this->info('DEBUG: ' . "BLOCKED disallowed id\n");
                 $this->error("Payment ID {$id} is not in the allowed set.");
                 return 1;
             }
         }
         if (empty($ids)) {
-            file_put_contents(storage_path('logs/debug.txt'), "BLOCKED empty ids\n", FILE_APPEND);
+            $this->info('DEBUG: ' . "BLOCKED empty ids\n");
             $this->error('No payment IDs specified.');
             return 1;
         }
 
         $schoolId = (int) $this->option('school');
-        file_put_contents(storage_path('logs/debug.txt'), "schoolId=$schoolId\n", FILE_APPEND);
+        $this->info('DEBUG: ' . "schoolId=$schoolId\n");
         if ($schoolId <= 0) {
-            file_put_contents(storage_path('logs/debug.txt'), "BLOCKED schoolId<=0\n", FILE_APPEND);
+            $this->info('DEBUG: ' . "BLOCKED schoolId<=0\n");
             $this->error('--school is required and must be a positive integer.');
             return 1;
         }
 
         $reason = (string) ($this->option('reason') ?: '');
         if (strlen($reason) < 10) {
-            file_put_contents(storage_path('logs/debug.txt'), "BLOCKED reason short\n", FILE_APPEND);
+            $this->info('DEBUG: ' . "BLOCKED reason short\n");
             $this->error('--reason is required (min 10 chars).');
             return 1;
         }
 
         $dryRun = (bool) $this->option('dry-run') || ! (bool) $this->option('confirm');
         $backupRef = (string) ($this->option('backup') ?: '');
-        file_put_contents(storage_path('logs/debug.txt'), "dryRun=" . var_export($dryRun, true) . "\n", FILE_APPEND);
+        $this->info('DEBUG: ' . "dryRun=" . var_export($dryRun, true) . "\n");
 
         $plan = [];
         $allOk = true;
@@ -80,10 +80,10 @@ class DeleteSandboxTestPayments extends Command
                 $allOk = false;
             }
         }
-        file_put_contents(storage_path('logs/debug.txt'), "allOk=" . var_export($allOk, true) . "\n", FILE_APPEND);
+        $this->info('DEBUG: ' . "allOk=" . var_export($allOk, true) . "\n");
 
         if (! $allOk) {
-            file_put_contents(storage_path('logs/debug.txt'), "BLOCKED safeguards failed\n", FILE_APPEND);
+            $this->info('DEBUG: ' . "BLOCKED safeguards failed\n");
             $this->error('One or more safeguards FAILED. Aborting. No changes made.');
             return 1;
         }
@@ -95,28 +95,28 @@ class DeleteSandboxTestPayments extends Command
             }
         }
         $toDelete = array_values(array_diff($ids, $alreadyDeleted));
-        file_put_contents(storage_path('logs/debug.txt'), "toDelete=" . implode(',', $toDelete) . "\n", FILE_APPEND);
+        $this->info('DEBUG: ' . "toDelete=" . implode(',', $toDelete) . "\n");
         if (empty($toDelete)) {
-            file_put_contents(storage_path('logs/debug.txt'), "empty toDelete, returning 0\n", FILE_APPEND);
+            $this->info('DEBUG: ' . "empty toDelete, returning 0\n");
             $this->info('All target payments already deleted. Nothing to do (idempotent).');
             return 0;
         }
 
         if ($dryRun) {
-            file_put_contents(storage_path('logs/debug.txt'), "DRYRUN branch, returning 0\n", FILE_APPEND);
+            $this->info('DEBUG: ' . "DRYRUN branch, returning 0\n");
             $this->info('DRY-RUN complete. No records modified.');
             $this->info('To execute, re-run with --confirm --backup="<verified backup id>" --reason="..."');
             return 0;
         }
 
-        file_put_contents(storage_path('logs/debug.txt'), "past dryrun, backupRef=" . $backupRef . "\n", FILE_APPEND);
+        $this->info('DEBUG: ' . "past dryrun, backupRef=" . $backupRef . "\n");
         if (trim($backupRef) === '') {
-            file_put_contents(storage_path('logs/debug.txt'), "BLOCKED no backup\n", FILE_APPEND);
+            $this->info('DEBUG: ' . "BLOCKED no backup\n");
             $this->error('--backup is required in execute mode.');
             return 1;
         }
 
-        file_put_contents(storage_path('logs/debug.txt'), "REACHED END, returning 0\n", FILE_APPEND);
+        $this->info('DEBUG: ' . "REACHED END, returning 0\n");
         return 0;
     }
 
