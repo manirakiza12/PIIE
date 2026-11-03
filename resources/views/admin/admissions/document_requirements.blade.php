@@ -19,6 +19,9 @@
                    onclick="return confirm('{{ get_phrase('Install the standard requirement set? Existing entries with the same key will be reset to their defaults.') }}')">
                     {{ get_phrase('Restore Defaults') }}
                 </a>
+                <button type="button" class="export_btn" onclick="resetRequirementForm(); document.getElementById('formCard').scrollIntoView({behavior:'smooth'});">
+                    <i class="bi bi-plus-lg"></i> {{ get_phrase('Add Requirement') }}
+                </button>
             </div>
         </div>
     </div></div>
@@ -37,127 +40,126 @@
     </div>
 @endif
 
-<div class="row g-3">
-    <div class="col-lg-8">
-        <div class="eSection-wrap">
-            <div class="table-responsive">
-                <table class="table eTable">
-                    <thead><tr>
-                        <th>{{ get_phrase('Requirement') }}</th>
-                        <th>{{ get_phrase('Key') }}</th>
-                        <th>{{ get_phrase('Applies To') }}</th>
-                        <th>{{ get_phrase('Rules') }}</th>
-                        <th>{{ get_phrase('Actions') }}</th>
-                    </tr></thead>
-                    <tbody>
-                    @forelse($requirements as $requirement)
-                        <tr>
-                            <td>
-                                <strong>{{ $requirement->label }}</strong>
-                                @unless($requirement->is_active)
-                                    <span class="badge bg-secondary">{{ get_phrase('Disabled') }}</span>
-                                @endunless
-                                @if($requirement->description)
-                                    <br><small class="text-muted">{{ $requirement->description }}</small>
-                                @endif
-                            </td>
-                            <td><code style="font-size:12px;">{{ $requirement->key }}</code></td>
-                            <td>
-                                @if(empty($requirement->applies_to_levels))
-                                    <span class="text-muted">{{ get_phrase('All levels') }}</span>
-                                @else
-                                    @foreach($requirement->applies_to_levels as $level)
-                                        <span class="badge bg-light text-dark">{{ $level }}</span>
-                                    @endforeach
-                                @endif
-                            </td>
-                            <td>
-                                <span class="badge bg-{{ $requirement->is_required ? 'danger' : 'secondary' }}">
-                                    {{ $requirement->is_required ? get_phrase('Required') : get_phrase('Optional') }}
-                                </span>
-                                @if($requirement->allow_multiple)
-                                    <span class="badge bg-info">{{ get_phrase('Multiple files') }}</span>
-                                @endif
-                            </td>
-                            <td>
-                                <div class="d-flex gap-1">
-                                    <button type="button" class="eBtn eBtn-sm eBtn-primary"
+{{-- Horizontal row of requirement cards --}}
+<div class="eSection-wrap mb-3">
+    <div class="d-flex align-items-stretch gap-3 overflow-auto pb-2" style="flex-wrap:nowrap;">
+        @forelse($requirements as $requirement)
+            <div class="card flex-shrink-0" style="min-width:260px; max-width:300px;">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <strong>{{ $requirement->label }}</strong>
+                            @unless($requirement->is_active)
+                                <span class="badge bg-secondary ms-1">{{ get_phrase('Disabled') }}</span>
+                            @endunless
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-light border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <button type="button" class="dropdown-item"
                                             onclick="editRequirement({{ $requirement->toJson() }})">
-                                        <i class="bi bi-pencil"></i>
+                                        <i class="bi bi-pencil me-2"></i>{{ get_phrase('Edit') }}
                                     </button>
-                                    <a href="{{ route('admin.admissions_documents.destroy', $requirement->id) }}"
-                                       class="eBtn eBtn-sm eBtn-danger"
+                                </li>
+                                <li>
+                                    <a class="dropdown-item text-danger"
+                                       href="{{ route('admin.admissions_documents.destroy', $requirement->id) }}"
                                        onclick="return confirm('{{ get_phrase('Remove this requirement? Files already uploaded against it are kept and stay visible on the review screen.') }}')">
-                                        <i class="bi bi-trash"></i>
+                                        <i class="bi bi-trash me-2"></i>{{ get_phrase('Delete') }}
                                     </a>
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="5" class="text-center text-muted py-4">{{ get_phrase('No requirements configured yet.') }}</td></tr>
-                    @endforelse
-                    </tbody>
-                </table>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    @if($requirement->description)
+                        <small class="text-muted d-block mb-2">{{ $requirement->description }}</small>
+                    @endif
+                    <div class="mb-2">
+                        <code style="font-size:11px;">{{ $requirement->key }}</code>
+                    </div>
+                    <div class="mb-2">
+                        @if(empty($requirement->applies_to_levels))
+                            <span class="badge bg-light text-dark">{{ get_phrase('All levels') }}</span>
+                        @else
+                            @foreach($requirement->applies_to_levels as $level)
+                                <span class="badge bg-light text-dark">{{ $level }}</span>
+                            @endforeach
+                        @endif
+                    </div>
+                    <div>
+                        <span class="badge bg-{{ $requirement->is_required ? 'danger' : 'secondary' }}">
+                            {{ $requirement->is_required ? get_phrase('Required') : get_phrase('Optional') }}
+                        </span>
+                        @if($requirement->allow_multiple)
+                            <span class="badge bg-info">{{ get_phrase('Multiple files') }}</span>
+                        @endif
+                    </div>
+                </div>
             </div>
-        </div>
+        @empty
+            <div class="text-muted py-4">{{ get_phrase('No requirements configured yet.') }}</div>
+        @endforelse
     </div>
+</div>
 
-    <div class="col-lg-4">
+{{-- Form card --}}
+<div class="row g-3" id="formCard">
+    <div class="col-12">
         <div class="eSection-wrap">
             <h5 class="mb-3" id="formTitle">{{ get_phrase('Add Requirement') }}</h5>
 
             <form method="POST" id="requirementForm" action="{{ route('admin.admissions_documents.store') }}">
                 @csrf
 
-                <div class="mb-3">
-                    <label class="form-label">{{ get_phrase('Label') }} <span class="text-danger">*</span></label>
-                    <input type="text" name="label" id="fLabel" class="form-control eForm-control" required>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">{{ get_phrase('Label') }} <span class="text-danger">*</span></label>
+                        <input type="text" name="label" id="fLabel" class="form-control eForm-control" required>
+                    </div>
+                    <div class="col-md-6" id="keyWrap">
+                        <label class="form-label">{{ get_phrase('Key') }} <span class="text-danger">*</span></label>
+                        <input type="text" name="key" id="fKey" class="form-control eForm-control" pattern="[a-z0-9_]+">
+                        <small class="text-muted">
+                            {{ get_phrase('Lowercase letters, numbers and underscores. Uploaded files are filed under this, so it cannot be changed later.') }}
+                        </small>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">{{ get_phrase('Description') }}</label>
+                        <textarea name="description" id="fDescription" class="form-control eForm-control" rows="2"
+                                  placeholder="{{ get_phrase('Shown to the applicant under the label.') }}"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ get_phrase('Applies to programme levels') }}</label>
+                        <select name="applies_to_levels[]" id="fLevels" class="form-control eForm-control" multiple size="6">
+                            @foreach($levels as $level)
+                                <option value="{{ $level }}">{{ $level }}</option>
+                            @endforeach
+                        </select>
+                        <small class="text-muted">{{ get_phrase('Select none to require it of every applicant.') }}</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ get_phrase('Sort Order') }}</label>
+                        <input type="number" name="sort_order" id="fSort" class="form-control eForm-control" value="0" min="0" max="999">
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" name="is_required" id="fRequired" value="1" checked>
+                            <label class="form-check-label" for="fRequired">{{ get_phrase('Required to submit') }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="allow_multiple" id="fMultiple" value="1">
+                            <label class="form-check-label" for="fMultiple">{{ get_phrase('Allow multiple files') }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_active" id="fActive" value="1" checked>
+                            <label class="form-check-label" for="fActive">{{ get_phrase('Active') }}</label>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="mb-3" id="keyWrap">
-                    <label class="form-label">{{ get_phrase('Key') }} <span class="text-danger">*</span></label>
-                    <input type="text" name="key" id="fKey" class="form-control eForm-control" pattern="[a-z0-9_]+">
-                    <small class="text-muted">
-                        {{ get_phrase('Lowercase letters, numbers and underscores. Uploaded files are filed under this, so it cannot be changed later.') }}
-                    </small>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">{{ get_phrase('Description') }}</label>
-                    <textarea name="description" id="fDescription" class="form-control eForm-control" rows="2"
-                              placeholder="{{ get_phrase('Shown to the applicant under the label.') }}"></textarea>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">{{ get_phrase('Applies to programme levels') }}</label>
-                    <select name="applies_to_levels[]" id="fLevels" class="form-control eForm-control" multiple size="6">
-                        @foreach($levels as $level)
-                            <option value="{{ $level }}">{{ $level }}</option>
-                        @endforeach
-                    </select>
-                    <small class="text-muted">{{ get_phrase('Select none to require it of every applicant.') }}</small>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">{{ get_phrase('Sort Order') }}</label>
-                    <input type="number" name="sort_order" id="fSort" class="form-control eForm-control" value="0" min="0" max="999">
-                </div>
-
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" name="is_required" id="fRequired" value="1" checked>
-                    <label class="form-check-label" for="fRequired">{{ get_phrase('Required to submit') }}</label>
-                </div>
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" name="allow_multiple" id="fMultiple" value="1">
-                    <label class="form-check-label" for="fMultiple">{{ get_phrase('Allow multiple files') }}</label>
-                </div>
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" name="is_active" id="fActive" value="1" checked>
-                    <label class="form-check-label" for="fActive">{{ get_phrase('Active') }}</label>
-                </div>
-
-                <div class="d-flex gap-2">
-                    <button type="submit" class="eBtn flex-grow-1">{{ get_phrase('Save') }}</button>
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" class="eBtn">{{ get_phrase('Save') }}</button>
                     <button type="button" class="eBtn eBtn-outline d-none" id="cancelEdit" onclick="resetRequirementForm()">
                         {{ get_phrase('Cancel') }}
                     </button>
@@ -183,7 +185,6 @@
         document.getElementById('fMultiple').checked  = !!requirement.allow_multiple;
         document.getElementById('fActive').checked    = !!requirement.is_active;
 
-        // The key identifies existing uploads — shown for reference, never editable.
         document.getElementById('fKey').readOnly = true;
 
         var levels = requirement.applies_to_levels || [];
