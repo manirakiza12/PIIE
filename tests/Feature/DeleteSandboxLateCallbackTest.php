@@ -46,7 +46,7 @@ class DeleteSandboxLateCallbackTest extends TestCase
             'gateway_txn_id' => 'tracking-6',
             'gateway_payload' => ['environment' => 'sandbox'],
         ]);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'missing invoice cleanup',
@@ -72,7 +72,7 @@ class DeleteSandboxLateCallbackTest extends TestCase
             'gateway_txn_id' => 'tracking-6',
             'gateway_payload' => ['environment' => 'sandbox', 'classification' => 'FAILED', 'last_checked_at' => now()->toIso8601String()],
         ]);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '6',
             '--reason' => 'late callback test',

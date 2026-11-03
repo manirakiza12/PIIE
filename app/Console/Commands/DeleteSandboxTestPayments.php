@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 class DeleteSandboxTestPayments extends Command
 {
-    protected $signature = 'pesapal:delete-sandbox-test-payments
+    protected $signature = 'pesapaldeletetestpayments
         {--ids=1,6 : Comma-separated payment IDs (must be subset of the allowed set)}
         {--school= : Required school ownership (both payments must belong to this school)}
         {--dry-run : Show what would be deleted without mutating (default)}

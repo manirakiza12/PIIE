@@ -51,7 +51,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6);
         $this->makePayment(1);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'dry run test reason',
@@ -64,7 +64,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6);
         $this->makePayment(1);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => 9999,
             '--ids' => '1,6',
             '--reason' => 'wrong school test',
@@ -79,7 +79,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6, ['amount' => 100]);
         $this->makePayment(1);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'wrong amount test',
@@ -94,7 +94,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6, ['gateway_payload' => ['environment' => 'live']]);
         $this->makePayment(1);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'live env test',
@@ -107,7 +107,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
 
     public function test_disallowed_id_aborts(): void
     {
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '2,6',
             '--reason' => 'disallowed id test',
@@ -118,7 +118,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6);
         $this->makePayment(1);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'one-time sandbox cleanup',
@@ -139,7 +139,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6);
         $this->makePayment(1);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'first run',
@@ -148,7 +148,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
             '--backup' => 'B1',
         ])->assertExitCode(0);
         // Second run: nothing to delete
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'second run',
@@ -163,7 +163,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
     {
         $this->makePayment(6);
         $this->makePayment(1);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'no backup ref',
@@ -180,7 +180,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         \App\Models\AuditLog::record('update', 'Student Fees', 'PesaPal school fee payment #' . $p->id . ': paid', [
             'school_id' => $this->school, 'event_type' => 'DATA', 'record_type' => \App\Models\TuitionPayment::class, 'record_id' => $p->id,
         ]);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
+        $this->artisan('pesapaldeletetestpayments', [
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'settlement test',
