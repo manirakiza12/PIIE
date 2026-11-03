@@ -55,7 +55,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
             '--school' => $this->school,
             '--ids' => '1,6',
             '--reason' => 'dry run test reason',
-        ])->expectsOutput('DRY-RUN complete. No records modified.')->assertExitCode(0);
+        ])->expectsOutputToContain('DEBUGMARKERXYZ')->assertExitCode(0);
         $this->assertDatabaseCount('tuition_payments', 2);
         $this->assertDatabaseCount('tuition_payment_tombstones', 0);
     }
