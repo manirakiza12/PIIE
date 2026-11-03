@@ -1,4 +1,9 @@
 @extends('admin.navigation')
+@section('page_styles')
+<style>
+.eTable.compact-admissions th, .eTable.compact-admissions td { padding: 4px 6px !important; }
+</style>
+@endsection
 @section('content')
 <div class="mainSection-title">
     <div class="row"><div class="col-12">
@@ -77,7 +82,7 @@
         </form>
 
         <div class="table-responsive">
-            <table class="table eTable align-middle mb-0" style="font-size:12px;">
+            <table class="table eTable compact-admissions align-middle mb-0" style="font-size:11px;">
                 <thead><tr>
                     <th style="width:34px;">#</th>
                     <th>{{ get_phrase('App No.') }}</th>
@@ -88,7 +93,7 @@
                     <th>{{ get_phrase('Fee') }}</th>
                     <th>{{ get_phrase('Source') }}</th>
                     <th>{{ get_phrase('Activation') }}</th>
-                    <th>{{ get_phrase('Date') }}</th>
+                    
                     <th class="text-end">{{ get_phrase('Actions') }}</th>
                 </tr></thead>
                 <tbody>
@@ -97,18 +102,18 @@
                 <tr>
                     <td style="width:34px;">{{ $admissions->firstItem() + $i }}</td>
                     <td class="text-truncate" style="max-width:110px;" title="{{ $app->app_number }}"><small class="text-muted">{{ $app->app_number }}</small></td>
-                    <td style="min-width:150px;">
-                        <div class="text-truncate fw-semibold" style="max-width:170px;" title="{{ $app->first_name }} {{ $app->last_name }}">{{ $app->first_name }} {{ $app->last_name }}</div>
-                        <div class="text-truncate small text-muted" style="max-width:170px;" title="{{ $app->email }}">{{ $app->email }}</div>
+                    <td style="min-width:130px;">
+                        <div class="text-truncate fw-semibold" style="max-width:120px;" title="{{ $app->first_name }} {{ $app->last_name }}">{{ $app->first_name }} {{ $app->last_name }}</div>
+                        <div class="text-truncate small text-muted" style="max-width:120px;" title="{{ $app->email }}">{{ $app->email }}</div>
                     </td>
-                    <td class="text-truncate" style="max-width:150px;" title="{{ $app->programme?->name ?? '' }}">
+                    <td class="text-truncate" style="max-width:120px;" title="{{ $app->programme?->name ?? '' }}">
                         @if(!empty($app->programme?->code))
                             <span class="fw-semibold">{{ $app->programme->code }}</span>
                         @else
                             {{ $app->programme?->name ?? '—' }}
                         @endif
                     </td>
-                    <td class="text-truncate" style="max-width:130px;" title="{{ $app->intakeSession?->name ?? '' }}">{{ $app->intakeSession?->name ?? '—' }}</td>
+                    <td class="text-truncate" style="max-width:120px;" title="{{ $app->intakeSession?->name ?? '' }}">{{ $app->intakeSession?->name ?? '—' }}</td>
                     <td>
                         <span class="badge bg-{{ $app->statusColor() }}" style="font-size:11px;">{{ $app->statusLabel() }}</span>
                     </td>
@@ -133,7 +138,6 @@
                             <span class="badge bg-success" style="font-size:11px;">{{ get_phrase('Activated') }}</span>
                         @endif
                     </td>
-                    <td><small>{{ $app->created_at->format('d M Y') }}</small></td>
                     <td class="text-end">
                         <div class="dropdown">
                             <button type="button" class="eBtn eBtn-black dropdown-toggle table-action-btn-2" data-bs-toggle="dropdown" aria-expanded="false">
@@ -183,7 +187,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="11" class="text-center text-muted py-4">{{ get_phrase('No applications found') }}</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">{{ get_phrase('No applications found') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>
