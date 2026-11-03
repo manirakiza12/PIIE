@@ -252,8 +252,8 @@ chmod -R u+rwX,go-w "$REL"; chmod -R 775 "$REL/bootstrap/cache" 2>/dev/null || t
 prepare_public_uploads "$REL/public/assets/uploads"
 
 cd "$REL"
-"$PHP" artisan --version >/dev/null || die "artisan does not boot on $PHP"
-"$PHP" artisan package:discover --ansi >/dev/null
+"$PHP" artisan --version || die "artisan does not boot on $PHP"
+"$PHP" artisan package:discover --ansi
 
 log "Pending migrations (pretend; nothing executed):"
 PRETEND="$("$PHP" artisan migrate --pretend --force 2>&1)" || die "migration preflight failed; release will not activate"
