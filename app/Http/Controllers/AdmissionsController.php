@@ -988,6 +988,37 @@ class AdmissionsController extends Controller
         // Online Exam visibility, which an entirely absent row would not).
         \App\Support\EnrollmentDefaults::ensureRow($student->id, $this->school_id);
 
+        // Cohort integration (Phase 7A): when an active Programme Cohort
+        // matches this admission's programme and intake, assign the student
+        // automatically. Placement (curriculum stage) remains a separate,
+        // authorised academic step. Never let cohort assignment break
+        // enrolment â€” failures are logged and surfaced as pending placement.
+        if ($admission->programme_id && $admission->intake_session_id) {
+            try {
+                $cohorts = \App\Models\ProgrammeCohort::query()
+                    ->where('school_id', $this->school_id)
+                    ->where('programme_id', $admission->programme_id)
+                    ->where('intake_session_id', $admission->intake_session_id)
+                    ->where('status', 'active')
+                    ->get();
+                if ($cohorts->count() === 1) {
+                    $already = \App\Models\ProgrammeCohortMembership::query()
+                        ->where('school_id', $this->school_id)
+                        ->where('student_id', $student->id)
+                        ->whereNull('ended_at')
+                        ->exists();
+                    if (! $already) {
+                        app(\App\Support\ProgrammeCohorts\ProgrammeCohortService::class)
+                            ->assignFromAdmission(\Illuminate\Support\Facades\Auth::user(), $cohorts->first()->id, $student->id, $admission->id);
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Cohort auto-assignment skipped: ' . $e->getMessage(), [
+                    'student_id' => $student->id, 'admission_id' => $admission->id,
+                ]);
+            }
+        }
+
         if ($result['plain_password'] !== null) {
             $sent = StudentPortalActivation::sendActivationEmail($student, $result['plain_password'], $admission->programme_id, $admission->intake_session_id, true);
 
