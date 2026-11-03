@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 class DeleteSandboxTestPayments extends Command
 {
-    protected $signature = 'pesapaldeletetestpayments
+    protected $signature = 'pesapal:delete-sandbox-test-payments
         {--ids=1,6 : Comma-separated payment IDs (must be subset of the allowed set)}
         {--school= : Required school ownership (both payments must belong to this school)}
         {--dry-run : Show what would be deleted without mutating (default)}
@@ -29,48 +29,37 @@ class DeleteSandboxTestPayments extends Command
 
     public function handle(): int
     {
-        $this->info('DEBUG: ' . "START env=" . app()->environment() . " force=" . var_export($this->option('force'), true) . "\n");
-
         if ($this->option('force') && ! app()->environment('testing')) {
-            $this->info('DEBUG: ' . "BLOCKED by force check\n");
-            $this->error('--force is only permitted in testing environments.');
+            $this->error('--force is only permitted in testing environments. In production, confirm interactively.');
             return 1;
         }
 
-        $optIds = $this->option('ids');
-        $this->info('DEBUG: optIds=' . var_export($optIds, true) . "\n");
-        $this->info('DEBUG: ' . "ids=" . implode(',', $ids) . "\n");
+        $ids = array_values(array_unique(array_map('intval', explode(',', (string) $this->option('ids')))));
         foreach ($ids as $id) {
             if (! in_array($id, self::ALLOWED_IDS, true)) {
-                $this->info('DEBUG: ' . "BLOCKED disallowed id\n");
                 $this->error("Payment ID {$id} is not in the allowed set.");
                 return 1;
             }
         }
         if (empty($ids)) {
-            $this->info('DEBUG: ' . "BLOCKED empty ids\n");
             $this->error('No payment IDs specified.');
             return 1;
         }
 
         $schoolId = (int) $this->option('school');
-        $this->info('DEBUG: ' . "schoolId=$schoolId\n");
         if ($schoolId <= 0) {
-            $this->info('DEBUG: ' . "BLOCKED schoolId<=0\n");
             $this->error('--school is required and must be a positive integer.');
             return 1;
         }
 
         $reason = (string) ($this->option('reason') ?: '');
         if (strlen($reason) < 10) {
-            $this->info('DEBUG: ' . "BLOCKED reason short\n");
             $this->error('--reason is required (min 10 chars).');
             return 1;
         }
 
         $dryRun = (bool) $this->option('dry-run') || ! (bool) $this->option('confirm');
         $backupRef = (string) ($this->option('backup') ?: '');
-        $this->info('DEBUG: ' . "dryRun=" . var_export($dryRun, true) . "\n");
 
         $plan = [];
         $allOk = true;
@@ -81,10 +70,8 @@ class DeleteSandboxTestPayments extends Command
                 $allOk = false;
             }
         }
-        $this->info('DEBUG: ' . "allOk=" . var_export($allOk, true) . "\n");
 
         if (! $allOk) {
-            $this->info('DEBUG: ' . "BLOCKED safeguards failed\n");
             $this->error('One or more safeguards FAILED. Aborting. No changes made.');
             return 1;
         }
@@ -96,28 +83,108 @@ class DeleteSandboxTestPayments extends Command
             }
         }
         $toDelete = array_values(array_diff($ids, $alreadyDeleted));
-        $this->info('DEBUG: ' . "toDelete=" . implode(',', $toDelete) . "\n");
         if (empty($toDelete)) {
-            $this->info('DEBUG: ' . "empty toDelete, returning 0\n");
             $this->info('All target payments already deleted. Nothing to do (idempotent).');
             return 0;
         }
 
         if ($dryRun) {
-            $this->info('DEBUG: ' . "DRYRUN branch, returning 0\n");
             $this->info('DRY-RUN complete. No records modified.');
             $this->info('To execute, re-run with --confirm --backup="<verified backup id>" --reason="..."');
-            throw new \RuntimeException('DEBUG: env=' . app()->environment() . ' schoolId=' . $schoolId . ' allOk=' . var_export($allOk, true) . ' toDelete=' . implode(',', $toDelete) . ' dryRun=' . var_export($dryRun, true));
+            return 0;
         }
 
-        $this->info('DEBUG: ' . "past dryrun, backupRef=" . $backupRef . "\n");
         if (trim($backupRef) === '') {
-            $this->info('DEBUG: ' . "BLOCKED no backup\n");
-            $this->error('--backup is required in execute mode.');
+            $this->error('--backup is required in execute mode (reference of verified production backup).');
             return 1;
         }
 
-        $this->info('DEBUG: ' . "REACHED END, returning 0\n");
+        $this->warn('EXECUTING deletion of payments: ' . implode(', ', $toDelete));
+        if (! $this->option('force') && ! $this->confirm('Are you absolutely sure? This is irreversible (recoverable only from backup).')) {
+            $this->info('Aborted by operator.');
+            return 1;
+        }
+
+        try {
+            DB::transaction(function () use ($toDelete, $schoolId, $reason, $backupRef) {
+                foreach ($toDelete as $id) {
+                    $payment = TuitionPayment::where('id', $id)->where('school_id', $schoolId)->lockForUpdate()->firstOrFail();
+
+                    $payload = $payment->gateway_payload ?? [];
+                    if (($payload['environment'] ?? null) !== 'sandbox') {
+                        throw new \RuntimeException('Safeguard failed: not sandbox.');
+                    }
+                    if ($payment->currency !== 'UGX') {
+                        throw new \RuntimeException('Safeguard failed: currency.');
+                    }
+                    if (! in_array($payment->status, ['pending', 'failed'], true)) {
+                        throw new \RuntimeException('Safeguard failed: status.');
+                    }
+                    if ($payment->isResolved()) {
+                        throw new \RuntimeException('Safeguard failed: already resolved.');
+                    }
+                    if (number_format((float) $payment->amount, 2, '.', '') !== self::EXPECTED[$id]['amount']) {
+                        throw new \RuntimeException('Safeguard failed: amount changed.');
+                    }
+                    if ($payment->currency !== self::EXPECTED[$id]['currency']) {
+                        throw new \RuntimeException('Safeguard failed: currency changed.');
+                    }
+                    if (TuitionPaymentTombstone::where('payment_id', $id)->exists()) {
+                        throw new \RuntimeException('Safeguard failed: already tombstoned.');
+                    }
+                    $hasSettlement = AuditLog::where('record_type', TuitionPayment::class)
+                        ->where('record_id', $payment->id)
+                        ->where('action', 'update')
+                        ->where('description', 'like', '%paid%')
+                        ->exists();
+                    if ($hasSettlement) {
+                        throw new \RuntimeException('Safeguard failed: settlement record exists.');
+                    }
+                    $fee = StudentFeeManager::where('id', $payment->fee_id)->where('school_id', $schoolId)->first();
+                    if ($fee) {
+                        $otherPaidCount = TuitionPayment::where('fee_id', $payment->fee_id)
+                            ->where('school_id', $payment->school_id)
+                            ->where('status', 'paid')
+                            ->where('id', '!=', $payment->id)
+                            ->count();
+                        if ($otherPaidCount === 0 && DecimalAmount::minorUnits($fee->paid_amount) > 0) {
+                            throw new \RuntimeException('Safeguard failed: unexplained credits.');
+                        }
+                    }
+
+                    TuitionPaymentTombstone::create([
+                        'payment_id' => $payment->id,
+                        'school_id' => $payment->school_id,
+                        'fee_id' => $payment->fee_id,
+                        'reference' => $payment->reference,
+                        'gateway_txn_id' => $payment->gateway_txn_id,
+                        'currency' => $payment->currency,
+                        'amount' => $payment->amount,
+                        'status' => $payment->status,
+                        'environment' => $payment->gateway_payload['environment'] ?? null,
+                        'provider_classification' => $payment->gateway_payload['classification'] ?? null,
+                        'payment_snapshot' => $this->sanitizeSnapshot($payment->toArray()),
+                        'deletion_reason' => $reason,
+                        'backup_reference' => $backupRef,
+                        'deleted_by' => null,
+                        'deleted_by_name' => 'artisan-command',
+                        'deleted_at' => now(),
+                    ]);
+
+                    AuditLog::record('delete', 'Tuition Payments',
+                        'Sandbox test payment permanently deleted #' . $payment->id . ': ' . $reason,
+                        ['school_id' => $payment->school_id, 'event_type' => 'DATA', 'record_type' => TuitionPayment::class, 'record_id' => $payment->id]);
+
+                    $payment->delete();
+                }
+            });
+        } catch (\RuntimeException $e) {
+            $this->error('Deletion aborted: ' . $e->getMessage());
+            return 1;
+        }
+
+        $this->info('Deletion complete. Tombstones created for: ' . implode(', ', $toDelete));
+        $this->info('Late Sandbox callbacks for these payments will find no payment row and cannot credit invoices.');
         return 0;
     }
 
