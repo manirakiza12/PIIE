@@ -66,7 +66,7 @@ class ProgrammeGalleryImageTest extends TestCase
 
     private function editorPayload(array $extra = []): array
     {
-        return $extra + ['code' => 'COMBINED', 'name' => 'Combined programme', 'level' => 'Diploma', 'mode' => 'ODEL'];
+        return $extra + ['code' => 'COMBINED', 'name' => 'Combined programme', 'level' => 'Diploma', 'mode' => 'ODeL'];
     }
 
     public function test_new_programme_saves_details_cover_and_two_gallery_images_together(): void
@@ -290,3 +290,4 @@ class ProgrammeGalleryImageTest extends TestCase
         $this->store($this->upload())->assertUnprocessable()->assertJsonValidationErrors('gallery_image');
     }
 }
+

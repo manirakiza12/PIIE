@@ -32,7 +32,7 @@ class AdmissionLetterDeliveryTest extends TestCase
         }
         $this->school = $this->makeSchool(['title' => 'Prime International Institute of Excellence', 'school_currency' => 'UGX', 'address' => 'Kampala, Uganda']);
         $this->admin = $this->makeAdminUser($this->school);
-        $programme = $this->makeProgramme($this->school, ['code' => 'MPAM', 'name' => 'Master of Public Administration and Management', 'mode' => 'ODEL', 'duration' => 'Two academic years']);
+        $programme = $this->makeProgramme($this->school, ['code' => 'MPAM', 'name' => 'Master of Public Administration and Management', 'mode' => 'ODeL', 'duration' => 'Two academic years']);
         $intake = $this->makeIntakeSession($this->school, ['name' => 'January 2027 Intake', 'application_fee' => 0, 'start_date' => '2027-01-11', 'orientation_start_date' => '2027-01-12', 'orientation_end_date' => '2027-01-13', 'registration_deadline' => '2027-02-08']);
         $this->makeFeeStructure($this->school, ['programme_id' => $programme, 'name' => 'Semester tuition', 'amount' => 900000, 'fee_type' => 'tuition']);
         $this->makeFeeStructure($this->school, ['programme_id' => $programme, 'name' => 'Library access', 'amount' => 30000, 'fee_type' => 'other']);
@@ -173,3 +173,4 @@ class AdmissionLetterDeliveryTest extends TestCase
         $this->assertSame('2027-01-13', $intake->fresh()->orientation_end_date);
     }
 }
+

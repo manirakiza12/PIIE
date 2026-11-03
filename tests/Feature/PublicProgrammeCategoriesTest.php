@@ -99,7 +99,7 @@ class PublicProgrammeCategoriesTest extends TestCase
             'code'          => strtoupper(substr(md5($name), 0, 6)),
             'name'          => $name,
             'level'         => $level,
-            'mode'          => 'ODEL',
+            'mode'          => 'ODeL',
             'is_active'     => 1,
             'is_published'  => 1,
             'created_at'    => now(),
@@ -522,3 +522,4 @@ class PublicProgrammeCategoriesTest extends TestCase
         $this->assertSame('MASTER PROGRAMME', $cards->first()['title']);
     }
 }
+
