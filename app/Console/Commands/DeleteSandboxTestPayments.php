@@ -29,6 +29,7 @@ class DeleteSandboxTestPayments extends Command
 
     public function handle(): int
     {
+        error_log('HANDLE_START env=' . app()->environment());
         if ($this->option('force') && ! app()->environment('testing')) {
             $this->error('--force is only permitted in testing environments. In production, confirm interactively.');
             return 1;
@@ -71,6 +72,7 @@ class DeleteSandboxTestPayments extends Command
             }
         }
 
+        error_log('ALL_OK=' . var_export($allOk, true) . ' schoolId=' . $schoolId);
         if (! $allOk) {
             $this->error('One or more safeguards FAILED. Aborting. No changes made.');
             return 1;
@@ -88,6 +90,7 @@ class DeleteSandboxTestPayments extends Command
             return 0;
         }
 
+        error_log('DRYRUN=' . var_export($dryRun, true) . ' toDelete=' . implode(',', $toDelete));
         if ($dryRun) {
             $this->info('DRY-RUN complete. No records modified.');
             $this->info('To execute, re-run with --confirm --backup="<verified backup id>" --reason="..."');
