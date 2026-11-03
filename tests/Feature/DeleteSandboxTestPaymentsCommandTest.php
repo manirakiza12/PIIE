@@ -147,7 +147,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
         $this->artisan('pesapal:delete-sandbox-test-payments', [
             '--school' => $this->school,
             '--ids' => '1,6',
-            '--reason' => 'first run',
+            '--reason' => 'first run cleanup',
             '--confirm' => true,
             '--force' => true,
             '--backup' => 'B1',
