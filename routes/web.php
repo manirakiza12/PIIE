@@ -1110,6 +1110,12 @@ Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\S
     Route::get('admin/curriculum/by-programme/{programmeId}', 'curriculaByProgramme')->whereNumber('programmeId')->name('admin.curriculum.by_programme');
 });
 
+Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\StudentProgressionController::class)->group(function () {
+    Route::get('admin/progression', 'index')->name('admin.progression.index');
+    Route::get('admin/progression/{studentId}', 'show')->whereNumber('studentId')->name('admin.progression.show');
+    Route::post('admin/progression/{studentId}/decide', 'decide')->whereNumber('studentId')->name('admin.progression.decide');
+});
+
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\DirectAcademicPlacementController::class)->group(function () {
     Route::get('admin/academic/student-placements', 'index')->name('admin.academic.placements.index');
     Route::put('admin/academic/student-placements/{id}', 'update')->whereNumber('id')->name('admin.academic.placements.update');
