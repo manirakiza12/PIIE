@@ -330,7 +330,7 @@ class OfficialContactIdentityTest extends TestCase
 
         $this->assertStringContainsString('piie-brand__mark', $html);
         $this->assertStringContainsString('>Apply Now<', $html);
-        $this->assertStringContainsString('>Login<', $html);
+        $this->assertStringContainsString('>Login to portal<', $html);
     }
 
     // ═══ 6. NO PLACEHOLDERS ANYWHERE ══════════════════════════════════════
@@ -365,7 +365,7 @@ class OfficialContactIdentityTest extends TestCase
         );
 
         $this->assertStringContainsString('>Apply Now<', $html);
-        $this->assertStringContainsString('>Login<', $html);
+        $this->assertStringContainsString('>Login to portal<', $html);
 
         // Shared footer.
         $this->assertStringContainsString('piie-footer__name', $html);
