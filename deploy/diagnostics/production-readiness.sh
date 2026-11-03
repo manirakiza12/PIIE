@@ -4,11 +4,11 @@ set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
 # Baseline: current active production release (diagnostics allowlist PR #166 merged, deployed 2026-11-02).
-BASELINE=8d42fc1bf0870e308027aef441ac0e3972d32aa0
+BASELINE=c7020ae90a455419e76ecdfa371761e4b09b54e2
 # Target: current main HEAD (same as baseline after deployment).
-TARGET=8d42fc1bf0870e308027aef441ac0e3972d32aa0
+TARGET=c7020ae90a455419e76ecdfa371761e4b09b54e2
 # Rollback: previous approved production release retained for legitimate rollback diagnostics.
-ROLLBACK=ea24f4c359a613de2dd293398783ed0925c78420
+ROLLBACK=8d42fc1bf0870e308027aef441ac0e3972d32aa0
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
 # Only the documented exec/seccomp incompatibility can use the existing separate
