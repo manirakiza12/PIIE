@@ -53,6 +53,11 @@
         .sidebar .nav-links li:hover > a, .sidebar .nav-links li.showMenu > a { background: rgba(255,255,255,0.12); }
         .student-card-row .card, .dashboard-card-row .card { height: 100%; display: flex; flex-direction: column; }
         .student-card-row .card-body, .dashboard-card-row .card-body { flex: 1 1 auto; }
+        /* PIIE student portal - upper ribbon (home header) colour */
+        .home-header { background: #0E4C87 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .home-header .header_notification p { color: #fff; }
+        .home-header .sidebar_menu_icon svg path { fill: #fff; }
+        .home-header .eBtn, .home-header .dropdown-toggle { color: #fff; }
     </style></head>
 
 <body>
