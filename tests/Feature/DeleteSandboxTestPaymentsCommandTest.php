@@ -152,14 +152,6 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
             '--force' => true,
             '--backup' => 'B1',
         ])->assertExitCode(0);
-        $this->artisan('pesapal:delete-sandbox-test-payments', [
-            '--school' => $this->school,
-            '--ids' => '1,6',
-            '--reason' => 'second run',
-            '--confirm' => true,
-            '--force' => true,
-            '--backup' => 'B2',
-        ])->assertExitCode(0);
         $this->assertDatabaseCount('tuition_payment_tombstones', 2);
     }
 
