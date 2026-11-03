@@ -87,7 +87,7 @@ class Programme extends Model
     /** Client-preferred Level/Mode option lists. */
     public const LEVELS = ['HEC', 'Certificate', 'Diploma', "Bachelor's", 'Masters', 'PhD', 'Professional Course', 'Short course'];
     public const LEVELS_LEGACY = ['Degree', 'Bachelors', 'PGD', 'Short Course'];
-    public const MODES = ['Day', 'Evening', 'Weekend', 'ODEL/Blended', 'ODEL'];
+    public const MODES = ['Day', 'Evening', 'Weekend', 'ODeL/Blended', 'ODeL'];
     public const MODES_LEGACY = ['fulltime', 'parttime', 'online', 'blended'];
 
     /** Keep an existing legacy value visible while editing its record. */
@@ -169,3 +169,4 @@ class Programme extends Model
         return $this->studentProfiles()->where('status', 'active')->count();
     }
 }
+
