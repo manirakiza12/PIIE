@@ -84,7 +84,6 @@ class DeleteSandboxTestPayments extends Command
                 $allOk = false;
             }
         }
-        foreach ($plan as $p) { $this->info('PLAN ' . $p['id'] . ' ok=' . var_export($p['ok'], true) . ' checks=' . json_encode($p['checks'])); }
         $this->info('D12 allOk=' . var_export($allOk, true));
 
         if (! $allOk) {

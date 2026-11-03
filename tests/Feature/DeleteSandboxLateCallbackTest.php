@@ -22,6 +22,7 @@ class DeleteSandboxLateCallbackTest extends TestCase
 
     public function test_missing_invoice_payment_can_be_deleted_with_payment_specific_evidence(): void
     {
+        \App\Models\TuitionPayment::unguard();
         TuitionPayment::create([
             'id' => 1,
             'school_id' => $this->school,
@@ -46,6 +47,8 @@ class DeleteSandboxLateCallbackTest extends TestCase
             'gateway_txn_id' => 'tracking-6',
             'gateway_payload' => ['environment' => 'sandbox'],
         ]);
+        \App\Models\TuitionPayment::reguard();
+
         $this->artisan('pesapal:delete-sandbox-test-payments', [
             '--school' => $this->school,
             '--ids' => '1,6',
@@ -60,6 +63,7 @@ class DeleteSandboxLateCallbackTest extends TestCase
 
     public function test_late_reconcile_of_deleted_payment_throws(): void
     {
+        \App\Models\TuitionPayment::unguard();
         TuitionPayment::create([
             'id' => 6,
             'school_id' => $this->school,
@@ -72,6 +76,8 @@ class DeleteSandboxLateCallbackTest extends TestCase
             'gateway_txn_id' => 'tracking-6',
             'gateway_payload' => ['environment' => 'sandbox', 'classification' => 'FAILED', 'last_checked_at' => now()->toIso8601String()],
         ]);
+        \App\Models\TuitionPayment::reguard();
+
         $this->artisan('pesapal:delete-sandbox-test-payments', [
             '--school' => $this->school,
             '--ids' => '6',

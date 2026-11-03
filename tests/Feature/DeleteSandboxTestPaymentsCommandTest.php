@@ -24,6 +24,7 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
 
     private function makePayment(int $id, array $overrides = []): TuitionPayment
     {
+        \App\Models\TuitionPayment::unguard();
         $p = TuitionPayment::create(array_merge([
             'id' => $id,
             'school_id' => $this->school,
@@ -36,7 +37,8 @@ class DeleteSandboxTestPaymentsCommandTest extends TestCase
             'gateway_txn_id' => 'tracking-' . $id,
             'gateway_payload' => ['environment' => 'sandbox'],
         ], $overrides));
-        return $p;
+        ], $overrides));
+        \App\Models\TuitionPayment::reguard();
     }
 
     private function makeFee(): int
