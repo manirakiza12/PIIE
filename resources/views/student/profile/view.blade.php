@@ -7,202 +7,112 @@
             (array) (json_decode(auth()->user()->user_information ?? '', true) ?: [])
         );
     @endphp
-    <!-- Start User Profile area -->
-    <div class="user-profile-area d-flex flex-wrap">
+    <style>
+        .profile-compact .user-info { max-width: 250px; flex: 0 0 250px; }
+        .profile-compact .userImg { width: 100px; height: 100px; border-radius: 6px; overflow: hidden; margin: 0 auto; background: #f2f2f2; }
+        .profile-compact .userImg img { width: 100%; height: 100%; object-fit: cover; }
+        .profile-compact .user-info-edit-items .item { padding: 4px 0; }
+        .profile-compact .fpb-7 { margin-bottom: 8px; }
+        .profile-compact .eForm-label { font-size: 13px; margin-bottom: 3px; }
+        .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+        @media (max-width: 767px) { .profile-grid { grid-template-columns: 1fr; } }
+        .profile-save-btn { background: #C54916; border-color: #C54916; color: #fff; }
+        .profile-save-btn:hover { background: #a83d12; border-color: #a83d12; color: #fff; }
+    </style>
+    <div class="user-profile-area d-flex flex-wrap profile-compact" style="gap:14px;">
         <!-- Left side -->
         <div class="user-info d-flex flex-column">
-            <div
-            class="user-info-basic d-flex flex-column justify-content-center"
-            >
-            <div class="user-graphic-element-1">
-                <img src="{{ asset('assets/images/sprial_1.png') }}" alt="" />
-            </div>
-            <div class="user-graphic-element-2">
-                <img src="{{ asset('assets/images/polygon_1.png') }}" alt="" />
-            </div>
-            <div class="user-graphic-element-3">
-                <img src="{{ asset('assets/images/circle_1.png') }}" alt="" />
-            </div>
-            <div class="userImg">
-                <img width="100%" height="150px" src="{{ get_user_image(auth()->user()->id) }}" alt="" />
-            </div>
-            <div class="userContent text-center">
-                <h4 class="title">{{ auth()->user()->name }}</h4>
-                <p class="info">{{ get_phrase('Student') }}</p>
-                <p class="user-status-verify">{{ get_phrase('Verified') }}</p>
-            </div>
+            <div class="user-info-basic d-flex flex-column justify-content-center">
+                <div class="userImg">
+                    <img src="{{ get_user_image(auth()->user()->id) }}" alt="" />
+                </div>
+                <div class="userContent text-center">
+                    <h4 class="title" style="color:#C54916; font-size:16px; margin-bottom:2px;">{{ auth()->user()->name }}</h4>
+                    <p class="info" style="margin-bottom:2px;">{{ get_phrase('Student') }}</p>
+                    <p class="user-status-verify" style="margin:0 auto;">{{ get_phrase('Verified') }}</p>
+                </div>
             </div>
             <div class="user-info-edit">
-            <div
-                class="user-edit-title d-flex justify-content-between align-items-center"
-            >
-                <h3 class="title">{{ get_phrase('Details info') }}</h3>
-            </div>
-            <div class="user-info-edit-items">
-            <div class="item">
-                <p class="title">{{ get_phrase('Registration Number') }}</p>
-                <p class="info">{{ auth()->user()->code }}</p>
+                <div class="user-edit-title d-flex justify-content-between align-items-center">
+                    <h3 class="title" style="font-size:14px; margin:0;">{{ get_phrase('Details info') }}</h3>
                 </div>
-                <div class="item">
-                <p class="title">{{ get_phrase('Email') }}</p>
-                <p class="info">{{ auth()->user()->email }}</p>
+                <div class="user-info-edit-items">
+                    <div class="item">
+                        <p class="title">{{ get_phrase('Registration Number') }}</p>
+                        <p class="info">{{ auth()->user()->code }}</p>
+                    </div>
+                    <div class="item">
+                        <p class="title">{{ get_phrase('Email') }}</p>
+                        <p class="info" style="word-break:break-all;">{{ auth()->user()->email }}</p>
+                    </div>
                 </div>
-                <div class="item">
-                <p class="title">{{ get_phrase('Phone Number') }}</p>
-                <p class="info">{{ $user_information['phone'] }}</p>
-                </div>
-                <div class="item">
-                <p class="title">{{ get_phrase('Address') }}</p>
-                <p class="info">
-                {{ $user_information['address'] }}
-                </p>
-                </div>
-                <div class="item">
-                </div>
-            </div>
             </div>
         </div>
         <!-- Right side -->
         <div class="user-details-info">
-
-            <!-- Tab content -->
             <div class="tab-content eNav-Tabs-content" id="myTabContent">
-            {{-- Regional Settings (personal timezone) lives on its own screen
-                 rather than inside this form, because it is a presentation
-                 preference and not part of a student's identity or contact
-                 record - and because a lecturer and a member of staff must
-                 reach the identical screen under identical rules. --}}
-            <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div>
-                    <strong>{{ get_phrase('Regional Settings') }}</strong>
-                    <div class="small">
-                        {{ get_phrase('Choose the timezone used to display your classes, deadlines and schedules.') }}
+                <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2 py-2 mb-2">
+                    <div>
+                        <strong style="color:#C54916;">{{ get_phrase('Regional Settings') }}</strong>
+                        <div class="small">{{ get_phrase('Choose the timezone used to display your classes, deadlines and schedules.') }}</div>
                     </div>
+                    <a href="{{ route('profile.regional.edit') }}" class="eBtn eBtn-primary btn-sm">{{ get_phrase('Regional Settings') }}</a>
                 </div>
-                <a href="{{ route('profile.regional.edit') }}" class="eBtn eBtn-primary">
-                    {{ get_phrase('Regional Settings') }}
-                </a>
-            </div>
-            <div
-                class="tab-pane fade show active"
-                id="basicInfo"
-                role="tabpanel"
-                aria-labelledby="basicInfo-tab"
-            >
-                <div class="eForm-layouts">
-                <form action="{{route('student.profile.update')}}" method="post" enctype="multipart/form-data">
-                    @CSRF
-                    <p class="form-text">{{ get_phrase('Your name, email, date of birth and registration number are maintained by the institution. Contact the Registrar for corrections.') }}</p>
-                    @if ($errors->any())
-                        <div class="alert alert-danger" role="alert">
-                            <ul class="mb-0">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
+                <div class="tab-pane fade show active" id="basicInfo" role="tabpanel" aria-labelledby="basicInfo-tab">
+                    <div class="eForm-layouts">
+                    <form action="{{route('student.profile.update')}}" method="post" enctype="multipart/form-data">
+                        @CSRF
+                        <p class="form-text small mb-2">{{ get_phrase('Your name, email, date of birth and registration number are maintained by the institution. Contact the Registrar for corrections.') }}</p>
+                        @if ($errors->any())
+                            <div class="alert alert-danger" role="alert">
+                                <ul class="mb-0">
+                                    @foreach ($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
+                        <div class="profile-grid">
+                            <div class="fpb-7">
+                                <label class="eForm-label">{{ get_phrase('Name') }}</label>
+                                <input type="text" class="form-control eForm-control" readonly value="{{ auth()->user()->name }}" />
+                            </div>
+                            <div class="fpb-7">
+                                <label class="eForm-label">{{ get_phrase('Email') }}</label>
+                                <input type="email" class="form-control eForm-control" readonly value="{{ auth()->user()->email }}" />
+                            </div>
+                            <div class="fpb-7">
+                                <label class="eForm-label">{{ get_phrase('Date of Birth') }}</label>
+                                @php $birthday = $user_information['birthday']; @endphp
+                                <input type="text" class="form-control eForm-control" readonly value="{{ $birthday ? date('m/d/Y', $birthday) : '' }}" />
+                            </div>
+                            <div class="fpb-7">
+                                <label class="eForm-label">{{ get_phrase('Gender') }}</label>
+                                <select name="gender" class="form-select eForm-select">
+                                    <option value="Male" @if(strtolower($user_information['gender'] ?? '') == 'male') selected @endif>{{ get_phrase('Male') }}</option>
+                                    <option value="Female" @if(strtolower($user_information['gender'] ?? '') == 'female') selected @endif>{{ get_phrase('Female') }}</option>
+                                </select>
+                            </div>
+                            <div class="fpb-7">
+                                <label class="eForm-label">{{ get_phrase('Phone Number') }}</label>
+                                <input type="tel" class="form-control eForm-control" name="phone" value="{{ old('phone', $user_information['phone']) }}" placeholder="Phone" />
+                            </div>
+                            <div class="fpb-7">
+                                <label class="eForm-label">{{ get_phrase('Address') }}</label>
+                                <input type="text" class="form-control eForm-control" name="address" value="{{ old('address', $user_information['address']) }}" placeholder="Address" />
+                            </div>
                         </div>
-                    @endif
-
-                    <div class="fpb-7">
-                    <label for="eInputName" class="eForm-label">{{ get_phrase('Name') }}</label>
-                    <input
-                        type="text"
-                        class="form-control eForm-control"
-                        id="eInputName"
-                        readonly
-                        value="{{ auth()->user()->name }}"
-                        placeholder="Your Name"
-                        aria-label="Your Name"
-                    />
+                        <div class="fpb-7 mt-2">
+                            <label class="eForm-label">{{ get_phrase('Photo') }}</label>
+                            <input type="file" class="form-control eForm-control-file" name="photo" accept=".jpg,.jpeg,.png,image/jpeg,image/png" />
+                            <div class="form-text small">{{ get_phrase('Choose a JPG or PNG image, up to 4 MB.') }}</div>
+                        </div>
+                        <button type="submit" class="userFormEdit-btn btn profile-save-btn">{{ get_phrase('Save Changes') }}</button>
+                    </form>
                     </div>
-                    <div class="fpb-7">
-                    <label for="eInputEmail" class="eForm-label"
-                        >{{ get_phrase('Email') }}</label
-                    >
-                    <input
-                        type="email"
-                        class="form-control eForm-control"
-                        id="eInputEmail"
-                        readonly
-                        value="{{ auth()->user()->email }}"
-                        placeholder="example@email.com"
-                        aria-label="example@email.com"
-                    />
-                    </div>
-
-
-                    <div class="fpb-7">
-                    <label for="studentDateOfBirth" class="eForm-label"
-                        >{{ get_phrase('Date of Birth') }}</label
-                    >
-                    @php
-                        $birthday = $user_information['birthday'];
-                    @endphp
-                    <input
-                        type="text"
-                        class="form-control eForm-control"
-                        id="studentDateOfBirth"
-                        readonly
-                        value="{{ $birthday ? date('m/d/Y', $birthday) : '' }}"
-                    />
-                    </div>
-                    <div class="fpb-7">
-                    <label for="eGenderList" class="eForm-label"
-                        >{{ get_phrase('Gender') }}</label
-                    >
-                    <select name="gender"
-                        class="form-select eForm-select eChoice-multiple-without-remove"
-                        data-placeholder="Type to search..."
-                    >
-                        <option value="Male" @php strtolower($user_information['gender'] ?? '') == 'male' ? 'selected':''; @endphp>{{ get_phrase('Male') }}</option>
-                        <option value="Female" @php strtolower($user_information['gender'] ?? '') == 'female' ? 'selected':''; @endphp>{{ get_phrase('Female') }}</option>
-                    </select>
-                    </div>
-                    <div class="fpb-7">
-                    <label for="eInputPhone" class="eForm-label"
-                        >{{ get_phrase('Phone Number') }}</label
-                    >
-                    <input
-                        type="number"
-                        class="form-control eForm-control"
-                        id="eInputPhone"
-                        name="phone"
-                        value="{{ old('phone', $user_information['phone']) }}"
-                        placeholder="00 (00) 12345 6789"
-                        aria-label="00 (00) 12345 6789"
-                    />
-                    </div>
-                    <div class="fpb-7">
-                    <label for="eInputAddress" class="eForm-label"
-                        >{{ get_phrase('Address') }}</label
-                    >
-                    <input
-                        type="text"
-                        class="form-control eForm-control"
-                        id="eInputAddress"
-                        name="address"
-                        value="{{ old('address', $user_information['address']) }}"
-                        placeholder="Enter Address"
-                        aria-label="Enter Address"
-                    />
-                    </div>
-
-                    <div class="fpb-7">
-                    <label for="profilePhoto" class="eForm-label"
-                        >{{ get_phrase('Photo') }}</label
-                    >
-                    <input type="file" id="profilePhoto" class="form-control eForm-control-file" name="photo" accept=".jpg,.jpeg,.png,image/jpeg,image/png" aria-describedby="profilePhotoHelp" />
-                    <div id="profilePhotoHelp" class="form-text">{{ get_phrase('Choose a JPG or PNG image, up to 4 MB.') }}</div>
-                    </div>
-
-                <button type="submit" class="userFormEdit-btn btn">{{ get_phrase('Save Changes') }}</button>
-
-                </form>
                 </div>
-            </div>
-
             </div>
         </div>
     </div>
-    <!-- End User Profile area -->
 @endsection
