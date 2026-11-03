@@ -298,7 +298,7 @@
 
             <div class="piie-header__actions">
                 <a class="piie-btn piie-btn--primary" href="{{ $piieApply }}">Apply Now</a>
-                <a class="piie-btn piie-btn--ghost" href="{{ $piieLogin }}">Login</a>
+                <a class="piie-btn piie-btn--ghost" href="{{ $piieLogin }}">Login to portal</a>
             </div>
 
             {{-- Below 1024px the navigation collapses to this control. --}}
@@ -367,9 +367,10 @@
 
                 <div class="piie-btn-row">
                     <a class="piie-btn piie-btn--primary" href="{{ $piieApply }}">Apply Now</a>
-                    <a class="piie-btn piie-btn--ghost" href="{{ $piieLogin }}">Login</a>
+                    <a class="piie-btn piie-btn--ghost" href="{{ $piieLogin }}">Login to portal</a>
                 </div>
             </nav>
         </div>
     </div>
 </header>
+

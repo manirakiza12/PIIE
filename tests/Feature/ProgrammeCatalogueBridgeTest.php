@@ -182,7 +182,7 @@ class ProgrammeCatalogueBridgeTest extends TestCase
             // round-trip test fail on a missing required field rather than on
             // the behaviour under test.
             'level' => 'Bachelors',
-            'mode'  => 'ODEL',
+            'mode'  => 'ODeL',
         ], $overrides));
 
         return Programme::query()->findOrFail($id);
@@ -200,7 +200,7 @@ class ProgrammeCatalogueBridgeTest extends TestCase
     {
         $school = $this->makeSchool();
         $admin = $this->makeAdminUser($school);
-        $payload = ['code' => 'ALL-IN-ONE', 'name' => 'All in one', 'level' => 'Diploma', 'mode' => 'ODEL'];
+        $payload = ['code' => 'ALL-IN-ONE', 'name' => 'All in one', 'level' => 'Diploma', 'mode' => 'ODeL'];
         $this->actingAs($admin)->postJson(route('admin.programmes.store'), $payload + [
             'cover_image' => $this->realImage(), 'is_published' => 1,
         ])->assertOk();
@@ -263,7 +263,7 @@ class ProgrammeCatalogueBridgeTest extends TestCase
         $admin = $this->makeAdminUser($school);
         $payload = [
             'code' => 'INFO-1', 'name' => 'Programme with information',
-            'level' => 'Diploma', 'mode' => 'ODEL',
+            'level' => 'Diploma', 'mode' => 'ODeL',
             'description' => 'A practical programme description.',
             'curriculum_overview' => 'A summary of the programme curriculum.',
             'career_prospects' => 'Graduate careers include teaching and research.',
@@ -1025,3 +1025,4 @@ class ProgrammeCatalogueBridgeTest extends TestCase
         $this->assertFalse($published->contains($draft->id));
     }
 }
+

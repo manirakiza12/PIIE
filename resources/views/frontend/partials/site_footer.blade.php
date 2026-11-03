@@ -256,7 +256,7 @@
                     <li><a href="{{ $piieProgramsUrl }}#support">Student Support</a></li>
                     <li><a href="{{ $piieBrochureUrl }}">Download Brochure</a></li>
                     <li><a href="{{ $piieApplyUrl }}">Apply Now</a></li>
-                    <li><a href="{{ $piieLoginUrl }}">Login</a></li>
+                    <li><a href="{{ $piieLoginUrl }}">Login to portal</a></li>
                 </ul>
             </nav>
 
@@ -308,8 +308,9 @@
                     <a href="{{ $piieTermsUrl }}">Terms</a>
                 @endif
                 <a href="{{ route('landingPage') }}#faqs">FAQs</a>
-                <a href="{{ $piieLoginUrl }}">Staff &amp; Student Login</a>
+                <a href="{{ $piieLoginUrl }}">Staff &amp; Student Login to portal</a>
             </nav>
         </div>
     </div>
 </footer>
+

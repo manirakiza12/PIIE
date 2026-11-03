@@ -38,6 +38,7 @@ trait AdmissionsTestHelper
         (require database_path('migrations/2026_10_19_150000_create_tuition_payments_table.php'))->up();
         (require database_path('migrations/2026_11_02_000001_create_tuition_payment_resolutions_table.php'))->up();
         (require database_path('migrations/2026_11_02_000002_add_resolution_to_tuition_payments.php'))->up();
+        (require database_path('migrations/2026_11_02_000003_create_tuition_payment_tombstones_table.php'))->up();
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();

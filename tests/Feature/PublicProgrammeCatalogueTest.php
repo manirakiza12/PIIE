@@ -203,7 +203,7 @@ class PublicProgrammeCatalogueTest extends TestCase
             'code'      => 'PRG',
             'name'      => 'Test Programme',
             'level'     => 'Bachelors',
-            'mode'      => 'ODEL',
+            'mode'      => 'ODeL',
             'is_active' => 1,
             'is_published' => 0,
             'created_at' => now(), 'updated_at' => now(),
@@ -939,3 +939,4 @@ class PublicProgrammeCatalogueTest extends TestCase
         $this->assertStringNotContainsString('piie-card__price-figure', $html);
     }
 }
+

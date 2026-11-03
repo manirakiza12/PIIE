@@ -1,10 +1,10 @@
-﻿@extends('frontend.index')
+@extends('frontend.index')
 
 @section('content')
 
 {{--
     ===========================================================================
-    PIIE PUBLIC HOMEPAGE — REDESIGNED
+    PIIE PUBLIC HOMEPAGE � REDESIGNED
     ===========================================================================
 
     WHAT IS HARDCODED (design)      WHAT IS ADMIN-MANAGED (content)
@@ -113,7 +113,7 @@
     /** A supplied photograph from the media folder, by its real filename. */
     $piieMedia = fn (string $name) => asset('assets/images/img/'.$name);
 
-    // ── Section lookups ───────────────────────────────────────────────────────
+    // -- Section lookups -------------------------------------------------------
     $piieHero = $piieSection('hero_slider');
     $piieWhy = $piieSection('why_choose_us');
     $piieOdel = $piieSection('online_learning_odel');
@@ -149,7 +149,7 @@
      * NOTE: no Blade comment syntax inside this block, and no literal "@" directive
      * name either. Blade compiles the block to raw PHP until its closing
      * directive, so a nested directive name in a comment silently restructures
-     * the template — which is why the explanation uses plain PHP comment syntax
+     * the template � which is why the explanation uses plain PHP comment syntax
      * and avoids naming the directives.
      */
     $piieProgrammes = app(\App\Support\ProgrammeCatalogue\PublicProgrammeCatalogue::class)->cards();
@@ -197,7 +197,7 @@
     <main id="piie-main">
 
         {{-- =====================================================================
-             SECTION 01 — VIDEO WELCOME BANNER
+             SECTION 01 � VIDEO WELCOME BANNER
              ---------------------------------------------------------------------
              The wording is the CMS `hero_slider` row, unchanged. Only the
              presentation is new.
@@ -298,7 +298,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 02 — EXPLORE YOUR ACADEMIC FUTURE
+             SECTION 02 � EXPLORE YOUR ACADEMIC FUTURE
         ===================================================================== --}}
         <section class="piie-section" id="levels" aria-labelledby="piie-levels-title">
             <div class="piie-wrap">
@@ -334,7 +334,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 03 — WHY CHOOSE PIIE
+             SECTION 03 � WHY CHOOSE PIIE
              Content is the CMS `why_choose_us` section verbatim; the benefits are
              the six themes the brief lists, each anchored to a sentence that is
              actually in that record.
@@ -374,12 +374,12 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 04 — PUBLISHED PROGRAMMES
+             SECTION 04 � PUBLISHED PROGRAMMES
 
              Read from the published academic Programme records via
              PublicProgrammeCatalogue. A MAXIMUM of eight, laid out four across, so
              two full rows. Fewer than eight renders fewer cards and the row simply
-             ends short — never padded with filler.
+             ends short � never padded with filler.
 
              The cards use the SAME shared partial the catalogue page uses, so a
              programme looks identical on the homepage and in the catalogue and the
@@ -395,8 +395,8 @@
 
                 @if($piieFeaturedProgrammes->isEmpty())
                     {{-- A designed empty state, not a blank area. An institution with
-                         no published programmes is a normal, temporary state — the
-                         catalogue is filled by administrators, not by code — and the
+                         no published programmes is a normal, temporary state � the
+                         catalogue is filled by administrators, not by code � and the
                          page must still look deliberate when it happens. --}}
                     <div class="piie-empty" style="margin-top:2rem;">
                         <p class="piie-empty__title" style="font-weight:600;margin:0 0 .5rem;">Programme catalogue is being prepared</p>
@@ -432,7 +432,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 05 — HOW ONLINE LEARNING WORKS
+             SECTION 05 � HOW ONLINE LEARNING WORKS
         ===================================================================== --}}
         <section class="piie-section piie-section--alt" id="odel" aria-labelledby="piie-odel-title">
             <div class="piie-wrap piie-split piie-split--reverse">
@@ -461,7 +461,7 @@
                     </ol>
 
                     <div class="piie-btn-row" style="margin-top:2rem;">
-                        <a class="piie-btn piie-btn--primary" href="{{ $piieLoginUrl }}">Login</a>
+                        <a class="piie-btn piie-btn--primary" href="{{ $piieLoginUrl }}">Login to portal</a>
                         <a class="piie-btn piie-btn--ghost" href="{{ $piieAdmissionsUrl }}">How to Apply</a>
                     </div>
                 </div>
@@ -469,7 +469,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 06 — ABOUT OUR INSTITUTION
+             SECTION 06 � ABOUT OUR INSTITUTION
         ===================================================================== --}}
         <section class="piie-section" aria-labelledby="piie-about-title">
             <div class="piie-wrap piie-split">
@@ -502,7 +502,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 07 — ADMISSIONS MADE SIMPLE
+             SECTION 07 � ADMISSIONS MADE SIMPLE
              The steps are the CMS `admissions` items, in their configured order.
         ===================================================================== --}}
         <section class="piie-section piie-section--alt" id="entry" aria-labelledby="piie-admissions-title">
@@ -542,7 +542,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 08 — STUDENT SUPPORT
+             SECTION 08 � STUDENT SUPPORT
         ===================================================================== --}}
         <section class="piie-section" id="support" aria-labelledby="piie-support-title">
             <div class="piie-wrap piie-split piie-split--reverse">
@@ -578,7 +578,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 09 — INSTITUTIONAL LEADERSHIP
+             SECTION 09 � INSTITUTIONAL LEADERSHIP
              The CMS `leadership_team` items. No portrait is invented: a person with
              no configured image is shown as a typographic monogram, which is honest
              where a stock photograph would not be.
@@ -621,7 +621,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 10 — NEWS AND UPCOMING EVENTS
+             SECTION 10 � NEWS AND UPCOMING EVENTS
              Published items only. No item means an honest empty state, never a
              fabricated announcement.
         ===================================================================== --}}
@@ -675,7 +675,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 11 — FREQUENTLY ASKED QUESTIONS
+             SECTION 11 � FREQUENTLY ASKED QUESTIONS
              A NATIVE <details> accordion: keyboard-operable and correctly
              announced with no JavaScript. The script only animates the open state.
         ===================================================================== --}}
@@ -709,7 +709,7 @@
         </section>
 
         {{-- =====================================================================
-             SECTION 12 — FINAL APPLICATION CTA
+             SECTION 12 � FINAL APPLICATION CTA
         ===================================================================== --}}
         <section class="piie-section piie-section--tight piie-cta" aria-labelledby="piie-cta-title">
             <div class="piie-wrap">
@@ -736,3 +736,4 @@
 </div>
 
 @endsection
+
