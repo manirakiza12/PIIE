@@ -2299,7 +2299,7 @@ class AdminController extends Controller
         $placementHistoryCount = Schema::hasTable('student_curriculum_assignments')
             ? DB::table('student_curriculum_assignments')->where('school_id', $schoolId)->where('student_id', $user->id)->count() : 0;
         $placementCurricula = Schema::hasTable('curricula')
-            ? Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with('programme')->orderByDesc('created_at')->get(['id', 'programme_id', 'version']) : collect();
+            ? \App\Models\Curriculum::where('school_id', $schoolId)->where('status', 'approved')->with('programme')->orderByDesc('created_at')->get(['id', 'programme_id', 'version']) : collect();
         $placementStages = Schema::hasTable('curriculum_stages') ? DB::table('curriculum_stages')->where('school_id', $schoolId)
             ->when(Schema::hasColumn('curriculum_stages', 'archived_at'), fn ($query) => $query->whereNull('archived_at'))
             ->orderBy('sequence')->get(['id', 'curriculum_id', 'label', 'sequence']) : collect();
