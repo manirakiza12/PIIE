@@ -113,7 +113,7 @@ final class AdmissionLetterDocument
         return match (strtolower(trim($mode ?? ''))) {
             'day' => 'Day',
             'evening' => 'Evening',
-            'odel/blended' => 'ODEL/Blended',
+            'odel/blended' => 'ODeL/Blended',
             'odel', 'online', 'online_distance_learning' => 'Online Distance Learning',
             'fulltime', 'full_time', 'full time' => 'Full Time',
             'parttime', 'part_time' => 'Part Time',
@@ -145,3 +145,4 @@ final class AdmissionLetterDocument
         return 'PIIE_Admission_Letter_'.preg_replace('/[^A-Za-z0-9_-]/', '_', (string) $letter['application_number']).'.pdf';
     }
 }
+

@@ -32,7 +32,7 @@ class ProgrammeFormContextTest extends TestCase
 
     private function payload(array $values = []): array
     {
-        return $values + ['code' => 'FORM1', 'name' => 'Programme Form Test', 'level' => 'Diploma', 'mode' => 'ODEL'];
+        return $values + ['code' => 'FORM1', 'name' => 'Programme Form Test', 'level' => 'Diploma', 'mode' => 'ODeL'];
     }
 
     public function test_selected_department_context_is_shown_by_name_on_initial_load_and_after_refresh(): void
@@ -88,3 +88,4 @@ class ProgrammeFormContextTest extends TestCase
         $this->assertDatabaseMissing('programmes', ['code' => 'FORM1']);
     }
 }
+

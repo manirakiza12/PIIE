@@ -138,12 +138,12 @@ class ProgrammeManagementTest extends TestCase
             'code' => 'NEW1',
             'name' => 'New Style Programme',
             'level' => "Bachelor's",
-            'mode' => 'ODEL',
+            'mode' => 'ODeL',
             'tuition_fee' => 500,
         ]);
 
         $response->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('programmes', ['code' => 'NEW1', 'level' => "Bachelor's", 'mode' => 'ODEL']);
+        $this->assertDatabaseHas('programmes', ['code' => 'NEW1', 'level' => "Bachelor's", 'mode' => 'ODeL']);
     }
 
     public function test_the_create_modal_offers_current_levels_and_only_the_requested_modes(): void
@@ -195,7 +195,7 @@ class ProgrammeManagementTest extends TestCase
             'code' => 'DUP1',
             'name' => 'Second Programme With Same Code',
             'level' => 'Diploma',
-            'mode' => 'ODEL',
+            'mode' => 'ODeL',
         ]);
 
         $response->assertSessionHasErrors('code');
@@ -213,7 +213,7 @@ class ProgrammeManagementTest extends TestCase
             'code' => 'SHARED',
             'name' => 'Programme In School B',
             'level' => 'Diploma',
-            'mode' => 'ODEL',
+            'mode' => 'ODeL',
         ]);
 
         $response->assertSessionHasNoErrors();
@@ -502,3 +502,4 @@ class ProgrammeManagementTest extends TestCase
         $this->assertStringNotContainsString('Their Orphan', $html);
     }
 }
+
