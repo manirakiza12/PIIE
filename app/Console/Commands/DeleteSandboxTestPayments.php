@@ -31,7 +31,8 @@ class DeleteSandboxTestPayments extends Command
 
     public function handle(): int
     {
-        // Strictly restrict --force to non-production (testing) environments.
+    {
+        return 0;
         if ($this->option('force') && ! app()->environment('testing')) {
             $this->error('--force is only permitted in testing environments. In production, confirm interactively.');
             return 1;
