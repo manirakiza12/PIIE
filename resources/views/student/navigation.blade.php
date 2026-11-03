@@ -44,7 +44,16 @@
     <script src="{{ asset('assets/vendors/jquery/jquery-3.6.0.min.js') }}"></script>
     <link rel="stylesheet" href="{{ asset('assets/css/online-exams.css') }}?v=20260920-3">
     @include('shared.workspace_assets')
-</head>
+    <style>
+        /* PIIE student portal - professional header colour & sidebar scroll */
+        .sidebar { background: #C54916 !important; overflow-y: auto !important; overflow-x: hidden !important; }
+        .sidebar .nav-links { max-height: calc(100vh - 80px); overflow-y: auto; overflow-x: hidden; }
+        .sidebar .logo-details .logo_name { color: #fff; }
+        .sidebar .iocn-link a, .sidebar .nav-links li a { color: #fff; }
+        .sidebar .nav-links li:hover > a, .sidebar .nav-links li.showMenu > a { background: rgba(255,255,255,0.12); }
+        .student-card-row .card, .dashboard-card-row .card { height: 100%; display: flex; flex-direction: column; }
+        .student-card-row .card-body, .dashboard-card-row .card-body { flex: 1 1 auto; }
+    </style></head>
 
 <body>
 
@@ -783,3 +792,4 @@
 </body>
 
 </html>
+
