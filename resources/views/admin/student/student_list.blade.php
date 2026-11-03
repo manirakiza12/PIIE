@@ -421,6 +421,95 @@ $menu_permission = (empty($user->menu_permission) || $user->menu_permission == '
 </script>
 
 
+<style>
+.pdf-export table { table-layout: fixed !important; width: 100% !important; }
+.pdf-export th, .pdf-export td { min-width: 0 !important; white-space: normal !important; word-wrap: break-word !important; overflow-wrap: anywhere !important; }
+.pdf-export .adminTable-action, .pdf-export button, .pdf-export .dropdown-menu, .pdf-export .dropdown-toggle,
+.pdf-export .export-btn-area, .pdf-export .search-filter-area, .pdf-export .admin-tInfo-pagi, .pdf-export .pagination { display: none !important; }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.html2pdf !== 'function') return;
+    window.exportCurrentPagePdf = function (targetId) {
+        var source = document.getElementById(targetId || 'page-print-area');
+        if (!source) return Promise.resolve();
+        var clone = source.cloneNode(true);
+        var tables = Array.from(clone.querySelectorAll('table'));
+        if (clone.matches('table')) tables.unshift(clone);
+        tables.forEach(function (table) {
+            var header = table.tHead && table.tHead.rows[0];
+            if (!header) return;
+            var columns = [];
+            Array.from(header.cells).forEach(function (cell, index) {
+                if (/^(actions?|options?|manage)$/i.test((cell.textContent || '').trim()) ||
+                    cell.hasAttribute('data-print-exclude') ||
+                    (!(cell.textContent || '').trim() && cell.querySelector('input[type="checkbox"]'))) columns.push(index);
+            });
+            Array.from(table.rows).forEach(function (row) {
+                var column = 0;
+                Array.from(row.cells).forEach(function (cell) {
+                    var span = cell.colSpan || 1;
+                    var removed = columns.filter(function (index) { return index >= column && index < column + span; }).length;
+                    column += span;
+                    if (removed === span) cell.remove();
+                    else if (removed) cell.colSpan = span - removed;
+                });
+            });
+        });
+        clone.querySelectorAll('button, .btn, .eBtn, a[class*="eBtn"], .dropdown-menu, .dropdown-toggle, input, select, textarea, .page-toolbar, .pagination, .admin-tInfo-pagi, .export-btn-area, .search-filter-area, .modal, .modal-backdrop').forEach(function (node) { node.remove(); });
+        clone.style.setProperty('width', '100%', 'important');
+        clone.style.setProperty('min-width', '0', 'important');
+        clone.style.setProperty('max-width', '100%', 'important');
+        clone.style.setProperty('display', 'block', 'important');
+        clone.style.setProperty('position', 'static', 'important');
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'pdf-export';
+        wrapper.style.width = '273mm';
+
+        var header = document.createElement('div');
+        header.className = 'print-header';
+        header.style.display = 'block';
+        header.style.marginBottom = '12px';
+        header.style.borderBottom = '2px solid #333';
+        header.style.paddingBottom = '8px';
+
+        var institution = document.createElement('p');
+        institution.style.fontSize = '16px';
+        institution.style.fontWeight = '700';
+        institution.style.margin = '0';
+        institution.textContent = '{{ institution_name() }}';
+        header.appendChild(institution);
+
+        var meta = document.createElement('div');
+        meta.style.display = 'flex';
+        meta.style.justifyContent = 'space-between';
+        meta.style.fontSize = '12px';
+        meta.style.marginTop = '4px';
+
+        var titleEl = document.createElement('span');
+        titleEl.textContent = 'Students Register';
+        meta.appendChild(titleEl);
+
+        var dateEl = document.createElement('span');
+        dateEl.textContent = '{{ get_phrase('Generated') }}: ' + new Date().toLocaleString();
+        meta.appendChild(dateEl);
+
+        header.appendChild(meta);
+        wrapper.appendChild(header);
+        wrapper.appendChild(clone);
+
+        return window.html2pdf().set({
+            margin: 10,
+            filename: (document.title || 'students-register').toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') + '.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 1.5, scrollX: 0, scrollY: 0, windowWidth: 1123, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h1', 'h2', 'h3', 'h4'] }
+        }).from(wrapper).save();
+    };
+});
+</script>
 <!-- End Students area -->
 <style>
 @media print {
