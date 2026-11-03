@@ -4293,10 +4293,50 @@ class AdminController extends Controller
 
     public function subjectDelete($id)
     {
-        $subject = Subject::where('school_id', auth()->user()->school_id)->findOrFail($id);
-        $subject->delete();
-        $subjects = Subject::get()->where('school_id', auth()->user()->school_id);
-        return redirect()->back()->with('message', 'You have successfully delete subject.');
+        $schoolId = (int) auth()->user()->school_id;
+        $subject = Subject::where('school_id', $schoolId)->findOrFail($id);
+
+        $blockers = [];
+        if ($subject->curriculumMemberships()->exists()) {
+            $blockers[] = get_phrase('curriculum placements');
+        }
+        if ($subject->courseOfferings()->exists()) {
+            $blockers[] = get_phrase('course offerings');
+        }
+        if ($subject->liveClasses()->exists()) {
+            $blockers[] = get_phrase('live classes');
+        }
+        if (\App\Models\Exam::where('school_id', $schoolId)->where('subject_id', $id)->exists()) {
+            $blockers[] = get_phrase('exams');
+        }
+        if (\App\Models\OnlineExam::where('school_id', $schoolId)->where('subject_id', $id)->exists()) {
+            $blockers[] = get_phrase('online exams');
+        }
+        if (\App\Models\Assignment::where('school_id', $schoolId)->where('subject_id', $id)->exists()) {
+            $blockers[] = get_phrase('assignments');
+        }
+        if (\App\Models\Routine::where('school_id', $schoolId)->where('subject_id', $id)->exists()) {
+            $blockers[] = get_phrase('timetable/routines');
+        }
+        if (\App\Models\Syllabus::where('school_id', $schoolId)->where('subject_id', $id)->exists()) {
+            $blockers[] = get_phrase('syllabuses');
+        }
+        if (\App\Models\QuestionBank::where('school_id', $schoolId)->where('subject_id', $id)->exists()) {
+            $blockers[] = get_phrase('question banks');
+        }
+
+        if (! empty($blockers)) {
+            return redirect()->back()->with('error', get_phrase('This Course Unit cannot be deleted because it is still used by: ') . implode(', ', $blockers) . '.');
+        }
+
+        try {
+            $subject->delete();
+        } catch (\Illuminate\Database\QueryException $e) {
+            report($e);
+            return redirect()->back()->with('error', get_phrase('This Course Unit could not be deleted because it is still referenced by other records.'));
+        }
+
+        return redirect()->back()->with('message', get_phrase('You have successfully deleted the subject.'));
     }
 
     /**
