@@ -1097,6 +1097,19 @@ Route::middleware(['auth', 'admin', 'rbac', \App\Http\Middleware\RetireAcademicG
     Route::post('admin/programme-cohorts/{id}/placement/{membershipId}', 'place')->name('admin.programme_cohorts.placement.store');
 });
 
+Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\StudentExemptionController::class)->group(function () {
+    Route::get('admin/exemptions', 'index')->name('admin.exemptions.index');
+    Route::get('admin/exemptions/create', 'create')->name('admin.exemptions.create');
+    Route::post('admin/exemptions', 'store')->name('admin.exemptions.store');
+    Route::get('admin/exemptions/{id}', 'show')->whereNumber('id')->name('admin.exemptions.show');
+    Route::post('admin/exemptions/{id}/approve', 'approve')->whereNumber('id')->name('admin.exemptions.approve');
+    Route::post('admin/exemptions/{id}/reject', 'reject')->whereNumber('id')->name('admin.exemptions.reject');
+    Route::post('admin/exemptions/{id}/cancel', 'cancel')->whereNumber('id')->name('admin.exemptions.cancel');
+    Route::get('admin/exemptions/curriculum/{curriculumId}/stages', 'curriculumStages')->whereNumber('curriculumId')->name('admin.exemptions.curriculum.stages');
+    Route::get('admin/exemptions/curriculum/{curriculumId}/memberships', 'curriculumMemberships')->whereNumber('curriculumId')->name('admin.exemptions.curriculum.memberships');
+    Route::get('admin/curriculum/by-programme/{programmeId}', 'curriculaByProgramme')->whereNumber('programmeId')->name('admin.curriculum.by_programme');
+});
+
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\DirectAcademicPlacementController::class)->group(function () {
     Route::get('admin/academic/student-placements', 'index')->name('admin.academic.placements.index');
     Route::put('admin/academic/student-placements/{id}', 'update')->whereNumber('id')->name('admin.academic.placements.update');

@@ -76,6 +76,16 @@ class StudentCurriculumAssignment extends Model
         }
     }
 
+    public function updateThroughDomainService(array $attributes): void
+    {
+        $this->domainWriteAllowed = true;
+        try {
+            $this->forceFill($attributes)->save();
+        } finally {
+            $this->domainWriteAllowed = false;
+        }
+    }
+
     public function school()
     {
         return $this->belongsTo(School::class, 'school_id');
