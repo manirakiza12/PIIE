@@ -20,10 +20,8 @@ class DeleteSandboxTestPayments extends Command
 
     protected $description = 'One-time guarded deletion of obsolete Sandbox test tuition payments (IDs 1 and 6). Dry-run by default.';
 
-    /** The only payment IDs this command is ever permitted to touch. */
     private const ALLOWED_IDS = [1, 6];
 
-    /** Expected immutable attributes per payment ID. */
     private const EXPECTED = [
         1 => ['amount' => '440000.00', 'currency' => 'UGX'],
         6 => ['amount' => '650000.00', 'currency' => 'UGX'],
@@ -31,8 +29,6 @@ class DeleteSandboxTestPayments extends Command
 
     public function handle(): int
     {
-    {
-        return 0;
         if ($this->option('force') && ! app()->environment('testing')) {
             $this->error('--force is only permitted in testing environments. In production, confirm interactively.');
             return 1;
@@ -41,7 +37,7 @@ class DeleteSandboxTestPayments extends Command
         $ids = array_values(array_unique(array_map('intval', explode(',', (string) $this->option('ids')))));
         foreach ($ids as $id) {
             if (! in_array($id, self::ALLOWED_IDS, true)) {
-                $this->error("Payment ID {$id} is not in the allowed set {" . implode(',', self::ALLOWED_IDS) . "}.");
+                $this->error("Payment ID {$id} is not in the allowed set.");
                 return 1;
             }
         }
@@ -69,7 +65,6 @@ class DeleteSandboxTestPayments extends Command
         $this->info('Mode: ' . ($dryRun ? 'DRY-RUN (no mutations)' : 'EXECUTE'));
         $this->info('Target IDs: ' . implode(', ', $ids));
         $this->info('School ID: ' . $schoolId);
-        $this->newLine();
 
         $plan = [];
         $allOk = true;
@@ -83,15 +78,9 @@ class DeleteSandboxTestPayments extends Command
 
         $rows = [];
         foreach ($plan as $p) {
-            $rows[] = [
-                $p['id'],
-                $p['exists'] ? 'yes' : 'no',
-                $p['ok'] ? 'PASS' : 'FAIL',
-                $p['reason'] ?? '',
-            ];
+            $rows[] = [$p['id'], $p['exists'] ? 'yes' : 'no', $p['ok'] ? 'PASS' : 'FAIL', $p['reason'] ?? ''];
         }
         $this->table(['Payment ID', 'Exists', 'Safeguards', 'Detail'], $rows);
-        $this->newLine();
 
         foreach ($plan as $p) {
             $this->line("Payment #{$p['id']}:");
@@ -103,7 +92,6 @@ class DeleteSandboxTestPayments extends Command
                     $this->line("    note: {$n}");
                 }
             }
-            $this->newLine();
         }
 
         if (! $allOk) {
@@ -148,24 +136,48 @@ class DeleteSandboxTestPayments extends Command
                 foreach ($toDelete as $id) {
                     $payment = TuitionPayment::where('id', $id)->where('school_id', $schoolId)->lockForUpdate()->firstOrFail();
 
-                    // Re-verify safeguards inside the transaction (race-condition protection).
                     $payload = $payment->gateway_payload ?? [];
-                    if (($payload['environment'] ?? null) !== 'sandbox') { throw new \RuntimeException('Safeguard failed: not sandbox.'); }
-                    if ($payment->currency !== 'UGX') { throw new \RuntimeException('Safeguard failed: currency.'); }
-                    if (! in_array($payment->status, ['pending', 'failed'], true)) { throw new \RuntimeException('Safeguard failed: status.'); }
-                    if ($payment->isResolved()) { throw new \RuntimeException('Safeguard failed: already resolved.'); }
-                    if (number_format((float) $payment->amount, 2, '.', '') !== self::EXPECTED[$id]['amount']) { throw new \RuntimeException('Safeguard failed: amount changed.'); }
-                    if ($payment->currency !== self::EXPECTED[$id]['currency']) { throw new \RuntimeException('Safeguard failed: currency changed.'); }
-                    if (TuitionPaymentTombstone::where('payment_id', $id)->exists()) { throw new \RuntimeException('Safeguard failed: already tombstoned.'); }
-                    $hasSettlement = AuditLog::where('record_type', TuitionPayment::class)->where('record_id', $payment->id)->where('action', 'update')->where('description', 'like', '%paid%')->exists();
-                    if ($hasSettlement) { throw new \RuntimeException('Safeguard failed: settlement record exists.'); }
+                    if (($payload['environment'] ?? null) !== 'sandbox') {
+                        throw new \RuntimeException('Safeguard failed: not sandbox.');
+                    }
+                    if ($payment->currency !== 'UGX') {
+                        throw new \RuntimeException('Safeguard failed: currency.');
+                    }
+                    if (! in_array($payment->status, ['pending', 'failed'], true)) {
+                        throw new \RuntimeException('Safeguard failed: status.');
+                    }
+                    if ($payment->isResolved()) {
+                        throw new \RuntimeException('Safeguard failed: already resolved.');
+                    }
+                    if (number_format((float) $payment->amount, 2, '.', '') !== self::EXPECTED[$id]['amount']) {
+                        throw new \RuntimeException('Safeguard failed: amount changed.');
+                    }
+                    if ($payment->currency !== self::EXPECTED[$id]['currency']) {
+                        throw new \RuntimeException('Safeguard failed: currency changed.');
+                    }
+                    if (TuitionPaymentTombstone::where('payment_id', $id)->exists()) {
+                        throw new \RuntimeException('Safeguard failed: already tombstoned.');
+                    }
+                    $hasSettlement = AuditLog::where('record_type', TuitionPayment::class)
+                        ->where('record_id', $payment->id)
+                        ->where('action', 'update')
+                        ->where('description', 'like', '%paid%')
+                        ->exists();
+                    if ($hasSettlement) {
+                        throw new \RuntimeException('Safeguard failed: settlement record exists.');
+                    }
                     $fee = StudentFeeManager::where('id', $payment->fee_id)->where('school_id', $schoolId)->first();
                     if ($fee) {
-                        $otherPaidCount = TuitionPayment::where('fee_id', $payment->fee_id)->where('school_id', $payment->school_id)->where('status', 'paid')->where('id', '!=', $payment->id)->count();
-                        if ($otherPaidCount === 0 && DecimalAmount::minorUnits($fee->paid_amount) > 0) { throw new \RuntimeException('Safeguard failed: unexplained credits.'); }
+                        $otherPaidCount = TuitionPayment::where('fee_id', $payment->fee_id)
+                            ->where('school_id', $payment->school_id)
+                            ->where('status', 'paid')
+                            ->where('id', '!=', $payment->id)
+                            ->count();
+                        if ($otherPaidCount === 0 && DecimalAmount::minorUnits($fee->paid_amount) > 0) {
+                            throw new \RuntimeException('Safeguard failed: unexplained credits.');
+                        }
                     }
 
-                    // Tombstone (immutable audit).
                     TuitionPaymentTombstone::create([
                         'payment_id' => $payment->id,
                         'school_id' => $payment->school_id,
@@ -213,40 +225,45 @@ class DeleteSandboxTestPayments extends Command
         $checks['exists'] = $exists;
         if (! $exists) {
             if (TuitionPaymentTombstone::where('payment_id', $id)->exists()) {
-                $notes[] = 'Already deleted (tombstone exists) — will be skipped.';
+                $notes[] = 'Already deleted (tombstone exists) - will be skipped.';
                 return ['id' => $id, 'exists' => false, 'ok' => true, 'checks' => $checks, 'notes' => $notes, 'reason' => 'already deleted'];
             }
             $ok = false;
-            $notes[] = 'Payment not found and no tombstone — cannot verify.';
+            $notes[] = 'Payment not found and no tombstone - cannot verify.';
             return ['id' => $id, 'exists' => false, 'ok' => false, 'checks' => $checks, 'notes' => $notes, 'reason' => 'not found'];
         }
 
         $checks['school_ownership'] = ((int) $payment->school_id === $schoolId);
         if (! $checks['school_ownership']) {
-            $ok = false; $notes[] = "school_id={$payment->school_id}, expected {$schoolId}";
+            $ok = false;
+            $notes[] = "school_id={$payment->school_id}, expected {$schoolId}";
         }
 
         $payload = $payment->gateway_payload ?? [];
         $checks['sandbox_environment'] = (($payload['environment'] ?? null) === 'sandbox');
         if (! $checks['sandbox_environment']) {
-            $ok = false; $notes[] = 'environment=' . ($payload['environment'] ?? 'null');
+            $ok = false;
+            $notes[] = 'environment=' . ($payload['environment'] ?? 'null');
         }
 
         $expCurrency = self::EXPECTED[$id]['currency'];
         $checks['currency'] = ($payment->currency === $expCurrency);
         if (! $checks['currency']) {
-            $ok = false; $notes[] = "currency={$payment->currency}, expected {$expCurrency}";
+            $ok = false;
+            $notes[] = "currency={$payment->currency}, expected {$expCurrency}";
         }
 
         $expAmount = self::EXPECTED[$id]['amount'];
         $checks['amount'] = (number_format((float) $payment->amount, 2, '.', '') === $expAmount);
         if (! $checks['amount']) {
-            $ok = false; $notes[] = "amount={$payment->amount}, expected {$expAmount}";
+            $ok = false;
+            $notes[] = "amount={$payment->amount}, expected {$expAmount}";
         }
 
         $checks['status_not_final'] = in_array($payment->status, ['pending', 'failed'], true);
         if (! $checks['status_not_final']) {
-            $ok = false; $notes[] = "status={$payment->status} (paid/reversed/archived not deletable)";
+            $ok = false;
+            $notes[] = "status={$payment->status} (paid/reversed/archived not deletable)";
         }
 
         $hasSettlement = AuditLog::where('record_type', TuitionPayment::class)
@@ -256,7 +273,8 @@ class DeleteSandboxTestPayments extends Command
             ->exists();
         $checks['no_settlement_record'] = ! $hasSettlement;
         if ($hasSettlement) {
-            $ok = false; $notes[] = 'settlement audit record exists';
+            $ok = false;
+            $notes[] = 'settlement audit record exists';
         }
 
         $fee = StudentFeeManager::where('id', $payment->fee_id)->where('school_id', $payment->school_id)->first();
@@ -269,7 +287,8 @@ class DeleteSandboxTestPayments extends Command
             $unexplained = ($otherPaidCount === 0 && DecimalAmount::minorUnits($fee->paid_amount) > 0);
             $checks['no_unexplained_credits'] = ! $unexplained;
             if ($unexplained) {
-                $ok = false; $notes[] = 'invoice has unexplained payment credits';
+                $ok = false;
+                $notes[] = 'invoice has unexplained payment credits';
             }
         } else {
             $checks['invoice_accessible'] = false;
@@ -278,7 +297,8 @@ class DeleteSandboxTestPayments extends Command
 
         $checks['not_already_resolved'] = ! $payment->isResolved();
         if ($payment->isResolved()) {
-            $ok = false; $notes[] = 'payment already resolved/archived';
+            $ok = false;
+            $notes[] = 'payment already resolved/archived';
         }
 
         $checks['not_already_tombstoned'] = ! TuitionPaymentTombstone::where('payment_id', $id)->exists();
@@ -306,5 +326,3 @@ class DeleteSandboxTestPayments extends Command
         return $data;
     }
 }
-
-
