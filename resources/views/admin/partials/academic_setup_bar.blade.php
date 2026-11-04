@@ -1,5 +1,13 @@
 {{-- Compact Academic Setup quick-access bar. UI-only; reuses existing routes and RBAC checks. --}}
 @php
+    $rbac = app(\App\Support\Permissions\PermissionService::class);
+    $navCan = $navCan ?? function (string $routeName) use ($rbac, $user): bool {
+        $required = $rbac->routePermission($routeName);
+        if ((int) $user->role_id === \App\Support\Roles\SystemRole::GENERIC_STAFF && $required === null) {
+            return false;
+        }
+        return $required === null || $rbac->allows($user, $required);
+    };
     $setupItems = [
         ['label' => 'Programmes', 'icon' => 'bi-mortarboard', 'index' => 'admin.programmes.index', 'create' => 'admin.programmes.open_modal'],
         ['label' => 'Programme Cohorts', 'icon' => 'bi-people', 'index' => 'admin.programme_cohorts.index', 'create' => 'admin.programme_cohorts.create'],
