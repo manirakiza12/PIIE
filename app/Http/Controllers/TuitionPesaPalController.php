@@ -243,7 +243,8 @@ final class TuitionPesaPalController extends Controller
         }
 
         // Write operations in transaction
-        DB::transaction(function () use ($user, $paymentId, $validated, $isReviewOnly, $payment) {
+        try {
+            DB::transaction(function () use ($user, $paymentId, $validated, $isReviewOnly, $payment) {
             // Re-lock and re-verify
             $lockedPayment = TuitionPayment::where('id', $paymentId)
                 ->where('school_id', $user->school_id)
@@ -292,6 +293,9 @@ final class TuitionPesaPalController extends Controller
                 ($isReviewOnly ? 'Admin review' : 'Test payment archived') . ' #' . $lockedPayment->id . ': ' . $validated['reason'],
                 ['school_id' => $user->school_id, 'event_type' => 'DATA', 'record_type' => TuitionPayment::class, 'record_id' => $lockedPayment->id]);
         });
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
 
         if ($isReviewOnly) {
             return back()->with('success', 'Admin review recorded. The payment remains pending and will still block configuration changes until definitively resolved.');
