@@ -18,9 +18,10 @@ return new class extends Migration
         Schema::table('academic_periods', function (Blueprint $table): void {
             if (! Schema::hasColumn('academic_periods', 'programme_cohort_id')) {
                 $table->unsignedBigInteger('programme_cohort_id')->nullable()->after('academic_year_id');
-                $table->index(['school_id', 'programme_cohort_id'], 'ap_cohort_idx');
-                $table->foreign('programme_cohort_id', 'ap_cohort_fk')
-                    ->references('id')->on('programme_cohorts')->onDelete('set null')->onUpdate('restrict');
+                // programme_cohorts has unique(school_id, id) — use composite tenant FK
+$table->foreign(['school_id', 'programme_cohort_id'], 'ap_cohort_tenant_fk')
+                ->references(['school_id', 'id'])->on('programme_cohorts')->onDelete('restrict')->onUpdate('restrict');
+                $table->index(['school_id', 'programme_cohort_id'], 'ap_cohort_tenant_idx');
             }
         });
     }
@@ -29,8 +30,8 @@ return new class extends Migration
     {
         Schema::table('academic_periods', function (Blueprint $table): void {
             if (Schema::hasColumn('academic_periods', 'programme_cohort_id')) {
-                $table->dropForeign('ap_cohort_fk');
-                $table->dropIndex('ap_cohort_idx');
+                $table->dropForeign('ap_cohort_tenant_fk');
+                $table->dropIndex('ap_cohort_tenant_idx');
                 $table->dropColumn('programme_cohort_id');
             }
         });

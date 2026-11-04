@@ -46,8 +46,9 @@ return new class extends Migration
                 ->references('id')->on('users')->onDelete('restrict')->onUpdate('restrict');
             $table->foreign(['school_id', 'programme_id'], 'sae_programme_tenant_fk')
                 ->references(['school_id', 'id'])->on('programmes')->onDelete('restrict')->onUpdate('restrict');
-            $table->foreign(['school_id', 'programme_id', 'curriculum_id'], 'sae_curriculum_programme_fk')
-                ->references(['school_id', 'programme_id', 'id'])->on('curricula')->onDelete('restrict')->onUpdate('restrict');
+            // curricula has unique(school_id, id) — use composite tenant FK
+            $table->foreign(['school_id', 'curriculum_id'], 'sae_curriculum_tenant_fk')
+                ->references(['school_id', 'id'])->on('curricula')->onDelete('restrict')->onUpdate('restrict');
             $table->foreign('requested_by', 'sae_requester_fk')
                 ->references('id')->on('users')->onDelete('restrict')->onUpdate('restrict');
             $table->foreign('decided_by', 'sae_decider_fk')
