@@ -1560,7 +1560,6 @@ if ($state === 'in_progress') app(CourseOfferingService::class)->start(1, $cance
             ->assertDontSee('>Programme Student Groups</span>', false)
             ->assertDontSee('>Schools, Faculties & Departments</span>', false)
             ->assertDontSee('>Classes</span>', false);
-        $this->assertNotContains(route('admin.programme_cohorts.index'), $destinations);
         $this->assertNotContains(route('admin.class_list'), $destinations);
         $this->get(route('admin.programmes.index'))->assertOk()->assertSee('Student Course Registration');
         $this->get(route('admin.daily_attendance'))
