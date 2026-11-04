@@ -8,12 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        foreach (['schools', 'users', 'programmes', 'curricula'] as $table) {
-            if (! Schema::hasTable($table)) {
-                throw new RuntimeException("Cannot create Student Credit Transfers: required table {$table} is missing.");
-            }
-        }
-
         Schema::create('student_credit_transfers', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('school_id');

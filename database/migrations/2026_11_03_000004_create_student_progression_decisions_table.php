@@ -8,12 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        foreach (['schools', 'users', 'programmes', 'curricula', 'programme_cohort_memberships'] as $table) {
-            if (! Schema::hasTable($table)) {
-                throw new RuntimeException("Cannot create Student Progression Decisions: required table {$table} is missing.");
-            }
-        }
-
         Schema::create('student_progression_decisions', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('school_id');
