@@ -436,7 +436,7 @@ class ProgrammeCohortService
         }
     }
 
-    private function suggestCode(int $schoolId, int $programmeId): string
+    public function suggestCode(int $schoolId, int $programmeId): string
     {
         $programme = Programme::where('school_id', $schoolId)->whereKey($programmeId)->first();
         if (! $programme) {

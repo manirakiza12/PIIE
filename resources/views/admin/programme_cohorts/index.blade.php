@@ -1,8 +1,8 @@
 @extends('admin.navigation')
 
 @section('content')
-<div class="mainSection-title"><div class="d-flex justify-content-between align-items-center flex-wrap gap-3"><div><h4>Student Group History</h4><p class="text-muted mb-0">Existing groups remain available for history and current memberships. New students can be placed directly.</p><ul class="d-flex align-items-center eBreadcrumb-2"><li>Academics</li><li>Programmes</li></ul></div>
-    <a class="btn btn-primary text-nowrap" href="{{ route('admin.academic.direct_placement') }}">Place Student in Programme</a>
+<div class="mainSection-title"><div class="d-flex justify-content-between align-items-center flex-wrap gap-3"><div><h4>Programme Cohorts</h4><p class="text-muted mb-0">Manage programme cohorts, memberships, and academic placement.</p><ul class="d-flex align-items-center eBreadcrumb-2"><li>Academics</li><li>Programme Cohorts</li></ul></div>
+    <div class="d-flex gap-2 flex-wrap"><a class="btn btn-primary text-nowrap" href="{{ route('admin.programme_cohorts.create') }}">Create Programme Cohort</a><a class="btn btn-outline-secondary text-nowrap" href="{{ route('admin.academic.direct_placement') }}">Place Student in Programme</a></div>
 </div></div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 <div class="eSection-wrap">
