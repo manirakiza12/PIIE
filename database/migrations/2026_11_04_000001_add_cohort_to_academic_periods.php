@@ -8,13 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('academic_periods')) {
-            throw new RuntimeException('Cannot alter Academic Periods: table is missing.');
-        }
-        if (! Schema::hasTable('programme_cohorts')) {
-            throw new RuntimeException('Cannot alter Academic Periods: programme_cohorts table is missing.');
-        }
-
         Schema::table('academic_periods', function (Blueprint $table): void {
             if (! Schema::hasColumn('academic_periods', 'programme_cohort_id')) {
                 $table->unsignedBigInteger('programme_cohort_id')->nullable()->after('academic_year_id');

@@ -8,10 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('student_curriculum_assignments')) {
-            throw new RuntimeException('Cannot alter Student Curriculum assignments: table is missing.');
-        }
-
         Schema::table('student_curriculum_assignments', function (Blueprint $table): void {
             if (! Schema::hasColumn('student_curriculum_assignments', 'current_academic_level')) {
                 $table->string('current_academic_level', 60)->nullable()->after('entry_curriculum_stage_id');
