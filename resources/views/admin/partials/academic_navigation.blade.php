@@ -8,13 +8,14 @@
         'academic.routine', 'academic.attendance', 'academic.gradebook', 'academic.assignments',
         'live_classes.view', 'online_exams.view',
     ]);
-    $workspaceMenuRoutes = ['admin.department_list', 'admin.programmes.index', 'admin.academic_structure.index', 'admin.settings.academic', 'admin.curricula.index', 'admin.programme_years.index', 'admin.subject_list', 'admin.curriculum_units.index', 'admin.course_offerings.index', 'admin.lecturer_assignments.index', 'admin.course_registrations.index', 'admin.routine', 'admin.daily_attendance', 'admin.live_classes.index', 'admin.assignments.index', 'admin.question_bank.index', 'admin.online_exams', 'admin.online_exams.index', 'admin.gradebook', 'admin.reports.index'];
+    $workspaceMenuRoutes = ['admin.department_list', 'admin.programmes.index', 'admin.programme_cohorts.index', 'admin.academic_structure.index', 'admin.settings.academic', 'admin.curricula.index', 'admin.programme_years.index', 'admin.subject_list', 'admin.curriculum_units.index', 'admin.course_offerings.index', 'admin.lecturer_assignments.index', 'admin.course_registrations.index', 'admin.routine', 'admin.daily_attendance', 'admin.live_classes.index', 'admin.assignments.index', 'admin.question_bank.index', 'admin.online_exams', 'admin.online_exams.index', 'admin.gradebook', 'admin.reports.index'];
     $canSeeAcademicWorkspace = $canSeeAcademicWorkspace && (empty($user->menu_permission) || $user->menu_permission === 'null' || (bool) array_intersect($workspaceMenuRoutes, $menu_permission));
     $academicLinks = [
         [$canSeeAcademicWorkspace, 'Academic Dashboard', 'admin.academic.workspace', [], request()->routeIs('admin.academic.workspace') && request()->query('mode') !== 'prepare', 'bi-grid-1x2'],
         [$canSeeProgrammes && $menuAllows('admin.department') && $navCan('admin.department_list'), 'Schools / Faculties', 'admin.department.schools_faculties', [], request()->routeIs('admin.department.schools_faculties', 'admin.department.units.*'), 'bi-building'],
         [$menuAllows('admin.department') && $navCan('admin.department_list'), 'Departments', 'admin.department.departments', [], request()->routeIs('admin.department.departments', 'admin.department.departments.*', 'admin.department.show'), 'bi-diagram-3'],
         [$showProgrammes, 'Programmes', 'admin.programmes.index', [], request()->is('admin/programmes*','admin/programme-cohorts*'), 'bi-mortarboard'],
+        [$showCohorts, 'Programme Cohorts', 'admin.programme_cohorts.index', [], request()->is('admin/programme-cohorts*'), 'bi-people'],
         [$showAcademicYears, 'Academic Years', 'admin.academic_structure.index', [], (request()->is('admin/academic-structure') && request('section') !== 'semesters') || request()->is('admin/academic-structure/years/*'), 'bi-calendar-range'],
         [$showAcademicYears, $calendarLabel, 'admin.academic_structure.index', ['section'=>'semesters'], (request()->is('admin/academic-structure') && request('section') === 'semesters') || request()->is('admin/academic-structure/periods/*'), 'bi-calendar-week'],
         [$showLegacySessions, 'Class-based Sessions', 'admin.settings.session_manager', [], request()->is('admin/session_manager*'), 'bi-calendar'],
@@ -39,7 +40,7 @@
         [$showResults, 'Marks & Results', 'admin.gradebook', [], request()->is('admin/gradebook*'), 'bi-clipboard-check'],
         [$navCan('admin.reports.index') && $menuAllows('admin.reports'), 'Academic Reports', 'admin.reports.index', [], request()->is('admin/reports*'), 'bi-file-earmark-bar-graph'],
     ];
-    $setupRoutes = ['admin.department.schools_faculties', 'admin.department.departments', 'admin.programmes.index', 'admin.academic_structure.index', 'admin.settings.session_manager', 'admin.settings.academic', 'admin.curricula.index', 'admin.programme_years.index', 'admin.subject_list', 'admin.curriculum_units.index'];
+    $setupRoutes = ['admin.department.schools_faculties', 'admin.department.departments', 'admin.programmes.index', 'admin.programme_cohorts.index', 'admin.academic_structure.index', 'admin.settings.session_manager', 'admin.settings.academic', 'admin.curricula.index', 'admin.programme_years.index', 'admin.subject_list', 'admin.curriculum_units.index'];
     $groups = [
         'Academic setup' => array_values(array_filter($academicLinks, fn ($link) => $link[0] && in_array($link[2], $setupRoutes, true))),
         'Teaching & learning' => array_values(array_filter($academicLinks, fn ($link) => $link[0] && in_array($link[2], ['admin.course_offerings.index','admin.lecturer_assignments.index','admin.teacher.permission','admin.course_registrations.index','admin.curriculum_assignment.index','admin.academic.placements.index','admin.routine','admin.live_classes.index','admin.daily_attendance','admin.assignments.index','admin.class_list']) && !in_array($link[2], $setupRoutes, true))),
