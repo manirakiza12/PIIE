@@ -1,7 +1,21 @@
 @extends('admin.navigation')
-@section('page_styles')<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">@endsection
+@section('page_styles')
+<link rel="stylesheet" href="{{ asset('assets/css/curriculum-workspace.css') }}">
+<style>
+    .course-units-compact .table.eTable { margin-bottom: 0; }
+    .course-units-compact .table.eTable thead th { padding: 10px 12px; font-size: 13px; white-space: nowrap; }
+    .course-units-compact .table.eTable tbody td { padding: 8px 12px; vertical-align: middle; font-size: 14px; }
+    .course-units-compact .table.eTable tbody tr { height: auto; }
+    .course-units-compact .adminTable-action { margin: 0; }
+    .course-units-compact .adminTable-action .table-action-btn-2 { padding: 4px 12px; font-size: 13px; }
+    .course-units-filter .form-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .course-units-filter .form-control, .course-units-filter .form-select { height: 38px; font-size: 14px; }
+    .curriculum-placements-compact .membership-row { padding: 8px 12px; }
+    .curriculum-placements-compact .membership-row .adminTable-action { margin: 0; }
+</style>
+@endsection
 @section('content')
-<div class="curriculum-workspace">
+<div class="curriculum-workspace course-units-compact curriculum-placements-compact">
 <div class="mainSection-title"><h4>Course Units</h4><p class="text-muted">Manage course-unit placements, credits and prerequisites for a Programme Curriculum. Catalogue editing requires separate permission.</p></div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
