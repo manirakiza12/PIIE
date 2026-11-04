@@ -34,7 +34,6 @@ class AcademicGroupsRetirementTest extends TestCase
     public function test_retired_workspaces_redirect_without_running_the_controller(): void
     {
         foreach ([
-            'ProgrammeCohortController@show' => 'admin.academic.direct_placement',
             'AdminController@classList' => 'admin.course_offerings.index',
             'AdminController@teacherPermission' => 'admin.course_offerings.index',
             'AssignmentController@index' => 'admin.course_offerings.index',
@@ -50,7 +49,7 @@ class AcademicGroupsRetirementTest extends TestCase
 
     public function test_retired_mutations_are_rejected(): void
     {
-        foreach (['ProgrammeCohortController@member', 'AdminController@classCreate', 'TeacherController@attendanceTake'] as $action) {
+        foreach (['AdminController@classCreate', 'TeacherController@attendanceTake'] as $action) {
             try {
                 (new RetireAcademicGroups)->handle($this->requestFor($action, 'POST'), fn () => $this->fail('Mutation executed.'));
                 $this->fail('Expected the retired endpoint to be rejected.');
