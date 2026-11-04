@@ -55,7 +55,7 @@ class ProgrammeYearController extends Controller
 
     public function show(Request $request, int $id)
     {
-        $year = CurriculumStage::where('school_id', $request->user()->school_id)->with(['curriculum.programme', 'memberships.subject', 'memberships.prerequisites.subject'])->findOrFail($id);
+        $year = CurriculumStage::where('school_id', $request->user()->school_id)->with(['curriculum.programme', 'memberships.subject'])->findOrFail($id);
         $year->setAttribute('student_assignments_count', Schema::hasTable('student_curriculum_assignments')
             && Schema::hasColumn('student_curriculum_assignments', 'entry_curriculum_stage_id')
             ? DB::table('student_curriculum_assignments')->where('entry_curriculum_stage_id', $year->id)
