@@ -166,6 +166,7 @@ class SystemRoleRegistryTest extends TestCase
             'Support/Curriculum/StudentCurriculumAssignmentService.php',
             'Support/Staff/StaffProvisioningService.php',
             'admin/navigation.blade.php',
+            'admin/partials/academic_setup_bar.blade.php',
             'migrations/2026_09_27_000001_add_generic_staff_system_role.php',
         ];
         $phase3bDisplayOnly = array_merge($phase3bDisplayOnly, $genericStaffWiring);

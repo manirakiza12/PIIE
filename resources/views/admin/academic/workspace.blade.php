@@ -16,6 +16,8 @@
     </div></div>
 </div>
 
+@include('admin.partials.academic_setup_bar')
+
 <div class="card border-0 shadow-sm mt-3"><div class="card-body">
     <p class="mb-3 text-muted">{{ get_phrase('Choose existing academic dates to review current work. Progress is read from existing academic records and updates as you complete each task.') }}</p>
     @if($canSelectAcademicContext)
