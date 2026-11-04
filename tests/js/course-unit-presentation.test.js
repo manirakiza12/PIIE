@@ -14,12 +14,15 @@ test('Assignments remains readable on hover, keyboard focus and disabled states'
 }, async () => {
     const profile = mkdtempSync(path.join(tmpdir(), 'piie-cover-ui-'));
     const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
-        '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { windowsHide: true, stdio: 'ignore' });
+        '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+        '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
     let socket;
     try {
+        child.stderr.on('data', chunk => { stderr += chunk; });
         const portFile = path.join(profile, 'DevToolsActivePort');
         for (let i = 0; i < 200 && !existsSync(portFile); i++) await pause(100);
-        assert.ok(existsSync(portFile), 'Chrome started');
+        assert.ok(existsSync(portFile), `Chrome started${stderr.trim() ? ': ' + stderr.trim() : ''}`);
         const port = readFileSync(portFile, 'utf8').split('\n')[0];
         const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
         socket = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
