@@ -40,14 +40,15 @@ chown root:www-data "$REL/bootstrap/cache"; chmod 2775 "$REL/bootstrap/cache"
 if [ -e "$REL/public/storage" ]; then fail 'Unexpected packaged public/storage'; fi
 ln -s ../../../shared/storage/app/public "$REL/public/storage"
 artisan() { app_run "/srv/piie/releases/$RID" php artisan "$@"; }
-artisan package:discover --no-interaction >/dev/null
+artisan package:discover --no-interaction > "$REL/package-discover.txt" 2>&1 || { echo 'PACKAGE_DISCOVER_FAILED:'; cat "$REL/package-discover.txt"; exit 1; }
+cat "$REL/package-discover.txt"
 artisan --version
 if [ "${PIIE_CODE_ONLY:-0}" = 1 ]; then
   artisan migrate:status > "$REL/migration-status.txt"
   ! grep -q Pending "$REL/migration-status.txt" || fail 'Code-only release refuses pending migrations'
   echo 'Code-only release: no migrations will run'
 else
-  artisan migrate --pretend --force --no-interaction > "$REL/migration-preview.txt"
+artisan migrate --pretend --force --no-interaction > "$REL/migration-preview.txt" 2>&1 || { echo 'MIGRATION_PRETEND_FAILED:'; cat "$REL/migration-preview.txt"; exit 1; }
   if grep -qiE 'drop +(table|column|database)|truncate|delete +from' "$REL/migration-preview.txt"; then fail 'Destructive migration SQL requires review'; fi
 fi
 if [ "$MODE" = stage ]; then echo "STAGED $RID: live release, uploads and database unchanged"; exit 0; fi
@@ -114,7 +115,7 @@ find "$SHARED" -type f -exec chmod 664 {} +
 mv "$REL/public/assets/uploads" "$REL/public/assets/uploads-baseline"
 ln -s ../../../../shared/public-uploads "$REL/public/assets/uploads"
 mkdir -p "$BASE/shared/storage/app/public"
-if [ "${PIIE_CODE_ONLY:-0}" != 1 ]; then artisan migrate --force --no-interaction; fi
+if [ "${PIIE_CODE_ONLY:-0}" != 1 ]; then artisan migrate --force --no-interaction > "$REL/migration-run.txt" 2>&1 || { echo 'MIGRATION_RUN_FAILED:'; cat "$REL/migration-run.txt"; exit 1; }; cat "$REL/migration-run.txt"; fi
 artisan migrate:status | tee "$REL/migration-status.txt"
 ! grep -q Pending "$REL/migration-status.txt" || fail 'Migrations remain pending'
 artisan config:clear

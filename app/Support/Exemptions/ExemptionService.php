@@ -34,6 +34,7 @@ class ExemptionService
                 StudentAcademicExemptionItem::create([
                     'school_id' => $data['school_id'],
                     'exemption_id' => $exemption->id,
+                    'curriculum_id' => $data['curriculum_id'],
                     'curriculum_membership_id' => $item['curriculum_membership_id'] ?? null,
                     'subject_id' => $item['subject_id'] ?? null,
                     'status' => $data['exemption_type'] === 'level' ? 'exempted' : 'exempted',

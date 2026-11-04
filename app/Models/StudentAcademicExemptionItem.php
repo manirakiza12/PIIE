@@ -9,12 +9,13 @@ class StudentAcademicExemptionItem extends Model
     protected $table = 'student_academic_exemption_items';
 
     protected $fillable = [
-        'school_id', 'exemption_id', 'curriculum_membership_id', 'subject_id', 'status', 'notes',
+        'school_id', 'exemption_id', 'curriculum_id', 'curriculum_membership_id', 'subject_id', 'status', 'notes',
     ];
 
     protected $casts = [
         'school_id' => 'integer',
         'exemption_id' => 'integer',
+        'curriculum_id' => 'integer',
         'curriculum_membership_id' => 'integer',
         'subject_id' => 'integer',
     ];
