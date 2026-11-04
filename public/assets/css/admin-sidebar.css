@@ -16,9 +16,15 @@
 .sidebar {
     background: #1a2332 !important;
     width: 280px !important;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .sidebar .logo-details {
+    flex: 0 0 auto;
     padding: 20px 25px !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     margin-bottom: 10px !important;
@@ -67,6 +73,53 @@
 .nav-links {
     padding: 0 !important;
     margin: 0 !important;
+}
+
+/* Fit the module list below the logo, including its margins and padding. */
+.sidebar .nav-links,
+.sidebar.close .nav-links {
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+    scroll-padding-block: 16px;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+    scrollbar-color: #79869a #1a2332;
+}
+
+.sidebar .nav-links::-webkit-scrollbar {
+    display: block;
+    width: 10px;
+}
+
+.sidebar .nav-links::-webkit-scrollbar-track {
+    background: #1a2332;
+}
+
+.sidebar .nav-links::-webkit-scrollbar-thumb {
+    background: #79869a;
+    border: 2px solid #1a2332;
+    border-radius: 6px;
+}
+
+/* Keep collapsed desktop submenus inside the scroll area so they are not clipped. */
+@media screen and (min-width: 992px) {
+    .sidebar.close .nav-links li .sub-menu {
+        position: static;
+        display: none;
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
+    }
+
+    .sidebar.close .nav-links li:hover > .sub-menu,
+    .sidebar.close .nav-links li:focus-within > .sub-menu,
+    .sidebar.close .nav-links li.showMenu > .sub-menu {
+        display: block;
+    }
 }
 
 .nav-links-li {
@@ -240,6 +293,7 @@
     .sidebar.close {
         width: 260px !important;
         left: 0;
+        overflow: hidden;
     }
 
     .home-section,
@@ -251,4 +305,29 @@
     .closeIcon {
         display: block;
     }
+}
+
+/* Viewport-safe admin module scrolling. */
+.sidebar {
+    height: 100vh !important;
+    height: 100dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+.nav-links {
+    flex: 1 !important;
+    min-height: 0 !important;
+    height: auto !important; /* Overrides the broken 100% */
+    overflow-y: auto !important; /* Restores the module scrollbar */
+    padding-bottom: 80px !important; /* Defensive padding for the last module */
+}
+/* Ensure scrollbars are visible and styled cleanly */
+.nav-links::-webkit-scrollbar {
+    display: block !important;
+    width: 6px !important;
+}
+.nav-links::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2) !important;
+    border-radius: 4px !important;
 }
