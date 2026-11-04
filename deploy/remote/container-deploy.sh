@@ -43,8 +43,8 @@ artisan() { app_run "/srv/piie/releases/$RID" php artisan "$@"; }
 artisan package:discover --no-interaction > "$REL/package-discover.txt" 2>&1 || { echo 'PACKAGE_DISCOVER_FAILED:'; cat "$REL/package-discover.txt"; exit 1; }
 cat "$REL/package-discover.txt"
 artisan --version
-echo "=== .env DB lines ==="; grep -E '^DB_' "$REL/.env" || true
-echo "=== db:show ==="; artisan db:show 2>&1 || true
+echo "=== read-only required-tables preflight ==="
+bash "$(dirname "$0")/check-required-tables.sh" "/srv/piie/releases/$RID" || fail 'Required tables missing in target database'
 if [ "${PIIE_CODE_ONLY:-0}" = 1 ]; then
   artisan migrate:status > "$REL/migration-status.txt"
   ! grep -q Pending "$REL/migration-status.txt" || fail 'Code-only release refuses pending migrations'

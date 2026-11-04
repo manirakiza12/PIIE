@@ -8,12 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        foreach (['schools', 'student_academic_exemptions', 'curricula', 'curriculum_memberships', 'subjects'] as $table) {
-            if (! Schema::hasTable($table)) {
-                throw new RuntimeException("Cannot create Student Academic Exemption Items: required table {$table} is missing.");
-            }
-        }
-
         Schema::create('student_academic_exemption_items', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('school_id');
