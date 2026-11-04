@@ -60,22 +60,67 @@ class ProgrammeCohortController extends Controller
 
     public function create(Request $request)
     {
-        return redirect()->route('admin.academic.direct_placement')->with('info', 'Student groups are optional. Place each student directly in their Programme.');
+        $schoolId = $this->schoolContext($request);
+        $programmes = Programme::where('school_id', $schoolId)->orderBy('name')->get(['id', 'code', 'name']);
+        $intakes = IntakeSession::where('school_id', $schoolId)->orderByDesc('id')->get(['id', 'name']);
+        $years = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label']);
+        $plans = Curriculum::where('school_id', $schoolId)->orderBy('version')->get(['id', 'programme_id', 'version', 'status']);
+        $suggestedCode = null;
+        $codeSuggestions = [];
+        foreach ($programmes as $programme) {
+            $codeSuggestions[$programme->id] = $this->cohorts->suggestCode($schoolId, $programme->id);
+        }
+
+        return view('admin.programme_cohorts.form', compact('programmes', 'intakes', 'years', 'plans', 'suggestedCode', 'codeSuggestions') + ['cohort' => null]);
     }
+
 
     public function store(Request $request)
     {
-        return redirect()->route('admin.academic.direct_placement')->with('info', 'Student groups are optional. Place each student directly in their Programme.');
+        try {
+            $cohort = $this->cohorts->createDraft($request->user(), $request->all());
+        } catch (\DomainException | \Illuminate\Validation\ValidationException $exception) {
+            if ($exception instanceof \Illuminate\Validation\ValidationException) {
+                return redirect()->back()->withErrors($exception->errors())->withInput();
+            }
+            return redirect()->back()->with('error', $exception->getMessage())->withInput();
+        }
+
+        return redirect()->route('admin.programme_cohorts.show', $cohort->id)->with('success', 'Programme Cohort created as a draft.');
     }
 
     public function edit(Request $request, int $id)
     {
-        return redirect()->route('admin.programme_cohorts.show', $id)->with('info', 'Student groups are retained for history. Use direct student placement for new students.');
+        $schoolId = $this->schoolContext($request);
+        $cohort = ProgrammeCohort::where('school_id', $schoolId)->whereKey($id)->firstOrFail();
+        if ($cohort->status !== 'draft') {
+            return redirect()->route('admin.programme_cohorts.show', $id)->with('info', 'Only draft Programme Cohorts can be edited.');
+        }
+        $programmes = Programme::where('school_id', $schoolId)->orderBy('name')->get(['id', 'code', 'name']);
+        $intakes = IntakeSession::where('school_id', $schoolId)->orderByDesc('id')->get(['id', 'name']);
+        $years = AcademicYear::where('school_id', $schoolId)->orderByDesc('start_date')->get(['id', 'label']);
+        $plans = Curriculum::where('school_id', $schoolId)->orderBy('version')->get(['id', 'programme_id', 'version', 'status']);
+        $suggestedCode = $cohort->code;
+        $codeSuggestions = [];
+        foreach ($programmes as $programme) {
+            $codeSuggestions[$programme->id] = $this->cohorts->suggestCode($schoolId, $programme->id);
+        }
+
+        return view('admin.programme_cohorts.form', compact('cohort', 'programmes', 'intakes', 'years', 'plans', 'suggestedCode', 'codeSuggestions'));
     }
 
     public function update(Request $request, int $id)
     {
-        return redirect()->route('admin.programme_cohorts.show', $id)->with('info', 'Student groups are retained for history. Use direct student placement for new students.');
+        try {
+            $cohort = $this->cohorts->updateDraft($request->user(), $id, $request->all());
+        } catch (\DomainException | \Illuminate\Validation\ValidationException $exception) {
+            if ($exception instanceof \Illuminate\Validation\ValidationException) {
+                return redirect()->back()->withErrors($exception->errors())->withInput();
+            }
+            return redirect()->back()->with('error', $exception->getMessage())->withInput();
+        }
+
+        return redirect()->route('admin.programme_cohorts.show', $cohort->id)->with('success', 'Programme Cohort updated.');
     }
 
     public function show(Request $request, int $id)
