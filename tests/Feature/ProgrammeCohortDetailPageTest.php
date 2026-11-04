@@ -172,7 +172,7 @@ class ProgrammeCohortDetailPageTest extends TestCase
         $cohort = $this->cohort();
         DB::table('programme_cohorts')->where('id', $cohort->id)->update(['school_id' => $this->otherSchool]);
         $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
-            ->assertOk()->assertDontSee($cohort->name);
+            ->assertStatus(404);
         $this->assertDatabaseHas('programme_cohorts', ['id' => $cohort->id, 'school_id' => $this->otherSchool]);
     }
 
