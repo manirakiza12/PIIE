@@ -10,7 +10,7 @@ return new class extends Migration
     {
         foreach (['schools', 'users', 'programmes', 'curricula'] as $table) {
             if (! Schema::hasTable($table)) {
-                throw new RuntimeException("Cannot create Student Academic Exemptions: required table {$table} is missing.");
+                throw new RuntimeException("Cannot create Student Academic Exemptions: required table {$table} is missing. DB=" . Schema::getConnection()->getDatabaseName() . " tables=" . implode(',', Schema::getTableListing()));
             }
         }
 
