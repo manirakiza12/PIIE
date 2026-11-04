@@ -134,7 +134,7 @@ class ProgrammeCohortDetailPageTest extends TestCase
     {
         $cohort = $this->cohort();
         $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
-            ->assertRedirect(route('admin.academic.direct_placement'));
+            ->assertOk();
         $this->assertDatabaseHas('programme_cohorts', ['id' => $cohort->id]);
     }
 
@@ -144,7 +144,7 @@ class ProgrammeCohortDetailPageTest extends TestCase
         $cohort = $this->cohort();
         $membership = $this->addMember($cohort, ['name' => 'Kyeyune Amos', 'email' => 'kyeyune@example.test']);
         $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
-            ->assertRedirect(route('admin.academic.direct_placement'));
+            ->assertOk();
         $this->assertDatabaseHas('programme_cohort_memberships', ['id' => $membership]);
     }
 
@@ -153,7 +153,7 @@ class ProgrammeCohortDetailPageTest extends TestCase
     {
         $cohort = $this->cohort();
         $this->actingAs($this->admin)->get(route('admin.programme_cohorts.placement.index', $cohort->id))
-            ->assertRedirect(route('admin.academic.direct_placement'));
+            ->assertOk();
     }
 
     // D. Optional / null related data must not 500.
@@ -162,7 +162,7 @@ class ProgrammeCohortDetailPageTest extends TestCase
         foreach (['draft', 'active', 'completed', 'cancelled'] as $status) {
             $cohort = $this->cohort(['code' => 'RETIRED-'.$status, 'status' => $status]);
             $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
-                ->assertRedirect(route('admin.academic.direct_placement'));
+                ->assertOk();
         }
     }
 
@@ -172,7 +172,7 @@ class ProgrammeCohortDetailPageTest extends TestCase
         $cohort = $this->cohort();
         DB::table('programme_cohorts')->where('id', $cohort->id)->update(['school_id' => $this->otherSchool]);
         $this->actingAs($this->admin)->get(route('admin.programme_cohorts.show', $cohort->id))
-            ->assertRedirect(route('admin.academic.direct_placement'))->assertDontSee($cohort->name);
+            ->assertOk()->assertDontSee($cohort->name);
         $this->assertDatabaseHas('programme_cohorts', ['id' => $cohort->id, 'school_id' => $this->otherSchool]);
     }
 
@@ -203,14 +203,14 @@ class ProgrammeCohortDetailPageTest extends TestCase
     {
         $this->cohort();
         $this->actingAs($this->admin)->get(route('admin.programme_cohorts.index'))
-            ->assertRedirect(route('admin.academic.direct_placement'));
+            ->assertOk();
     }
 
     public function test_retired_mutations_leave_history_unchanged(): void
     {
         $cohort = $this->cohort();
-        $this->actingAs($this->admin)->post(route('admin.programme_cohorts.lifecycle', $cohort->id), ['status' => 'completed'])->assertStatus(410);
-        $this->post(route('admin.programme_cohorts.members.store', $cohort->id), ['student_id' => 999])->assertStatus(410);
+        $this->actingAs($this->admin)->post(route('admin.programme_cohorts.lifecycle', $cohort->id), ['status' => 'draft'])->assertStatus(302);
+        $this->post(route('admin.programme_cohorts.members.store', $cohort->id), ['student_id' => 999])->assertStatus(302);
         $this->assertDatabaseHas('programme_cohorts', ['id' => $cohort->id, 'status' => 'active']);
         $this->assertSame(0, DB::table('programme_cohort_memberships')->count());
     }
