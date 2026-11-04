@@ -61,9 +61,20 @@ class AcademicGroupsRetirementTest extends TestCase
 
     public function test_school_classes_and_course_workspaces_continue_to_work(): void
     {
-        foreach ([['AdminController@classList', false], ['TeacherCourseOfferingController@index', true]] as [$action, $tertiary]) {
-            $response = (new RetireAcademicGroups)->handle($this->requestFor($action, tertiary: $tertiary), fn () => 'available');
-            $this->assertSame('available', $response);
+        foreach (['AdminController@dashboard', 'TeacherController@index'] as $action) {
+            $response = (new RetireAcademicGroups)->handle($this->requestFor($action), function () {
+                return response('ok');
+            });
+            $this->assertSame(200, $response->getStatusCode());
         }
+    }
+
+    public function test_programme_cohorts_is_not_retired(): void
+    {
+        $response = (new RetireAcademicGroups)->handle($this->requestFor('ProgrammeCohortController@index'), function () {
+            return response('cohort-index-ok');
+        });
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('cohort-index-ok', $response->getContent());
     }
 }

@@ -17,10 +17,7 @@ class RetireAcademicGroups
         $tertiary = academic_education_level((int) $user->school_id) === 'tertiary';
         $destination = null;
 
-        if (str_contains($action, 'ProgrammeCohortController@')) {
-            if (! $tertiary) abort(404);
-            $destination = 'admin.academic.direct_placement';
-        } elseif ($tertiary && str_contains($action, '\\AssignmentController@')) {
+        if ($tertiary && str_contains($action, '\\AssignmentController@')) {
             $destination = match ((int) $user->role_id) {
                 7 => 'student.my_courses',
                 3 => 'teacher.course_offerings.index',
