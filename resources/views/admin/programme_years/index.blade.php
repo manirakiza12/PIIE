@@ -45,17 +45,14 @@
     <div class="programme-years-list overflow-auto" role="region" aria-labelledby="programme-years-heading" tabindex="0">
     <div class="d-inline-flex flex-column" style="min-width: 100%;">
     @forelse($years as $year)
-    @php
-        $containsPeriodLabel = preg_match('/\b(?:semester|term)\s*(?:no\.?\s*)?[1-9][0-9]*\b/i', $year->label) === 1;
-        $canManageYear = !$year->archived_at && ($year->curriculum->status === 'draft' || $isOwner) && auth()->user()->hasPermission('academic.curriculum.manage');
-        $fullCurriculumLabel = ($year->curriculum->programme?->name ?? 'Programme').' / '.$year->curriculum->version;
-    @endphp
+    @php($containsPeriodLabel = preg_match('/\b(?:semester|term)\s*(?:no\.?\s*)?[1-9][0-9]*\b/i', $year->label) === 1)
+    @php($canManageYear = !$year->archived_at && (($year->curriculum->status ?? '') === 'draft' || $isOwner) && auth()->user()->hasPermission('academic.curriculum.manage'))
     <article class="programme-year-record mb-2" aria-labelledby="year-title-{{ $year->id }}">
         <div class="list-group-item d-flex flex-nowrap align-items-center justify-content-between gap-4 py-2 px-3 border rounded bg-white text-nowrap">
             <div class="d-flex flex-nowrap align-items-center gap-3 flex-shrink-0">
                 <strong id="year-title-{{ $year->id }}" class="text-dark" title="{{ $year->label }}" aria-label="{{ $year->label }}">{{ $year->sequence }}. {{ $compactText($year->label, 'Year '.$year->sequence) }}</strong>
                 <span class="text-muted small" aria-hidden="true">|</span>
-                <span class="text-secondary small font-monospace bg-light px-2 py-1 rounded" title="{{ $fullCurriculumLabel }}" aria-label="{{ $fullCurriculumLabel }}">{{ \Illuminate\Support\Str::limit($curriculumLabels[$year->curriculum_id], 36) }}</span>
+                <span class="text-secondary small font-monospace bg-light px-2 py-1 rounded" title="{{ ($year->curriculum->programme?->name ?? 'Programme').' / ' . ($year->curriculum->version ?? '') }}" aria-label="{{ ($year->curriculum->programme?->name ?? 'Programme').' / ' . ($year->curriculum->version ?? '') }}">{{ \Illuminate\Support\Str::limit($curriculumLabels[$year->curriculum_id], 36) }}</span>
                 <span class="badge {{ $year->archived_at ? 'bg-secondary' : ($year->curriculum->status === 'approved' ? 'bg-success' : 'bg-warning text-dark') }}" tabindex="0" title="{{ $year->archived_at ? 'Retained for history; unavailable for new placements.' : ($canManageYear ? 'This Programme Year can be managed.' : 'Read-only; use a successor curriculum for structural changes.') }}">{{ $year->archived_at ? 'Archived' : ucfirst($year->curriculum->status) }}</span>
             </div>
             <div class="d-flex flex-nowrap align-items-center gap-4 flex-shrink-0">
