@@ -15,22 +15,26 @@
 <div class="row"><div class="col-12"><div class="eSection-wrap">
     <div class="table-responsive">
         <table class="table eTable">
-            <thead><tr><th>#</th><th>{{ get_phrase('Staff') }}</th><th>{{ get_phrase('Basic Salary') }}</th><th>{{ get_phrase('Allowances') }}</th><th>{{ get_phrase('Effective From') }}</th><th>{{ get_phrase('Notes') }}</th></tr></thead>
+            <thead><tr><th>#</th><th>{{ get_phrase('Staff') }}</th><th class="text-end">{{ get_phrase('Basic') }}</th><th class="text-end">{{ get_phrase('Housing') }}</th><th class="text-end">{{ get_phrase('Transport') }}</th><th class="text-end">{{ get_phrase('Medical') }}</th><th class="text-end">{{ get_phrase('Other') }}</th><th>{{ get_phrase('Payment') }}</th><th>{{ get_phrase('Effective From') }}</th></tr></thead>
             <tbody>
             @forelse($structures as $i => $ss)
             <tr>
                 <td>{{ $i+1 }}</td>
                 <td>{{ optional($ss->user)->name }}</td>
-                <td>{{ number_format($ss->basic_salary,2) }}</td>
-                <td>{{ number_format($ss->allowances,2) }}</td>
+                <td class="text-end">{{ number_format($ss->basic,2) }}</td>
+                <td class="text-end">{{ number_format($ss->housing,2) }}</td>
+                <td class="text-end">{{ number_format($ss->transport,2) }}</td>
+                <td class="text-end">{{ number_format($ss->medical,2) }}</td>
+                <td class="text-end">{{ number_format($ss->other_earnings,2) }}</td>
+                <td>{{ ucfirst($ss->payment_method ?: 'bank') }}@if($ss->bank_account) · <small class="text-muted">{{ $ss->bank_account }}</small>@endif</td>
                 <td>{{ $ss->effective_from?->format('d M Y') }}</td>
-                <td>{{ $ss->notes ?? '—' }}</td>
             </tr>
             @empty
-            <tr><td colspan="6" class="text-center text-muted py-4">{{ get_phrase('No salary structures configured') }}</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-4">{{ get_phrase('No salary structures configured') }}</td></tr>
             @endforelse
             </tbody>
         </table>
     </div>
+    {{ $structures->links() }}
 </div></div></div>
 @endsection
