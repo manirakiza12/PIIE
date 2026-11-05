@@ -262,7 +262,28 @@ final class PayrollService
         });
     }
 
-    // ── Payment ──────────────────────────────────────────────────────────
+    public function deleteDraft(int $schoolId, int $payrollId): void
+    {
+        DB::transaction(function () use ($schoolId, $payrollId) {
+            /** @var Payroll $pay */
+            $pay = Payroll::where('school_id', $schoolId)->whereKey($payrollId)->lockForUpdate()->firstOrFail();
+
+            if ($pay->status !== 'draft') {
+                abort(422, 'Only draft payslips can be deleted.');
+            }
+            if ((float) $pay->paid_amount > 0) {
+                abort(422, 'Payslips with recorded payments cannot be deleted.');
+            }
+
+            $pay->delete();
+
+            AuditLog::record('delete', 'Payroll', "Deleted draft payslip #{$payrollId}.", [
+                'record_type' => 'Payroll',
+                'record_id' => $payrollId,
+            ]);
+        });
+    }
+
 
     /**
      * Records an actual salary payment (full or partial). Salaries reach the

@@ -17,50 +17,61 @@
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if(session('info'))<div class="alert alert-info">{{ session('info') }}</div>@endif
 
-{{-- Period / filter + Generate controls: GET to stay on the dashboard, POST to generate (preview first). --}}
 <div class="eSection-wrap p-3 mb-3">
-    <div class="d-flex justify-content-between align-items-center gap-3 mb-2">
-        <h6 class="m-0">{{ get_phrase('Payroll Period') }}: <span class="text-primary">{{ \Carbon\Carbon::parse($period)->format('F Y') }}</span></h6>
-        <form method="GET" action="{{ route('admin.payroll.index') }}" class="d-flex align-items-center gap-2 flex-wrap">
-            <input type="month" name="month" value="{{ $month }}" class="form-control form-control-sm" style="max-width: 11rem;">
-            <select name="department_id" class="form-select form-select-sm" style="max-width: 13rem;">
+    <form method="GET" action="{{ route('admin.payroll.index') }}" class="row g-2 align-items-end">
+        <div class="col-12 col-md-2">
+            <label class="form-label small mb-1">{{ get_phrase('Month') }}</label>
+            <input type="month" name="month" value="{{ $month }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label small mb-1">{{ get_phrase('Department') }}</label>
+            <select name="department_id" class="form-select form-select-sm">
                 <option value="">{{ get_phrase('All departments') }}</option>
                 @foreach($departments as $department)
                     <option value="{{ $department->id }}" @selected($departmentId == $department->id)>{{ $department->name }}</option>
                 @endforeach
             </select>
-            <input type="text" name="search" value="{{ $search }}" class="form-control form-control-sm" placeholder="{{ get_phrase('Search employee…') }}" style="max-width: 13rem;">
-            <button type="submit" class="btn btn-sm btn-outline-secondary">{{ get_phrase('View') }}</button>
-        </form>
-        <div class="d-flex gap-2">
-            <a href="{{ route('admin.payroll.preview', array_filter(['month' => $month], fn ($v) => $v !== null)) }}{{ $departmentId ? '&department_id='.$departmentId : '' }}" class="btn btn-sm btn-outline-primary">{{ get_phrase('Preview run') }}</a>
-            <form method="POST" action="{{ route('admin.payroll.generate') }}" onsubmit="return confirm('{{ get_phrase('Generate payroll for the selected period? Existing records are kept; rejected drafts are replaced.') }}')">
-                @csrf
-                <input type="hidden" name="month" value="{{ $month }}">
-                @if($departmentId)<input type="hidden" name="department_id" value="{{ $departmentId }}">@endif
-                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-stars"></i> {{ get_phrase('Generate Payroll') }}</button>
-            </form>
         </div>
+        <div class="col-12 col-md-2">
+            <label class="form-label small mb-1">{{ get_phrase('Status') }}</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">{{ get_phrase('All statuses') }}</option>
+                <option value="pending" @selected($status === 'pending')>{{ get_phrase('Pending (draft)') }}</option>
+                <option value="approved" @selected($status === 'approved')>{{ get_phrase('Approved') }}</option>
+                <option value="partially_paid" @selected($status === 'partially_paid')>{{ get_phrase('Partially paid') }}</option>
+                <option value="paid" @selected($status === 'paid')>{{ get_phrase('Paid') }}</option>
+                <option value="rejected" @selected($status === 'rejected')>{{ get_phrase('Rejected') }}</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label small mb-1">{{ get_phrase('Search employee') }}</label>
+            <input type="text" name="search" value="{{ $search }}" class="form-control form-control-sm" placeholder="{{ get_phrase('Search employee…') }}">
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">{{ get_phrase('View') }}</button>
+            <a href="{{ route('admin.payroll.preview', array_filter(['month' => $month], fn ($v) => $v !== null)) }}{{ $departmentId ? '&department_id='.$departmentId : '' }}" class="btn btn-sm btn-outline-primary">{{ get_phrase('Preview run') }}</a>
+        </div>
+    </form>
+    <div class="d-flex justify-content-between align-items-center gap-2 mt-3 flex-wrap">
+        <h6 class="m-0">{{ get_phrase('Payroll Period') }}: <span class="text-primary">{{ \Carbon\Carbon::parse($period)->format('F Y') }}</span></h6>
+        <form method="POST" action="{{ route('admin.payroll.generate') }}" onsubmit="return confirm('{{ get_phrase('Generate payroll for the selected period? Existing records are kept; rejected drafts are replaced.') }}')">
+            @csrf
+            <input type="hidden" name="month" value="{{ $month }}">
+            @if($departmentId)<input type="hidden" name="department_id" value="{{ $departmentId }}">@endif
+            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-stars"></i> {{ get_phrase('Generate Payroll') }}</button>
+        </form>
     </div>
 </div>
 
-{{-- Headcount + period figures --}}
 <div class="row mb-3">
-    <div class="col-md-2 col-6"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Active employees') }}</h6><h4>{{ $headcount['employees'] }}</h4><small class="text-muted">{{ $headcount['teaching'] }} {{ get_phrase('teaching') }} · {{ $headcount['non_teaching'] }} {{ get_phrase('non-teaching') }}</small></div></div>
-    <div class="col-md-2 col-6"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Gross payroll') }}</h6><h4>{{ number_format($stats['gross_total'], 2) }}</h4><small class="text-muted">{{ get_phrase('UGX') }}</small></div></div>
-    <div class="col-md-2 col-6"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Total allowances') }}</h6><h4>{{ number_format($stats['allowances_total'] + $stats['other_earnings_total'], 2) }}</h4><small class="text-muted">{{ get_phrase('Basic') }}: {{ number_format($stats['basic_total'], 2) }}</small></div></div>
-    <div class="col-md-2 col-6"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Deductions (employee)') }}</h6><h4 class="text-danger">{{ number_format($stats['employee_deductions'], 2) }}</h4><small class="text-muted">{{ get_phrase('Employer NSSF') }}: {{ number_format($stats['employer_nssf'], 2) }}</small></div></div>
-    <div class="col-md-2 col-6"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Net payroll') }}</h6><h4><strong>{{ number_format($stats['net_total'], 2) }}</strong></h4><small class="text-muted">{{ get_phrase('Paid') }}: {{ number_format($stats['paid_total'], 2) }}</small></div></div>
-    <div class="col-md-2 col-6"><div class="eSection-wrap text-center">
-        <h6>{{ get_phrase('Records') }}</h6>
-        <div class="d-flex justify-content-center gap-2 flex-wrap">
-            <span class="badge bg-warning text-dark">{{ $stats['draft_count'] }} {{ get_phrase('pending') }}</span>
-            <span class="badge bg-primary">{{ $stats['approved_count'] }} {{ get_phrase('approved') }}</span>
-            <span class="badge bg-success">{{ $stats['paid_count'] }} {{ get_phrase('paid') }}</span>
-            <span class="badge bg-info">{{ $stats['partially_paid_count'] }} {{ get_phrase('partial') }}</span>
-            @if($stats['rejected_count'])<span class="badge bg-secondary">{{ $stats['rejected_count'] }} {{ get_phrase('rejected') }}</span>@endif
-        </div>
-    </div></div>
+    <div class="col-md-3 col-6 mb-2"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Total employees') }}</h6><h4>{{ $headcount['employees'] }}</h4><small class="text-muted">{{ $headcount['teaching'] }} {{ get_phrase('teaching') }} · {{ $headcount['non_teaching'] }} {{ get_phrase('non-teaching') }}</small></div></div>
+    <div class="col-md-3 col-6 mb-2"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Teaching staff') }}</h6><h4>{{ $headcount['teaching'] }}</h4></div></div>
+    <div class="col-md-3 col-6 mb-2"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Non-teaching staff') }}</h6><h4>{{ $headcount['non_teaching'] }}</h4></div></div>
+    <div class="col-md-3 col-6 mb-2"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Gross payroll') }}</h6><h4>{{ number_format($stats['gross_total'], 2) }}</h4><small class="text-muted">{{ get_phrase('UGX') }}</small></div></div>
+    <div class="col-md-3 col-6 mb-2"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Net payroll') }}</h6><h4><strong>{{ number_format($stats['net_total'], 2) }}</strong></h4><small class="text-muted">{{ get_phrase('Paid') }}: {{ number_format($stats['paid_total'], 2) }}</small></div></div>
+    <div class="col-md-3 col-6 mb-2"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Pending approvals') }}</h6><h4 class="text-warning">{{ $stats['draft_count'] }}</h4></div></div>
+    <div class="col-md-3 col-6 mb-2"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Paid salaries') }}</h6><h4 class="text-success">{{ number_format($stats['paid_total'], 2) }}</h4></div></div>
+    <div class="col-md-3 col-6 mb-2"><div class="eSection-wrap text-center"><h6>{{ get_phrase('Outstanding salaries') }}</h6><h4 class="text-warning">{{ number_format($stats['net_total'] - $stats['paid_total'], 2) }}</h4></div></div>
 </div>
 
 <div class="row"><div class="col-12"><div class="eSection-wrap">
@@ -76,14 +87,14 @@
                 <th class="text-end">{{ get_phrase('Net Salary') }}</th>
                 <th class="text-end">{{ get_phrase('Paid') }}</th>
                 <th>{{ get_phrase('Status') }}</th>
-                <th>{{ get_phrase('Actions') }}</th>
+                <th class="text-end">{{ get_phrase('Actions') }}</th>
             </tr></thead>
             <tbody>
             @forelse($payrolls as $p)
                 @php($statusLabel = $p->isRejected() ? get_phrase('Rejected') : ucfirst($p->status))
                 <tr>
                     <td>{{ $payrolls->firstItem() + $loop->index }}</td>
-                    <td><strong class="text-dark">{{ optional($p->staff)->name }}</strong><br><small class="text-muted">{{ optional($p->staff)->code }}</small></td>
+                    <td><strong class="text-dark">{{ optional($p->staff)->name }}</strong> <small class="text-muted">{{ optional($p->staff)->code }}</small></td>
                     <td>{{ optional($p->staff->department)->name ?? '—' }}</td>
                     <td class="text-end">{{ number_format($p->basic_salary, 2) }}</td>
                     <td class="text-end">{{ number_format($p->allowances + $p->other_earnings, 2) }}</td>
@@ -91,25 +102,43 @@
                     <td class="text-end"><strong>{{ number_format($p->net_pay, 2) }}</strong></td>
                     <td class="text-end">{{ number_format($p->paid_amount, 2) }}</td>
                     <td><span class="badge bg-{{ $p->isRejected() ? 'secondary' : ($p->status=='paid' ? 'success' : ($p->status=='approved' ? 'primary' : 'warning')) }}" title="{{ $p->isRejected() ? $p->rejection_reason : '' }}">{{ $statusLabel }}</span>@if($p->isPartiallyPaid())<span class="badge bg-info">{{ get_phrase('partially paid') }}</span>@endif</td>
-                    <td>
-                        <div class="d-flex gap-1 flex-nowrap">
-                            @if($p->status=='draft' && !$p->isRejected())
-                                <form method="POST" action="{{ route('admin.payroll.approve', $p->id) }}" onsubmit="return confirm('{{ get_phrase('Approve this payslip?') }}')">
-                                    @csrf
-                                    <button type="submit" class="eBtn eBtn-sm eBtn-primary" title="{{ get_phrase('Approve') }}"><i class="bi bi-check-circle"></i></button>
-                                </form>
-                                <button type="button" class="eBtn eBtn-sm eBtn-secondary" title="{{ get_phrase('Reject') }}" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $p->id }}"><i class="bi bi-x-circle"></i></button>
-                            @endif
-                            @if($p->status=='approved')
-                                <button type="button" class="eBtn eBtn-sm eBtn-success" title="{{ get_phrase('Record payment') }}" data-bs-toggle="modal" data-bs-target="#payModal{{ $p->id }}"><i class="bi bi-cash"></i></button>
-                            @endif
-                            <a href="{{ route('admin.payroll.payment_history', $p->id) }}" class="eBtn eBtn-sm eBtn-info" title="{{ get_phrase('Payment history') }}"><i class="bi bi-clock-history"></i></a>
-                            <a href="{{ route('admin.payroll.print', $p->id) }}" target="_blank" class="eBtn eBtn-sm eBtn-warning" title="{{ get_phrase('Payslip PDF') }}"><i class="bi bi-file-earmark-pdf"></i></a>
+                    <td class="text-end">
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false">{{ get_phrase('Actions') }}</button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="{{ route('admin.payroll.payment_history', $p->id) }}">{{ get_phrase('View details') }}</a></li>
+                                @if($p->status === 'draft' && !$p->isRejected())
+                                    <li><button type="button" class="dropdown-item" disabled>{{ get_phrase('Edit draft') }}</button></li>
+                                    <li>
+                                        <form method="POST" action="{{ route('admin.payroll.approve', $p->id) }}" onsubmit="return confirm('{{ get_phrase('Approve this payslip?') }}')">
+                                            @csrf
+                                            <button type="submit" class="dropdown-item">{{ get_phrase('Approve') }}</button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $p->id }}">{{ get_phrase('Reject') }}</button>
+                                    </li>
+                                    <li>
+                                        <form method="POST" action="{{ route('admin.payroll.delete', $p->id) }}" onsubmit="return confirm('{{ get_phrase('Delete this draft payslip?') }}')">
+                                            @csrf
+                                            <button type="submit" class="dropdown-item text-danger">{{ get_phrase('Delete draft') }}</button>
+                                        </form>
+                                    </li>
+                                @endif
+                                @if($p->status === 'approved')
+                                    <li>
+                                        <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#payModal{{ $p->id }}">{{ get_phrase('Record payment') }}</button>
+                                    </li>
+                                @endif
+                                <li><a class="dropdown-item" href="{{ route('admin.payroll.payment_history', $p->id) }}">{{ get_phrase('Payment history') }}</a></li>
+                                <li><a class="dropdown-item" href="{{ route('admin.payroll.print', $p->id) }}" target="_blank">{{ get_phrase('View payslip') }}</a></li>
+                                <li><a class="dropdown-item" href="{{ route('admin.payroll.print', $p->id) }}" target="_blank" download>{{ get_phrase('Download PDF') }}</a></li>
+                                <li><a class="dropdown-item" href="{{ route('admin.payroll.print', $p->id) }}" target="_blank">{{ get_phrase('Print payslip') }}</a></li>
+                            </ul>
                         </div>
                     </td>
                 </tr>
 
-                {{-- Reject modal (draft only) --}}
                 @if($p->status=='draft' && !$p->isRejected())
                 <div class="modal fade" id="rejectModal{{ $p->id }}" tabindex="-1">
                     <div class="modal-dialog">
@@ -129,7 +158,6 @@
                 </div>
                 @endif
 
-                {{-- Payment modal (approved only) --}}
                 @if($p->status=='approved')
                 <div class="modal fade" id="payModal{{ $p->id }}" tabindex="-1">
                     <div class="modal-dialog">
@@ -137,7 +165,8 @@
                             @csrf
                             <div class="modal-header"><h5 class="modal-title">{{ get_phrase('Record payment') }} — {{ optional($p->staff)->name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                             <div class="modal-body">
-                                <p class="mb-2">{{ get_phrase('Net salary') }}: <strong>{{ number_format($p->net_pay, 2) }}</strong> · {{ get_phrase('Remaining') }}: <strong>{{ number_format($p->net_pay - $p->paid_amount, 2) }}</strong></p>
+                                <p class="mb-2">{{ get_phrase('Employee') }}: <strong>{{ optional($p->staff)->name }}</strong> · {{ get_phrase('Period') }}: <strong>{{ $p->pay_period?->format('F Y') }}</strong></p>
+                                <p class="mb-2">{{ get_phrase('Net salary') }}: <strong>{{ number_format($p->net_pay, 2) }}</strong> · {{ get_phrase('Already paid') }}: <strong>{{ number_format($p->paid_amount, 2) }}</strong> · {{ get_phrase('Remaining') }}: <strong>{{ number_format($p->net_pay - $p->paid_amount, 2) }}</strong></p>
                                 <div class="mb-2"><label class="form-label">{{ get_phrase('Amount (UGX)') }}</label><input type="number" name="payment_amount" class="form-control" step="0.01" min="0.01" max="{{ $p->net_pay - $p->paid_amount }}" value="{{ number_format($p->net_pay - $p->paid_amount, 2, '.', '') }}" required></div>
                                 <div class="mb-2"><label class="form-label">{{ get_phrase('Method') }}</label>
                                     <select name="payment_method" class="form-select" required>

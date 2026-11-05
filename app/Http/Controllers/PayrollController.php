@@ -83,11 +83,23 @@ class PayrollController extends Controller
         $period = $month . '-01';
         $search = trim((string) $request->get('search', ''));
         $departmentId = $request->get('department_id');
+        $status = trim((string) $request->get('status', ''));
 
         $payrolls = Payroll::where('school_id', $this->school_id)
             ->where('pay_period', PayrollService::periodValue($period))
             ->when($departmentId, fn ($q) => $q->whereHas('staff', fn ($s) => $s->where('department_id', $departmentId)))
             ->when($search !== '', fn ($q) => $q->whereHas('staff', fn ($s) => $s->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%")))
+            ->when($status !== '' && $status !== 'all', function ($q) use ($status) {
+                if ($status === 'rejected') {
+                    $q->where('status', 'draft')->whereNotNull('rejected_at');
+                } elseif ($status === 'pending') {
+                    $q->where('status', 'draft')->whereNull('rejected_at');
+                } elseif ($status === 'partially_paid') {
+                    $q->where('status', 'approved')->where('paid_amount', '>', 0);
+                } elseif (in_array($status, ['draft', 'approved', 'paid'], true)) {
+                    $q->where('status', $status);
+                }
+            })
             ->with('staff')
             ->orderBy('name')
             ->paginate(30)
@@ -103,7 +115,7 @@ class PayrollController extends Controller
         $departments = Department::where('school_id', $this->school_id)->orderBy('name')->get();
 
         return view('admin.payroll.index', compact(
-            'payrolls', 'month', 'stats', 'headcount', 'search', 'departments', 'departmentId', 'period'
+            'payrolls', 'month', 'stats', 'headcount', 'search', 'departments', 'departmentId', 'period', 'status'
         ));
     }
 
@@ -159,6 +171,13 @@ class PayrollController extends Controller
         app(PayrollService::class)->reject($this->school_id, Auth::id(), (int) $id, $validated['rejection_reason']);
 
         return redirect()->back()->with('success', get_phrase('Payslip rejected'));
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        app(PayrollService::class)->deleteDraft($this->school_id, (int) $id);
+
+        return redirect()->back()->with('success', get_phrase('Draft payslip deleted'));
     }
 
     // ── Payment recording ────────────────────────────────────────────────
