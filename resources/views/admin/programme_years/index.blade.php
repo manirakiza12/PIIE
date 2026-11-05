@@ -60,8 +60,8 @@
             </div>
             <div class="d-flex flex-nowrap align-items-center gap-4 flex-shrink-0">
                 <div class="text-end text-muted small me-2">
-                    <span class="me-3"><strong>{{ $year->memberships_count }}</strong> Course Unit placement(s)</span>
-                    <span><strong>{{ $year->student_assignments_count }}</strong> student placement/history record(s)</span>
+                    <span class="me-3">{{ $year->memberships_count }} Course Unit placement(s)</span>
+                    <span>{{ $year->student_assignments_count }} student placement/history record(s)</span>
                 </div>
                 <div class="d-flex flex-nowrap align-items-center gap-2">
                     <a class="btn btn-outline-secondary btn-sm py-1 px-2 text-nowrap" href="{{ route('admin.programme_years.show', $year->id) }}" aria-label="View {{ $year->label }}">View Year</a>
