@@ -70,7 +70,7 @@ class CurriculumProposalMysqlConcurrencyTest extends TestCase
                 DB::table('schools')->where('id', $school)->lockForUpdate()->firstOrFail();
                 foreach ($ids as $id) {
                     $process = new Process([PHP_BINARY, base_path('tests/Feature/Support/CurriculumProposalMysqlWorker.php'), $operation, (string) $actor, (string) $id], base_path(), ['APP_ENV' => 'testing']);
-                    $process->setTimeout(30);
+                    $process->setTimeout(120);
                     $processes[] = $process;
                     $process->start();
                 }

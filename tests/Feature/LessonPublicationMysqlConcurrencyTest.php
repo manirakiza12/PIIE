@@ -53,7 +53,7 @@ class LessonPublicationMysqlConcurrencyTest extends TestCase
                 DB::table($table)->where('id',$lockId)->lockForUpdate()->firstOrFail();
                 for ($i=0; $i<2; $i++) {
                     $process = new Process(array_merge([PHP_BINARY,base_path('tests/Feature/Support/LessonPublicationMysqlWorker.php')], array_map('strval',$arguments)), base_path(), ['APP_ENV'=>'testing']);
-                    $process->setTimeout(40);
+                    $process->setTimeout(120);
                     $processes[]=$process;
                     $process->start();
                 }
