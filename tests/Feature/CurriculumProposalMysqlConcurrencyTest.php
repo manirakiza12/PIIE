@@ -40,7 +40,7 @@ class CurriculumProposalMysqlConcurrencyTest extends TestCase
         $stage = DB::table('curriculum_stages')->insertGetId(['school_id' => $school, 'curriculum_id' => $curriculum, 'label' => 'Year 1', 'sequence' => 1]);
         $subject = DB::table('subjects')->insertGetId(['school_id' => $school, 'name' => 'CI Unit', 'code' => 'CI'.$suffix, 'class_id' => 0, 'session_id' => 0, 'programme_id' => $programme]);
         DB::table('curriculum_memberships')->insert(['school_id' => $school, 'curriculum_id' => $curriculum, 'curriculum_stage_id' => $stage, 'subject_id' => $subject, 'period_type' => 'semester', 'period_sequence' => 1, 'classification' => 'compulsory', 'credits' => 3, 'sequence' => 1]);
-        DB::table('student_profiles')->insert(['school_id' => $school, 'user_id' => $student, 'programme_id' => $programme, 'intake_session_id' => $intake, 'status' => 'active']);
+        $studentProfile = DB::table('student_profiles')->insert(['school_id' => $school, 'user_id' => $student, 'programme_id' => $programme, 'intake_session_id' => $intake, 'status' => 'active']);
         $admission = DB::table('admissions')->insertGetId(['school_id' => $school, 'app_number' => 'CI'.$suffix, 'programme_id' => $programme, 'intake_session_id' => $intake, 'first_name' => 'CI', 'last_name' => 'Student', 'status' => 'accepted', 'automation_student_id' => $student]);
         $service = app(CurriculumAssignmentProposals::class);
         $registrar = User::findOrFail($actor);
@@ -66,18 +66,15 @@ class CurriculumProposalMysqlConcurrencyTest extends TestCase
     {
         $processes = [];
         try {
-            DB::transaction(function () use ($school, $actor, $operation, $ids, &$processes): void {
-                DB::table('schools')->where('id', $school)->lockForUpdate()->firstOrFail();
-                foreach ($ids as $id) {
-                    $process = new Process([PHP_BINARY, base_path('tests/Feature/Support/CurriculumProposalMysqlWorker.php'), $operation, (string) $actor, (string) $id], base_path(), ['APP_ENV' => 'testing']);
-                    $process->setTimeout(120);
-                    $processes[] = $process;
-                    $process->start();
-                }
-                // READY precedes the service's school lock. Never wait for worker
-                // completion here: both workers need the lock held by this parent.
-                foreach ($processes as $process) CurriculumWorkerBarrier::awaitReady($process);
-            });
+            for ($i = 0; $i < count($ids); $i++) {
+                $process = new Process([PHP_BINARY, base_path('tests/Feature/Support/CurriculumProposalMysqlWorker.php'), $operation, (string) $actor, (string) $ids[$i]], base_path(), ['APP_ENV' => 'testing']);
+                $process->setTimeout(120);
+                $processes[] = $process;
+                $process->start();
+            }
+            foreach ($processes as $process) {
+                CurriculumWorkerBarrier::awaitReady($process);
+            }
             $results = [];
             foreach ($processes as $process) {
                 $process->wait();
@@ -87,8 +84,9 @@ class CurriculumProposalMysqlConcurrencyTest extends TestCase
             }
             return $results;
         } finally {
-            // Also reap siblings when startup, readiness, waiting or assertions fail.
-            foreach ($processes as $process) $process->stop(0);
+            foreach ($processes as $process) {
+                $process->stop(0);
+            }
         }
     }
 }
