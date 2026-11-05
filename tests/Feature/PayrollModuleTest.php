@@ -402,6 +402,25 @@ class PayrollModuleTest extends TestCase
             ->assertSee('Larry Librarian');
     }
 
+    /** The payment modal only renders for approved rows — exercising it guards the dashboard render for paid/approved periods. */
+    public function test_dashboard_renders_approved_rows_and_payment_modal(): void
+    {
+        $this->structureFor($this->teacher, ['basic' => 1000000, 'housing' => 0, 'transport' => 0, 'medical' => 0]);
+        $this->generate($this->period);
+        $payroll = $this->rowFor($this->teacher);
+        $net = (float) DB::table('payroll')->find($payroll->id)->net_pay;
+
+        $this->actingAs($this->admin)->post(route('admin.payroll.approve', $payroll->id))->assertRedirect();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.payroll.index', ['month' => $this->period]))
+            ->assertOk()
+            ->assertSee('Sarah Teacher')
+            ->assertSee('Record payment')
+            // default amount must be a plain 2-decimal number (no thousands separators)
+            ->assertSee('value="'.number_format($net, 2, '.', '').'"', false);
+    }
+
     // ── Preview ────────────────────────────────────────────────────────
 
     public function test_preview_lists_eligible_staff_without_creating_records(): void

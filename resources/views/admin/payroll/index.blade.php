@@ -138,7 +138,7 @@
                             <div class="modal-header"><h5 class="modal-title">{{ get_phrase('Record payment') }} — {{ optional($p->staff)->name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                             <div class="modal-body">
                                 <p class="mb-2">{{ get_phrase('Net salary') }}: <strong>{{ number_format($p->net_pay, 2) }}</strong> · {{ get_phrase('Remaining') }}: <strong>{{ number_format($p->net_pay - $p->paid_amount, 2) }}</strong></p>
-                                <div class="mb-2"><label class="form-label">{{ get_phrase('Amount (UGX)') }}</label><input type="number" name="payment_amount" class="form-control" step="0.01" min="0.01" max="{{ $p->net_pay - $p->paid_amount }}" value="{{ number($p->net_pay - $p->paid_amount, 2, '.') }}" required></div>
+                                <div class="mb-2"><label class="form-label">{{ get_phrase('Amount (UGX)') }}</label><input type="number" name="payment_amount" class="form-control" step="0.01" min="0.01" max="{{ $p->net_pay - $p->paid_amount }}" value="{{ number_format($p->net_pay - $p->paid_amount, 2, '.', '') }}" required></div>
                                 <div class="mb-2"><label class="form-label">{{ get_phrase('Method') }}</label>
                                     <select name="payment_method" class="form-select" required>
                                         <option value="bank">{{ get_phrase('Bank transfer') }}</option>
