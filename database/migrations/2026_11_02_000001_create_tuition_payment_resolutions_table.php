@@ -21,8 +21,8 @@ return new class extends Migration
             $table->timestamp('resolved_at');
             $table->timestamps();
 
-            $table->foreign('payment_id')->references('id')->on('tuition_payments')->onDelete('cascade');
-            $table->foreign('resolved_by')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('payment_id')->references('id')->on('tuition_payments')->onDelete('restrict');
+            $table->foreign('resolved_by')->references('id')->on('users')->onDelete('restrict');
         });
     }
 
