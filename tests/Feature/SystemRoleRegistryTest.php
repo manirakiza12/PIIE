@@ -164,6 +164,7 @@ class SystemRoleRegistryTest extends TestCase
             // Neutral staff placement requires both explicit Registrar approval
             // and existing placement permissions; no base-role grant is inferred.
             'Support/Curriculum/StudentCurriculumAssignmentService.php',
+            'Support/Payroll/PayrollEligibility.php',
             'Support/Staff/StaffProvisioningService.php',
             'admin/navigation.blade.php',
             'admin/partials/academic_setup_bar.blade.php',
