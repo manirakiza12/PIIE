@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 // Shared messaging endpoints. Actor policy, school and participant checks are
 // enforced in MessagingController and MessagingService for every portal alias.

@@ -13,7 +13,9 @@ final class CurriculumWorkerBarrier
             $process->checkTimeout();
             // Read the durable buffer, including output consumed by status checks.
             // waitUntil() only supplies new chunks and can miss an earlier READY.
-            if (str_contains("\n".$process->getOutput(), "\nREADY\n")) {
+            $output = $process->getOutput();
+            $output = preg_replace('/^\xEF\xBB\xBF/', '', $output);
+            if (str_contains("\n".$output, "\nREADY\n")) {
                 return;
             }
             if (! $process->isRunning()) {
