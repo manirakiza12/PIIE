@@ -65,6 +65,9 @@ class PayrollController extends Controller
             'bank_account'     => 'nullable|string|max:100',
             'effective_from'   => 'required|date',
         ]);
+        // Tenant guard: the employee must belong to the actor's school.
+        $employee = User::where('id', $validated['user_id'])->where('school_id', $this->school_id)->first();
+        abort_unless($employee, 404);
         $validated = array_merge([
             'other_earnings' => 0,
             'payment_method' => 'bank',
@@ -325,6 +328,19 @@ class PayrollController extends Controller
             ->orderByDesc('pay_period')
             ->paginate(12);
         return view('teacher.payroll.index', ['payrolls' => $payslips]);
+    }
+
+    public function staffPayslipPrint($id)
+    {
+        $pay = Payroll::where('school_id', Auth::user()->school_id)
+            ->where('staff_id', Auth::id())
+            ->with(['staff', 'payments'])
+            ->findOrFail($id);
+        $school = DB::table('schools')->find(Auth::user()->school_id);
+        $payments = $pay->payments;
+
+        $pdf = PDF::loadView('admin.payroll.payslip_pdf', compact('pay', 'school', 'payments'));
+        return $pdf->download("Payslip_{$pay->staff->name}_{$pay->pay_period->format('Y_m')}.pdf");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

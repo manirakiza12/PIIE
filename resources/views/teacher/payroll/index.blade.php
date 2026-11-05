@@ -23,7 +23,7 @@
                 <td><span class="badge bg-{{ $p->status=='paid'?'success':($p->status=='approved'?'primary':'warning') }}">{{ ucfirst($p->status) }}</span></td>
                 <td>
                     @if($p->status=='paid')
-                        <a href="{{ route('admin.payroll.print', $p->id) }}" target="_blank" class="eBtn eBtn-sm eBtn-primary"><i class="bi bi-printer"></i> {{ get_phrase('Download') }}</a>
+                        <a href="{{ route('teacher.payroll.print', $p->id) }}" target="_blank" class="eBtn eBtn-sm eBtn-primary"><i class="bi bi-printer"></i> {{ get_phrase('Download') }}</a>
                     @endif
                 </td>
             </tr>
