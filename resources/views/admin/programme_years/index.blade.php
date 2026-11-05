@@ -45,8 +45,8 @@
     <div class="programme-years-list overflow-auto" role="region" aria-labelledby="programme-years-heading" tabindex="0">
     <div class="d-inline-flex flex-column" style="min-width: 100%;">
     @forelse($years as $year)
-    @php($containsPeriodLabel = preg_match('/\b(?:semester|term)\s*(?:no\.?\s*)?[1-9][0-9]*\b/i', $year->label) === 1)
     @php
+        $containsPeriodLabel = preg_match('/\b(?:semester|term)\s*(?:no\.?\s*)?[1-9][0-9]*\b/i', $year->label) === 1;
         $canManageYear = !$year->archived_at && ($year->curriculum->status === 'draft' || $isOwner) && auth()->user()->hasPermission('academic.curriculum.manage');
         $fullCurriculumLabel = ($year->curriculum->programme?->name ?? 'Programme').' / '.$year->curriculum->version;
     @endphp
