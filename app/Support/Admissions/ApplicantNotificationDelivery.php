@@ -62,7 +62,12 @@ final class ApplicantNotificationDelivery
                 'student_activation' => new \App\Mail\StudentPortalActivationEmail($message['data']),
                 default => throw new \RuntimeException('Unsupported notification type'),
             };
-            Mail::to($message['to'])->send($mail);
+            try {
+                Mail::to($message['to'])->send($mail);
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Log::warning('Applicant notification delivery failed', ['delivery_id' => $id]);
+                return false;
+            }
             DB::table('applicant_notification_deliveries')->where('id', $id)->update([
                 'sent_at' => now(), 'encrypted_message' => '[delivered]', 'updated_at' => now(),
             ]);
