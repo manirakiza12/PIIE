@@ -69,3 +69,4 @@ jobs:
         if: always()
         run: |
           rm -f "$RUNNER_TEMP/piie-diagnostics/key" "$RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config"
+          rm -f "$RUNNER_TEMP/piie-diagnostics/matched_hosts" "$RUNNER_TEMP/piie-diagnostics/verified_hosts"

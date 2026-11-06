@@ -56,4 +56,5 @@ jobs:
         if: always()
         run: |
           rm -f "$RUNNER_TEMP/piie-diagnostics/key" "$RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config"
+          rm -f "$RUNNER_TEMP/piie-diagnostics/matched_hosts" "$RUNNER_TEMP/piie-diagnostics/verified_hosts"
           rm -f "$RUNNER_TEMP/piie-inventory-evidence/recipient.pem" "$RUNNER_TEMP/piie-inventory-evidence/probe.cms" production-inventory.log production-inventory.cms

@@ -104,7 +104,7 @@ concurrency:
 jobs:
   gate:
     name: Gate (no production access)
-    if: ${{ vars.PIIE_DEPLOY_ENABLED == 'true' }}   # lock 2
+    if: ${{ github.ref == 'refs/heads/main' && vars.PIIE_DEPLOY_ENABLED == 'true' }}   # lock 2
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     outputs:
@@ -120,6 +120,14 @@ jobs:
           CONFIRM: ${{ inputs.confirm }}
         run: |
           [ "$CONFIRM" = "DEPLOY TO PRODUCTION" ] || { echo "::error::Confirmation phrase not given."; exit 1; }
+
+      - name: Validate deployment inputs before any remote command
+        env:
+          MODE: ${{ inputs.mode }}
+          DEPLOYED_REF: ${{ inputs.deployed_ref }}
+          ALLOW_DESTRUCTIVE: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS || '0' }}
+          CODE_ONLY: ${{ inputs.code_only && '1' || '0' }}
+        run: bash deploy/validate-deploy-inputs.sh
 
       - id: sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -144,7 +152,7 @@ jobs:
           # it finds something destructive. Those mean different things, so they
           # must not be collapsed into one error message.
           BASE=origin/main
-          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main" || true
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
           git merge-base --is-ancestor HEAD origin/main || {
             echo "::error::Deployment commit is not on main."
             exit 1
@@ -164,16 +172,14 @@ jobs:
 
       - name: Scan new migrations for destructive operations
         env:
-          ALLOW: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS }}
-        run: |
-          bash deploy/check-migrations.sh "${{ steps.baseref.outputs.ref }}" || {
-            [ "$ALLOW" = "1" ] || { echo "::error::Destructive migration(s) need human review (set repo variable ALLOW_DESTRUCTIVE_MIGRATIONS=1 after review)."; exit 1; }
-          }
+          ALLOW_DESTRUCTIVE_MIGRATIONS: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS || '0' }}
+          MIGRATION_BASE: ${{ steps.baseref.outputs.ref }}
+        run: bash deploy/gate-migrations.sh "$MIGRATION_BASE"
 
   deploy:
     name: Deploy to production
     needs: gate
-    if: ${{ vars.PIIE_DEPLOY_ENABLED == 'true' }}   # lock 2
+    if: ${{ github.ref == 'refs/heads/main' && vars.PIIE_DEPLOY_ENABLED == 'true' }}   # lock 2
     runs-on: ubuntu-22.04
     environment: production        # configure required reviewers = manual approval
     timeout-minutes: 45
@@ -195,29 +201,17 @@ jobs:
           ( cd dist && sha256sum -c ./*.sha256 )
           bash deploy/verify-release.sh dist/piie-release-${SHA:0:12}.tar.gz
 
-      - name: Install pinned host key and v3 deploy key
+      - name: Prepare independently pinned SSH client
         env:
           PIIE_SSH_KEY: ${{ secrets.PIIE_SSH_KEY }}
           PIIE_SSH_KNOWN_HOSTS: ${{ secrets.PIIE_SSH_KNOWN_HOSTS }}
+          PIIE_SSH_HOST: ${{ secrets.PIIE_SSH_HOST }}
+          PIIE_SSH_PORT: ${{ secrets.PIIE_SSH_PORT }}
+          PIIE_SSH_USER: ${{ secrets.PIIE_SSH_USER }}
         run: |
+          bash deploy/diagnostics/prepare-ssh.sh
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$PIIE_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          printf '%s\n' "$PIIE_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/known_hosts ~/.ssh/deploy_key
-          FP=$(ssh-keygen -lf ~/.ssh/deploy_key | awk '{print $2}')
-          [ "$FP" = "SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM" ] \
-            || { echo "::error::PIIE_SSH_KEY is not the authorised v3 key."; exit 1; }
-          cat > ~/.ssh/config <<EOF
-          Host piie-prod
-            HostName ${{ secrets.PIIE_SSH_HOST }}
-            Port ${{ secrets.PIIE_SSH_PORT }}
-            User ${{ secrets.PIIE_SSH_USER }}
-            IdentityFile ~/.ssh/deploy_key
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-            UserKnownHostsFile ~/.ssh/known_hosts
-            PasswordAuthentication no
-          EOF
+          cp "$RUNNER_TEMP/piie-diagnostics/config" ~/.ssh/config
 
       - name: Upload the on-server scripts and the artefact
         run: |
@@ -234,10 +228,11 @@ jobs:
       - name: Install the release
         env:
           MODE: ${{ inputs.mode }}
-          ALLOW_DESTRUCTIVE: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS }}
+          ALLOW_DESTRUCTIVE: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS || '0' }}
           DEPLOYED_REF: ${{ inputs.deployed_ref }}
           CODE_ONLY: ${{ inputs.code_only && '1' || '0' }}
         run: |
+          bash deploy/validate-deploy-inputs.sh
           RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
           SUM=$(cut -d' ' -f1 dist/piie-release-${SHA:0:12}.tar.gz.sha256)
           ssh piie-prod "PIIE_CODE_ONLY=$CODE_ONLY EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
@@ -271,4 +266,6 @@ jobs:
 
       - name: Remove key material
         if: always()
-        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts ~/.ssh/config
+        run: |
+          rm -f ~/.ssh/config
+          rm -f "$RUNNER_TEMP/piie-diagnostics/key" "$RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config" "$RUNNER_TEMP/piie-diagnostics/matched_hosts" "$RUNNER_TEMP/piie-diagnostics/verified_hosts"
