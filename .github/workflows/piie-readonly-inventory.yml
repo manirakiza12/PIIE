@@ -20,6 +20,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      - name: Validate operator-controlled evidence encryption certificate
+        id: recipient
+        env:
+          PIIE_INVENTORY_RECIPIENT_CERT: ${{ vars.PIIE_INVENTORY_RECIPIENT_CERT }}
+          PIIE_INVENTORY_RECIPIENT_SHA256: ${{ vars.PIIE_INVENTORY_RECIPIENT_SHA256 }}
+        run: bash deploy/diagnostics/inventory-evidence.sh prepare
       - name: Prepare ephemeral pinned SSH client
         env:
           PIIE_SSH_KEY: ${{ secrets.PIIE_SSH_KEY }}
@@ -29,16 +35,25 @@ jobs:
           PIIE_SSH_USER: ${{ secrets.PIIE_SSH_USER }}
         run: bash deploy/diagnostics/prepare-ssh.sh
       - name: Collect fixed read-only inventory
+        id: collect
         run: |
           set -euo pipefail
-          ssh -F "$RUNNER_TEMP/piie-diagnostics/config" -T piie-prod 'bash --noprofile --norc -s' < deploy/diagnostics/readonly-inventory.sh > production-inventory.log
-      - name: Retain restricted repository evidence
-        if: always()
+          umask 077
+          ssh -F "$RUNNER_TEMP/piie-diagnostics/config" -T piie-prod 'bash --noprofile --norc -s' < deploy/diagnostics/readonly-inventory.sh > production-inventory.log 2>&1
+      - name: Encrypt complete or partial evidence without printing it
+        id: encrypt
+        if: ${{ always() && steps.recipient.outcome == 'success' && (steps.collect.outcome == 'success' || steps.collect.outcome == 'failure') }}
+        run: bash deploy/diagnostics/inventory-evidence.sh encrypt
+      - name: Retain encrypted evidence only
+        if: ${{ always() && steps.encrypt.outcome == 'success' }}
         uses: actions/upload-artifact@v6
         with:
           name: production-inventory-${{ github.run_id }}
-          path: production-inventory.log
+          path: production-inventory.cms
+          if-no-files-found: error
           retention-days: 7
-      - name: Remove ephemeral SSH material
+      - name: Remove ephemeral SSH material and plaintext evidence
         if: always()
-        run: rm -f "$RUNNER_TEMP/piie-diagnostics/key" "$RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config"
+        run: |
+          rm -f "$RUNNER_TEMP/piie-diagnostics/key" "$RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config"
+          rm -f "$RUNNER_TEMP/piie-inventory-evidence/recipient.pem" "$RUNNER_TEMP/piie-inventory-evidence/probe.cms" production-inventory.log production-inventory.cms
