@@ -48,6 +48,13 @@ final class ApplicantNotificationDelivery
                 if (! $admission || $admission->email !== $message['to'] || $admission->isFeeSettled()
                     || ! \App\Support\Payments\ApplicantPesaPalPayment::eligible($admission)) { return false; }
                 $applicant = ApplicantPortalAccess::ensureLinked($admission);
+                $existingUrl = $message['data']['cta_url'] ?? null;
+                if (is_string($existingUrl) && $existingUrl !== '') {
+                    \Illuminate\Support\Facades\URL::forceRootUrl(rtrim((string) parse_url($existingUrl, PHP_URL_SCHEME), '/').'://'.parse_url($existingUrl, PHP_URL_HOST));
+                    \Illuminate\Support\Facades\URL::forceScheme((string) (parse_url($existingUrl, PHP_URL_SCHEME) ?: 'https'));
+                }
+                $message['data']['cta_url'] = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+                    'applicant.pesapal.invitation', now()->addHour(), ['admission' => $admission->id]);
                 $message['data']['access_url'] = ApplicantPortalAccess::paymentLinkFor($applicant);
             }
             $mail = match ($message['mail_type'] ?? 'applicant') {
