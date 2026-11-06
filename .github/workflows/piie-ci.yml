@@ -417,7 +417,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Syntax-check every deployment script
-        run: for f in deploy/*.sh deploy/remote/*.sh deploy/tests/*.sh; do bash -n "$f"; done
+        run: for f in deploy/*.sh deploy/remote/*.sh deploy/diagnostics/*.sh deploy/tests/*.sh; do bash -n "$f"; done
+      - name: Run migration scanner regression matrix
+        run: php deploy/tests/scan-migrations-regression.php
       - name: Test public asset smoke checks
         run: python3 -m unittest discover -s tests/deploy -v
       # Every suite in deploy/tests/ is run, in this order. Naming them one by one

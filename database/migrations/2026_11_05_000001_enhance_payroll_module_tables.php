@@ -25,10 +25,10 @@ use Illuminate\Support\Facades\Schema;
  *    It also gains the business-rule constraint the application code used
  *    to enforce only by racing exists() checks:
  *      UNIQUE (school_id, staff_id, pay_period) — one payslip per employee
- *    per period. Any pre-existing duplicates (possible only through the
- *    old race window) are collapsed to the earliest row first, so the
- *    index can be created; the removed rows have never been approved or
- *    paid because only the newest row was ever shown per period+staff.
+ *    per period. The index is created ONLY when no pre-existing duplicates
+ *    exist. This migration never deletes, deduplicates or rewrites payroll
+ *    rows: if duplicates are found it reports them and leaves the index for
+ *    a separately reviewed follow-up after the rows are reconciled.
  *
  * 2. `salary_structures` gains the employee payment channels and an
  *    open-ended "other earnings" line so payroll reflects how each
@@ -83,32 +83,38 @@ return new class extends Migration
             }
         });
 
-        // One payslip per employee per period: collapse any race-window
-        // duplicates first (keep the earliest row, never touching approved
-        // or paid history), then add the unique index.
-        if (Schema::hasTable('payroll')) {
-            DB::table('payroll')
-                ->selectRaw('MIN(id) as keep_id, school_id, staff_id, pay_period, COUNT(*) as c')
+        // One payslip per employee per period is enforced by a UNIQUE index,
+        // but that index can only be created when no historical duplicates
+        // exist. This migration does NOT delete or rewrite any payroll row.
+        // If duplicates are present the index is skipped and reported, so a
+        // human can reconcile the rows and add the index in a reviewed
+        // follow-up migration.
+        if (Schema::hasTable('payroll') && !$this->hasUniquePayrollPeriod()) {
+            $duplicateGroups = DB::table('payroll')
+                ->selectRaw('school_id, staff_id, pay_period, COUNT(*) as duplicate_count')
                 ->groupBy('school_id', 'staff_id', 'pay_period')
-                ->having('c', '>', 1)
-                ->get()
-                ->each(function ($group) {
-                    DB::table('payroll')
-                        ->where('school_id', $group->school_id)
-                        ->where('staff_id', $group->staff_id)
-                        ->where('pay_period', $group->pay_period)
-                        ->where('id', '!=', $group->keep_id)
-                        ->where('status', 'draft')
-                        ->whereNull('approved_by')
-                        ->delete();
-                });
-        }
+                ->having('duplicate_count', '>', 1)
+                ->get();
 
-        Schema::table('payroll', function (Blueprint $table) {
-            if (!$this->hasUniquePayrollPeriod()) {
-                $table->unique(['school_id', 'staff_id', 'pay_period'], 'payroll_school_staff_period_unique');
+            if ($duplicateGroups->isEmpty()) {
+                Schema::table('payroll', function (Blueprint $table) {
+                    $table->unique(
+                        ['school_id', 'staff_id', 'pay_period'],
+                        'payroll_school_staff_period_unique'
+                    );
+                });
+            } else {
+                // Visible in the migration output; no production data changed.
+                fwrite(STDERR, sprintf(
+                    "WARNING: %d payroll period group(s) contain duplicate rows.\n"
+                    ."The unique index payroll_school_staff_period_unique was NOT created.\n"
+                    ."No payroll data was changed. Audit and reconcile with "
+                    ."docs/phase0/audit-payroll-duplicates.sql, then add the index "
+                    ."in a separate reviewed migration.\n",
+                    $duplicateGroups->count()
+                ));
             }
-        });
+        }
 
         Schema::table('salary_structures', function (Blueprint $table) {
             if (!Schema::hasColumn('salary_structures', 'other_earnings')) {
