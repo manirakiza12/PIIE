@@ -85,7 +85,9 @@ for container in piie-app piie-db; do
     docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}network={{$name}} ip={{$net.IPAddress}}{{println}}{{end}}' "$container" 2>/dev/null || true
     docker inspect --format '{{range .Mounts}}mount type={{.Type}} source={{.Source}} destination={{.Destination}} rw={{.RW}}{{println}}{{end}}' "$container" 2>/dev/null || true
     # Names only: values are secrets and are never emitted.
-    docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" 2>/dev/null | cut -d= -f1 | sed 's/^/env_name=/' || true
+    # Split inside Docker's template: multiline secret values must never reach
+    # line-oriented filters, where continuation lines could leak as names.
+    docker inspect --format '{{range .Config.Env}}{{println (index (split . "=") 0)}}{{end}}' "$container" 2>/dev/null | grep -E '^[A-Za-z_][A-Za-z0-9_]*$' | sed 's/^/env_name=/' || true
   else
     note "container $container not found"
   fi
@@ -189,7 +191,9 @@ if [ -d "$BASE/current" ]; then
       -not -path './storage/*' \
       -not -path './bootstrap/cache/*' \
       -not -path './node_modules/*' \
-      -not -name '.env' \
+      -not -path './public/assets/uploads/*' \
+      -not -path './.git/*' \
+      -not -name '.env*' \
       -print0 2>/dev/null \
       | sort -z \
       | xargs -0 -r sha256sum 2>/dev/null

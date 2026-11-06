@@ -42,6 +42,12 @@ automatic migration rollback on production.
 - PHPUnit focused deployment tests: four passed, 14 assertions; 15 existing
   PHPUnit deprecation notices. Preservation tests use explicit in-memory SQLite.
 - Shell syntax checks include diagnostics; JavaScript exam tests: 14 passed.
+- PHP syntax sweep of tracked PHP and new deployment PHP files: zero failures.
+- Executable route tokens match 79779e5 after line-ending normalization; the
+  route-file repair changes comments only. The scanner rejects the original
+  destructive payroll migration preserved in OpenCode's handoff directory.
+- Synthetic read-only inventory sandbox: five cases passed (valid evidence,
+  corrupt archive, path traversal, stale backup and missing release pointer).
 - Public-asset Python tests: three passed.
 - Composer audit --locked: no advisories or abandoned packages.
 - Full Windows Git Bash sandbox attempt: nine of 15 suites failed, with POSIX
@@ -55,6 +61,8 @@ automatic migration rollback on production.
 
 GitHub variable read confirms PIIE_DEPLOY_ENABLED=false (2026-11-06).
 Production environment has required reviewers and custom branch policies.
+Current public read-only HTTP checks: /health returns 200 with PIIE-APP-OK;
+homepage returns 200. These checks do not establish the deployed SHA or data health.
 No deployment was dispatched, freeze lifted, credentials changed, protected merge
 performed, database accessed, backup transferred or production files modified.
 
@@ -74,6 +82,13 @@ Unresolved exit gates:
 6. Green exact-commit CI and required PR review/approval before merge.
 7. Explicit user authorization to lift the freeze, followed by approved staging
    and activation with production environment review.
+
+GitHub integration is currently blocked before push: GitHub rejected the OAuth
+credential because its scopes are repo/read:org/gist without workflow. The
+operator must run `gh auth refresh -h github.com -s workflow` and complete GitHub
+authorization. No remote branch update, PR or exact-commit CI run has occurred.
+After that authorization, push normally, open the PR against main and require
+the existing CI checks; never force-push or bypass protection.
 
 The payroll migration never reconciles records. If duplicates exist it warns and
 omits the unique index; concurrent payroll generation lacks that DB constraint
