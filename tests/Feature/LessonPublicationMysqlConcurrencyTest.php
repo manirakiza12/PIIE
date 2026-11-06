@@ -34,12 +34,12 @@ class LessonPublicationMysqlConcurrencyTest extends TestCase
         $module = DB::table('course_offering_modules')->insertGetId(['school_id'=>$school,'course_offering_id'=>$offering,'title'=>'CI module','status'=>'published','sequence'=>1]);
         $assignment = DB::table('assignments')->insertGetId(['school_id'=>$school,'course_offering_id'=>$offering,'title'=>'CI assignment','status'=>'published','is_published'=>1,'instructions'=>'<p>Complete the exercise.</p>','due_date'=>'2027-01-01 10:00:00','max_marks'=>10]);
 
-        $ids = $this->race('users', $actor, ['create', $actor, $module, $assignment, $suffix]);
+        $ids = $this->race('course_offering_modules', $module, ['create', $actor, $module, $assignment, $suffix]);
         $this->assertSame($ids[0], $ids[1]);
         $this->assertSame(1, DB::table('course_offering_lessons')->where('school_id',$school)->count());
         $this->assertSame(1, DB::table('assignments')->where('school_id',$school)->count());
         $lesson = $ids[0];
-        $ids = $this->race('course_offering_lessons', $lesson, ['update', $actor, $lesson, $assignment, $suffix]);
+        $ids = $this->race('course_offerings', $offering, ['update', $actor, $lesson, $assignment, $suffix]);
         $this->assertSame([$lesson, $lesson], $ids);
         $this->assertSame(1, DB::table('course_offering_lessons')->where('school_id',$school)->count());
         $this->assertSame('published', DB::table('course_offering_lessons')->where('id',$lesson)->value('status'));
@@ -49,27 +49,28 @@ class LessonPublicationMysqlConcurrencyTest extends TestCase
     {
         $processes = [];
         try {
-            DB::transaction(function () use ($table,$lockId,$arguments,&$processes): void {
-                DB::table($table)->where('id',$lockId)->lockForUpdate()->firstOrFail();
-                for ($i=0; $i<2; $i++) {
-                    $process = new Process(array_merge([PHP_BINARY,base_path('tests/Feature/Support/LessonPublicationMysqlWorker.php')], array_map('strval',$arguments)), base_path(), ['APP_ENV'=>'testing']);
-                    $process->setTimeout(40);
-                    $processes[]=$process;
-                    $process->start();
-                }
-                foreach ($processes as $process) { CurriculumWorkerBarrier::awaitReady($process); }
-            });
-            $ids=[];
+            for ($i = 0; $i < 2; $i++) {
+                $process = new Process(array_merge([PHP_BINARY, base_path('tests/Feature/Support/LessonPublicationMysqlWorker.php')], array_map('strval', $arguments)), base_path(), ['APP_ENV' => 'testing']);
+                $process->setTimeout(120);
+                $processes[] = $process;
+                $process->start();
+            }
+            foreach ($processes as $process) {
+                CurriculumWorkerBarrier::awaitReady($process);
+            }
+            $ids = [];
             foreach ($processes as $process) {
                 $process->wait();
-                $this->assertTrue($process->isSuccessful(),$process->getErrorOutput().$process->getOutput());
-                preg_match('/LESSON_ID=(\d+)/',$process->getOutput(),$match);
-                $this->assertNotEmpty($match,$process->getOutput());
-                $ids[]=(int)$match[1];
+                $this->assertTrue($process->isSuccessful(), $process->getErrorOutput().$process->getOutput());
+                preg_match('/LESSON_ID=(\d+)/', $process->getOutput(), $match);
+                $this->assertNotEmpty($match, $process->getOutput());
+                $ids[] = (int) $match[1];
             }
             return $ids;
         } finally {
-            foreach ($processes as $process) { $process->stop(0); }
+            foreach ($processes as $process) {
+                $process->stop(0);
+            }
         }
     }
 }

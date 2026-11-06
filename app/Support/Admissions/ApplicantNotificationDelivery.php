@@ -48,6 +48,11 @@ final class ApplicantNotificationDelivery
                 if (! $admission || $admission->email !== $message['to'] || $admission->isFeeSettled()
                     || ! \App\Support\Payments\ApplicantPesaPalPayment::eligible($admission)) { return false; }
                 $applicant = ApplicantPortalAccess::ensureLinked($admission);
+                $existingUrl = $message['data']['cta_url'] ?? null;
+                if (is_string($existingUrl) && $existingUrl !== '') {
+                    \Illuminate\Support\Facades\URL::forceRootUrl(rtrim((string) parse_url($existingUrl, PHP_URL_SCHEME), '/').'://'.parse_url($existingUrl, PHP_URL_HOST));
+                    \Illuminate\Support\Facades\URL::forceScheme((string) (parse_url($existingUrl, PHP_URL_SCHEME) ?: 'https'));
+                }
                 $message['data']['cta_url'] = \Illuminate\Support\Facades\URL::temporarySignedRoute(
                     'applicant.pesapal.invitation', now()->addHour(), ['admission' => $admission->id]);
                 $message['data']['access_url'] = ApplicantPortalAccess::paymentLinkFor($applicant);
@@ -57,7 +62,12 @@ final class ApplicantNotificationDelivery
                 'student_activation' => new \App\Mail\StudentPortalActivationEmail($message['data']),
                 default => throw new \RuntimeException('Unsupported notification type'),
             };
-            Mail::to($message['to'])->send($mail);
+            try {
+                Mail::to($message['to'])->send($mail);
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Log::warning('Applicant notification delivery failed', ['delivery_id' => $id]);
+                return false;
+            }
             DB::table('applicant_notification_deliveries')->where('id', $id)->update([
                 'sent_at' => now(), 'encrypted_message' => '[delivered]', 'updated_at' => now(),
             ]);
