@@ -47,7 +47,8 @@
 #   PIIE_SSH_HOST  PIIE_SSH_PORT  PIIE_SSH_USER  PIIE_SSH_KEY  PIIE_SSH_KNOWN_HOSTS
 # PIIE_SSH_KEY must be the v3 key (SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM);
 # v1/v2 are revoked. The host key is pinned via PIIE_SSH_KNOWN_HOSTS (ED25519
-# SHA256:fR4AOOMWFR17JIX9k8ed4O7+N6IaH30zEtefkbx/UEI) - never ssh-keyscan at run time.
+# fingerprint requires independent console verification; see
+# docs/phase0/HOST-IDENTITY-VERIFICATION.md). Never ssh-keyscan at run time.
 #
 # HOST FACTS (surveyed 2026-10-03): PHP 8.3.12 is /usr/local/php83/bin/php; bare
 # `php` is 8.2.27. No Node on the host (assets are committed; any build runs in CI).

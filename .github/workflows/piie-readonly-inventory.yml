@@ -1,0 +1,44 @@
+name: PIIE Read-only Inventory
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: piie-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: production
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Prepare ephemeral pinned SSH client
+        env:
+          PIIE_SSH_KEY: ${{ secrets.PIIE_SSH_KEY }}
+          PIIE_SSH_KNOWN_HOSTS: ${{ secrets.PIIE_SSH_KNOWN_HOSTS }}
+          PIIE_SSH_HOST: ${{ secrets.PIIE_SSH_HOST }}
+          PIIE_SSH_PORT: ${{ secrets.PIIE_SSH_PORT }}
+          PIIE_SSH_USER: ${{ secrets.PIIE_SSH_USER }}
+        run: bash deploy/diagnostics/prepare-ssh.sh
+      - name: Collect fixed read-only inventory
+        run: |
+          set -euo pipefail
+          ssh -F "$RUNNER_TEMP/piie-diagnostics/config" -T piie-prod 'bash --noprofile --norc -s' < deploy/diagnostics/readonly-inventory.sh > production-inventory.log
+      - name: Retain restricted repository evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: production-inventory-${{ github.run_id }}
+          path: production-inventory.log
+          retention-days: 7
+      - name: Remove ephemeral SSH material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/piie-diagnostics/key" "$RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config"
