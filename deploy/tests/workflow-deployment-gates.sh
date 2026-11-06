@@ -11,13 +11,15 @@ check() {
 }
 VALIDATOR="$ROOT/deploy/validate-deploy-inputs.sh"
 check 0 env MODE=stage DEPLOYED_REF= ALLOW_DESTRUCTIVE=0 CODE_ONLY=0 bash "$VALIDATOR"
-check 0 env MODE=activate DEPLOYED_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bash "$VALIDATOR"
+check 0 env MODE=activate DEPLOYED_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ROLLBACK_RELEASE=f23cff8 bash "$VALIDATOR"
 check 2 env MODE=activate DEPLOYED_REF= bash "$VALIDATOR"
 check 2 env MODE=stage DEPLOYED_REF='; touch should-never-exist' bash "$VALIDATOR"
 check 2 env MODE=stage DEPLOYED_REF='$(id)' bash "$VALIDATOR"
 check 2 env MODE=invalid bash "$VALIDATOR"
 check 2 env MODE=stage ALLOW_DESTRUCTIVE='1; id' bash "$VALIDATOR"
 check 2 env MODE=stage CODE_ONLY=invalid bash "$VALIDATOR"
+check 2 env MODE=activate DEPLOYED_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ROLLBACK_RELEASE= bash "$VALIDATOR"
+check 2 env MODE=stage ROLLBACK_RELEASE='../mailcow' bash "$VALIDATOR"
 echo 'PASS valid stage/activation accepted; missing identity and remote-shell injection inputs rejected'
 # Stub only the scanner process, retaining the real override decision logic.
 cp "$ROOT/deploy/gate-migrations.sh" "$S/gate-migrations.sh"
@@ -31,6 +33,6 @@ check 2 env FIXTURE_SCAN_STATUS=0 ALLOW_DESTRUCTIVE_MIGRATIONS=invalid bash "$S/
 echo 'PASS scanner errors and unexpected exits fail closed even with destructive review override'
 WORKFLOW="$ROOT/.github/workflows/piie-deploy.yml"
 [ "$(grep -c 'github.ref.*refs/heads/main.*PIIE_DEPLOY_ENABLED' "$WORKFLOW")" -eq 2 ]
-[ "$(grep -c 'bash deploy/validate-deploy-inputs.sh' "$WORKFLOW")" -eq 2 ]
+[ "$(grep -c 'bash deploy/validate-deploy-inputs.sh' "$WORKFLOW")" -eq 3 ]
 grep -q 'bash deploy/gate-migrations.sh' "$WORKFLOW"
 echo 'PASS gate and protected job require main; validated inputs and fail-closed migration gate are wired'

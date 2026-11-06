@@ -9,12 +9,16 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 [[ "$SUM" =~ ^[0-9a-f]{64}$ ]] || fail 'Invalid checksum'
 [ "$MODE" = stage ] || [ "$MODE" = activate ] || fail 'Invalid mode'
 case "$ART" in "$BASE"/incoming/piie-release-*.tar.gz) ;; *) fail 'Archive outside incoming';; esac
+[[ "${EXPECTED_RELEASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Full approved candidate SHA required'
 bash "$(dirname "$0")/container-preflight.sh"
 exec 9>"$BASE/.deploy.lock"; flock -n 9 || fail 'Another deployment is active'
 PREV=$(readlink "$BASE/current")
 if [ "$MODE" = activate ]; then
   [[ "${EXPECTED_DEPLOYED_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Verified baseline SHA required'
   [ "$(cat "$BASE/current/RELEASE_SHA")" = "$EXPECTED_DEPLOYED_SHA" ] || fail 'Live baseline changed'
+  if [ -n "${EXPECTED_ROLLBACK_RELEASE:-}" ]; then
+    [ "$PREV" = "releases/$EXPECTED_ROLLBACK_RELEASE" ] || fail 'Approved rollback release is not the active baseline'
+  fi
 fi
 printf '%s  %s\n' "$SUM" "$ART" | sha256sum -c -
 # Refuse traversal, links, devices and secret files before extracting as root.
@@ -29,6 +33,7 @@ tar -xzf "$ART" -C "$REL" --no-same-owner
 chmod 755 "$REL"
 SHA=$(cat "$REL/RELEASE_SHA")
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ "${SHA:0:12}" = "${RID##*-}" ] || fail 'Release SHA does not match ID'
+[ "$SHA" = "$EXPECTED_RELEASE_SHA" ] || fail 'Release differs from approved full SHA'
 [ -f "$REL/vendor/autoload.php" ] || fail 'Production dependencies missing'
 ENV_SUM=$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)
 ln -s ../../shared/.env "$REL/.env"
@@ -99,11 +104,20 @@ SWITCHED=0; MAINTENANCE=0
 cleanup() {
   local status=$?
   if [ "$status" -ne 0 ] && [ "$SWITCHED" = 1 ]; then
-    ln -s "$PREV" "$BASE/current.rollback"; mv -Tf "$BASE/current.rollback" "$BASE/current"
-    app_apache_reload || true
+    if ! ln -s "$PREV" "$BASE/current.rollback" || ! mv -Tf "$BASE/current.rollback" "$BASE/current"; then
+      echo 'CRITICAL: code pointer restoration failed; administrator intervention required' >&2
+      return 1
+    fi
+    if ! app_apache_reload; then
+      echo 'CRITICAL: prior pointer restored but application reload failed; runtime recovery unverified' >&2
+      return 1
+    fi
     echo 'Code rolled back; forward database migrations retained.' >&2
   fi
-  if [ "$MAINTENANCE" = 1 ]; then app_run /srv/piie/current php artisan up || true; fi
+  if [ "$MAINTENANCE" = 1 ]; then
+    app_run /srv/piie/current php artisan up || { echo 'CRITICAL: maintenance recovery failed' >&2; return 1; }
+  fi
+  return "$status"
 }
 trap cleanup EXIT
 app_run /srv/piie/current php artisan down --retry=30

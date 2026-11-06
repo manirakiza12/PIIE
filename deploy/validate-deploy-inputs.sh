@@ -11,4 +11,9 @@ if [ -n "${DEPLOYED_REF:-}" ]; then
 elif [ "$MODE" = activate ]; then
   fail 'Activation requires a verified deployed commit SHA'
 fi
+if [ -n "${ROLLBACK_RELEASE:-}" ]; then
+  [[ "$ROLLBACK_RELEASE" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$ ]] || fail 'Invalid rollback release ID'
+elif [ "$MODE" = activate ]; then
+  fail 'Activation requires an explicit verified rollback release'
+fi
 echo 'Deployment inputs validated'

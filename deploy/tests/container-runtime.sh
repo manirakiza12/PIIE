@@ -13,6 +13,7 @@ cleanup_fixture() {
 trap cleanup_fixture EXIT
 mkdir -p "$S/bin" "$S/shared/storage/app/public" "$S/shared/storage/logs" "$S/releases/old/public/assets/uploads" "$S/incoming" "$S/fixture/vendor" "$S/fixture/public/assets/uploads" "$S/scripts"
 SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+export EXPECTED_RELEASE_SHA="$SHA"
 printf '%s\n' "$SHA" > "$S/releases/old/RELEASE_SHA"
 printf 'preserved' > "$S/shared/.env"
 chmod 600 "$S/shared/.env"
@@ -48,6 +49,20 @@ bash "$S/scripts/container-deploy.sh" "$RID" "$S/incoming/piie-release-fixture.t
 ! grep -q 'migrate --force' "$S/docker.log"
 ! grep -q '^kill ' "$S/docker.log"
 echo 'PASS: staging preserves current, database and uploads'
+set +e
+EXPECTED_RELEASE_SHA=aaaaaaaaaaaa1111111111111111111111111111 bash "$S/scripts/container-deploy.sh" 20261014-120009-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage > "$S/full-sha.log" 2>&1
+code=$?
+set -e
+[ "$code" -ne 0 ] && grep -q 'approved full SHA' "$S/full-sha.log"
+[ "$(readlink "$S/current")" = releases/old ]
+echo 'PASS: candidate with matching short prefix but different full approved SHA is refused'
+set +e
+EXPECTED_DEPLOYED_SHA="$SHA" EXPECTED_ROLLBACK_RELEASE=unrelated bash "$S/scripts/container-deploy.sh" 20261014-120011-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/wrong-fallback.log" 2>&1
+code=$?
+set -e
+[ "$code" -ne 0 ] && grep -q 'rollback release is not the active baseline' "$S/wrong-fallback.log"
+[ "$(readlink "$S/current")" = releases/old ] && [ ! -d "$S/backups" ]
+echo 'PASS: unrelated rollback input is refused before backup, migration or current changes'
 set +e
 EXPECTED_DEPLOYED_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb bash "$S/scripts/container-deploy.sh" 20261014-120001-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/rejected.log" 2>&1
 code=$?
@@ -132,3 +147,11 @@ set -e
 [ "$code" -ne 0 ] && grep -q 'synthetic storage archive write error' "$S/archive-error.log"
 [ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
 echo 'PASS: meaningful storage archive errors remain fatal before activation'
+set +e
+EXPECTED_DEPLOYED_SHA="$SHA" FAIL_RELOAD_ALWAYS=1 bash "$S/scripts/container-deploy.sh" 20261014-120010-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/recovery-failed.log" 2>&1
+code=$?
+set -e
+[ "$code" -ne 0 ] && grep -q 'CRITICAL: prior pointer restored but application reload failed' "$S/recovery-failed.log"
+! grep -q 'Code rolled back;' "$S/recovery-failed.log"
+[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+echo 'PASS: failed rollback reload is reported critical without a false recovery success'
