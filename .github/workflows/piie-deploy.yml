@@ -241,7 +241,7 @@ jobs:
 
       - name: Docker preflight (starts temporary clients; requires approved privileges)
         run: |
-          ssh piie-prod "bash $REMOTE_BASE/bin/container-preflight.sh"
+          ssh piie-prod "sudo /usr/local/lib/piie/bin/container-preflight.sh"
 
       - name: Install the release
         id: install
@@ -255,7 +255,7 @@ jobs:
           bash deploy/validate-deploy-inputs.sh
           RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
           SUM=$(cut -d' ' -f1 dist/piie-release-${SHA:0:12}.tar.gz.sha256)
-          ssh piie-prod "PIIE_CODE_ONLY=$CODE_ONLY EXPECTED_RELEASE_SHA=$SHA EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF EXPECTED_ROLLBACK_RELEASE=$ROLLBACK_RELEASE ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} $REMOTE_BASE/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
+          ssh piie-prod "PIIE_CODE_ONLY=$CODE_ONLY EXPECTED_RELEASE_SHA=$SHA EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF EXPECTED_ROLLBACK_RELEASE=$ROLLBACK_RELEASE ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} sudo /usr/local/lib/piie/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
 
       - name: Verify active release SHA and document root (read-only)
         if: ${{ inputs.mode == 'activate' }}
@@ -282,7 +282,7 @@ jobs:
       - name: Audit published lesson requirements (read-only)
         if: ${{ inputs.mode == 'activate' }}
         run: |
-          ssh piie-prod "test \"\$(cat $REMOTE_BASE/current/RELEASE_SHA)\" = '$SHA' && bash $REMOTE_BASE/bin/container-app.sh /srv/piie/current php artisan course-content:audit"
+          ssh piie-prod "test \"\$(cat $REMOTE_BASE/current/RELEASE_SHA)\" = '$SHA' && sudo /usr/local/lib/piie/bin/container-app.sh /srv/piie/current php artisan course-content:audit"
 
       - name: Restore explicit prior code after post-activation workflow failure
         if: ${{ failure() && inputs.mode == 'activate' && steps.install.outcome == 'success' }}
@@ -292,7 +292,7 @@ jobs:
           ROLLBACK_RELEASE: ${{ inputs.rollback_release }}
         run: |
           bash deploy/validate-deploy-inputs.sh
-          ssh piie-prod "bash $REMOTE_BASE/bin/container-rollback.sh '$SHA' '$ROLLBACK_RELEASE' '$DEPLOYED_REF'"
+          ssh piie-prod "sudo /usr/local/lib/piie/bin/container-rollback.sh '$SHA' '$ROLLBACK_RELEASE' '$DEPLOYED_REF'"
 
       - name: Remove key material
         if: always()
