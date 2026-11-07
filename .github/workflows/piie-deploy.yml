@@ -45,7 +45,7 @@
 # SECRETS (names only; values live in GitHub, scoped to the `production`
 # environment, and are never echoed):
 #   PIIE_SSH_HOST  PIIE_SSH_PORT  PIIE_SSH_USER  PIIE_SSH_KEY  PIIE_SSH_KNOWN_HOSTS
-# PIIE_SSH_KEY must be the v3 key (SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM);
+# PIIE_SSH_KEY must be the v4 key (SHA256:HnARD+o96mEq/ZObScCf5YgfXvV7RW3qrN/aF3LI4LA);
 # v1/v2 are revoked. The host key is pinned via PIIE_SSH_KNOWN_HOSTS (ED25519
 # fingerprint requires independent console verification; see
 # docs/phase0/HOST-IDENTITY-VERIFICATION.md). Never ssh-keyscan at run time.

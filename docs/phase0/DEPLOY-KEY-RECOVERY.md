@@ -1,4 +1,4 @@
-# Deploy key recovery
+﻿# Deploy key recovery
 
 The last recorded failure (42211372383) passed client-key and configured host-pin
 checks but failed public-key authentication before the first remote command.
@@ -21,7 +21,7 @@ sudo journalctl -u ssh --since '2026-11-06 11:34:00 UTC' --until '2026-11-06 11:
 Keep logs private; report only the relevant rejection reason, account, ownership,
 permissions and public fingerprints. Compare the authorized public-key fingerprint
 with the client's configured identity:
-`SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM`.
+`SHA256:HnARD+o96mEq/ZObScCf5YgfXvV7RW3qrN/aF3LI4LA`.
 Inspect effective AuthorizedKeysFile, AllowUsers/DenyUsers, Match rules, account
 expiry, login shell, key restrictions, and endpoint/port routing. Distinguish
 wrong host, wrong account, missing key, key restrictions and sshd policy from logs.

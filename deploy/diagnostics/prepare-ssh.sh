@@ -21,8 +21,13 @@ mkdir "$D"
 operation='private key and known-host file creation'
 printf '%s\n' "$PIIE_SSH_KEY" > "$D/key"
 printf '%s\n' "$PIIE_SSH_KNOWN_HOSTS" > "$D/known_hosts"
+# Safe diagnostics: report only formatting metadata, never key material.
+CR_COUNT=$(tr -cd '\r' < "$D/key" | wc -c)
+TRAILING_WS=$(grep -cE '[[:space:]]+$' "$D/key" || true)
+LINE_COUNT=$(wc -l < "$D/key")
+echo "Deploy key diagnostics: lines=$LINE_COUNT cr=$CR_COUNT trailing_ws_lines=$TRAILING_WS"
 FP=$(ssh-keygen -lf "$D/key" 2>/dev/null | awk '{print $2}') || fail 'deploy key parsing failed'
-[ "$FP" = 'SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM' ] || fail 'authorized deploy key identity validation failed'
+[ "$FP" = 'SHA256:HnARD+o96mEq/ZObScCf5YgfXvV7RW3qrN/aF3LI4LA' ] || fail 'authorized deploy key identity validation failed'
 # Independently verified through the Contabo console by the operator.
 # This validates a runner copy; it never updates the protected secret or server.
 if grep -Eq '^[[:space:]]*@' "$D/known_hosts"; then fail 'marked host entries require review'; fi

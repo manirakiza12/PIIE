@@ -3,10 +3,10 @@
 set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
-# Baseline: current active production release (diagnostics allowlist PR #166 merged, deployed 2026-11-02).
-BASELINE=c7020ae90a455419e76ecdfa371761e4b09b54e2
-# Target: current main HEAD (same as baseline after deployment).
-TARGET=c7020ae90a455419e76ecdfa371761e4b09b54e2
+# Baseline: currently deployed production release (f23cff8, PR #215, activated 2026-11-05).
+BASELINE=f23cff88f15a35fd3d7606df929c26cd951ee288
+# Target: approved release candidate on main (47ee202, PR #220, CI green).
+TARGET=47ee202adc70b86d55ea83bc98b2e22061472487
 # Rollback: previous approved production release retained for legitimate rollback diagnostics.
 ROLLBACK=8d42fc1bf0870e308027aef441ac0e3972d32aa0
 fail() { echo "FAIL: $*" >&2; exit 1; }
