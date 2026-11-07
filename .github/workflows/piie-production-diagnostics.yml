@@ -15,7 +15,7 @@ concurrency:
 jobs:
   gate:
     name: Diagnostic main and CI gate
-    if: ${{ github.ref == 'refs/heads/main' && vars.PIIE_DEPLOY_ENABLED == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -37,7 +37,7 @@ jobs:
   diagnose:
     name: Protected read-only production diagnostics
     needs: gate
-    if: ${{ github.ref == 'refs/heads/main' && vars.PIIE_DEPLOY_ENABLED == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     environment: production
     runs-on: ubuntu-22.04
     timeout-minutes: 15
