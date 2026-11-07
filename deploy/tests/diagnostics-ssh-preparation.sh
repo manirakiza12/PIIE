@@ -12,7 +12,7 @@ ssh-keygen -q -t ed25519 -N '' -C fixture-host-only -f "$S/host"
 FP=$(ssh-keygen -lf "$S/key" | awk '{print $2}')
 HOST_FP=$(ssh-keygen -lf "$S/host" | awk '{print $2}')
 # Substitute the two independent identities only in a disposable test copy.
-sed "s|SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM|$FP|; s|SHA256:fnVx92azTndsKgv+ZLYmnmWr/4iLDmtnvBU5Y4MFkbw|$HOST_FP|" "$SOURCE" > "$S/prepare.sh"
+sed "s|SHA256:HnARD+o96mEq/ZObScCf5YgfXvV7RW3qrN/aF3LI4LA|$FP|; s|SHA256:fnVx92azTndsKgv+ZLYmnmWr/4iLDmtnvBU5Y4MFkbw|$HOST_FP|" "$SOURCE" > "$S/prepare.sh"
 export PIIE_SSH_HOST=fixture.invalid PIIE_SSH_PORT=2222 PIIE_SSH_USER=root
 export PIIE_SSH_KEY="$(cat "$S/key")"
 export PIIE_SSH_KNOWN_HOSTS="[$PIIE_SSH_HOST]:$PIIE_SSH_PORT $(cat "$S/host.pub")"
