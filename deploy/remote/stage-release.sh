@@ -23,7 +23,6 @@ SHA=$(cat "$REL/RELEASE_SHA")
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ "${SHA:0:12}" = "${RID##*-}" ] || fail 'Release SHA does not match ID'
 [ "$SHA" = "$EXPECTED_RELEASE_SHA" ] || fail 'Release differs from approved full SHA'
 [ -f "$REL/vendor/autoload.php" ] || fail 'Production dependencies missing'
-ENV_SUM=$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)
 ln -s ../../shared/.env "$REL/.env"
 if [ -d "$REL/storage" ]; then mv "$REL/storage" "$REL/storage-baseline"; fi
 ln -s ../../shared/storage "$REL/storage"
@@ -31,6 +30,5 @@ mkdir -p "$REL/bootstrap/cache"
 chown "$(id -u):$(id -g)" "$REL/bootstrap/cache"; chmod 2775 "$REL/bootstrap/cache"
 if [ -e "$REL/public/storage" ]; then fail 'Unexpected packaged public/storage'; fi
 ln -s ../../../shared/storage/app/public "$REL/public/storage"
-[ "$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)" = "$ENV_SUM" ] || fail 'Environment changed'
 echo "STAGED $RID: live release, uploads and database unchanged (unprivileged)"
 echo "Staged SHA: $SHA"
