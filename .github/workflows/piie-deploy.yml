@@ -257,7 +257,7 @@ jobs:
           RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
           SUM=$(cut -d' ' -f1 dist/piie-release-${SHA:0:12}.tar.gz.sha256)
           if [ "${MODE:-stage}" = "stage" ]; then
-            ssh piie-prod "$REMOTE_BASE/bin/stage-release.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM"
+            ssh piie-prod "EXPECTED_RELEASE_SHA=$SHA $REMOTE_BASE/bin/stage-release.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM"
           else
             ssh piie-prod "PIIE_CODE_ONLY=$CODE_ONLY EXPECTED_RELEASE_SHA=$SHA EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF EXPECTED_ROLLBACK_RELEASE=$ROLLBACK_RELEASE ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} sudo /usr/local/lib/piie/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM activate"
           fi
