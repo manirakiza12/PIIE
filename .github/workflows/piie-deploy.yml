@@ -240,6 +240,7 @@ jobs:
           ssh piie-prod "chmod +x $REMOTE_BASE/bin/*.sh"
 
       - name: Docker preflight (starts temporary clients; requires approved privileges)
+        if: ${{ inputs.mode == 'activate' }}
         run: |
           ssh piie-prod "sudo /usr/local/lib/piie/bin/container-preflight.sh"
 
@@ -255,7 +256,11 @@ jobs:
           bash deploy/validate-deploy-inputs.sh
           RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
           SUM=$(cut -d' ' -f1 dist/piie-release-${SHA:0:12}.tar.gz.sha256)
-          ssh piie-prod "PIIE_CODE_ONLY=$CODE_ONLY EXPECTED_RELEASE_SHA=$SHA EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF EXPECTED_ROLLBACK_RELEASE=$ROLLBACK_RELEASE ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} sudo /usr/local/lib/piie/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM ${MODE:-stage}"
+          if [ "${MODE:-stage}" = "stage" ]; then
+            ssh piie-prod "$REMOTE_BASE/bin/stage-release.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM"
+          else
+            ssh piie-prod "PIIE_CODE_ONLY=$CODE_ONLY EXPECTED_RELEASE_SHA=$SHA EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF EXPECTED_ROLLBACK_RELEASE=$ROLLBACK_RELEASE ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} sudo /usr/local/lib/piie/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM activate"
+          fi
 
       - name: Verify active release SHA and document root (read-only)
         if: ${{ inputs.mode == 'activate' }}
