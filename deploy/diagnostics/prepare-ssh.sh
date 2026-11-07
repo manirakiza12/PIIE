@@ -27,8 +27,6 @@ TRAILING_WS=$(grep -cE '[[:space:]]+$' "$D/key" || true)
 LINE_COUNT=$(wc -l < "$D/key")
 echo "Deploy key diagnostics: lines=$LINE_COUNT cr=$CR_COUNT trailing_ws_lines=$TRAILING_WS"
 FP=$(ssh-keygen -lf "$D/key" 2>/dev/null | awk '{print $2}') || fail 'deploy key parsing failed'
-echo "Calculated deploy key fingerprint: $FP"
-echo "Expected deploy key fingerprint: SHA256:HnARD+o96mEq/ZObScCf5YgfXvV7RW3qrN/aF3LI4LA"
 [ "$FP" = 'SHA256:HnARD+o96mEq/ZObScCf5YgfXvV7RW3qrN/aF3LI4LA' ] || fail 'authorized deploy key identity validation failed'
 # Independently verified through the Contabo console by the operator.
 # This validates a runner copy; it never updates the protected secret or server.
