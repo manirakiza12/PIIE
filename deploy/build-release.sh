@@ -54,5 +54,6 @@ tar --sort=name --owner=0 --group=0 --numeric-owner -czf "$ARTEFACT" .
 
 echo "==> Verifying artefact"
 bash "$ROOT/deploy/verify-release.sh" "$ARTEFACT"
+bash "$ROOT/deploy/verify-release-identity.sh" "$ARTEFACT" "$SHA"
 
 echo "ARTEFACT=$ARTEFACT"

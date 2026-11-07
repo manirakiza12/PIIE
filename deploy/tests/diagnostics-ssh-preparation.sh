@@ -10,8 +10,9 @@ bash -n "$SOURCE"
 ssh-keygen -q -t ed25519 -N '' -C fixture-only -f "$S/key"
 ssh-keygen -q -t ed25519 -N '' -C fixture-host-only -f "$S/host"
 FP=$(ssh-keygen -lf "$S/key" | awk '{print $2}')
-# Substitute only the authorized identity in a temporary test copy.
-sed -E "s|SHA256:[A-Za-z0-9+/]+|$FP|" "$SOURCE" > "$S/prepare.sh"
+HOST_FP=$(ssh-keygen -lf "$S/host" | awk '{print $2}')
+# Substitute the two independent identities only in a disposable test copy.
+sed "s|SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM|$FP|; s|SHA256:fnVx92azTndsKgv+ZLYmnmWr/4iLDmtnvBU5Y4MFkbw|$HOST_FP|" "$SOURCE" > "$S/prepare.sh"
 export PIIE_SSH_HOST=fixture.invalid PIIE_SSH_PORT=2222 PIIE_SSH_USER=root
 export PIIE_SSH_KEY="$(cat "$S/key")"
 export PIIE_SSH_KNOWN_HOSTS="[$PIIE_SSH_HOST]:$PIIE_SSH_PORT $(cat "$S/host.pub")"
@@ -23,6 +24,7 @@ ssh -G -F "$RUNNER_TEMP/piie-diagnostics/config" piie-prod > "$S/effective" 2>/d
 grep -Eq '^stricthostkeychecking (true|yes)$' "$S/effective"
 grep -Eq '^identitiesonly (true|yes)$' "$S/effective"
 grep -Eq '^passwordauthentication (false|no)$' "$S/effective"
+grep -Eq '^hostkeyalgorithms ssh-ed25519$' "$S/effective"
 # The generated config must actually select the protected known-host file.
 grep -Fq "UserKnownHostsFile $RUNNER_TEMP/piie-diagnostics/known_hosts" "$RUNNER_TEMP/piie-diagnostics/config"
 for file in "$S/pass.log"; do
@@ -33,7 +35,11 @@ reject() {
   local expected=$1; shift
   fresh
   if "$@" > "$S/rejected.log" 2>&1; then echo 'FAIL: invalid SSH fixture accepted'; exit 1; fi
-  grep -Fq "SSH preparation: $expected" "$S/rejected.log"
+  if ! grep -Fq "SSH preparation: $expected" "$S/rejected.log"; then
+    echo "FAIL: expected sanitized rejection: $expected"
+    cat "$S/rejected.log"
+    exit 1
+  fi
   ! grep -Eq 'PRIVATE KEY|fixture.invalid|SHA256:' "$S/rejected.log"
 }
 reject 'required variable PIIE_SSH_KEY is missing or empty' env -u PIIE_SSH_KEY bash "$S/prepare.sh"
@@ -45,6 +51,9 @@ reject 'deploy key parsing failed' env PIIE_SSH_KEY=invalid bash "$S/prepare.sh"
 reject 'authorized deploy key identity validation failed' env PIIE_SSH_KEY="$(cat "$S/host")" bash "$S/prepare.sh"
 reject 'known-host file parsing failed' env PIIE_SSH_KNOWN_HOSTS=invalid bash "$S/prepare.sh"
 reject 'known-host entry for configured host and port is missing' env PIIE_SSH_PORT=2223 bash "$S/prepare.sh"
+reject 'independently verified host identity mismatch' env PIIE_SSH_KNOWN_HOSTS="[$PIIE_SSH_HOST]:$PIIE_SSH_PORT $(cat "$S/key.pub")" bash "$S/prepare.sh"
+reject 'independently verified host identity mismatch' env PIIE_SSH_KNOWN_HOSTS="$(printf '%s\n%s\n' "$PIIE_SSH_KNOWN_HOSTS" "[$PIIE_SSH_HOST]:$PIIE_SSH_PORT $(cat "$S/key.pub")")" bash "$S/prepare.sh"
+reject 'marked host entries require review' env PIIE_SSH_KNOWN_HOSTS="@cert-authority $PIIE_SSH_KNOWN_HOSTS" bash "$S/prepare.sh"
 echo 'PASS: missing secrets, malformed metadata, wrong identities and missing host pins fail with sanitized named errors'
 # Hashed host pins must work without disclosing or replacing them.
 printf '%s\n' "$PIIE_SSH_KNOWN_HOSTS" > "$S/hashed"

@@ -21,6 +21,7 @@ case "$1" in
     printf 'PID COMMAND\n12345 %s\n' "${FIXTURE_INIT:-apache2}";;
   kill)
     [ "$*" = 'kill --signal=USR1 piie-app' ]
+    [ "${FAIL_RELOAD_ALWAYS:-0}" = 0 ] || exit 1
     if [ "${FAIL_RELOAD_ONCE:-0}" = 1 ] && [ ! -f "$FIXTURE_BASE/reload-failed" ]; then
       touch "$FIXTURE_BASE/reload-failed"; exit 1
     fi;;

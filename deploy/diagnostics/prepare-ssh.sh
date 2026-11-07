@@ -23,12 +23,20 @@ printf '%s\n' "$PIIE_SSH_KEY" > "$D/key"
 printf '%s\n' "$PIIE_SSH_KNOWN_HOSTS" > "$D/known_hosts"
 FP=$(ssh-keygen -lf "$D/key" 2>/dev/null | awk '{print $2}') || fail 'deploy key parsing failed'
 [ "$FP" = 'SHA256:xE5JjsJX2o4xwKnBZuiZQoOdTv+dFonLKwFq8bhCrTM' ] || fail 'authorized deploy key identity validation failed'
-# The protected known_hosts secret is the production host pin, as in piie-deploy.
-# Do not additionally compare it to the legacy host fingerprint in old comments.
+# Independently verified through the Contabo console by the operator.
+# This validates a runner copy; it never updates the protected secret or server.
+if grep -Eq '^[[:space:]]*@' "$D/known_hosts"; then fail 'marked host entries require review'; fi
 ssh-keygen -lf "$D/known_hosts" >/dev/null 2>&1 || fail 'known-host file parsing failed'
 LOOKUP="$PIIE_SSH_HOST"
 [ "$PORT" = 22 ] || LOOKUP="[$PIIE_SSH_HOST]:$PORT"
 ssh-keygen -F "$LOOKUP" -f "$D/known_hosts" >/dev/null 2>&1 || fail 'known-host entry for configured host and port is missing'
+ssh-keygen -F "$LOOKUP" -f "$D/known_hosts" > "$D/matched_hosts"
+awk '!/^#/ { if ($1 ~ /^@/) exit 1; if ($2 == "ssh-ed25519") print }' "$D/matched_hosts" > "$D/verified_hosts" || fail 'marked host entries require review'
+[ -s "$D/verified_hosts" ] || fail 'verified ED25519 host entry is missing'
+HOST_FP=$(ssh-keygen -lf "$D/verified_hosts" 2>/dev/null | awk '{print $2}' | sort -u) || fail 'host fingerprint parsing failed'
+[ "$HOST_FP" = 'SHA256:fnVx92azTndsKgv+ZLYmnmWr/4iLDmtnvBU5Y4MFkbw' ] || fail 'independently verified host identity mismatch'
+mv "$D/verified_hosts" "$D/known_hosts"
+rm -f "$D/matched_hosts"
 operation='SSH configuration creation'
 cat > "$D/config" <<EOF
 Host piie-prod
@@ -38,6 +46,7 @@ Host piie-prod
   IdentityFile $D/key
   UserKnownHostsFile $D/known_hosts
   StrictHostKeyChecking yes
+  HostKeyAlgorithms ssh-ed25519
   IdentitiesOnly yes
   BatchMode yes
   PasswordAuthentication no
