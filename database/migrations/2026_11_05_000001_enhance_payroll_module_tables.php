@@ -8,13 +8,53 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Payroll Module upgrade (professionalisation phase).
  *
- * Additive only — no existing column is dropped or re-typed, so every
- * current reader of `payroll` keeps working untouched.
+ * Additive only.
  */
 return new class extends Migration
 {
     public function up()
     {
+        // ── Pre-flight validations (run BEFORE any schema change) ────────
+        // Fail loudly rather than partially migrating. These queries only read
+        // existing tables and never modify data.
+
+        // 1. Payroll period uniqueness.
+        if (Schema::hasTable('payroll')) {
+            $duplicateGroups = DB::table('payroll')
+                ->selectRaw('school_id, staff_id, pay_period, COUNT(*) as duplicate_count')
+                ->groupBy('school_id', 'staff_id', 'pay_period')
+                ->having('duplicate_count', '>', 1)
+                ->get();
+
+            if (!$duplicateGroups->isEmpty()) {
+                throw new \RuntimeException(sprintf(
+                    "Payroll period uniqueness cannot be enforced: %d group(s) contain duplicate rows. "
+                    ."No payroll data was changed. Reconcile with docs/phase0/audit-payroll-duplicates.sql, "
+                    ."then re-run this migration.",
+                    $duplicateGroups->count()
+                ));
+            }
+        }
+
+        // 2. Payment reference uniqueness (institution-scoped).
+        if (Schema::hasTable('payroll_payments')) {
+            $dupRefs = DB::table('payroll_payments')
+                ->selectRaw('school_id, payment_reference, COUNT(*) as duplicate_count')
+                ->whereNotNull('payment_reference')
+                ->where('payment_reference', '<>', '')
+                ->groupBy('school_id', 'payment_reference')
+                ->having('duplicate_count', '>', 1)
+                ->get();
+
+            if (!$dupRefs->isEmpty()) {
+                throw new \RuntimeException(sprintf(
+                    "Payroll payment reference uniqueness cannot be enforced: %d group(s) contain duplicate references. "
+                    ."No payment data was changed. Reconcile duplicate references, then re-run this migration.",
+                    $dupRefs->count()
+                ));
+            }
+        }
+
         Schema::table('payroll', function (Blueprint $table) {
             if (!Schema::hasColumn('payroll', 'other_earnings')) {
                 $table->decimal('other_earnings', 15, 2)->default(0)->after('allowances');
@@ -49,44 +89,38 @@ return new class extends Migration
         });
 
         // One-time, idempotent reconciliation for rows that were paid before
-        // this module existed: their paid_amount defaulted to 0 even though
-        // the payslip is fully paid. Only touches paid rows whose
-        // paid_amount is still 0, so it never overwrites a recorded amount.
-        // Safe to re-run; never creates or deletes payment records.
+        // this module existed. Prefer the sum of recorded payroll_payments when
+        // payment history exists; otherwise fall back to net_pay for paid rows.
+        // Only touches paid rows whose paid_amount is still 0, so it never
+        // overwrites a recorded amount. Safe to re-run.
         if (Schema::hasColumn('payroll', 'paid_amount')) {
+            if (Schema::hasTable('payroll_payments')) {
+                DB::statement("
+                    UPDATE payroll
+                    SET paid_amount = COALESCE((
+                        SELECT SUM(pp.amount)
+                        FROM payroll_payments pp
+                        WHERE pp.payroll_id = payroll.id
+                    ), 0)
+                    WHERE status = 'paid'
+                      AND paid_amount = 0
+                      AND EXISTS (SELECT 1 FROM payroll_payments pp WHERE pp.payroll_id = payroll.id)
+                ");
+            }
             DB::table('payroll')
                 ->where('status', 'paid')
                 ->where('paid_amount', 0)
                 ->update(['paid_amount' => DB::raw('net_pay')]);
         }
 
-        // One payslip per employee per period is enforced by a UNIQUE index.
-        // Unresolved duplicates must NOT silently leave the integrity
-        // protection absent: the migration fails loudly so the rows are
-        // reconciled (docs/phase0/audit-payroll-duplicates.sql) before retry.
-        // This migration does NOT delete or rewrite any payroll row.
+        // Create the period unique index (validations already passed).
         if (Schema::hasTable('payroll') && !$this->hasUniquePayrollPeriod()) {
-            $duplicateGroups = DB::table('payroll')
-                ->selectRaw('school_id, staff_id, pay_period, COUNT(*) as duplicate_count')
-                ->groupBy('school_id', 'staff_id', 'pay_period')
-                ->having('duplicate_count', '>', 1)
-                ->get();
-
-            if ($duplicateGroups->isEmpty()) {
-                Schema::table('payroll', function (Blueprint $table) {
-                    $table->unique(
-                        ['school_id', 'staff_id', 'pay_period'],
-                        'payroll_school_staff_period_unique'
-                    );
-                });
-            } else {
-                throw new \RuntimeException(sprintf(
-                    "Payroll period uniqueness cannot be enforced: %d group(s) contain duplicate rows. "
-                    ."No payroll data was changed. Reconcile with docs/phase0/audit-payroll-duplicates.sql, "
-                    ."then re-run this migration.",
-                    $duplicateGroups->count()
-                ));
-            }
+            Schema::table('payroll', function (Blueprint $table) {
+                $table->unique(
+                    ['school_id', 'staff_id', 'pay_period'],
+                    'payroll_school_staff_period_unique'
+                );
+            });
         }
 
         Schema::table('salary_structures', function (Blueprint $table) {
@@ -117,32 +151,14 @@ return new class extends Migration
             });
         }
 
-        // Institution-scoped duplicate-payment protection.
-        if (Schema::hasTable('payroll_payments')) {
-            $dupRefs = DB::table('payroll_payments')
-                ->selectRaw('school_id, payment_reference, COUNT(*) as duplicate_count')
-                ->whereNotNull('payment_reference')
-                ->where('payment_reference', '<>', '')
-                ->groupBy('school_id', 'payment_reference')
-                ->having('duplicate_count', '>', 1)
-                ->get();
-
-            if ($dupRefs->isEmpty()) {
-                if (!$this->hasPayrollPaymentReferenceUnique()) {
-                    Schema::table('payroll_payments', function (Blueprint $table) {
-                        $table->unique(
-                            ['school_id', 'payment_reference'],
-                            'payroll_payments_school_reference_unique'
-                        );
-                    });
-                }
-            } else {
-                throw new \RuntimeException(sprintf(
-                    "Payroll payment reference uniqueness cannot be enforced: %d group(s) contain duplicate references. "
-                    ."No payment data was changed. Reconcile duplicate references, then re-run this migration.",
-                    $dupRefs->count()
-                ));
-            }
+        // Create the payment reference unique index (validations already passed).
+        if (Schema::hasTable('payroll_payments') && !$this->hasPayrollPaymentReferenceUnique()) {
+            Schema::table('payroll_payments', function (Blueprint $table) {
+                $table->unique(
+                    ['school_id', 'payment_reference'],
+                    'payroll_payments_school_reference_unique'
+                );
+            });
         }
 
         if (!Schema::hasTable('payroll_settings')) {
