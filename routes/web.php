@@ -2662,8 +2662,7 @@ Route::get('calendar/events.json', [AcademicCalendarController::class, 'eventsJs
 Route::controller(PayrollController::class)->middleware('auth', 'admin', 'rbac')->group(function () {
     Route::get('admin/payroll',                       'index')->name('admin.payroll.index');
     Route::get('admin/payroll/preview',               'preview')->name('admin.payroll.preview');
-    Route::post('admin/payroll/generate',             'generate')->name('admin.payroll.generate');
-    Route::post('admin/payroll/{id}/approve',         'approve')->name('admin.payroll.approve')->whereNumber('id');
+    Route::match(['get', 'post'], 'admin/payroll/generate', 'generate')->name('admin.payroll.generate');    Route::post('admin/payroll/{id}/approve',         'approve')->name('admin.payroll.approve')->whereNumber('id');
     Route::post('admin/payroll/{id}/reject',          'reject')->name('admin.payroll.reject')->whereNumber('id');
     Route::delete('admin/payroll/{id}',               'destroy')->name('admin.payroll.destroy')->whereNumber('id');
     Route::post('admin/payroll/{id}/delete',          'destroy')->name('admin.payroll.delete')->whereNumber('id');
