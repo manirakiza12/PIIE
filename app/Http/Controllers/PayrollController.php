@@ -137,6 +137,10 @@ class PayrollController extends Controller
 
     public function generate(Request $request)
     {
+        if (!$request->isMethod('post')) {
+            return redirect()->route('admin.payroll.index', $request->only(['month', 'department_id']));
+        }
+
         $validated = $request->validate([
             'month' => 'required|date_format:Y-m',
         ]);

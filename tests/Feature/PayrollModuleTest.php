@@ -140,9 +140,9 @@ class PayrollModuleTest extends TestCase
         $route = route('admin.payroll.generate');
         $this->actingAs($this->admin)->post($route, ['month' => $this->period])->assertRedirect();
 
-        // GET on the POST-only route: 405 Method Not Allowed (same behaviour
-        // as before — the bug was the view issuing GET requests, not the route).
-        $this->actingAs($this->admin)->get($route)->assertStatus(405);
+        // GET on the generate URL no longer 405s — it redirects to the payroll
+        // dashboard (the generation itself requires a POST with CSRF).
+        $this->actingAs($this->admin)->get($route)->assertRedirect(route('admin.payroll.index'));
     }
 
     // ── Generate workflow ──────────────────────────────────────────────
