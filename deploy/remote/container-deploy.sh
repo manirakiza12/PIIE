@@ -79,7 +79,7 @@ install -d -m 700 "$BACK"
   trap 'rm -f "$db_env"' EXIT
   docker inspect piie-db --format '{{range .Config.Env}}{{println .}}{{end}}' |
     grep -E '^MARIADB_(DATABASE|ROOT_PASSWORD)=' > "$db_env"
-  docker run --rm --network piie-stack_private --env-file "$db_env" mariadb:11.4 sh -ec \
+  docker run --rm --network piie-deploy_private --env-file "$db_env" mariadb:11.4 sh -ec \
     'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-dump --host=piie-db --user=root --single-transaction --routines --triggers --events --hex-blob "$MARIADB_DATABASE"' |
     gzip > "$BACK/database.sql.gz"
 )

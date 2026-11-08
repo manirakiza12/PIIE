@@ -88,7 +88,7 @@ set -e
 tar -tzf "$S/backups/20261014-120003-aaaaaaaaaaaa/storage.tar.gz" > "$S/storage-backup.list"
 grep -qx 'storage/app/public/student-upload.pdf' "$S/storage-backup.list"
 ! grep -q '^storage/logs/.*\.log$' "$S/storage-backup.list"
-grep -q 'run --rm --network piie-stack_private --env-file' "$S/docker.log"
+grep -q 'run --rm --network piie-deploy_private --env-file' "$S/docker.log"
 ! grep -q 'exec piie-db' "$S/docker.log"
 echo 'PASS: failed HTTP health rolls code back, preserving user data and environment while omitting mutable logs'
 EXPECTED_DEPLOYED_SHA="$SHA" bash "$S/scripts/container-deploy.sh" 20261014-120004-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/success.log" 2>&1

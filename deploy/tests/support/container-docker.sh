@@ -30,7 +30,7 @@ case "$1" in
     [[ "$*" != *--privileged* && "$*" != *--security-opt* ]]
     if [[ "$*" != *--entrypoint* ]]; then
       # Existing database client path, not the application namespace.
-      [[ "$*" == *'--network piie-stack_private --env-file'* ]]
+      [[ "$*" == *'--network piie-deploy_private --env-file'* ]]
       if [[ "$*" == *'exec mariadb-dump'* ]]; then head -c 2000 /dev/urandom; fi
       exit 0
     fi

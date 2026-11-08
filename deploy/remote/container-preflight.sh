@@ -31,7 +31,7 @@ app_apache_master
   trap 'rm -f "$db_env"' EXIT
   docker inspect piie-db --format '{{range .Config.Env}}{{println .}}{{end}}' |
     grep -E '^MARIADB_(DATABASE|ROOT_PASSWORD)=' > "$db_env"
-  docker run --rm --network piie-stack_private --env-file "$db_env" mariadb:11.4 sh -ec \
+  docker run --rm --network piie-deploy_private --env-file "$db_env" mariadb:11.4 sh -ec \
     'command -v mariadb-dump >/dev/null; MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb --connect-timeout=3 --host=piie-db --user=root -Nse "SELECT 1" | grep -qx 1'
 )
 echo 'Verified live Docker runtime, shared environment, storage, PHP and database backup tooling.'
