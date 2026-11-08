@@ -6,9 +6,10 @@ case "$1" in
   exec) echo 'OCI runtime exec failed: SetSSB requires API level >= 4 (effective API level: 1)' >&2; exit 128;;
   inspect)
     case "$*" in
-      *'.State.Running'*) echo true;;
+      *'.State.Running'*) echo "${FIXTURE_RUNNING:-true}";;
+      *'.HostConfig.RestartPolicy.Name'*) echo "${FIXTURE_RESTART_POLICY:-no}";;
       *'.Mounts'*) echo "$FIXTURE_BASE:/srv/piie";;
-      *'.State.Pid'*) echo 12345;;
+      *'.State.Pid'*) echo "${FIXTURE_PID:-12345}";;
       *'.Image'*) printf 'sha256:%064d\n' 0;;
       *'inspect piie-db --format'*) printf 'MARIADB_DATABASE=forge\nMARIADB_ROOT_PASSWORD=test-password\n';;
       *'.Config.Env'*) printf 'APP_RUNTIME_MARKER=private-fixture-value\n';;
@@ -18,13 +19,15 @@ case "$1" in
     [ "$*" = 'cp -L piie-app:/etc/apache2/sites-enabled/000-default.conf -' ]
     tar -c -C "$FIXTURE_BASE" apache.conf;;
   top)
-    printf 'PID COMMAND\n12345 %s\n' "${FIXTURE_INIT:-apache2}";;
+    printf 'PID COMMAND\n%s %s\n' "${FIXTURE_PID:-12345}" "${FIXTURE_INIT:-apache2}";;
   kill)
     [ "$*" = 'kill --signal=USR1 piie-app' ]
     [ "${FAIL_RELOAD_ALWAYS:-0}" = 0 ] || exit 1
     if [ "${FAIL_RELOAD_ONCE:-0}" = 1 ] && [ ! -f "$FIXTURE_BASE/reload-failed" ]; then
       touch "$FIXTURE_BASE/reload-failed"; exit 1
     fi;;
+  start) [ "$*" = 'start piie-app' ] ;;
+  wait) [ "$*" = 'wait piie-app' ]; echo 0 ;;
   run)
     # No host-runtime or confinement workaround is allowed in these clients.
     [[ "$*" != *--privileged* && "$*" != *--security-opt* ]]
@@ -44,7 +47,7 @@ case "$1" in
     shift 9
     [ "$1" = --user ] && [ "$2" = www-data ]
     [ "$3" = --workdir ]
-    case "$4" in /srv/piie/current|/srv/piie/releases/*) ;; *) exit 2;; esac
+    case "$4" in /srv/piie/current|/srv/piie/.secure/releases/*) ;; *) exit 2;; esac
     [ "$5" = --entrypoint ]
     client_command=$6
     [[ "$7" =~ ^sha256:[0-9a-f]{64}$ ]]
@@ -56,7 +59,7 @@ case "$1" in
       'php artisan migrate --pretend '*) [ "${FAIL_PREVIEW:-0}" = 0 ];;
       'php artisan migrate:status') if [ "${PENDING_MIGRATIONS:-0}" = 1 ]; then echo Pending; fi;;
       'php artisan '*) exit 0;;
-      'curl --fail '*) [ "${FAIL_HEALTH:-0}" = 0 ];;
+      'curl --fail '*) [ "${FAIL_HEALTH:-0}" = 0 ] || exit 1; printf '%s\n' "${FIXTURE_HEALTH_BODY:-PIIE-APP-OK}";;
       *) echo "Unexpected application client command: $client_command" >&2; exit 2;;
     esac;;
   *) echo "Unexpected Docker command: $1" >&2; exit 2;;

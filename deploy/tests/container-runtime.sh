@@ -1,127 +1,110 @@
 #!/usr/bin/env bash
+# CI-REQUIRES-ROOT: real ownership and mode changes on synthetic data.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-S=$(mktemp -d)
-cleanup_fixture() {
-  local status=$?
-  if [ "$status" != 0 ]; then
-    # Only synthetic fixture data; expose failures otherwise hidden by redirects.
-    for log in "$S"/*.log; do echo "--- $log"; tail -n 30 "$log"; done
-  fi
-  rm -rf "$S"
-}
-trap cleanup_fixture EXIT
-mkdir -p "$S/bin" "$S/shared/storage/app/public" "$S/shared/storage/logs" "$S/releases/old/public/assets/uploads" "$S/incoming" "$S/fixture/vendor" "$S/fixture/public/assets/uploads" "$S/scripts"
-SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-export EXPECTED_RELEASE_SHA="$SHA"
-printf '%s\n' "$SHA" > "$S/releases/old/RELEASE_SHA"
-printf 'preserved' > "$S/shared/.env"
-chmod 600 "$S/shared/.env"
-printf 'persistent student upload\n' > "$S/shared/storage/app/public/student-upload.pdf"
-printf 'scheduler output that changes while the server is running\n' > "$S/shared/storage/logs/scheduler.log"
-printf 'DocumentRoot /srv/piie/current/public\n' > "$S/apache.conf"
-ln -s releases/old "$S/current"
-printf 'live-upload' > "$S/releases/old/public/assets/uploads/keep.txt"
-printf 'baseline' > "$S/fixture/public/assets/uploads/keep.txt"
-printf '%s\n' "$SHA" > "$S/fixture/RELEASE_SHA"
-touch "$S/fixture/vendor/autoload.php"
-tar -czf "$S/incoming/piie-release-fixture.tar.gz" -C "$S/fixture" .
-SUM=$(sha256sum "$S/incoming/piie-release-fixture.tar.gz" | cut -d' ' -f1)
-# Replace only deployment location and privileged infrastructure commands.
-sed "s|BASE=/home/piie/deployments/piie|BASE=$S|; s|chgrp -R www-data|true|; s|chown root:www-data|true|; s|/etc/cron.d/piie-scheduler|$S/scheduler|g; s|/home/piie/deployments/piie/bin/container-app.sh|$S/scripts/container-app.sh|g; s|/home/piie/deployments/piie/shared/storage/logs/scheduler.log|$S/scheduler.log|g; s|/usr/local/lib/piie/bin/container-app.sh|$S/scripts/container-app.sh|g" "$ROOT/deploy/remote/container-deploy.sh" > "$S/scripts/container-deploy.sh"
-sed "s|BASE=/home/piie/deployments/piie|BASE=$S|" "$ROOT/deploy/remote/container-preflight.sh" > "$S/scripts/container-preflight.sh"
-cp "$ROOT/deploy/remote/container-app.sh" "$S/scripts/"
-cp "$ROOT/deploy/remote/check-required-tables.sh" "$S/scripts/"
-sed "s|BASE=/home/piie/deployments/piie|BASE=$S|" "$S/scripts/check-required-tables.sh" > "$S/scripts/check-required-tables.sh.tmp" && mv "$S/scripts/check-required-tables.sh.tmp" "$S/scripts/check-required-tables.sh"
-chmod +x "$S/scripts/check-required-tables.sh"
-cp "$ROOT/deploy/tests/support/container-docker.sh" "$S/bin/docker"
-printf '#!/usr/bin/env bash\necho 0\n' > "$S/bin/id"; chmod +x "$S/bin/id"
-chmod +x "$S/bin/docker"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$S/bin/flock"
-chmod +x "$S/bin/flock"
-export PATH="$S/bin:$PATH" FIXTURE_LOG="$S/docker.log" FIXTURE_BASE="$S"
-RID=20261014-120000-aaaaaaaaaaaa
-bash "$S/scripts/container-deploy.sh" "$RID" "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage >/dev/null
-[ "$(readlink "$S/current")" = releases/old ]
-[ "$(stat -c %a "$S/releases/$RID")" = 755 ]
-[ ! -d "$S/backups" ]
+[ "$(id -u)" = 0 ] || { echo "Run in an isolated Linux root environment" >&2; exit 1; }
+if [ "${1:-}" != --private-namespace ]; then exec unshare --mount --propagation private -- bash "$0" --private-namespace; fi
+source "$ROOT/deploy/tests/support/secure-fixture.sh"
+fixture_init
+trap fixture_cleanup EXIT
+RID=20261014-120000-f23cff8aaaaa
+bash "$SCRIPTS/container-deploy.sh" "$RID" "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage >/dev/null
+[ "$(readlink "$S/current")" = releases/f23cff8 ]
+[ "$(stat -c %a "$S/.secure/releases/$RID")" = 755 ]
+[ ! -d "$S/.secure/private/backup-unused" ]
 [ ! -d "$S/shared/public-uploads" ]
 ! grep -q 'migrate --force' "$S/docker.log"
 ! grep -q '^kill ' "$S/docker.log"
 echo 'PASS: staging preserves current, database and uploads'
 set +e
-EXPECTED_RELEASE_SHA=aaaaaaaaaaaa1111111111111111111111111111 bash "$S/scripts/container-deploy.sh" 20261014-120009-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage > "$S/full-sha.log" 2>&1
+EXPECTED_RELEASE_SHA=f23cff8aaaaa1111111111111111111111111111 bash "$SCRIPTS/container-deploy.sh" 20261014-120009-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage > "$S/full-sha.log" 2>&1
 code=$?
 set -e
 [ "$code" -ne 0 ] && grep -q 'approved full SHA' "$S/full-sha.log"
-[ "$(readlink "$S/current")" = releases/old ]
+[ "$(readlink "$S/current")" = releases/f23cff8 ]
 echo 'PASS: candidate with matching short prefix but different full approved SHA is refused'
 set +e
-EXPECTED_DEPLOYED_SHA="$SHA" EXPECTED_ROLLBACK_RELEASE=unrelated bash "$S/scripts/container-deploy.sh" 20261014-120011-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/wrong-fallback.log" 2>&1
+EXPECTED_DEPLOYED_SHA="$SHA" EXPECTED_ROLLBACK_RELEASE=unrelated bash "$SCRIPTS/container-deploy.sh" 20261014-120011-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/wrong-fallback.log" 2>&1
 code=$?
 set -e
 [ "$code" -ne 0 ] && grep -q 'rollback release is not the active baseline' "$S/wrong-fallback.log"
-[ "$(readlink "$S/current")" = releases/old ] && [ ! -d "$S/backups" ]
+[ "$(readlink "$S/current")" = releases/f23cff8 ] && [ ! -d "$S/.secure/private/backup-unused" ]
 echo 'PASS: unrelated rollback input is refused before backup, migration or current changes'
+# Reproduce the production state that broke uploads: a durable upload tree left
+# root:root 0700 by an older deployment. It must be backed up and repaired
+# before the first activation writes into it.
+mkdir -p "$S/shared/public-uploads/legacy/nested"
+printf 'preexisting-shared-upload\n' > "$S/shared/public-uploads/legacy/nested/existing.pdf"
+chown -R root:root "$S/shared/public-uploads"
+find "$S/shared/public-uploads" -type d -exec chmod 700 {} +
+find "$S/shared/public-uploads" -type f -exec chmod 600 {} +
+[ "$(stat -c '%U:%G:%a' "$S/shared/public-uploads/legacy/nested")" = 'root:root:700' ]
 set +e
-EXPECTED_DEPLOYED_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb bash "$S/scripts/container-deploy.sh" 20261014-120001-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/rejected.log" 2>&1
+EXPECTED_DEPLOYED_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb bash "$SCRIPTS/container-deploy.sh" 20261014-120001-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/rejected.log" 2>&1
 code=$?
 set -e
 [ "$code" != 0 ] && grep -q 'Live baseline changed' "$S/rejected.log"
 echo 'PASS: activation rejects changed baseline before backup or migration'
 set +e
-FAIL_PREVIEW=1 bash "$S/scripts/container-deploy.sh" 20261014-120002-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage > "$S/preview.log" 2>&1
+FAIL_PREVIEW=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120002-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage > "$S/preview.log" 2>&1
 code=$?
 set -e
-[ "$code" != 0 ] && [ "$(readlink "$S/current")" = releases/old ]
+[ "$code" != 0 ] && [ "$(readlink "$S/current")" = releases/f23cff8 ]
 echo 'PASS: failed migration preview cannot activate'
 set +e
-EXPECTED_DEPLOYED_SHA="$SHA" FAIL_HEALTH=1 bash "$S/scripts/container-deploy.sh" 20261014-120003-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/rollback.log" 2>&1
+EXPECTED_DEPLOYED_SHA="$SHA" FAIL_HEALTH=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120003-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/rollback.log" 2>&1
 code=$?
 set -e
 [ "$code" != 0 ] && grep -q 'Code rolled back' "$S/rollback.log"
-[ "$(readlink "$S/current")" = releases/old ]
+[ "$(readlink "$S/current")" = .secure/releases/f23cff8 ]
 [ "$(cat "$S/shared/public-uploads/keep.txt")" = live-upload ]
+[ "$(stat -c '%U:%G:%a' "$S/shared/public-uploads")" = 'root:www-data:2775' ]
+[ "$(stat -c '%U:%G:%a' "$S/shared/public-uploads/legacy/nested")" = 'root:www-data:2775' ]
+[ "$(stat -c '%U:%G:%a' "$S/shared/public-uploads/legacy/nested/existing.pdf")" = 'root:www-data:664' ]
+[ "$(cat "$S/shared/public-uploads/legacy/nested/existing.pdf")" = preexisting-shared-upload ]
 [ "$(cat "$S/shared/.env")" = preserved ]
-[ -s "$S/backups/20261014-120003-aaaaaaaaaaaa/database.sql.gz" ]
-[ -s "$S/backups/20261014-120003-aaaaaaaaaaaa/storage.tar.gz" ]
-tar -tzf "$S/backups/20261014-120003-aaaaaaaaaaaa/storage.tar.gz" > "$S/storage-backup.list"
+[ -s "$S/.secure/private/backup-20261014-120003-f23cff8aaaaa/database.sql.gz" ]
+[ -s "$S/.secure/private/backup-20261014-120003-f23cff8aaaaa/storage.tar.gz" ]
+tar -tzf "$S/.secure/private/backup-20261014-120003-f23cff8aaaaa/public-uploads.tar.gz" > "$S/uploads-backup.list"
+grep -qx './keep.txt' "$S/uploads-backup.list"
+grep -qx './legacy/nested/existing.pdf' "$S/uploads-backup.list"
+[ "$(tar -xOzf "$S/.secure/private/backup-20261014-120003-f23cff8aaaaa/public-uploads.tar.gz" ./keep.txt)" = live-upload ]
+[ "$(tar -xOzf "$S/.secure/private/backup-20261014-120003-f23cff8aaaaa/public-uploads.tar.gz" ./legacy/nested/existing.pdf)" = preexisting-shared-upload ]
+tar -tzf "$S/.secure/private/backup-20261014-120003-f23cff8aaaaa/storage.tar.gz" > "$S/storage-backup.list"
 grep -qx 'storage/app/public/student-upload.pdf' "$S/storage-backup.list"
 ! grep -q '^storage/logs/.*\.log$' "$S/storage-backup.list"
 grep -q 'run --rm --network piie-deploy_private --env-file' "$S/docker.log"
 ! grep -q 'exec piie-db' "$S/docker.log"
-echo 'PASS: failed HTTP health rolls code back, preserving user data and environment while omitting mutable logs'
-EXPECTED_DEPLOYED_SHA="$SHA" bash "$S/scripts/container-deploy.sh" 20261014-120004-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/success.log" 2>&1
-[ "$(readlink "$S/current")" = releases/20261014-120004-aaaaaaaaaaaa ]
-[ "$(readlink "$S/current/.env")" = ../../shared/.env ]
-[ "$(readlink "$S/current/public/assets/uploads")" = ../../../../shared/public-uploads ]
-[ -s "$S/scheduler" ]
-cut -d' ' -f7- "$S/scheduler" > "$S/run-scheduler.sh"
-bash "$S/run-scheduler.sh"
+echo 'PASS: failed HTTP health rolls code back, repairing a root:root 0700 upload tree and backing up both upload locations'
+EXPECTED_DEPLOYED_SHA="$SHA" bash "$SCRIPTS/container-deploy.sh" 20261014-120004-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/success.log" 2>&1
+[ "$(readlink "$S/current")" = .secure/releases/20261014-120004-f23cff8aaaaa ]
+[ "$(readlink "$S/current/.env")" = ../../../shared/.env ]
+[ "$(readlink "$S/current/public/assets/uploads")" = ../../../../../shared/public-uploads ]
+bash "$SCRIPTS/run-scheduler.sh"
 grep -q 'artisan schedule:run' "$S/docker.log"
 ! grep -q '^exec ' "$S/docker.log"
 grep -q '^kill --signal=USR1 piie-app' "$S/docker.log"
 echo 'PASS: successful activation uses container-compatible relative links and scheduler'
 
 : > "$S/docker.log"
-EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 bash "$S/scripts/container-deploy.sh" 20261014-120005-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/code-only.log" 2>&1
+EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120005-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/code-only.log" 2>&1
 ! grep -q 'migrate --' "$S/docker.log"
-[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+[ "$(readlink "$S/current")" = .secure/releases/20261014-120005-f23cff8aaaaa ]
 echo 'PASS: code-only activation runs no migrations'
 set +e
-EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 PENDING_MIGRATIONS=1 bash "$S/scripts/container-deploy.sh" 20261014-120006-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/pending.log" 2>&1
+EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 PENDING_MIGRATIONS=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120006-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/pending.log" 2>&1
 code=$?
 set -e
 [ "$code" != 0 ] && grep -q 'refuses pending migrations' "$S/pending.log"
-[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+[ "$(readlink "$S/current")" = .secure/releases/20261014-120005-f23cff8aaaaa ]
 echo 'PASS: code-only activation rejects pending migrations before backup or switching'
 
 set +e
-EXPECTED_DEPLOYED_SHA="$SHA" FAIL_RELOAD_ONCE=1 bash "$S/scripts/container-deploy.sh" 20261014-120007-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/reload.log" 2>&1
+EXPECTED_DEPLOYED_SHA="$SHA" FAIL_RELOAD_ONCE=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120007-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/reload.log" 2>&1
 code=$?
 set -e
 [ "$code" != 0 ] && grep -q 'Code rolled back' "$S/reload.log"
-[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+[ "$(readlink "$S/current")" = .secure/releases/20261014-120005-f23cff8aaaaa ]
 ! grep -q '^exec ' "$S/docker.log"
 while IFS= read -r file; do [ ! -e "$file" ]; done < "$S/env-paths.log"
 echo 'PASS: graceful reload failure rolls back and lifts maintenance without exec'
@@ -130,7 +113,7 @@ echo 'PASS: graceful reload failure rolls back and lifts maintenance without exe
 # symlink is switched. This wrapper fails only the storage backup archive and
 # delegates every other tar operation to the host's real tar binary.
 REAL_TAR=$(command -v tar)
-cat > "$S/bin/tar" <<'STUB'
+cat > "$TESTROOT/bin/tar" <<'STUB'
 #!/usr/bin/env bash
 if [ "${FAIL_STORAGE_ARCHIVE:-0}" = 1 ] && [[ "$*" == *"/storage.tar.gz"* ]]; then
   echo 'tar: synthetic storage archive write error' >&2
@@ -138,20 +121,27 @@ if [ "${FAIL_STORAGE_ARCHIVE:-0}" = 1 ] && [[ "$*" == *"/storage.tar.gz"* ]]; th
 fi
 exec "$REAL_TAR" "$@"
 STUB
-chmod +x "$S/bin/tar"
+chmod +x "$TESTROOT/bin/tar"
 export REAL_TAR
 set +e
-EXPECTED_DEPLOYED_SHA="$SHA" FAIL_STORAGE_ARCHIVE=1 bash "$S/scripts/container-deploy.sh" 20261014-120008-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/archive-error.log" 2>&1
+EXPECTED_DEPLOYED_SHA="$SHA" FAIL_STORAGE_ARCHIVE=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120008-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/archive-error.log" 2>&1
 code=$?
 set -e
 [ "$code" -ne 0 ] && grep -q 'synthetic storage archive write error' "$S/archive-error.log"
-[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+[ "$(readlink "$S/current")" = .secure/releases/20261014-120005-f23cff8aaaaa ]
 echo 'PASS: meaningful storage archive errors remain fatal before activation'
 set +e
-EXPECTED_DEPLOYED_SHA="$SHA" FAIL_RELOAD_ALWAYS=1 bash "$S/scripts/container-deploy.sh" 20261014-120010-aaaaaaaaaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/recovery-failed.log" 2>&1
+EXPECTED_DEPLOYED_SHA="$SHA" FAIL_RELOAD_ALWAYS=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120010-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/recovery-failed.log" 2>&1
 code=$?
 set -e
 [ "$code" -ne 0 ] && grep -q 'CRITICAL: prior pointer restored but application reload failed' "$S/recovery-failed.log"
 ! grep -q 'Code rolled back;' "$S/recovery-failed.log"
-[ "$(readlink "$S/current")" = releases/20261014-120005-aaaaaaaaaaaa ]
+[ "$(readlink "$S/current")" = .secure/releases/20261014-120005-f23cff8aaaaa ]
 echo 'PASS: failed rollback reload is reported critical without a false recovery success'
+
+RID=20261014-120012-f23cff8aaaaa
+bash "$SCRIPTS/container-deploy.sh" "$RID" "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage > "$S/restage.log" 2>&1
+EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 bash "$SCRIPTS/container-deploy.sh" "$RID" "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate >> "$S/restage.log" 2>&1
+[ "$(readlink "$S/current")" = ".secure/releases/$RID" ]
+[ -n "$(find "$S/.secure/private" -path '*/previous-release/RELEASE_SHA' -print -quit)" ]
+echo 'PASS: root stage then activate of the same approved RID rebuilds verified code and preserves prior protected snapshot'

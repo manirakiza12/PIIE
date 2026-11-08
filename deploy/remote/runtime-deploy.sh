@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 set -euo pipefail
 # This verified production is Docker-based. Permission/daemon errors are not
 # evidence of a legacy runtime and must never redirect execution to host PHP.

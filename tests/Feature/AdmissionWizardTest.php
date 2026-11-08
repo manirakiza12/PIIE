@@ -6,8 +6,10 @@ use App\Models\Admission;
 use App\Models\AdmissionDocument;
 use App\Models\AdmissionDocumentRequirement;
 use App\Models\AdmissionQualification;
+use App\Support\Admissions\ApplicationDocuments;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Tests\Feature\Support\AdmissionsTestHelper;
 use Tests\TestCase;
 
@@ -286,10 +288,12 @@ class AdmissionWizardTest extends TestCase
 
         $dir = public_path(AdmissionDocument::UPLOAD_DIR);
         if (is_dir($dir)) {
-            // Leave directory in place; ensure upload still works.
-        } else {
-            @mkdir($dir, 0775, true);
+            // Remove only an empty test directory. A populated directory means a
+            // previous test leaked data, and deleting it would hide that.
+            $this->assertSame([], array_values(array_diff(scandir($dir), ['.', '..'])));
+            rmdir($dir);
         }
+        $this->assertDirectoryDoesNotExist($dir);
 
         $response = $this->actingAs($admin)->post(route('admin.hei_admissions.wizard.documents.store', $admissionId), [
             'requirement_key' => 'national_id',
@@ -298,11 +302,39 @@ class AdmissionWizardTest extends TestCase
 
         $response->assertSessionHasNoErrors();
 
+        $this->assertDirectoryExists($dir, 'The upload path must be created by the store step itself.');
         $document = AdmissionDocument::where('admission_id', $admissionId)->first();
         $this->assertNotNull($document);
         $this->assertFileExists($document->absolute_path);
 
         @unlink($document->absolute_path);
+        @rmdir($dir);
+    }
+
+    public function test_rejected_upload_extension_has_no_filesystem_side_effect(): void
+    {
+        $schoolId = $this->makeSchool();
+        $this->configurePrimarySchool($schoolId);
+        $admission = Admission::findOrFail($this->makeAdmission($schoolId, ['status' => Admission::STATUS_DRAFT]));
+
+        $dir = public_path(AdmissionDocument::UPLOAD_DIR);
+        if (is_dir($dir)) {
+            $this->assertSame([], array_values(array_diff(scandir($dir), ['.', '..'])));
+            rmdir($dir);
+        }
+        $this->assertDirectoryDoesNotExist($dir);
+
+        $file = UploadedFile::fake()->create('payload.svg', 10, 'image/svg+xml');
+
+        try {
+            ApplicationDocuments::store($admission, $file, 'national_id');
+            $this->fail('An extension outside the allow-list must be rejected.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('files', $e->errors());
+        }
+
+        $this->assertDirectoryDoesNotExist($dir, 'A refused upload must not create the upload directory.');
+        $this->assertSame(0, AdmissionDocument::where('admission_id', $admission->id)->count());
     }
 
     public function test_required_document_validation_blocks_submission_until_supplied(): void

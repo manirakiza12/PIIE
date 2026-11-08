@@ -177,11 +177,6 @@ class ApplicationDocuments
     ): AdmissionDocument {
         $destination = public_path(AdmissionDocument::UPLOAD_DIR);
 
-        if (! is_dir($destination)) {
-            @mkdir($destination, 0775, true);
-        }
-        \Illuminate\Support\Facades\File::ensureDirectoryExists($destination, 0775, true);
-
         $extension = strtolower($file->getClientOriginalExtension());
         // Security Phase 2F: callers' mimes rule checks the *content*; the stored name keeps the
         // client extension, so it must itself be one of the allowed types (a real PNG named
@@ -189,6 +184,11 @@ class ApplicationDocuments
         if (! in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
             throw \Illuminate\Validation\ValidationException::withMessages(['files' => 'Only PDF, JPG and PNG files are accepted.']);
         }
+
+        // Create the durable directory only after the upload has passed the
+        // extension check, so a refused file has no filesystem side effect.
+        \Illuminate\Support\Facades\File::ensureDirectoryExists($destination, 0775, true);
+
         $storedAs  = 'app' . $admission->id . '_' . uniqid() . '.' . $extension;
 
         $size = $file->getSize();

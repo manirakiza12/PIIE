@@ -1,0 +1,5 @@
+# Use with the reviewed PIIE compose file for any separately approved future
+# reconciliation. Do not run compose up to install this security correction.
+services:
+  app:
+    restart: "no"  # piie-runtime.service owns guarded restart of the SAME container

@@ -455,7 +455,15 @@ jobs:
             # Every suite runs even if an earlier one fails, so one broken suite
             # does not hide the state of the others. The step still exits
             # non-zero at the end.
-            if bash "$s"; then
+            # Suites that exercise real ownership, mounts or namespaces declare
+            # CI-REQUIRES-ROOT in their header. Run only those through sudo -E so
+            # the rest keep the unprivileged boundary they are written against.
+            if grep -q 'CI-REQUIRES-ROOT' "$s"; then
+              runner=(sudo -E bash "$s")
+            else
+              runner=(bash "$s")
+            fi
+            if "${runner[@]}"; then
               echo "::endgroup::"
               echo "PASS  $s"
             else
