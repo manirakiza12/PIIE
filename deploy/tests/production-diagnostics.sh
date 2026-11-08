@@ -67,6 +67,21 @@ PY
 esac
 SH
 printf '#!/usr/bin/env bash\necho 0\n' > "$S/bin/id"
+cat > "$S/bin/stat" <<'SH'
+#!/usr/bin/env bash
+# Sandbox stub: simulate root ownership for backup files, but preserve real
+# filesystem modes and modification times so freshness checks stay meaningful.
+if [ "$1" = "-c" ]; then
+  fmt="$2"
+  case "$fmt" in
+    %u) echo 0 ;;
+    *) /usr/bin/stat "$@" ;;
+  esac
+else
+  /usr/bin/stat "$@"
+fi
+SH
+chmod +x "$S/bin/stat"
 cat > "$S/bin/df" <<'SH'
 #!/usr/bin/env bash
 echo 'Filesystem blocks used available capacity mount'
