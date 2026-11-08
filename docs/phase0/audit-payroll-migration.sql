@@ -11,10 +11,22 @@ GROUP BY school_id, staff_id, pay_period
 HAVING COUNT(*) > 1
 ORDER BY school_id, staff_id, pay_period;
 
--- Paid rows that will be backfilled (paid_amount is 0/null but status='paid').
-SELECT COUNT(*) AS paid_with_zero_paid_amount
+-- Historical paid payroll records (count and total net pay). These are the
+-- rows whose paid_amount will be reconciled by the migration. Computed
+-- without referencing paid_amount, which does not exist pre-migration.
+SELECT COUNT(*) AS historical_paid_record_count,
+       COALESCE(SUM(net_pay), 0) AS historical_paid_net_pay_total
 FROM payroll
-WHERE status = 'paid' AND (paid_amount IS NULL OR paid_amount = 0);
+WHERE status = 'paid';
+
+-- Paid rows that have no matching payroll_payments row (will be backfilled
+-- to net_pay because no payment history exists).
+SELECT COUNT(*) AS paid_rows_without_payment_history
+FROM payroll p
+WHERE p.status = 'paid'
+  AND NOT EXISTS (
+        SELECT 1 FROM payroll_payments pp WHERE pp.payroll_id = p.id
+  );
 
 -- Existing payroll table columns (to confirm pre-migration baseline).
 SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
