@@ -80,7 +80,7 @@ HEALTH_PY
     exit 1
   fi
   if docker run --rm --pull=never --read-only --cap-drop=ALL --security-opt no-new-privileges \
-    --network piie-stack_private --env-file "$db_env" --entrypoint sh mariadb:11.4 -ec \
+    --network piie-deploy_private --env-file "$db_env" --entrypoint sh mariadb:11.4 -ec \
     'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb --connect-timeout=5 --host=piie-db --user=root --batch --skip-column-names -e "SELECT 1" | grep -qx 1' >/dev/null 2>&1; then
     echo 'Independent database read-only SELECT 1: PASS'
     [ "$compatible" = 1 ] || exit 1

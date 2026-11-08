@@ -24,7 +24,7 @@ grep -q -- '--entrypoint test .* -r /srv/piie/shared/.env' "$S/docker.log"
 grep -q -- '--entrypoint test .* -w /srv/piie/shared/storage' "$S/docker.log"
 grep -q -- '--entrypoint php .*pdo_mysql' "$S/docker.log"
 grep -q '^cp -L piie-app:' "$S/docker.log"
-grep -q 'run --rm --network piie-stack_private' "$S/docker.log"
+grep -q 'run --rm --network piie-deploy_private' "$S/docker.log"
 ! grep -q 'private-fixture-value\|test-password' "$S/pass.log" "$S/docker.log"
 while IFS= read -r file; do [ ! -e "$file" ]; done < "$S/env-paths.log"
 echo 'PASS: real preflight succeeds with exec unavailable; live config checked; no signal or secret leak'
