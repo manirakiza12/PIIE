@@ -56,8 +56,11 @@ jobs:
       - name: Execute fixed read-only diagnostic script
         run: |
           set -euo pipefail
-          # No inputs, remote uploads, command parameters, or deployment calls.
-          ssh -F "$RUNNER_TEMP/piie-diagnostics/config" -T piie-prod 'bash --noprofile --norc -se' < deploy/diagnostics/production-readiness.sh | tee production-diagnostics.log
+          # The diagnostic requires root (UID 0). It is installed as a root-owned,
+          # non-writable entry point (see docs/phase0/DIAGNOSTICS-ADMIN-PRIVILEGE.md).
+          # sudo -n fails fast if a password is required; no arguments are passed.
+          ssh -F "$RUNNER_TEMP/piie-diagnostics/config" -T piie-prod \
+            'sudo -n /usr/local/lib/piie/bin/production-readiness.sh' | tee production-diagnostics.log
       - name: Retain sanitized diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v6
