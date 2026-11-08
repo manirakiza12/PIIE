@@ -1,0 +1,71 @@
+# =============================================================================
+# PIIE production Docker Compose — networking contract
+# =============================================================================
+#
+# This file mirrors the reviewed production service definitions and adds the
+# Mailcow network permanently. It is a deployment artefact, not something CI
+# runs. Install it next to the existing reviewed Dockerfile and Apache vhost
+# (those two files remain administrator-controlled and are not tracked here).
+#
+# WHY THE MAILCOW NETWORK IS DECLARED HERE
+#   A temporary `docker network connect` is lost when the app container is
+#   recreated, so mail starts failing after the next restart or compose up.
+#   Declaring the external network makes the attachment part of the container
+#   definition and therefore durable across recreation.
+#
+# NETWORKS THAT MUST BE PRESERVED
+#   public  -> n8n_default (external; already used by other services)
+#   private -> piie-deploy_private (internal; database only)
+#   mailcow -> mailcowdockerized_mailcow-network (external; Mailcow postfix)
+#
+# Do not rename or recreate the existing networks. The explicit `name:` keys
+# below pin the Docker names even if the compose project directory is renamed.
+# =============================================================================
+
+services:
+  db:
+    image: mariadb:11.4
+    container_name: piie-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${PIIE_DB_NAME:?missing database name}
+      MARIADB_USER: ${PIIE_DB_USER:?missing database user}
+      MARIADB_PASSWORD: ${PIIE_DB_PASSWORD:?missing database password}
+      MARIADB_ROOT_PASSWORD: ${PIIE_DB_ROOT_PASSWORD:?missing root password}
+    volumes:
+      - piie_db_data:/var/lib/mysql
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    container_name: piie-app
+    restart: unless-stopped
+    volumes:
+      - /home/piie/deployments/piie:/srv/piie
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - public
+      - private
+      - mailcow
+
+volumes:
+  piie_db_data:
+
+networks:
+  public:
+    external: true
+    name: n8n_default
+  private:
+    internal: true
+    name: piie-deploy_private
+  mailcow:
+    external: true
+    name: mailcowdockerized_mailcow-network

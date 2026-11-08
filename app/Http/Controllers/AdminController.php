@@ -846,6 +846,7 @@ class AdminController extends Controller
         }
 
         $fileName = bin2hex(random_bytes(20)) . '.' . $extension;
+        \Illuminate\Support\Facades\File::ensureDirectoryExists(public_path('assets/uploads/user-docs/' . $user->id . '/'), 0775, true);
         $file->move(public_path('assets/uploads/user-docs/' . $user->id . '/'), $fileName);
 
         // Get existing documents or initialize as an empty array

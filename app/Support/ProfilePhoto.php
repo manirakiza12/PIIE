@@ -34,6 +34,7 @@ class ProfilePhoto
         }
 
         $name = bin2hex(random_bytes(20)) . '.' . $extension;
+        \Illuminate\Support\Facades\File::ensureDirectoryExists(public_path('assets/uploads/user-images/'), 0775, true);
         $file->move(public_path('assets/uploads/user-images/'), $name);
 
         return $name;

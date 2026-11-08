@@ -25,7 +25,7 @@ tar -czf "$S/linked-marker.tar.gz" -C "$S/archive" RELEASE_SHA
 reject bash "$ROOT/deploy/verify-release-identity.sh" "$S/linked-marker.tar.gz" "$A"
 echo 'PASS full-SHA archive identity; mismatched, duplicate, missing and linked markers refused'
 
-cp "$ROOT/deploy/remote/runtime-deploy.sh" "$S/scripts/runtime-deploy.sh"
+sed "s|PATH=/usr/sbin:/usr/bin:/sbin:/bin|PATH=$S/bin:/usr/sbin:/usr/bin:/sbin:/bin|" "$ROOT/deploy/remote/runtime-deploy.sh" > "$S/scripts/runtime-deploy.sh"
 printf '#!/usr/bin/env bash\nexit "${FIXTURE_DOCKER_STATUS:-1}"\n' > "$S/bin/docker"
 printf '#!/usr/bin/env bash\nprintf container > "$FIXTURE_ROOT/launched"\n' > "$S/scripts/container-deploy.sh"
 printf '#!/usr/bin/env bash\nprintf legacy > "$FIXTURE_ROOT/legacy"\n' > "$S/scripts/deploy-release.sh"
@@ -37,47 +37,7 @@ FIXTURE_DOCKER_STATUS=0 bash "$S/scripts/runtime-deploy.sh"
 [ "$(cat "$S/launched")" = container ] && [ ! -e "$S/legacy" ]
 echo 'PASS missing Docker visibility never selects host/legacy execution'
 
-HOST="$S/host"
-printf '%s\n' "$A" > "$HOST/releases/start/RELEASE_SHA"
-printf '%s\n' "$B" > "$HOST/releases/target/RELEASE_SHA"
-printf 'autoload\n' > "$HOST/releases/start/vendor/autoload.php"
-printf 'autoload\n' > "$HOST/releases/target/vendor/autoload.php"
-printf 'persistent database and upload sentinel\n' > "$HOST/shared/sentinel"
-ln -s releases/start "$HOST/current"
-sed "s|BASE=/home/piie/deployments/piie|BASE=$HOST|" "$ROOT/deploy/remote/container-rollback.sh" > "$S/scripts/container-rollback.sh"
-printf '#!/usr/bin/env bash\nprintf "%%s\\n" "${FIXTURE_UID:-0}"\n' > "$S/bin/id"
-chmod +x "$S/bin/id"
-cat > "$S/scripts/container-app.sh" <<'SH'
-app_apache_master() { return 0; }
-app_apache_reload() {
-  printf 'reload piie-app\n' >> "$FIXTURE_ROOT/calls"
-  if [ "${FAIL_TARGET_RELOAD:-0}" = 1 ] && [ "$(readlink "$FIXTURE_ROOT/host/current")" = releases/target ]; then return 1; fi
-}
-app_run() {
-  printf 'health piie-app\n' >> "$FIXTURE_ROOT/calls"
-  if [ "${FAIL_TARGET_HEALTH:-0}" = 1 ] && [ "$(readlink "$FIXTURE_ROOT/host/current")" = releases/target ]; then return 1; fi
-  printf '%s\n' "${FIXTURE_HEALTH_BODY:-PIIE-APP-OK}"
-}
-SH
-ROLLBACK="$S/scripts/container-rollback.sh"
-reject env FIXTURE_UID=1000 bash "$ROLLBACK" "$A" target "$B"
-reject bash "$ROLLBACK" "$B" target "$B"
-reject bash "$ROLLBACK" "$A" '../mailcow' "$B"
-reject bash "$ROLLBACK" "$A" target "$A"
-[ "$(readlink "$HOST/current")" = releases/start ]
-bash "$ROLLBACK" "$A" target "$B"
-[ "$(readlink "$HOST/current")" = releases/target ]
-ln -sfn releases/start "$HOST/current"
-reject env FAIL_TARGET_HEALTH=1 bash "$ROLLBACK" "$A" target "$B"
-[ "$(readlink "$HOST/current")" = releases/start ]
-grep -q 'Failed rollback target reverted' "$S/rejected.log"
-reject env FAIL_TARGET_RELOAD=1 bash "$ROLLBACK" "$A" target "$B"
-[ "$(readlink "$HOST/current")" = releases/start ]
-reject env FIXTURE_HEALTH_BODY=WRONG-APPLICATION bash "$ROLLBACK" "$A" target "$B"
-[ "$(readlink "$HOST/current")" = releases/start ]
-[ "$(cat "$HOST/shared/sentinel")" = 'persistent database and upload sentinel' ]
-! grep -Ei 'migration|mailcow|database|prune|compose' "$S/calls"
-echo 'PASS explicit Docker rollback, identity/privilege rejection and transactional recovery without database/shared-state operations'
+# Protected rollback is exercised with real root ownership/mounts in root-handoff.sh.
 
 WORKFLOW="$ROOT/.github/workflows/piie-deploy.yml"
 grep -q 'steps.install.outcome.*success' "$WORKFLOW"

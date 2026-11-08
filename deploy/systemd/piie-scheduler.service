@@ -1,0 +1,10 @@
+[Unit]
+Description=PIIE Laravel scheduler
+Requires=piie-deployment-pin.service
+After=piie-deployment-pin.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /usr/local/lib/piie/bin/run-scheduler.sh
+StandardOutput=journal
+StandardError=journal
