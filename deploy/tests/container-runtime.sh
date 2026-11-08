@@ -28,7 +28,7 @@ touch "$S/fixture/vendor/autoload.php"
 tar -czf "$S/incoming/piie-release-fixture.tar.gz" -C "$S/fixture" .
 SUM=$(sha256sum "$S/incoming/piie-release-fixture.tar.gz" | cut -d' ' -f1)
 # Replace only deployment location and privileged infrastructure commands.
-sed "s|BASE=/home/piie/deployments/piie|BASE=$S|; s|chgrp -R www-data|true|; s|chown root:www-data|true|; s|/etc/cron.d/piie-scheduler|$S/scheduler|g; s|/home/piie/deployments/piie/bin/container-app.sh|$S/scripts/container-app.sh|g; s|/home/piie/deployments/piie/shared/storage/logs/scheduler.log|$S/scheduler.log|g" "$ROOT/deploy/remote/container-deploy.sh" > "$S/scripts/container-deploy.sh"
+sed "s|BASE=/home/piie/deployments/piie|BASE=$S|; s|chgrp -R www-data|true|; s|chown root:www-data|true|; s|/etc/cron.d/piie-scheduler|$S/scheduler|g; s|/home/piie/deployments/piie/bin/container-app.sh|$S/scripts/container-app.sh|g; s|/home/piie/deployments/piie/shared/storage/logs/scheduler.log|$S/scheduler.log|g; s|/usr/local/lib/piie/bin/container-app.sh|$S/scripts/container-app.sh|g" "$ROOT/deploy/remote/container-deploy.sh" > "$S/scripts/container-deploy.sh"
 sed "s|BASE=/home/piie/deployments/piie|BASE=$S|" "$ROOT/deploy/remote/container-preflight.sh" > "$S/scripts/container-preflight.sh"
 cp "$ROOT/deploy/remote/container-app.sh" "$S/scripts/"
 cp "$ROOT/deploy/remote/check-required-tables.sh" "$S/scripts/"

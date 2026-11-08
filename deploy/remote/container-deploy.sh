@@ -25,25 +25,37 @@ printf '%s  %s\n' "$SUM" "$ART" | sha256sum -c -
 tar -tzf "$ART" | awk '/^\// || /(^|\/)\.\.($|\/)/ || /(^|\/)\.env$/ {bad=1} END {exit bad}' || fail 'Unsafe archive paths'
 tar -tvzf "$ART" | awk 'substr($0,1,1)!="-" && substr($0,1,1)!="d" {bad=1} END {exit bad}' || fail 'Archive links or special files refused'
 REL="$BASE/releases/$RID"
-[ ! -e "$REL" ] || fail 'Release already exists'
-mkdir "$REL"
-tar -xzf "$ART" -C "$REL" --no-same-owner
-# CI's mktemp staging directory is 0700 and tar preserves its '.' entry.
-# Apache's www-data user must be able to traverse the extracted release root.
-chmod 755 "$REL"
-SHA=$(cat "$REL/RELEASE_SHA")
-[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ "${SHA:0:12}" = "${RID##*-}" ] || fail 'Release SHA does not match ID'
-[ "$SHA" = "$EXPECTED_RELEASE_SHA" ] || fail 'Release differs from approved full SHA'
-[ -f "$REL/vendor/autoload.php" ] || fail 'Production dependencies missing'
 ENV_SUM=$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)
-ln -s ../../shared/.env "$REL/.env"
-# The archive excludes runtime storage; preserve any baseline in the candidate.
-if [ -d "$REL/storage" ]; then mv "$REL/storage" "$REL/storage-baseline"; fi
-ln -s ../../shared/storage "$REL/storage"
-mkdir -p "$REL/bootstrap/cache"
-chown root:www-data "$REL/bootstrap/cache"; chmod 2775 "$REL/bootstrap/cache"
-if [ -e "$REL/public/storage" ]; then fail 'Unexpected packaged public/storage'; fi
-ln -s ../../../shared/storage/app/public "$REL/public/storage"
+if [ -e "$REL" ]; then
+  # An unprivileged stage-release.sh run already prepared this release.
+  # Reuse it, but re-verify identity and shared links instead of overwriting.
+  [ -d "$REL" ] && [ ! -L "$REL" ] || fail 'Existing release path is not a directory'
+  SHA=$(cat "$REL/RELEASE_SHA" 2>/dev/null) || fail 'Staged release missing RELEASE_SHA'
+  [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ "${SHA:0:12}" = "${RID##*-}" ] || fail 'Staged release SHA invalid'
+  [ "$SHA" = "$EXPECTED_RELEASE_SHA" ] || fail 'Staged release differs from approved SHA'
+  [ -f "$REL/vendor/autoload.php" ] || fail 'Staged release dependencies missing'
+  [ -L "$REL/.env" ] && [ -L "$REL/storage" ] && [ -L "$REL/public/storage" ] || fail 'Staged release missing shared links'
+  chmod 755 "$REL"
+  echo "Using existing verified staged release $RID"
+else
+  mkdir "$REL"
+  tar -xzf "$ART" -C "$REL" --no-same-owner
+  # CI's mktemp staging directory is 0700 and tar preserves its '.' entry.
+  # Apache's www-data user must be able to traverse the extracted release root.
+  chmod 755 "$REL"
+  SHA=$(cat "$REL/RELEASE_SHA")
+  [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ "${SHA:0:12}" = "${RID##*-}" ] || fail 'Release SHA does not match ID'
+  [ "$SHA" = "$EXPECTED_RELEASE_SHA" ] || fail 'Release differs from approved full SHA'
+  [ -f "$REL/vendor/autoload.php" ] || fail 'Production dependencies missing'
+  ln -s ../../shared/.env "$REL/.env"
+  # The archive excludes runtime storage; preserve any baseline in the candidate.
+  if [ -d "$REL/storage" ]; then mv "$REL/storage" "$REL/storage-baseline"; fi
+  ln -s ../../shared/storage "$REL/storage"
+  mkdir -p "$REL/bootstrap/cache"
+  chown root:www-data "$REL/bootstrap/cache"; chmod 2775 "$REL/bootstrap/cache"
+  if [ -e "$REL/public/storage" ]; then fail 'Unexpected packaged public/storage'; fi
+  ln -s ../../../shared/storage/app/public "$REL/public/storage"
+fi
 artisan() { app_run "/srv/piie/releases/$RID" php artisan "$@"; }
 artisan package:discover --no-interaction > "$REL/package-discover.txt" 2>&1 || { echo 'PACKAGE_DISCOVER_FAILED:'; cat "$REL/package-discover.txt"; exit 1; }
 cat "$REL/package-discover.txt"
@@ -146,6 +158,6 @@ for url in /health / /login /careers /applicant/login /assets/css/typography.css
   app_run /srv/piie/current curl --fail --silent --show-error --retry 3 --retry-delay 2 -H 'Host: piie.ac.ug' "http://127.0.0.1$url" -o /dev/null || fail "HTTP smoke failed: $url"
 done
 # Host cron executes the scheduler in the same runtime as HTTP, without host PHP.
-printf '%s\n' '* * * * * root /bin/bash /home/piie/deployments/piie/bin/container-app.sh /srv/piie/current php artisan schedule:run >> /home/piie/deployments/piie/shared/storage/logs/scheduler.log 2>&1' > /etc/cron.d/piie-scheduler
+printf '%s\n' '* * * * * root /bin/bash /usr/local/lib/piie/bin/container-app.sh /srv/piie/current php artisan schedule:run >> /home/piie/deployments/piie/shared/storage/logs/scheduler.log 2>&1' > /etc/cron.d/piie-scheduler
 chmod 644 /etc/cron.d/piie-scheduler
 echo "DEPLOYED $SHA; verified backup $BACK; previous $PREV retained"
