@@ -178,8 +178,9 @@ class ApplicationDocuments
         $destination = public_path(AdmissionDocument::UPLOAD_DIR);
 
         if (! is_dir($destination)) {
-            mkdir($destination, 0755, true);
+            @mkdir($destination, 0775, true);
         }
+        \Illuminate\Support\Facades\File::ensureDirectoryExists($destination, 0775, true);
 
         $extension = strtolower($file->getClientOriginalExtension());
         // Security Phase 2F: callers' mimes rule checks the *content*; the stored name keeps the

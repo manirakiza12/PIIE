@@ -269,6 +269,42 @@ class AdmissionWizardTest extends TestCase
         @unlink($document->absolute_path);
     }
 
+    public function test_admin_upload_creates_missing_directory_and_stores_file(): void
+    {
+        $schoolId = $this->makeSchool();
+        $this->configurePrimarySchool($schoolId);
+        $admin = $this->makeAdminUser($schoolId);
+        $admissionId = $this->makeAdmission($schoolId, ['status' => Admission::STATUS_DRAFT]);
+
+        AdmissionDocumentRequirement::create([
+            'school_id' => $schoolId,
+            'key' => 'national_id',
+            'label' => 'National ID',
+            'is_required' => true,
+            'allow_multiple' => false,
+        ]);
+
+        $dir = public_path(AdmissionDocument::UPLOAD_DIR);
+        if (is_dir($dir)) {
+            // Leave directory in place; ensure upload still works.
+        } else {
+            @mkdir($dir, 0775, true);
+        }
+
+        $response = $this->actingAs($admin)->post(route('admin.hei_admissions.wizard.documents.store', $admissionId), [
+            'requirement_key' => 'national_id',
+            'files' => [UploadedFile::fake()->create('id.pdf', 40, 'application/pdf')],
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $document = AdmissionDocument::where('admission_id', $admissionId)->first();
+        $this->assertNotNull($document);
+        $this->assertFileExists($document->absolute_path);
+
+        @unlink($document->absolute_path);
+    }
+
     public function test_required_document_validation_blocks_submission_until_supplied(): void
     {
         $schoolId = $this->makeSchool();

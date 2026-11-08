@@ -1812,6 +1812,7 @@ class StudentController extends Controller
                 return redirect()->back()->with('error', 'Only PDF, JPG and PNG files are accepted.');
             }
             $fileName = bin2hex(random_bytes(20)) . '.' . $extension;
+            \Illuminate\Support\Facades\File::ensureDirectoryExists(public_path('assets/uploads/hostel_fees'), 0775, true);
             $file->move(public_path('assets/uploads/hostel_fees'), $fileName);
         }
 

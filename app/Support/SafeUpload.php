@@ -69,6 +69,7 @@ class SafeUpload
         }
 
         $name = bin2hex(random_bytes(20)) . '.' . $extension;
+        \Illuminate\Support\Facades\File::ensureDirectoryExists($directory, 0775, true);
         $file->move($directory, $name);
 
         return $name;
