@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 # Shared application client for deploy, preflight and cron. Never exec into the
 # long-running container: some hosts can create clients but reject exec/setns.
 set -euo pipefail
@@ -9,7 +11,9 @@ app_run() (
   workdir=${1:?application working directory}
   command=${2:?command}
   shift 2
-  case "$workdir" in /srv/piie/current|/srv/piie/releases/*) ;; *) echo 'Invalid application working directory' >&2; exit 1;; esac
+  [[ "$workdir" = /srv/piie/current || "$workdir" =~ ^/srv/piie/\.secure/releases/[A-Za-z0-9][A-Za-z0-9_-]{0,127}$ ]] || { echo 'Invalid application working directory' >&2; exit 1; }
+  source "$(dirname "${BASH_SOURCE[0]}")/deployment-guard.sh"
+  verify_runtime_mount
   image=$(docker inspect --format '{{.Image}}' piie-app) || exit 1
   [[ "$image" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Invalid application image ID' >&2; exit 1; }
   env_dir=$(mktemp -d) || exit 1
@@ -25,6 +29,8 @@ app_run() (
 
 app_apache_master() {
   local pid
+  source "$(dirname "${BASH_SOURCE[0]}")/deployment-guard.sh"
+  verify_runtime_mount
   pid=$(docker inspect --format '{{.State.Pid}}' piie-app)
   [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
   # A container signal is safe only when its init is the Apache parent itself.

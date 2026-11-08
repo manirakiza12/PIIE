@@ -1,0 +1,14 @@
+[Unit]
+Description=Pin the enrolled PIIE deployment ancestor
+After=local-fs.target
+Before=piie-scheduler.service
+RequiresMountsFor=/home/piie
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /usr/local/lib/piie/bin/pin-deployments.sh start
+RemainAfterExit=yes
+# Deliberately no ExecStop: never unpin a live deployment path.
+
+[Install]
+WantedBy=multi-user.target

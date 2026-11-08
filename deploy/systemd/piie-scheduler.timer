@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the PIIE scheduler every minute
+Requires=piie-deployment-pin.service
+After=piie-deployment-pin.service
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Unit=piie-scheduler.service
+
+[Install]
+WantedBy=timers.target

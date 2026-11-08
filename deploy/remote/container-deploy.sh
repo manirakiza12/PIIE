@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 # Docker runtime counterpart to deploy-release.sh. No container/volume recreation.
 set -euo pipefail
 BASE=/home/piie/deployments/piie
@@ -10,46 +12,41 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 [ "$MODE" = stage ] || [ "$MODE" = activate ] || fail 'Invalid mode'
 case "$ART" in "$BASE"/incoming/piie-release-*.tar.gz) ;; *) fail 'Archive outside incoming';; esac
 [[ "${EXPECTED_RELEASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Full approved candidate SHA required'
+
+source "$(dirname "$0")/secure-handoff.sh"
+verify_runtime_mount
+deployment_lock
 bash "$(dirname "$0")/container-preflight.sh"
-exec 9>"$BASE/.deploy.lock"; flock -n 9 || fail 'Another deployment is active'
 PREV=$(readlink "$BASE/current")
+RECOVERY=$PREV
+ENV_SUM=$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)
+ENV_PERM=$(stat -c '%u:%g:%a' "$BASE/shared/.env")
 if [ "$MODE" = activate ]; then
   [[ "${EXPECTED_DEPLOYED_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Verified baseline SHA required'
   [ "$(cat "$BASE/current/RELEASE_SHA")" = "$EXPECTED_DEPLOYED_SHA" ] || fail 'Live baseline changed'
+  case "$PREV" in
+    releases/f23cff8) ACTIVE_ID=f23cff8 ;;
+    .secure/releases/*) ACTIVE_ID=${PREV##*/} ;;
+    *) fail 'Untrusted active pointer' ;;
+  esac
   if [ -n "${EXPECTED_ROLLBACK_RELEASE:-}" ]; then
-    [ "$PREV" = "releases/$EXPECTED_ROLLBACK_RELEASE" ] || fail 'Approved rollback release is not the active baseline'
+    [ "$ACTIVE_ID" = "$EXPECTED_ROLLBACK_RELEASE" ] || fail 'Approved rollback release is not the active baseline'
   fi
+  verify_release "$ACTIVE_ID" "$EXPECTED_DEPLOYED_SHA"
+  if [ "$PREV" = releases/f23cff8 ]; then
+    python3 -I "$(dirname "$0")/release-archive.py" compare "$BASE/current" "$BASE/.secure/releases/f23cff8" || fail 'Legacy baseline code changed'
+  fi
+  RECOVERY=".secure/releases/$ACTIVE_ID"
 fi
-printf '%s  %s\n' "$SUM" "$ART" | sha256sum -c -
-# Refuse traversal, links, devices and secret files before extracting as root.
-tar -tzf "$ART" | awk '/^\// || /(^|\/)\.\.($|\/)/ || /(^|\/)\.env$/ {bad=1} END {exit bad}' || fail 'Unsafe archive paths'
-tar -tvzf "$ART" | awk 'substr($0,1,1)!="-" && substr($0,1,1)!="d" {bad=1} END {exit bad}' || fail 'Archive links or special files refused'
-REL="$BASE/releases/$RID"
-[ ! -e "$REL" ] || fail 'Release already exists'
-mkdir "$REL"
-tar -xzf "$ART" -C "$REL" --no-same-owner
-# CI's mktemp staging directory is 0700 and tar preserves its '.' entry.
-# Apache's www-data user must be able to traverse the extracted release root.
-chmod 755 "$REL"
-SHA=$(cat "$REL/RELEASE_SHA")
-[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ "${SHA:0:12}" = "${RID##*-}" ] || fail 'Release SHA does not match ID'
-[ "$SHA" = "$EXPECTED_RELEASE_SHA" ] || fail 'Release differs from approved full SHA'
-[ -f "$REL/vendor/autoload.php" ] || fail 'Production dependencies missing'
-ENV_SUM=$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)
-ln -s ../../shared/.env "$REL/.env"
-# The archive excludes runtime storage; preserve any baseline in the candidate.
-if [ -d "$REL/storage" ]; then mv "$REL/storage" "$REL/storage-baseline"; fi
-ln -s ../../shared/storage "$REL/storage"
-mkdir -p "$REL/bootstrap/cache"
-chown root:www-data "$REL/bootstrap/cache"; chmod 2775 "$REL/bootstrap/cache"
-if [ -e "$REL/public/storage" ]; then fail 'Unexpected packaged public/storage'; fi
-ln -s ../../../shared/storage/app/public "$REL/public/storage"
-artisan() { app_run "/srv/piie/releases/$RID" php artisan "$@"; }
+[ "$PREV" != ".secure/releases/$RID" ] || fail 'Candidate is already current'
+prepare_release "$RID" "$ART" "$SUM" "$EXPECTED_RELEASE_SHA"
+SHA=$EXPECTED_RELEASE_SHA
+artisan() { app_run "/srv/piie/.secure/releases/$RID" php artisan "$@"; }
 artisan package:discover --no-interaction > "$REL/package-discover.txt" 2>&1 || { echo 'PACKAGE_DISCOVER_FAILED:'; cat "$REL/package-discover.txt"; exit 1; }
 cat "$REL/package-discover.txt"
 artisan --version
 echo "=== read-only required-tables preflight ==="
-bash "$(dirname "$0")/check-required-tables.sh" "/srv/piie/releases/$RID" || fail 'Required tables missing in target database'
+bash "$(dirname "$0")/check-required-tables.sh" "/srv/piie/.secure/releases/$RID" || fail 'Required tables missing in target database'
 if [ "${PIIE_CODE_ONLY:-0}" = 1 ]; then
   artisan migrate:status > "$REL/migration-status.txt"
   ! grep -q Pending "$REL/migration-status.txt" || fail 'Code-only release refuses pending migrations'
@@ -59,15 +56,15 @@ artisan migrate --pretend --force --no-interaction > "$REL/migration-preview.txt
   if grep -qiE 'drop +(table|column|database)|truncate|delete +from' "$REL/migration-preview.txt"; then fail 'Destructive migration SQL requires review'; fi
 fi
 if [ "$MODE" = stage ]; then echo "STAGED $RID: live release, uploads and database unchanged"; exit 0; fi
-BACK="$BASE/backups/$RID"
-install -d -m 700 "$BACK"
+BACK="$BASE/.secure/private/backup-$RID"
+mkdir -m 700 "$BACK"  # never overwrite a previous activation backup
 (
   db_env=$(mktemp)
   chmod 600 "$db_env"
   trap 'rm -f "$db_env"' EXIT
   docker inspect piie-db --format '{{range .Config.Env}}{{println .}}{{end}}' |
     grep -E '^MARIADB_(DATABASE|ROOT_PASSWORD)=' > "$db_env"
-  docker run --rm --network piie-stack_private --env-file "$db_env" mariadb:11.4 sh -ec \
+  docker run --rm --network piie-deploy_private --env-file "$db_env" mariadb:11.4 sh -ec \
     'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-dump --host=piie-db --user=root --single-transaction --routines --triggers --events --hex-blob "$MARIADB_DATABASE"' |
     gzip > "$BACK/database.sql.gz"
 )
@@ -79,32 +76,45 @@ gzip -t "$BACK/database.sql.gz"; [ "$(stat -c %s "$BACK/database.sql.gz")" -gt 1
 # error remain fatal under set -e.
 tar -czf "$BACK/storage.tar.gz" --exclude='storage/logs/*.log' -C "$BASE/shared" storage
 tar -tzf "$BACK/storage.tar.gz" >/dev/null
+SHARED="$BASE/shared/public-uploads"
 LIVE_UPLOADS=$(readlink -f "$BASE/current/public/assets/uploads")
-case "$LIVE_UPLOADS" in "$BASE"/releases/*/public/assets/uploads|"$BASE"/shared/public-uploads) ;; *) fail 'Unexpected live uploads location';; esac
-tar -czf "$BACK/public-uploads.tar.gz" -C "$LIVE_UPLOADS" .
+case "$LIVE_UPLOADS" in "$BASE"/releases/f23cff8/public/assets/uploads|"$BASE"/.secure/releases/*/public/assets/uploads|"$SHARED") ;; *) fail 'Unexpected live uploads location';; esac
+# The live tree and the durable shared tree can each hold files the other lacks
+# (first activation after the durable-upload change, or an interrupted earlier
+# attempt). Archive their union so a restore never loses either side. The
+# pre-existing shared file wins a path collision, matching the merge order below.
+UPLOAD_BACKUP=$(mktemp -d "$BASE/.upload-backup.XXXXXXXX")
+cleanup_upload_backup() { rm -rf -- "$UPLOAD_BACKUP"; }
+trap cleanup_upload_backup EXIT
+if [ -d "$SHARED" ] && [ ! -L "$SHARED" ]; then
+  validate_uploads "$SHARED"
+  python3 -I "$(dirname "$0")/merge-uploads.py" "$SHARED" "$UPLOAD_BACKUP"
+fi
+if [ "$LIVE_UPLOADS" != "$SHARED" ] && [ -d "$LIVE_UPLOADS" ] && [ ! -L "$LIVE_UPLOADS" ]; then
+  validate_uploads "$LIVE_UPLOADS"
+  python3 -I "$(dirname "$0")/merge-uploads.py" "$LIVE_UPLOADS" "$UPLOAD_BACKUP"
+fi
+tar -czf "$BACK/public-uploads.tar.gz" -C "$UPLOAD_BACKUP" .
 tar -tzf "$BACK/public-uploads.tar.gz" >/dev/null
+rm -rf -- "$UPLOAD_BACKUP"
+trap - EXIT
 cp -p "$BASE/shared/.env" "$BACK/environment.backup"; chmod 600 "$BACK/environment.backup"
 (cd "$BACK" && sha256sum database.sql.gz storage.tar.gz public-uploads.tar.gz environment.backup > SHA256SUMS && sha256sum -c SHA256SUMS)
-SHARED="$BASE/shared/public-uploads"
 [ ! -L "$SHARED" ] || fail 'Shared uploads cannot be a link'
 mkdir -p "$SHARED"
+# Repair the existing tree BEFORE copying anything into it. Older deployments
+# left this tree root:root 0700, which www-data cannot traverse. Validating and
+# repairing first also makes an unsafe pre-existing tree fail before any write.
+set_upload_permissions "$SHARED"
 merge_uploads() {
-  local source=$1 path relative destination
-  [ -d "$source" ] && [ ! -L "$source" ] || fail 'Invalid upload source'
-  [ -z "$(find "$source" -type l -print -quit)" ] || fail 'Upload symlinks refused'
-  [ -z "$(find "$SHARED" -type l -print -quit)" ] || fail 'Shared upload symlinks refused'
-  while IFS= read -r -d '' path; do
-    relative=${path#"$source"/}; destination="$SHARED/$relative"
-    if [ -d "$path" ]; then mkdir -p "$destination";
-    elif [ -f "$path" ]; then [ -e "$destination" ] || cp -p "$path" "$destination";
-    else fail 'Unexpected upload entry'; fi
-  done < <(find "$source" -mindepth 1 -print0)
+  python3 -I "$(dirname "$0")/merge-uploads.py" "$1" "$SHARED" || fail 'Cannot safely merge uploads'
 }
+
 SWITCHED=0; MAINTENANCE=0
 cleanup() {
   local status=$?
   if [ "$status" -ne 0 ] && [ "$SWITCHED" = 1 ]; then
-    if ! ln -s "$PREV" "$BASE/current.rollback" || ! mv -Tf "$BASE/current.rollback" "$BASE/current"; then
+    if ! switch_pointer "$RECOVERY"; then
       echo 'CRITICAL: code pointer restoration failed; administrator intervention required' >&2
       return 1
     fi
@@ -125,11 +135,10 @@ MAINTENANCE=1
 # Copy runtime files under maintenance, then candidate baseline. Existing files win.
 if [ "$LIVE_UPLOADS" != "$SHARED" ]; then merge_uploads "$LIVE_UPLOADS"; fi
 merge_uploads "$REL/public/assets/uploads"
-chgrp -R www-data "$SHARED"
-find "$SHARED" -type d -exec chmod 2775 {} +
-find "$SHARED" -type f -exec chmod 664 {} +
-mv "$REL/public/assets/uploads" "$REL/public/assets/uploads-baseline"
-ln -s ../../../../shared/public-uploads "$REL/public/assets/uploads"
+set_upload_permissions "$SHARED"
+link_uploads "$REL"
+# The rollback copy must see the same durable user uploads as the candidate.
+link_uploads "$BASE/$RECOVERY"
 mkdir -p "$BASE/shared/storage/app/public"
 if [ "${PIIE_CODE_ONLY:-0}" != 1 ]; then artisan migrate --force --no-interaction > "$REL/migration-run.txt" 2>&1 || { echo 'MIGRATION_RUN_FAILED:'; cat "$REL/migration-run.txt"; exit 1; }; cat "$REL/migration-run.txt"; fi
 artisan migrate:status | tee "$REL/migration-status.txt"
@@ -138,14 +147,14 @@ artisan config:clear
 artisan view:clear
 artisan route:clear
 [ "$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)" = "$ENV_SUM" ] || fail 'Environment changed'
-ln -s "releases/$RID" "$BASE/current.new"; mv -Tf "$BASE/current.new" "$BASE/current"
+[ "$(stat -c '%u:%g:%a' "$BASE/shared/.env")" = "$ENV_PERM" ] || fail '.env permissions changed'
+switch_pointer ".secure/releases/$RID"
 SWITCHED=1
 app_apache_reload
 artisan up; MAINTENANCE=0
 for url in /health / /login /careers /applicant/login /assets/css/typography.css /assets/css/workspace-ui.css; do
   app_run /srv/piie/current curl --fail --silent --show-error --retry 3 --retry-delay 2 -H 'Host: piie.ac.ug' "http://127.0.0.1$url" -o /dev/null || fail "HTTP smoke failed: $url"
 done
-# Host cron executes the scheduler in the same runtime as HTTP, without host PHP.
-printf '%s\n' '* * * * * root /bin/bash /home/piie/deployments/piie/bin/container-app.sh /srv/piie/current php artisan schedule:run >> /home/piie/deployments/piie/shared/storage/logs/scheduler.log 2>&1' > /etc/cron.d/piie-scheduler
-chmod 644 /etc/cron.d/piie-scheduler
+# Scheduler is a separately installed, mount-gated systemd timer. Never rewrite
+# cron during activation or open a root host log through a mutable path.
 echo "DEPLOYED $SHA; verified backup $BACK; previous $PREV retained"

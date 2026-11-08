@@ -1,0 +1,16 @@
+[Unit]
+Description=Guarded startup of the existing PIIE application container
+Requires=piie-deployment-pin.service
+After=piie-deployment-pin.service docker.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /usr/local/lib/piie/bin/runtime-supervisor.sh run
+Restart=on-failure
+RestartSec=5
+# No ExecStop: stopping this monitor does not stop the existing container.
+
+[Install]
+WantedBy=multi-user.target

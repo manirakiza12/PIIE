@@ -60,7 +60,7 @@ PY
       cat >/dev/null
       echo '{"database_read_only":true,"current_pending_migrations":[],"target_pending_migrations":["2026_10_29_090000_create_curriculum_assignment_proposals"]}'
     else
-      if [[ " $* " = *' --network piie-stack_private '* && " $* " = *'SELECT 1'* ]]; then exit "${DB_CLIENT_STATUS:-0}"; fi
+      if [[ " $* " = *' --network piie-deploy_private '* && " $* " = *'SELECT 1'* ]]; then exit "${DB_CLIENT_STATUS:-0}"; fi
       [[ " $* " = *' --network none '* ]] || exit 94
     fi;;
   *) exit 95;;

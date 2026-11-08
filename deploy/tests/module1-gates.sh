@@ -20,10 +20,12 @@ STUB
 chmod +x "$S/bin/php"
 
 # Run the exact CI block with a process that fails without a PHPUnit summary.
+# Strip a trailing CR so the check also works from a Windows checkout, where the
+# workflow file may still have CRLF endings even though CI sees LF.
 awk '
   /- name: Run PHPUnit Feature tests/ { found=1; next }
   found && /run: \|/ { body=1; next }
-  body && /^          / { print substr($0,11); next }
+  body && /^          / { sub(/\r$/, ""); print substr($0,11); next }
   body && /^      - name:/ { exit }
 ' "$ROOT/.github/workflows/piie-ci.yml" > "$S/phpunit-step.sh"
 set +e

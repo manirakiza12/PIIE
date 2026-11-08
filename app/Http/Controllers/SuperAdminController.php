@@ -204,6 +204,7 @@ class SuperAdminController extends Controller
         if($request->school_logo){
             $ext = $request->school_logo->extension();   // from the validated content, not the client's file name
             $newFileName = time().'.'.$ext;
+            \Illuminate\Support\Facades\File::ensureDirectoryExists(public_path('assets/uploads/school_logo'), 0775, true);
             $request->school_logo->move(public_path('assets/uploads/school_logo'),$newFileName); // This will save file in a folder.  
             $school->school_logo =$newFileName;
             $school->save();
@@ -225,6 +226,7 @@ class SuperAdminController extends Controller
 
                 $imageName = time() . '.' . $data['photo']->extension();
 
+                \Illuminate\Support\Facades\File::ensureDirectoryExists(public_path('assets/uploads/user-images/'), 0775, true);
                 $data['photo']->move(public_path('assets/uploads/user-images/'), $imageName);
 
                 $photo  = $imageName;
