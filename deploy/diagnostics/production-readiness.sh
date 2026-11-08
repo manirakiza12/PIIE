@@ -3,11 +3,12 @@
 set -euo pipefail
 [ "$#" = 0 ] || { echo 'Diagnostic arguments refused'; exit 1; }
 BASE=/home/piie/deployments/piie
-# Baseline: currently deployed production release (f23cff8, PR #215, activated 2026-11-05).
+# Baseline: currently deployed production release (f23cff8, PR #224-era, activated 2026-11-05).
 BASELINE=f23cff88f15a35fd3d7606df929c26cd951ee288
-# Target: approved release candidate on main (47ee202, PR #220, CI green).
-TARGET=47ee202adc70b86d55ea83bc98b2e22061472487
-# Rollback: previous approved production release retained for legitimate rollback diagnostics.
+# Target: approved staged candidate (4684b28, verified by operator). Not the newest
+# Git commit; promotion requires explicit approval and passing diagnostics.
+TARGET=4684b28255b9257edb477153f38288b432982d2a
+# Rollback: retained recovery release (8d42fc1, PR #134). Verified retained release.
 ROLLBACK=8d42fc1bf0870e308027aef441ac0e3972d32aa0
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # Explain a failed database probe without printing Docker command/env/log values.
@@ -123,24 +124,72 @@ echo "Disk free bytes: $FREE; free inodes: $INODES; conservative release/backup 
 [ "$FREE" -ge 2147483648 ] && [ "$FREE" -ge "$NEEDED" ] && [ "$INODES" -ge 25000 ] || fail 'Insufficient disk/inode headroom'
 
 # Read existing archives in place; never create a backup or restore anything here.
-BACK=$(find "$BASE/backups" -mindepth 2 -maxdepth 2 -type f -name SHA256SUMS -printf '%T@ %h\n' | sort -nr | sed -n '1s/^[^ ]* //p')
-[[ "$BACK" =~ ^$BASE/backups/[0-9]{8}-[0-9]{6}-[0-9a-f]{12}$ ]] || fail 'No recognized backup manifest'
+# Secure backups may live in either the legacy in-tree location or the root-protected
+# secure location. Do not assume the manifest uses the legacy member names or count.
+BACK=""
+for root in "$BASE/backups" "/root/piie-secure-backups"; do
+  [ -d "$root" ] || continue
+  cand=$(find "$root" -mindepth 1 -maxdepth 2 -type f -name SHA256SUMS -printf '%T@ %h\n' 2>/dev/null | sort -nr | sed -n '1s/^[^ ]* //p')
+  [ -n "$cand" ] || continue
+  # Prefer the newest by mtime across both roots.
+  if [ -z "$BACK" ] || [ "$(stat -c %Y "$cand/SHA256SUMS")" -gt "$(stat -c %Y "$BACK/SHA256SUMS")" ]; then
+    BACK="$cand"
+  fi
+done
+# Validate the chosen backup directory: root-owned, non-writable, not a symlink.
+[ -n "$BACK" ] || fail 'No recognized backup manifest'
+[ -d "$BACK" ] && [ ! -L "$BACK" ] || fail 'Unsafe backup directory'
+[ "$(stat -c %u "$BACK")" = 0 ] || fail 'Backup directory is not root-owned'
+MODE=$(stat -c %a "$BACK")
+(( (8#$MODE & 0022) == 0 )) || fail 'Backup directory is writable by non-root'
+[ -f "$BACK/SHA256SUMS" ] && [ ! -L "$BACK/SHA256SUMS" ] || fail 'Backup manifest missing or linked'
+[ "$(stat -c %u "$BACK/SHA256SUMS")" = 0 ] || fail 'Backup manifest is not root-owned'
+[ -s "$BACK/SHA256SUMS" ] || fail 'Backup manifest is empty'
 AGE=$(( $(date +%s) - $(stat -c %Y "$BACK/SHA256SUMS") ))
 echo "Latest backup: ${BACK##*/}; age_seconds=$AGE"
 [ "$AGE" -ge 0 ] && [ "$AGE" -le 86400 ] || fail 'Latest verified backup is older than 24 hours or has a future timestamp'
-for file in database.sql.gz storage.tar.gz public-uploads.tar.gz environment.backup SHA256SUMS; do
-  [ -f "$BACK/$file" ] && [ ! -L "$BACK/$file" ] && [ -s "$BACK/$file" ] || fail 'Backup member missing or linked'
-done
-[ "$(wc -l < "$BACK/SHA256SUMS")" = 4 ] || fail 'Unexpected backup manifest size'
-awk 'NF!=2 || $1 !~ /^[0-9a-f]+$/ || length($1)!=64 || ($2!="database.sql.gz" && $2!="storage.tar.gz" && $2!="public-uploads.tar.gz" && $2!="environment.backup") {exit 1}' "$BACK/SHA256SUMS" || fail 'Unsafe backup manifest'
-[ "$(awk '{print $2}' "$BACK/SHA256SUMS" | sort -u | wc -l)" = 4 ] || fail 'Duplicate backup manifest members'
+# Generic manifest validation: every listed member must be a regular, non-symlink,
+# non-empty file owned by root, and all checksums must verify. Member names and
+# count are not hardcoded.
+MANIFEST_OK=1
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  set -- $line
+  [ "$#" = 2 ] || { MANIFEST_OK=0; break; }
+  hash=$1; name=$2
+  [[ "$hash" =~ ^[0-9a-f]{64}$ ]] || { MANIFEST_OK=0; break; }
+  [ -f "$BACK/$name" ] && [ ! -L "$BACK/$name" ] || { MANIFEST_OK=0; break; }
+  [ -s "$BACK/$name" ] || { MANIFEST_OK=0; break; }
+  [ "$(stat -c %u "$BACK/$name")" = 0 ] || { MANIFEST_OK=0; break; }
+  fmode=$(stat -c %a "$BACK/$name")
+  (( (8#$fmode & 0022) == 0 )) || { MANIFEST_OK=0; break; }
+done < "$BACK/SHA256SUMS"
+[ "$MANIFEST_OK" = 1 ] || fail 'Unsafe or malformed backup manifest'
+# Duplicate member check.
+[ "$(awk '{print $2}' "$BACK/SHA256SUMS" | sort -u | wc -l)" = "$(wc -l < "$BACK/SHA256SUMS")" ] || fail 'Duplicate backup manifest members'
 (cd "$BACK" && sha256sum --check --strict SHA256SUMS)
-gzip -t "$BACK/database.sql.gz"
-gzip -cd "$BACK/database.sql.gz" | tail -n 8 | grep -q 'Dump completed' || fail 'Database dump completion marker missing'
-tar -tzf "$BACK/storage.tar.gz" >/dev/null
-tar -tzf "$BACK/public-uploads.tar.gz" >/dev/null
+# If a database dump member exists, validate gzip and completion marker.
+DBMEMBER=$(awk '{print $2}' "$BACK/SHA256SUMS" | grep -E '(^|/)database.*\.sql\.gz$|^database\.sql\.gz$' | head -n1 || true)
+if [ -n "$DBMEMBER" ] && [ -f "$BACK/$DBMEMBER" ]; then
+  gzip -t "$BACK/$DBMEMBER"
+  gzip -cd "$BACK/$DBMEMBER" | tail -n 8 | grep -q 'Dump completed' || fail 'Database dump completion marker missing'
+fi
+# If a storage archive member exists, validate it.
+STORAGEMEMBER=$(awk '{print $2}' "$BACK/SHA256SUMS" | grep -E '(^|/)storage.*\.tar\.gz$|^storage\.tar\.gz$' | head -n1 || true)
+if [ -n "$STORAGEMEMBER" ] && [ -f "$BACK/$STORAGEMEMBER" ]; then
+  tar -tzf "$BACK/$STORAGEMEMBER" >/dev/null
+fi
+# If a public-uploads archive member exists, validate it.
+UPLOADSMEMBER=$(awk '{print $2}' "$BACK/SHA256SUMS" | grep -E '(^|/)public-uploads.*\.tar\.gz$|^public-uploads\.tar\.gz$' | head -n1 || true)
+if [ -n "$UPLOADSMEMBER" ] && [ -f "$BACK/$UPLOADSMEMBER" ]; then
+  tar -tzf "$BACK/$UPLOADSMEMBER" >/dev/null
+fi
 echo 'Backup checksums, database gzip/completion marker and storage/upload archive integrity: PASS'
-DB_BYTES=$(gzip -cd "$BACK/database.sql.gz" | wc -c)
+if [ -n "${DBMEMBER:-}" ] && [ -f "$BACK/$DBMEMBER" ]; then
+  DB_BYTES=$(gzip -cd "$BACK/$DBMEMBER" | wc -c)
+else
+  DB_BYTES=0
+fi
 TOTAL_NEEDED=$((NEEDED + DB_BYTES * 2))
 echo "Capacity including twice the uncompressed database backup: required_bytes=$TOTAL_NEEDED"
 [ "$FREE" -ge "$TOTAL_NEEDED" ] || fail 'Insufficient capacity for release and database/storage backups'

@@ -101,9 +101,58 @@ rm /etc/sudoers.d/piie-diagnostics
 Then revert the workflow PR. Optionally remove the installed script. The root UID
 gate remains, so no privilege persists.
 
-## Preserved controls
+## Backup discovery correction (this PR)
 
-SSH identity pin (`SHA256:HnARD+o96mEq/ZObScCf5YgfXvV7RW3qrN/aF3LI4LA`), strict
-host verification (`SHA256:fnVx92azTndsKgv+ZLYmnmWr/4iLDmtnvBU5Y4MFkbw`), the
-root UID gate, and read-only diagnostic behavior are unchanged. No Mailcow,
-container, database, or deployment-state change is made by this correction.
+The diagnostic previously assumed backups lived under
+`$BASE/backups/<timestamp>-<sha>/SHA256SUMS` with exactly four fixed member names
+(`database.sql.gz`, `storage.tar.gz`, `public-uploads.tar.gz`,
+`environment.backup`). Secure backups now live under `/root/piie-secure-backups/`
+with a `predeploy-<timestamp>` directory name and may use different member names.
+
+The corrected discovery:
+
+- Searches both `$BASE/backups` and `/root/piie-secure-backups` for `SHA256SUMS`,
+  selecting the newest by mtime.
+- Requires the backup directory and manifest to be root-owned and non-writable by
+  group/other (no weakening of ownership or permissions).
+- Does not hardcode member names or count. Every manifest entry must be a
+  regular, non-symlink, non-empty, root-owned, non-group/other-writable file, and
+  all checksums must verify (`sha256sum --check --strict`).
+- Duplicate member names are rejected.
+- Freshness (<= 24 h) is still enforced.
+- Database gzip/completion-marker, storage, and public-uploads archive validation
+  run only when a matching member exists.
+
+## Reconciled release identities
+
+- BASELINE: `f23cff88f15a35fd3d7606df929c26cd951ee288` (active production release).
+- TARGET: `4684b28255b9257edb477153f38288b432982d2a` (verified staged candidate).
+- ROLLBACK: `8d42fc1bf0870e308027aef441ac0e3972d32aa0` (retained recovery release).
+
+The newest Git commit is not automatically treated as an approved production
+release.
+
+## Safely updating the installed root-owned diagnostic script
+
+1. Review and merge this PR.
+2. On the VPS (console, as root), replace the installed copy from the reviewed
+   source and re-validate:
+
+```sh
+install -o root -g root -m 0555 /path/to/reviewed/production-readiness.sh \
+  /usr/local/lib/piie/bin/production-readiness.sh
+chown root:root /usr/local/lib/piie/bin/production-readiness.sh
+chmod 0555 /usr/local/lib/piie/bin/production-readiness.sh
+visudo -cf /etc/sudoers.d/piie-diagnostics
+```
+
+3. Verify:
+
+```sh
+sudo -u piie sudo -n /usr/local/lib/piie/bin/production-readiness.sh
+```
+
+4. Re-run `PIIE Production Diagnostics` on `main` and confirm PASS.
+5. Rollback: restore the previous installed copy (kept under
+   `/usr/local/lib/piie/bin/production-readiness.sh.bak` if retained) or revert
+   the PR and reinstall the prior version. Sudoers remains unchanged.
