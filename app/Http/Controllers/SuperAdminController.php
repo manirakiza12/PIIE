@@ -633,8 +633,8 @@ class SuperAdminController extends Controller
         ]);
         // Files are checked before any setting is written (no partial update on an invalid upload).
         $request->validate([
-            'email_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'socialLogo1' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'socialLogo2' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'socialLogo3' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'],
-            'front_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'],
+            'email_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'], 'socialLogo1' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'], 'socialLogo2' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'], 'socialLogo3' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'],
+            'front_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'],
             'off_pay_ins_file' => ['nullable', 'file', 'mimes:jpg,png,pdf', 'max:10240'],
         ]);
         $directories = [
@@ -1188,7 +1188,7 @@ class SuperAdminController extends Controller
     //logo update
     function update_logo(Request $request){
         $request->validate([
-            'dark_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'light_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'], 'white_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'],
+            'dark_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'], 'light_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'], 'white_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'],
             'favicon' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp,ico', 'max:1024'],
         ]);
         if (!array_filter(['dark_logo', 'light_logo', 'white_logo', 'favicon'], fn ($field) => $request->hasFile($field))) {

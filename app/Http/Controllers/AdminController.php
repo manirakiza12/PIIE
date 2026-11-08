@@ -5528,7 +5528,7 @@ class AdminController extends Controller
 
         $rules = ['school_name' => ['required', 'string', 'max:255']];
         foreach (['school_logoo', 'email_logo', 'socialLogo1', 'socialLogo2', 'socialLogo3'] as $field) {
-            $rules[$field] = ['nullable', 'image', 'mimes:png,jpg,jpeg,gif,webp', 'max:4096'];
+            $rules[$field] = ['nullable', 'image', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'];
         }
         foreach (['phone', 'address', 'school_info', 'email_title', 'email_details', 'warning_text', 'socialLink1', 'socialLink2', 'socialLink3'] as $field) {
             $rules[$field] = ['nullable', 'string'];

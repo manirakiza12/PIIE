@@ -26,10 +26,11 @@ class BrandingUploads
                 if ($name === null) {
                     throw ValidationException::withMessages([$field => 'Choose a supported image file.']);
                 }
-                $paths[] = public_path($directory.'/'.$name);
-                if (!chmod(end($paths), 0644)) {
-                    throw new \RuntimeException('Uploaded branding image could not be made readable.');
+                $fullPath = public_path($directory . '/' . $name);
+                if (!is_file($fullPath)) {
+                    throw new \RuntimeException('Stored branding image is missing after upload.');
                 }
+                $paths[] = $fullPath;
                 $stored[$field] = $name;
             }
             DB::transaction(fn () => $save($stored));
