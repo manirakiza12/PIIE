@@ -13,6 +13,7 @@ use App\Support\Payroll\UgandaPayrollCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use PDF;
 
 /**
@@ -55,27 +56,58 @@ class PayrollController extends Controller
     public function storeSalary(Request $request)
     {
         $validated = $request->validate([
-            'user_id'          => 'required|exists:users,id',
-            'basic'            => 'required|numeric|min:0',
-            'housing'          => 'nullable|numeric|min:0',
-            'transport'        => 'nullable|numeric|min:0',
-            'medical'          => 'nullable|numeric|min:0',
-            'other_earnings'   => 'nullable|numeric|min:0',
+            'user_id'          => 'required|integer|exists:users,id',
+            'basic'            => 'required|numeric|min:0|max:9999999999999.99|decimal:0,2',
+            'housing'          => 'nullable|numeric|min:0|max:9999999999999.99|decimal:0,2',
+            'transport'        => 'nullable|numeric|min:0|max:9999999999999.99|decimal:0,2',
+            'medical'          => 'nullable|numeric|min:0|max:9999999999999.99|decimal:0,2',
+            'other_earnings'   => 'nullable|numeric|min:0|max:9999999999999.99|decimal:0,2',
             'payment_method'   => 'nullable|in:bank,cash,mobile_money',
             'bank_account'     => 'nullable|string|max:100',
-            'effective_from'   => 'required|date',
+            'effective_from'   => 'required|date_format:Y-m-d',
         ]);
-        // Tenant guard: the employee must belong to the actor's school.
-        $employee = User::where('id', $validated['user_id'])->where('school_id', $this->school_id)->first();
-        abort_unless($employee, 404);
-        $validated = array_merge([
-            'other_earnings' => 0,
-            'payment_method' => 'bank',
-        ], $validated);
+        $money = ['basic', 'housing', 'transport', 'medical', 'other_earnings'];
+        foreach ($money as $field) {
+            $validated[$field] = number_format((float) ($validated[$field] ?? 0), 2, '.', '');
+        }
+        $validated['payment_method'] = $validated['payment_method'] ?? 'bank';
+        $validated['bank_account'] = $validated['bank_account'] ?? null;
         $validated['school_id'] = $this->school_id;
-        SalaryStructure::create($validated);
-        AuditLog::record('create', 'Payroll', "Salary structure created for user #{$validated['user_id']}");
-        return response()->json(['status' => 'success', 'message' => get_phrase('Salary structure saved')]);
+        [$structure, $created] = DB::transaction(function () use ($validated, $money) {
+            // Lock a stable parent row, including when no salary row exists yet.
+            // Every save through this endpoint for the employee serializes here.
+            $employee = User::where('school_id', $this->school_id)
+                ->whereKey($validated['user_id'])->lockForUpdate()->firstOrFail();
+            if (!PayrollEligibility::isEligible($employee)) {
+                throw ValidationException::withMessages(['user_id' => 'Select an eligible employee.']);
+            }
+            $sameDate = SalaryStructure::where('school_id', $this->school_id)
+                ->where('user_id', $employee->id)
+                ->whereDate('effective_from', $validated['effective_from'])->lockForUpdate()->get();
+            if ($sameDate->isNotEmpty()) {
+                $existing = $sameDate->first();
+                $identical = $sameDate->count() === 1;
+                foreach ($money as $field) {
+                    $identical = $identical && number_format((float) $existing->$field, 2, '.', '') === $validated[$field];
+                }
+                $identical = $identical && ($existing->payment_method ?: 'bank') === $validated['payment_method']
+                    && ($existing->bank_account ?? '') === ($validated['bank_account'] ?? '');
+                if (!$identical) {
+                    throw ValidationException::withMessages([
+                        'effective_from' => 'A different or ambiguous salary structure already exists for this employee and effective date. Existing history was not changed.',
+                    ]);
+                }
+                return [$existing, false];
+            }
+            $structure = SalaryStructure::create($validated);
+            AuditLog::record('create', 'Payroll', "Salary structure created for user #{$employee->id}");
+            return [$structure, true];
+        }, 3);
+        $message = get_phrase($created ? 'Salary structure saved' : 'Salary structure already saved');
+        if ($request->expectsJson()) {
+            return response()->json(['status' => 'success', 'message' => $message, 'created' => $created, 'id' => $structure->id]);
+        }
+        return redirect()->route('admin.salary_structures.index')->with('success', $message);
     }
 
     // ── Dashboard ────────────────────────────────────────────────────────

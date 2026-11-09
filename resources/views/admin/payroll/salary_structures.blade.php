@@ -12,6 +12,15 @@
     </div>
 </div></div></div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+@if($errors->any())
+<div class="alert alert-danger" role="alert"><ul class="mb-0">
+    @foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach
+</ul></div>
+<div class="eSection-wrap mb-3">
+    <h5>{{ get_phrase('Correct salary structure details') }}</h5>
+    @include('admin.payroll.salary_modal')
+</div>
+@endif
 <div class="row"><div class="col-12"><div class="eSection-wrap">
     <div class="table-responsive">
         <table class="table eTable">
