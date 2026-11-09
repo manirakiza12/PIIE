@@ -699,4 +699,52 @@ class PayrollModuleTest extends TestCase
         $expected = 23500 + 0.20 * (335000 - 235000) + 0.30 * (500000 - 335000);
         $this->assertEqualsWithDelta($expected, $result['paye'], 0.01);
     }
+
+    // ── Regression: November 2026 ORDER BY name error (P0) ────────────────
+
+    public function test_dashboard_sorts_by_staff_name_without_sql_error(): void
+    {
+        $this->period = '2026-11';
+        $this->structureFor($this->teacher);
+        $this->structureFor($this->librarian, ['basic' => 800000, 'housing' => 0, 'transport' => 0, 'medical' => 0]);
+        $this->generate($this->period);
+
+        // Default sort by staff.name (ascending) — must not throw "Unknown column 'name'"
+        $this->actingAs($this->admin)
+            ->get(route('admin.payroll.index', ['month' => $this->period]))
+            ->assertOk()
+            ->assertSee('Larry Librarian')
+            ->assertSee('Sarah Teacher');
+
+        // Explicit sort parameter must be restricted to allowlist
+        $this->actingAs($this->admin)
+            ->get(route('admin.payroll.index', ['month' => $this->period, 'sort' => 'name', 'dir' => 'desc']))
+            ->assertOk()
+            ->assertSeeInOrder(['Sarah Teacher', 'Larry Librarian']); // desc: Sarah (S) before Larry (L)
+
+        // Invalid sort field must fall back to default (staff.name asc)
+        $this->actingAs($this->admin)
+            ->get(route('admin.payroll.index', ['month' => $this->period, 'sort' => 'invalid_column', 'dir' => 'desc']))
+            ->assertOk()
+            ->assertSeeInOrder(['Larry Librarian', 'Sarah Teacher']);
+
+        // Pagination works with sorting
+        $this->actingAs($this->admin)
+            ->get(route('admin.payroll.index', ['month' => $this->period, 'page' => 1]))
+            ->assertOk();
+    }
+
+    public function test_dashboard_allows_sorting_by_allowlisted_fields(): void
+    {
+        $this->period = '2026-11';
+        $this->structureFor($this->teacher);
+        $this->structureFor($this->librarian, ['basic' => 800000, 'housing' => 0, 'transport' => 0, 'medical' => 0]);
+        $this->generate($this->period);
+
+        foreach (['name', 'pay_period', 'net_pay', 'status', 'created_at'] as $field) {
+            $this->actingAs($this->admin)
+                ->get(route('admin.payroll.index', ['month' => $this->period, 'sort' => $field]))
+                ->assertOk();
+        }
+    }
 }
