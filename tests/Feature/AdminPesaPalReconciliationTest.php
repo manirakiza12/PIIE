@@ -52,9 +52,7 @@ class AdminPesaPalReconciliationTest extends TestCase
             }
             if (str_contains($request->url(), 'GetTransactionStatus')) {
                 if ($this->statusUnavailable) { return Http::response([], 503); }
-                $queryString = $request->getQueryString() ?? '';
-                parse_str($queryString, $params);
-                $orderTrackingId = $params['orderTrackingId'] ?? $this->trackingId;
+                $orderTrackingId = $request['orderTrackingId'] ?? $this->trackingId;
                 $reference = $this->trackingIdToReference[$orderTrackingId] ?? $this->reference;
                 return Http::response(['merchant_reference' => $reference, 'order_tracking_id' => $orderTrackingId,
                     'amount' => $this->amount, 'currency' => 'UGX', 'status_code' => $this->code, 'payment_status_description' => $this->description,
@@ -133,7 +131,7 @@ class AdminPesaPalReconciliationTest extends TestCase
         $this->actingAs($this->admin)->get(route('admin.tuition_payments.reconciliation'))->assertOk();
     }
 
-public function test_cross_school_access_denied(): void
+    public function test_cross_school_access_denied(): void
     {
         $otherSchool = $this->makeSchool(['school_currency' => 'UGX']);
         $otherAdmin = $this->makeAdminUser($otherSchool);
@@ -398,7 +396,7 @@ public function test_cross_school_access_denied(): void
         $this->assertSame(0, (int) $fee->paid_amount);
     }
 
-public function test_reconciliation_does_not_affect_other_invoices(): void
+    public function test_reconciliation_does_not_affect_other_invoices(): void
     {
         $fee1 = $this->fee(['total_amount' => 5000]);
         $payment1 = $this->createPendingPayment($fee1);

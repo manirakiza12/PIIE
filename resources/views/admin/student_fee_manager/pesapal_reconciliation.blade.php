@@ -7,7 +7,7 @@
             <p class="text-muted mb-0">Centralized payment verification and financial reconciliation</p>
         </div>
         <a href="{{ route('admin.tuition_payments.index') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i> Legacy Payment List
+            <i class="bi bi-arrow-left me-1"></i> Fee payments
         </a>
     </div>
 </div>
@@ -23,6 +23,9 @@
         {{ session('error') }}
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
+@endif
+@if(session('warning'))
+    <div class="alert alert-warning" role="alert">{{ session('warning') }}</div>
 @endif
 
 {{-- Summary Cards --}}
