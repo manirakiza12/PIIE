@@ -77,6 +77,21 @@ validate_full_sha() {
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "invalid full sha: $sha"
 }
 
+# Integrity checks on a caller-supplied archive are not independent authorization.
+# Only a root-controlled receipt, obtained through the administrator review path,
+# may authorize the exact candidate, digest, baseline, rollback target and flags.
+verify_candidate_authorization() {
+  source "$LIB/deployment-guard.sh"
+  secure_layout
+  local approvals="$BASE/.secure/private/authorized"
+  local receipt="$approvals/$1.approved"
+  root_directory "$approvals"
+  root_file "$receipt"
+  [ "$(stat -c %a "$receipt")" = 600 ] || fail 'Candidate approval must have mode 600'
+  cmp -s "$receipt" <(printf '%s\n' piie-deployment-approval-v1 "$@") ||
+    fail 'Candidate is not independently approved for these deployment inputs'
+}
+
 # OPERATION: preflight
 op_preflight() {
   [ "$#" -eq 0 ] || fail 'preflight: no arguments allowed'
@@ -114,6 +129,8 @@ op_deploy_activate() {
   [[ "$EXPECTED_ROLLBACK_RELEASE" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$ ]] || fail "invalid rollback release id: $EXPECTED_ROLLBACK_RELEASE"
   [[ "$ALLOW_DESTRUCTIVE" =~ ^(0|1)$ ]] || fail 'ALLOW_DESTRUCTIVE must be 0 or 1'
   [[ "$PIIE_CODE_ONLY" =~ ^(0|1)$ ]] || fail 'PIIE_CODE_ONLY must be 0 or 1'
+  verify_candidate_authorization "$EXPECTED_RELEASE_SHA" "$SUM" "$EXPECTED_DEPLOYED_SHA" \
+    "$EXPECTED_ROLLBACK_RELEASE" "$PIIE_CODE_ONLY" "$ALLOW_DESTRUCTIVE"
   log "deploy-activate: RID=$RID ART=$ART SHA=$EXPECTED_RELEASE_SHA DEPLOYED=$EXPECTED_DEPLOYED_SHA ROLLBACK=$EXPECTED_ROLLBACK_RELEASE DESTRUCTIVE=$ALLOW_DESTRUCTIVE CODE_ONLY=$PIIE_CODE_ONLY"
   require_root
   env -i PATH="$PATH" PIIE_CODE_ONLY=$PIIE_CODE_ONLY \

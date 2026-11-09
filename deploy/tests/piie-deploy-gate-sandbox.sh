@@ -18,6 +18,10 @@ set -eu
 printf '%s|%s|%s|%s|%s\n' "${0##*/}" "$*" "${EXPECTED_RELEASE_SHA:-}" "${PIIE_CODE_ONLY:-}" "${ALLOW_DESTRUCTIVE_MIGRATIONS:-}"
 SH
 done
+# Production uses the real mount/identity guard. This isolated gate fixture uses
+# its real ownership checks, with only the fixture's mount check stubbed locally.
+sed "s|/home/piie/deployments/piie|$S/base|g" "$ROOT/deploy/remote/deployment-guard.sh" > "$S/lib/bin/deployment-guard.sh"
+printf '\nsecure_layout() { :; }\n' >> "$S/lib/bin/deployment-guard.sh"
 printf '# fixture helper\n' > "$S/lib/bin/helper.py"
 chmod 755 "$S" "$S/lib" "$S/lib/bin" "$S/lib/bin/"*
 SHA=abcdef123456aaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -34,8 +38,36 @@ reject() {
 }
 gate preflight | grep 'preflight: ok'
 gate deploy-stage "$RID" "$ART" "$SUM" "$SHA" | grep "|$SHA||"
+# A caller-provided SHA/checksum is an integrity assertion, not release approval.
+# This must fail before any deployment helper runs when no root approval exists.
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" f23cff8 1 0
+mkdir -p "$S/base/.secure/private/authorized"
+chmod 700 "$S/base/.secure/private"
+RECEIPT="$S/base/.secure/private/authorized/$SHA.approved"
+printf '%s\n' piie-deployment-approval-v1 "$SHA" "$SUM" "$OLD" f23cff8 1 0 > "$RECEIPT"
+chmod 600 "$RECEIPT"
 gate deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" f23cff8 1 0 |
   grep "|$SHA|1|0"
+reject deploy-activate "$RID" "$ART" "$(printf 'c%.0s' {1..64})" "$SHA" "$OLD" f23cff8 1 0
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" f23cff8 0 0
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" f23cff8 1 1
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$SHA" f23cff8 1 0
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" another-release 1 0
+chmod 644 "$RECEIPT"
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" f23cff8 1 0
+chmod 600 "$RECEIPT"
+mv "$RECEIPT" "$RECEIPT.saved"
+ln -s "$RECEIPT.saved" "$RECEIPT"
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" f23cff8 1 0
+rm "$RECEIPT"
+ln "$RECEIPT.saved" "$RECEIPT"
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" f23cff8 1 0
+rm "$RECEIPT"
+mv "$RECEIPT.saved" "$RECEIPT"
+chmod 777 "$S/base/.secure/private/authorized"
+reject deploy-activate "$RID" "$ART" "$SUM" "$SHA" "$OLD" f23cff8 1 0
+chmod 755 "$S/base/.secure/private/authorized"
+echo 'PASS: independent approval required; altered digest, baseline, rollback, flags and unsafe receipts refused'
 gate rollback "$SHA" f23cff8 "$OLD" | grep 'rollback: ok'
 gate app-run /srv/piie/current php artisan course-content:audit | grep 'app-run: ok'
 echo 'PASS: all fixed operations and asymmetric activation flags'

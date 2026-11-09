@@ -71,6 +71,40 @@ All paths and helper locations are fixed. The wrapper has no environment-based
 test bypass and gives child helpers a fresh environment with only explicit
 validated deployment inputs. Test fixtures rewrite paths in a temporary copy.
 
+## Independent candidate authorization
+
+The local readiness correction requires an additional root-controlled receipt
+before activation. A caller-provided checksum and RELEASE_SHA establish integrity
+and identity, but do not prove that the candidate was reviewed. The receipt must
+be created through the administrator approval path, independently of the `piie`
+account and its uploaded archive/checksum. This change is not installed merely
+because the original gate was installed.
+
+After checking the exact CI artifact and its SHA-256 through trusted release
+evidence, the administrator may create
+`/home/piie/deployments/piie/.secure/private/authorized/CANDIDATE_SHA.approved`.
+The authorized directory must be root-owned and not group/other writable; the
+receipt must be a root-owned, single-link regular file, mode 0600, with exactly
+these newline-terminated lines:
+
+```text
+piie-deployment-approval-v1
+CANDIDATE_SHA
+ARTIFACT_SHA256
+VERIFIED_DEPLOYED_SHA
+VERIFIED_ROLLBACK_RELEASE_ID
+CODE_ONLY
+ALLOW_DESTRUCTIVE
+```
+
+All six input values must match the later activation exactly. The gate verifies
+the protected mount/layout first and refuses missing or mismatched receipts
+before calling the deployment helper. Neither unprivileged staging nor the
+workflow uploads may create this authorization. Approval records created by
+`prepare_release` are installation receipts, not substitutes for this prior
+authorization. Do not use placeholders or approve a digest obtained solely from
+an untrusted upload. Publishing or installing this correction needs approval.
+
 ## Recovery
 
 If verification fails, retain the current code pointer and investigate. Restore
