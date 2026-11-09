@@ -7,6 +7,7 @@ use App\Support\Payroll\PayrollService;
 use App\Support\Payroll\UgandaPayrollCalculator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Support\StaffModuleTestHelper;
 use Tests\TestCase;
 
@@ -209,6 +210,100 @@ class PayrollModuleTest extends TestCase
 
         $count = DB::table('payroll')->where('pay_period', $this->periodFilter())->count();
         $this->assertSame(1, $count);
+    }
+
+    public function test_november_five_eligible_employees_without_assignments_are_skipped_without_inventing_salaries(): void
+    {
+        $this->period = '2026-11';
+        User::factory()->count(2)->create([
+            'school_id' => $this->school, 'role_id' => 3, 'account_status' => 'active',
+        ]);
+        $service = app(PayrollService::class);
+        $preview = $service->preview($this->school, '2026-11-01');
+
+        $this->assertCount(5, $preview['rows']);
+        $this->assertSame(5, $preview['missing_structure_count']);
+        $this->assertCount(0, array_filter($preview['rows'], fn ($row) => $row['computed'] !== null));
+        $this->assertDatabaseCount('payroll', 0);
+        $this->actingAs($this->admin)->get(route('admin.payroll.preview', ['month' => $this->period]))
+            ->assertOk()->assertSee('No salary structure effective for this period');
+
+        $result = $service->generate($this->school, $this->admin->id, '2026-11-01');
+        $this->assertSame(0, $result['generated']);
+        $this->assertCount(5, $result['skipped_no_structure']);
+        $this->assertDatabaseCount('salary_structures', 0);
+        $this->assertDatabaseCount('payroll', 0);
+        $this->assertDatabaseCount('expenses', 0);
+    }
+
+    public static function novemberSalaryDates(): array
+    {
+        return [
+            'prior month carries forward' => ['2026-10-31', true],
+            'month start' => ['2026-11-01', true],
+            'mid month' => ['2026-11-15', true],
+            'last day is inclusive' => ['2026-11-30', true],
+            'next month is excluded' => ['2026-12-01', false],
+            'legacy undated assignment is excluded' => [null, false],
+        ];
+    }
+
+    #[DataProvider('novemberSalaryDates')]
+    public function test_november_salary_assignment_dates_match_preview_and_generation(?string $date, bool $payable): void
+    {
+        $this->period = '2026-11';
+        if ($date === null) {
+            $this->structureFor($this->teacher, ['effective_from' => null]);
+        } else {
+            // Synthetic fixture amount only. Exercise the real form/model date
+            // cast, rather than bypassing it with a raw database date insert.
+            $this->actingAs($this->admin)->postJson(route('admin.salary_structures.store'), [
+                'user_id' => $this->teacher->id, 'basic' => 1000000, 'effective_from' => $date,
+            ])->assertOk()->assertJsonPath('status', 'success');
+        }
+        $service = app(PayrollService::class);
+        $preview = $service->preview($this->school, '2026-11-01');
+        $row = collect($preview['rows'])->first(fn ($row) => $row['staff']->id === $this->teacher->id);
+        $this->assertSame($payable, $row['structure'] !== null);
+        $this->assertSame($payable, $row['computed'] !== null);
+        $this->assertDatabaseCount('payroll', 0);
+
+        $result = $service->generate($this->school, $this->admin->id, '2026-11-01');
+        $this->assertSame($payable ? 1 : 0, $result['generated']);
+        $this->assertSame(!$payable, in_array($this->teacher->name, $result['skipped_no_structure'], true));
+        $this->assertSame($payable, $this->rowFor($this->teacher) !== null);
+    }
+
+    public function test_november_uses_latest_effective_assignment_and_never_future_or_foreign_school_salary(): void
+    {
+        $this->period = '2026-11';
+        $this->structureFor($this->teacher, ['effective_from' => '2026-10-01']);
+        $expected = $this->structureFor($this->teacher, ['effective_from' => '2026-11-15']);
+        $this->structureFor($this->teacher, ['effective_from' => '2026-12-01']);
+        $this->structureFor($this->teacher, ['school_id' => $this->otherSchool, 'effective_from' => '2026-11-29']);
+        $this->structureFor($this->librarian, ['school_id' => $this->otherSchool]);
+
+        $service = app(PayrollService::class);
+        $preview = $service->preview($this->school, '2026-11-01');
+        $teacher = collect($preview['rows'])->first(fn ($row) => $row['staff']->id === $this->teacher->id);
+        $this->assertSame($expected, $teacher['structure']->id);
+        $this->assertSame(2, $preview['missing_structure_count']);
+
+        $result = $service->generate($this->school, $this->admin->id, '2026-11-01');
+        $this->assertSame(1, $result['generated']);
+        $this->assertContains($this->librarian->name, $result['skipped_no_structure']);
+        $this->assertEqualsWithDelta($teacher['computed']['net'], $this->rowFor($this->teacher)->net_pay, 0.01);
+    }
+
+    public function test_salary_assignment_requires_an_effective_date_and_the_same_school(): void
+    {
+        $payload = ['user_id' => $this->teacher->id, 'basic' => 1000000];
+        $this->actingAs($this->admin)->postJson(route('admin.salary_structures.store'), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('effective_from');
+        $payload['user_id'] = $this->otherSchoolAdmin->id;
+        $payload['effective_from'] = '2026-11-01';
+        $this->actingAs($this->admin)->postJson(route('admin.salary_structures.store'), $payload)->assertNotFound();
+        $this->assertDatabaseCount('salary_structures', 0);
     }
 
     // ── Approval workflow ──────────────────────────────────────────────

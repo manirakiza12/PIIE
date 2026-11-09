@@ -407,7 +407,7 @@ final class PayrollService
 
         return SalaryStructure::where('school_id', $schoolId)
             ->where('user_id', $userId)
-            ->where('effective_from', '<=', $periodEnd)
+            ->whereDate('effective_from', '<=', $periodEnd)
             ->orderByDesc('effective_from')
             ->first();
     }
