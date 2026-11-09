@@ -20,6 +20,161 @@ final class TuitionPesaPalController extends Controller
         return view('admin.student_fee_manager.pesapal_payments', compact('payments', 'status'));
     }
 
+    public function reconciliationIndex(Request $request)
+    {
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'), 403);
+
+        $user = $request->user();
+        $schoolId = $user->school_id;
+
+        $validated = array_merge([
+            'status' => null,
+            'date_from' => null,
+            'date_to' => null,
+            'student_search' => null,
+            'reference_search' => null,
+            'environment' => null,
+            'discrepancy' => false,
+        ], $request->validate([
+            'status' => 'nullable|in:pending,paid,failed,reversed,archived',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date',
+            'student_search' => 'nullable|string|max:191',
+            'reference_search' => 'nullable|string|max:191',
+            'environment' => 'nullable|in:sandbox,live',
+            'discrepancy' => 'nullable|boolean',
+        ]));
+
+        $query = TuitionPayment::where('school_id', $schoolId)
+            ->where('method', 'pesapal')
+            ->with(['fee.student', 'resolution'])
+            ->latest('id');
+
+        if (!empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+        if (!empty($validated['date_from'])) {
+            $query->whereDate('created_at', '>=', $validated['date_from']);
+        }
+        if (!empty($validated['date_to'])) {
+            $query->whereDate('created_at', '<=', $validated['date_to']);
+        }
+        if (!empty($validated['environment'])) {
+            $query->where(function ($q) use ($validated) {
+                $q->whereRaw("JSON_EXTRACT(gateway_payload, '$.environment') = ?", [$validated['environment']]);
+            });
+        }
+        if (!empty($validated['student_search'])) {
+            $query->whereHas('fee.student', function ($q) use ($validated) {
+                $q->where('name', 'like', '%' . $validated['student_search'] . '%')
+                  ->orWhere('code', 'like', '%' . $validated['student_search'] . '%');
+            });
+        }
+        if (!empty($validated['reference_search'])) {
+            $query->where(function ($q) use ($validated) {
+                $q->where('reference', 'like', '%' . $validated['reference_search'] . '%')
+                  ->orWhere('gateway_txn_id', 'like', '%' . $validated['reference_search'] . '%');
+            });
+        }
+        if (!empty($validated['discrepancy'])) {
+            $query->where(function ($q) {
+                $q->where('status', 'pending')
+                  ->whereHas('fee', function ($feeQ) {
+                      $feeQ->whereRaw('total_amount > paid_amount');
+                  });
+            });
+        }
+
+        $payments = $query->paginate(30)->withQueryString();
+
+        // Calculate reconciliation summary
+        $summary = [
+            'total_pending' => TuitionPayment::where('school_id', $schoolId)->where('method', 'pesapal')->where('status', 'pending')->count(),
+            'total_paid' => TuitionPayment::where('school_id', $schoolId)->where('method', 'pesapal')->where('status', 'paid')->count(),
+            'total_failed' => TuitionPayment::where('school_id', $schoolId)->where('method', 'pesapal')->where('status', 'failed')->count(),
+            'total_reversed' => TuitionPayment::where('school_id', $schoolId)->where('method', 'pesapal')->where('status', 'reversed')->count(),
+            'total_archived' => TuitionPayment::where('school_id', $schoolId)->where('method', 'pesapal')->where('status', 'archived')->count(),
+            'stale_pending' => TuitionPayment::where('school_id', $schoolId)->where('method', 'pesapal')->where('status', 'pending')->where('updated_at', '<', now()->subDays(7))->count(),
+            'unverified_failed' => TuitionPayment::where('school_id', $schoolId)->where('method', 'pesapal')->where('status', 'failed')
+                ->where(function ($q) {
+                    $q->whereNull('gateway_payload->classification')
+                      ->orWhere('gateway_payload->classification', '!=', 'FAILED');
+                })->count(),
+        ];
+
+        // Get invoices with balance discrepancies
+        $discrepancyInvoices = StudentFeeManager::where('school_id', $schoolId)
+            ->whereRaw('total_amount > paid_amount')
+            ->whereHas('pesapalPayments', function ($q) {
+                $q->where('method', 'pesapal')->where('status', 'pending');
+            })
+            ->with(['pesapalPayments' => function ($q) { $q->where('method', 'pesapal')->where('status', 'pending'); }])
+            ->limit(20)
+            ->get();
+
+        return view('admin.student_fee_manager.pesapal_reconciliation', compact(
+            'payments', 'summary', 'discrepancyInvoices', 'validated'
+        ));
+    }
+
+    public function runReconciliation(Request $request)
+    {
+        abort_unless(app(\App\Support\Permissions\PermissionService::class)->allows($request->user(), 'finance.payments'), 403);
+
+        $schoolId = $request->user()->school_id;
+
+        $payments = TuitionPayment::where('school_id', $schoolId)
+            ->where('method', 'pesapal')
+            ->where('status', 'pending')
+            ->whereNotNull('gateway_txn_id')
+            ->orderBy('updated_at')
+            ->limit(100)
+            ->get();
+
+        $results = [
+            'verified_paid' => 0,
+            'verified_failed' => 0,
+            'unavailable' => 0,
+            'skipped' => 0,
+            'errors' => [],
+        ];
+
+        foreach ($payments as $payment) {
+            try {
+                $classification = TuitionPesaPalPayment::reconcile($payment);
+                if ($classification === 'paid') {
+                    $results['verified_paid']++;
+                } elseif ($classification === 'failed') {
+                    $results['verified_failed']++;
+                } elseif ($classification === 'invoice_missing') {
+                    $results['skipped']++;
+                } else {
+                    $results['skipped']++;
+                }
+            } catch (\App\Support\Payments\PesaPalException $exception) {
+                $results['unavailable']++;
+            } catch (\Throwable $exception) {
+                $results['skipped']++;
+                $results['errors'][] = [
+                    'payment_id' => $payment->id,
+                    'reference' => $payment->reference,
+                    'error' => get_class($exception) . ': ' . $exception->getMessage(),
+                ];
+                \Illuminate\Support\Facades\Log::warning('tuition:run-reconciliation skipped payment', [
+                    'payment_id' => $payment->id,
+                    'exception' => get_class($exception),
+                ]);
+            }
+        }
+
+        $message = "Manual reconciliation completed: {$results['verified_paid']} paid, {$results['verified_failed']} failed, {$results['unavailable']} provider unavailable, {$results['skipped']} skipped.";
+        if (!empty($results['errors'])) {
+            $message .= ' Errors: ' . count($results['errors']) . ' payments had exceptions (see logs).';
+        }
+
+        return back()->with(empty($results['errors']) ? 'success' : 'warning', $message);
+    }
+
     public function verifyPesapalPayment(Request $request, int $paymentId)
     {
         $user = $request->user();

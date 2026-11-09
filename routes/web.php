@@ -2882,6 +2882,8 @@ Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middle
 Route::get('payments/tuition/pesapal/callback', [\App\Http\Controllers\TuitionPesaPalController::class, 'callback'])->middleware('throttle:60,1')->name('tuition.pesapal.callback');
 Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middleware(['auth', 'admin', 'rbac'])->group(function () {
     Route::get('admin/fee-payments', 'payments')->name('admin.tuition_payments.index');
+    Route::get('admin/fee-payments/reconciliation', 'reconciliationIndex')->name('admin.tuition_payments.reconciliation');
+    Route::post('admin/fee-payments/run-reconciliation', 'runReconciliation')->name('admin.tuition_payments.run_reconciliation');
     Route::post('admin/fee-payments/{payment}/verify-pesapal', 'verifyPesapalPayment')->name('admin.tuition_payments.verify_pesapal');
     Route::post('admin/fee-payments/{payment}/archive-test', 'archiveTestPayment')->name('admin.tuition_payments.archive_test');
     Route::post('admin/fee-payments/{payment}/resolve-test', 'resolveTestPayment')->name('admin.tuition_payments.resolve_test');
