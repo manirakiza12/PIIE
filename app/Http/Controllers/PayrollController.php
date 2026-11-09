@@ -125,19 +125,19 @@ class PayrollController extends Controller
             : 'name';
         $sortDir = strtolower($request->get('dir')) === 'desc' ? 'desc' : 'asc';
 
-        $payrolls = Payroll::where('school_id', $this->school_id)
-            ->where('pay_period', PayrollService::periodValue($period))
+        $payrolls = Payroll::where('payroll.school_id', $this->school_id)
+            ->where('payroll.pay_period', PayrollService::periodValue($period))
             ->when($departmentId, fn ($q) => $q->whereHas('staff', fn ($s) => $s->where('department_id', $departmentId)))
             ->when($search !== '', fn ($q) => $q->whereHas('staff', fn ($s) => $s->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%")))
             ->when($status !== '' && $status !== 'all', function ($q) use ($status) {
                 if ($status === 'rejected') {
-                    $q->where('status', 'draft')->whereNotNull('rejected_at');
+                    $q->where('payroll.status', 'draft')->whereNotNull('payroll.rejected_at');
                 } elseif ($status === 'pending') {
-                    $q->where('status', 'draft')->whereNull('rejected_at');
+                    $q->where('payroll.status', 'draft')->whereNull('payroll.rejected_at');
                 } elseif ($status === 'partially_paid') {
-                    $q->where('status', 'approved')->where('paid_amount', '>', 0);
+                    $q->where('payroll.status', 'approved')->where('payroll.paid_amount', '>', 0);
                 } elseif (in_array($status, ['draft', 'approved', 'paid'], true)) {
-                    $q->where('status', $status);
+                    $q->where('payroll.status', $status);
                 }
             })
             ->join('users', 'payroll.staff_id', '=', 'users.id')
