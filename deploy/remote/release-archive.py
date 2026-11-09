@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Strict extraction and read-only baseline comparison. No application execution."""
 import hashlib
+import json
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -94,6 +95,52 @@ def inventory(root):
     return result
 
 
+def inventory_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True,
+                                    separators=(",", ":")).encode()).hexdigest()
+
+
+def compare_attested(live, trusted, receipt, archive_sum):
+    """One exact administrator-reviewed legacy state; never trust a SHA marker alone."""
+    if os.geteuid() != 0:
+        raise ValueError("Legacy attestation requires root")
+    fd = os.open(receipt, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd) as handle:
+        meta = os.fstat(handle.fileno())
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
+                or meta.st_nlink != 1 or stat.S_IMODE(meta.st_mode) != 0o600):
+            raise ValueError("Attestation must be a private root-owned regular file")
+        proof = json.load(handle)
+    before = os.stat(live)
+    sha = "f23cff88f15a35fd3d7606df929c26cd951ee288"
+    if (proof.get("schema") != 1 or proof.get("release_sha") != sha
+            or proof.get("archive_sha256") != archive_sum
+            or len(archive_sum) != 64
+            or proof.get("release_identity") != [before.st_dev, before.st_ino]):
+        raise ValueError("Legacy attestation identity differs")
+    for root in (live, trusted):
+        if (Path(root) / "RELEASE_SHA").read_bytes() != (sha + "\n").encode():
+            raise ValueError("Legacy release SHA differs")
+    actual, expected = inventory(live), inventory(trusted)
+    if (inventory_digest(actual) != proof.get("live_inventory_sha256")
+            or inventory_digest(expected) != proof.get("archive_inventory_sha256")):
+        raise ValueError("Legacy attested inventory changed")
+    # This private legacy backup is retained in place, never copied into code.
+    backup = Path(live) / ".env.before-mail-fix"
+    meta = backup.lstat()
+    if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
+            or meta.st_nlink != 1 or stat.S_IMODE(meta.st_mode) != 0o640):
+        raise ValueError("Legacy private backup permissions differ")
+    actual.pop(".env.before-mail-fix", None)
+    def code(value):
+        return {key: entry[:2] for key, entry in value.items()}
+    if code(actual) != code(expected):
+        raise ValueError("Legacy code bytes, types or paths differ")
+    after = os.stat(live)
+    if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+        raise ValueError("Legacy release replaced during comparison")
+
+
 if __name__ == "__main__":
     try:
         if sys.argv[1] == "snapshot":
@@ -103,7 +150,9 @@ if __name__ == "__main__":
         elif sys.argv[1] == "compare":
             if inventory(sys.argv[2]) != inventory(sys.argv[3]):
                 raise ValueError("Live baseline code differs from approved archive")
+        elif sys.argv[1] == "compare-attested":
+            compare_attested(*sys.argv[2:])
         else:
             raise ValueError("Unknown action")
-    except (OSError, ValueError, tarfile.TarError) as error:
+    except (OSError, ValueError, KeyError, TypeError, tarfile.TarError) as error:
         sys.exit("RELEASE REFUSED: " + str(error))

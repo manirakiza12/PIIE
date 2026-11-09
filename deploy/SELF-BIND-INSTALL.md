@@ -69,6 +69,17 @@ are runtime data, not the trusted code. A mismatch fails closed. A failed partia
 protected copy is retained for review; it is never silently overwritten.
 
 The original releases/f23cff8 and current pointer remain unchanged during import.
+For the independently examined original production tree only, an administrator
+may install `.secure/private/f23cff8.comparison.json` as root:root 0600. It binds
+the original CI archive checksum and full SHA, live release device/inode, and
+exact canonical/live inventory digests. `compare-attested` still independently
+requires identical code bytes, types and paths, allowing only executable-mode
+differences and the exact private root-owned 0640 `.env.before-mail-fix` backup.
+The backup remains in the legacy tree; it is not copied into protected code.
+Any changed inventory, insecure receipt/backup, unknown path or code difference
+fails closed. Without this explicit private receipt, strict comparison remains
+the default. Never generate a receipt merely to accept unexplained drift.
+
 First authorized activation rechecks the legacy baseline code. It creates durable
 upload links in candidate and protected baseline, and uses the protected baseline
 for automatic recovery. A failed first activation can therefore return current to
@@ -108,7 +119,7 @@ BACK=$(mktemp -d /var/lib/piie/install-backup.XXXXXXXX)
 docker inspect piie-app > "$BACK/piie-app.before.json"
 NEW=$(mktemp -d "$BIN/.selfbind-install.XXXXXXXX")
 # Only these root-installed deployment entry points/helpers are replaced.
-FILES='deployment-guard.sh release-archive.py repair-uploads.py merge-uploads.py secure-handoff.sh pin-deployments.sh preserve-baseline.sh runtime-supervisor.sh run-scheduler.sh container-app.sh check-required-tables.sh container-preflight.sh container-rollback.sh container-deploy.sh runtime-deploy.sh'
+FILES='deployment-guard.sh release-archive.py repair-uploads.py merge-uploads.py secure-handoff.sh pin-deployments.sh preserve-baseline.sh runtime-supervisor.sh run-scheduler.sh container-app.sh check-required-tables.sh container-preflight.sh container-rollback.sh container-deploy.sh runtime-deploy.sh piie-deploy-gate.sh'
 for file in $FILES; do
   if [ -e "$BIN/$file" ] || [ -L "$BIN/$file" ]; then
     root_file "$BIN/$file"
@@ -216,3 +227,11 @@ Decision: local implementation is reviewable; production installation/activation
 remains NO-GO until the baseline evidence and explicit mount/restart-policy/cutover
 approvals are available. If app restart policy must remain unchanged, the secure
 reboot contract cannot be achieved under these constraints.
+
+## Non-interactive deployment authorization
+
+Once the protected runtime is installed, use [DEPLOY-GATE-INSTALL.md](DEPLOY-GATE-INSTALL.md)
+for the separate root-console installation of the command gate and its constrained
+sudoers policy. This supersedes the earlier statement that no sudoers changes are
+proposed for that additional step. Do not rerun legacy baseline enrollment on an
+already protected active release; verify its existing identity/approval instead.

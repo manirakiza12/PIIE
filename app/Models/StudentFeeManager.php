@@ -59,4 +59,6 @@ class StudentFeeManager extends Model
     }
 
     public function student() { return $this->belongsTo(User::class, 'student_id'); }
+
+    public function pesapalPayments() { return $this->hasMany(TuitionPayment::class, 'fee_id')->where('method', 'pesapal'); }
 }

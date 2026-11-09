@@ -1,6 +1,9 @@
 @extends('admin.navigation')
 @section('content')
 <div class="mainSection-title"><h1 class="h4">Fee Payments</h1><p>PesaPal school fee payments and verification history</p></div>
+@if(app(\App\Support\Permissions\PermissionService::class)->allows(auth()->user(), 'finance.payments'))
+    <a href="{{ route('admin.tuition_payments.reconciliation') }}" class="btn btn-outline-primary mb-3">PesaPal reconciliation</a>
+@endif
 @if(session('success'))
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         {{ session('success') }}
