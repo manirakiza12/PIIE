@@ -308,6 +308,153 @@ class PayrollModuleTest extends TestCase
 
     // ── Approval workflow ──────────────────────────────────────────────
 
+    private function salaryFormPayload(array $overrides = []): array
+    {
+        // Existing synthetic test salary, never production configuration.
+        return array_merge(['user_id' => $this->teacher->id, 'basic' => '1000000.00',
+            'housing' => '0', 'transport' => '', 'medical' => '', 'other_earnings' => '',
+            'payment_method' => 'bank', 'bank_account' => '', 'effective_from' => '2026-11-30'], $overrides);
+    }
+
+    public function test_salary_form_browser_save_persists_redirects_and_is_recognized_by_preview_only(): void
+    {
+        $this->actingAs($this->admin)->post(route('admin.salary_structures.store'), $this->salaryFormPayload())
+            ->assertRedirect(route('admin.salary_structures.index'))->assertSessionHas('success', 'Salary structure saved');
+        $this->assertDatabaseCount('salary_structures', 1);
+        $saved = \App\Models\SalaryStructure::firstOrFail();
+        $this->assertSame($this->teacher->id, $saved->user_id);
+        $this->assertSame($this->school, $saved->school_id);
+        $this->assertSame('2026-11-30', $saved->effective_from->format('Y-m-d'));
+        $this->assertEquals(1000000, $saved->basic);
+        $this->assertEquals(0, $saved->transport);
+        $preview = app(PayrollService::class)->preview($this->school, '2026-11-01');
+        $row = collect($preview['rows'])->first(fn ($row) => $row['staff']->id === $this->teacher->id);
+        $this->assertSame($saved->id, $row['structure']->id);
+        $this->assertNotNull($row['computed']);
+        $this->assertDatabaseCount('payroll', 0);
+        $this->assertDatabaseCount('payroll_payments', 0);
+        $this->assertDatabaseCount('expenses', 0);
+    }
+
+    public function test_salary_form_ajax_save_and_identical_retry_return_same_persisted_id(): void
+    {
+        $this->actingAs($this->admin);
+        $first = $this->postJson(route('admin.salary_structures.store'), $this->salaryFormPayload())
+            ->assertOk()->assertJsonPath('status', 'success')->assertJsonPath('created', true);
+        $id = $first->json('id');
+        $this->assertDatabaseHas('salary_structures', ['id' => $id, 'user_id' => $this->teacher->id]);
+        $this->postJson(route('admin.salary_structures.store'), $this->salaryFormPayload(['basic' => '1000000', 'transport' => '0.00']))
+            ->assertOk()->assertJsonPath('created', false)->assertJsonPath('id', $id);
+        $this->assertDatabaseCount('salary_structures', 1);
+    }
+
+    public function test_salary_form_browser_retry_does_not_duplicate_and_conflict_preserves_input_and_history(): void
+    {
+        $url = route('admin.salary_structures.store');
+        $this->actingAs($this->admin);
+        $payload = $this->salaryFormPayload();
+        $this->post($url, $payload)->assertRedirect(route('admin.salary_structures.index'));
+        $original = DB::table('salary_structures')->first();
+        $this->post($url, $payload)->assertSessionHas('success', 'Salary structure already saved');
+        $conflict = $this->salaryFormPayload(['basic' => '1000001.00']);
+        $this->from(route('admin.salary_structures.index'))->post($url, $conflict)
+            ->assertRedirect(route('admin.salary_structures.index'))->assertSessionHasErrors('effective_from')
+            ->assertSessionHasInput('basic', '1000001.00');
+        $this->assertEquals($original, DB::table('salary_structures')->first());
+        $this->assertDatabaseCount('salary_structures', 1);
+    }
+
+    public function test_salary_form_conflicting_ajax_and_preexisting_duplicates_are_rejected_without_deleting_history(): void
+    {
+        $url = route('admin.salary_structures.store');
+        $this->actingAs($this->admin)->postJson($url, $this->salaryFormPayload())->assertOk();
+        $this->postJson($url, $this->salaryFormPayload(['housing' => '1.00']))
+            ->assertUnprocessable()->assertJsonValidationErrors('effective_from');
+        $this->postJson($url, $this->salaryFormPayload(['bank_account' => '0']))
+            ->assertUnprocessable()->assertJsonValidationErrors('effective_from');
+        $this->structureFor($this->teacher, ['effective_from' => '2026-11-30']);
+        $before = DB::table('salary_structures')->orderBy('id')->get();
+        $this->postJson($url, $this->salaryFormPayload())->assertUnprocessable()->assertJsonValidationErrors('effective_from');
+        $this->assertEquals($before, DB::table('salary_structures')->orderBy('id')->get());
+    }
+
+    public function test_salary_form_new_effective_date_appends_history_and_never_overwrites_the_old_salary(): void
+    {
+        $url = route('admin.salary_structures.store');
+        $this->actingAs($this->admin)->postJson($url, $this->salaryFormPayload())->assertOk();
+        $old = DB::table('salary_structures')->first();
+        $this->postJson($url, $this->salaryFormPayload(['effective_from' => '2026-12-01']))->assertOk()->assertJsonPath('created', true);
+        $this->assertEquals($old, DB::table('salary_structures')->where('id', $old->id)->first());
+        $this->assertDatabaseCount('salary_structures', 2);
+        $this->assertDatabaseCount('payroll', 0);
+    }
+
+    public static function invalidSalaryFormFields(): array
+    {
+        return ['negative salary' => ['basic', '-1'], 'overflow' => ['basic', '10000000000000'],
+            'extra decimal places' => ['housing', '1.001'], 'missing date' => ['effective_from', ''],
+            'invalid date' => ['effective_from', '2026-11-31'], 'timestamp instead of date' => ['effective_from', '2026-11-30 12:00:00'],
+            'payment method' => ['payment_method', 'cheque'], 'unknown employee' => ['user_id', 999999]];
+    }
+
+    #[DataProvider('invalidSalaryFormFields')]
+    public function test_salary_form_ajax_validation_does_not_persist(string $field, mixed $value): void
+    {
+        $this->actingAs($this->admin)->postJson(route('admin.salary_structures.store'), $this->salaryFormPayload([$field => $value]))
+            ->assertUnprocessable()->assertJsonValidationErrors($field);
+        $this->assertDatabaseCount('salary_structures', 0);
+    }
+
+    public function test_salary_form_browser_validation_renders_errors_with_entered_values(): void
+    {
+        $index = route('admin.salary_structures.index');
+        $this->actingAs($this->admin)->from($index)->post(route('admin.salary_structures.store'),
+            $this->salaryFormPayload(['basic' => '-1', 'housing' => '125.25', 'payment_method' => 'cash']))
+            ->assertRedirect($index)->assertSessionHasErrors('basic')->assertSessionHasInput('housing', '125.25');
+        $this->get($index)->assertOk()->assertSee('Correct salary structure details')->assertSee('value="125.25"', false)
+            ->assertSee('name="_token"', false);
+        $this->assertDatabaseCount('salary_structures', 0);
+    }
+
+    public function test_salary_form_requires_authorized_actor_and_eligible_same_school_employee(): void
+    {
+        $url = route('admin.salary_structures.store');
+        $this->postJson($url, $this->salaryFormPayload())->assertUnauthorized();
+        $this->actingAs($this->teacher)->postJson($url, $this->salaryFormPayload())->assertForbidden();
+        $this->actingAs($this->admin)->postJson($url, $this->salaryFormPayload(['user_id' => $this->otherSchoolAdmin->id]))->assertNotFound();
+        $parent = User::factory()->create(['school_id' => $this->school, 'role_id' => 6, 'account_status' => 'active']);
+        $this->postJson($url, $this->salaryFormPayload(['user_id' => $parent->id]))->assertUnprocessable()->assertJsonValidationErrors('user_id');
+        $this->teacher->update(['staff_status' => 'terminated']);
+        $this->postJson($url, $this->salaryFormPayload())->assertUnprocessable()->assertJsonValidationErrors('user_id');
+        $this->assertDatabaseCount('salary_structures', 0);
+    }
+
+    public function test_salary_form_csrf_is_required_for_browser_and_ajax(): void
+    {
+        $this->app->bind(\App\Http\Middleware\VerifyCsrfToken::class, fn ($app) =>
+            new class($app, $app['encrypter']) extends \App\Http\Middleware\VerifyCsrfToken {
+                protected function runningUnitTests() { return false; }
+            });
+        $this->actingAs($this->admin)->post(route('admin.salary_structures.store'), $this->salaryFormPayload())->assertStatus(419);
+        $this->postJson(route('admin.salary_structures.store'), $this->salaryFormPayload())->assertStatus(419);
+        $this->assertDatabaseCount('salary_structures', 0);
+        $this->withSession(['_token' => 'salary-form-test-token'])
+            ->post(route('admin.salary_structures.store'), $this->salaryFormPayload(['_token' => 'salary-form-test-token']), ['Accept' => 'text/html'])
+            ->assertRedirect(route('admin.salary_structures.index'));
+        $this->postJson(route('admin.salary_structures.store'), $this->salaryFormPayload(), ['X-CSRF-TOKEN' => 'salary-form-test-token'])
+            ->assertOk()->assertJsonPath('created', false);
+        $this->assertDatabaseCount('salary_structures', 1);
+    }
+
+    public function test_salary_form_transaction_rolls_back_if_persistence_fails_after_insert(): void
+    {
+        \App\Models\SalaryStructure::created(function () { throw new \RuntimeException('Synthetic persistence failure'); });
+        try {
+            $this->actingAs($this->admin)->postJson(route('admin.salary_structures.store'), $this->salaryFormPayload())->assertStatus(500);
+            $this->assertDatabaseCount('salary_structures', 0);
+        } finally { \App\Models\SalaryStructure::flushEventListeners(); }
+    }
+
     public function test_draft_cannot_be_approved_by_get_but_can_via_post(): void
     {
         $this->structureFor($this->teacher);
