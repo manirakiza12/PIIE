@@ -237,12 +237,14 @@ jobs:
           scp -q deploy/remote/*.sh deploy/remote/production-inventory.php piie-prod:$REMOTE_BASE/bin/
           scp -q deploy/docroot/index.php piie-prod:$REMOTE_BASE/bin/docroot-index.php
           scp -q dist/piie-release-${SHA:0:12}.tar.gz piie-prod:$REMOTE_BASE/incoming/
+          # Upload privileged gate (to be installed by admin at /usr/local/sbin/piie-deploy-gate)
+          scp -q deploy/remote/piie-deploy-gate.sh piie-prod:$REMOTE_BASE/bin/piie-deploy-gate.sh
           ssh piie-prod "chmod +x $REMOTE_BASE/bin/*.sh"
 
       - name: Docker preflight (starts temporary clients; requires approved privileges)
         if: ${{ inputs.mode == 'activate' }}
         run: |
-          ssh piie-prod "sudo /usr/local/lib/piie/bin/container-preflight.sh"
+          ssh piie-prod "sudo -n /usr/local/sbin/piie-deploy-gate preflight"
 
       - name: Install the release
         id: install
@@ -259,7 +261,7 @@ jobs:
           if [ "${MODE:-stage}" = "stage" ]; then
             ssh piie-prod "EXPECTED_RELEASE_SHA=$SHA $REMOTE_BASE/bin/stage-release.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM"
           else
-            ssh piie-prod "PIIE_CODE_ONLY=$CODE_ONLY EXPECTED_RELEASE_SHA=$SHA EXPECTED_DEPLOYED_SHA=$DEPLOYED_REF EXPECTED_ROLLBACK_RELEASE=$ROLLBACK_RELEASE ALLOW_DESTRUCTIVE_MIGRATIONS=${ALLOW_DESTRUCTIVE:-0} sudo /usr/local/lib/piie/bin/runtime-deploy.sh $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM activate"
+            ssh piie-prod "sudo -n /usr/local/sbin/piie-deploy-gate deploy-activate $RID $REMOTE_BASE/incoming/piie-release-${SHA:0:12}.tar.gz $SUM $SHA $DEPLOYED_REF $ROLLBACK_RELEASE $CODE_ONLY $ALLOW_DESTRUCTIVE"
           fi
 
       - name: Verify active release SHA and document root (read-only)
@@ -287,7 +289,7 @@ jobs:
       - name: Audit published lesson requirements (read-only)
         if: ${{ inputs.mode == 'activate' }}
         run: |
-          ssh piie-prod "test \"\$(cat $REMOTE_BASE/current/RELEASE_SHA)\" = '$SHA' && sudo /usr/local/lib/piie/bin/container-app.sh /srv/piie/current php artisan course-content:audit"
+          ssh piie-prod "test \"\$(cat $REMOTE_BASE/current/RELEASE_SHA)\" = '$SHA' && sudo -n /usr/local/sbin/piie-deploy-gate app-run /srv/piie/current php artisan course-content:audit"
 
       - name: Restore explicit prior code after post-activation workflow failure
         if: ${{ failure() && inputs.mode == 'activate' && steps.install.outcome == 'success' }}
@@ -297,7 +299,7 @@ jobs:
           ROLLBACK_RELEASE: ${{ inputs.rollback_release }}
         run: |
           bash deploy/validate-deploy-inputs.sh
-          ssh piie-prod "sudo /usr/local/lib/piie/bin/container-rollback.sh '$SHA' '$ROLLBACK_RELEASE' '$DEPLOYED_REF'"
+          ssh piie-prod "sudo -n /usr/local/sbin/piie-deploy-gate rollback '$SHA' '$ROLLBACK_RELEASE' '$DEPLOYED_REF'"
 
       - name: Remove key material
         if: always()

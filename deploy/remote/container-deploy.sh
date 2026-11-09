@@ -34,7 +34,7 @@ if [ "$MODE" = activate ]; then
   fi
   verify_release "$ACTIVE_ID" "$EXPECTED_DEPLOYED_SHA"
   if [ "$PREV" = releases/f23cff8 ]; then
-    python3 -I "$(dirname "$0")/release-archive.py" compare "$BASE/current" "$BASE/.secure/releases/f23cff8" || fail 'Legacy baseline code changed'
+    compare_legacy_baseline "$BASE/current" "$BASE/.secure/releases/f23cff8" "$(sed -n '2p' "$BASE/.secure/private/f23cff8.approved")" || fail 'Legacy baseline code changed'
   fi
   RECOVERY=".secure/releases/$ACTIVE_ID"
 fi

@@ -13,7 +13,7 @@ deployment_lock
 ENV_BEFORE=$(stat -c '%u:%g:%a' "$BASE/shared/.env")
 ENV_HASH=$(sha256sum "$BASE/shared/.env")
 prepare_release f23cff8 "$1" "$2" "$3"
-python3 -I "$(dirname "$0")/release-archive.py" compare "$BASE/releases/f23cff8" "$REL" || {
+compare_legacy_baseline "$BASE/releases/f23cff8" "$REL" "$2" || {
   fail 'Baseline comparison failed; protected copy is not approved'
 }
 [ "$(stat -c '%u:%g:%a' "$BASE/shared/.env")" = "$ENV_BEFORE" ] && [ "$(sha256sum "$BASE/shared/.env")" = "$ENV_HASH" ] || fail 'Environment changed'

@@ -2,6 +2,18 @@
 source "$(dirname "${BASH_SOURCE[0]}")/deployment-guard.sh"
 # Fixed protected parents, independent of unprivileged incoming/releases staging.
 protected_directory() { root_directory "$1"; }
+compare_legacy_baseline() {
+  local receipt="$BASE/.secure/private/f23cff8.comparison.json"
+  local action=compare
+  local -a extra=()
+  if [ -e "$receipt" ] || [ -L "$receipt" ]; then
+    root_file "$receipt"
+    [ "$(stat -c %a "$receipt")" = 600 ] || fail 'Invalid baseline attestation mode'
+    action=compare-attested
+    extra=("$receipt" "$3")
+  fi
+  python3 -I "$(dirname "${BASH_SOURCE[0]}")/release-archive.py" "$action" "$1" "$2" "${extra[@]}"
+}
 secure_handoff() {
   secure_layout
   [[ "$ART" = "$BASE/incoming/"* ]] || fail 'Archive outside incoming'
