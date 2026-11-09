@@ -120,10 +120,11 @@ class PayrollController extends Controller
         $departmentId = $request->get('department_id');
         $status = trim((string) $request->get('status', ''));
 
-        $sortField = in_array($request->get('sort'), ['name', 'pay_period', 'net_pay', 'status', 'created_at'], true)
-            ? $request->get('sort')
-            : 'name';
-        $sortDir = strtolower($request->get('dir')) === 'desc' ? 'desc' : 'asc';
+        $allowedSortFields = ['name', 'pay_period', 'net_pay', 'status', 'created_at'];
+        $requestedSort = $request->get('sort');
+        $isValidSort = in_array($requestedSort, $allowedSortFields, true);
+        $sortField = $isValidSort ? $requestedSort : 'name';
+        $sortDir = $isValidSort && strtolower($request->get('dir')) === 'desc' ? 'desc' : 'asc';
 
         $payrolls = Payroll::where('payroll.school_id', $this->school_id)
             ->where('payroll.pay_period', PayrollService::periodValue($period))
