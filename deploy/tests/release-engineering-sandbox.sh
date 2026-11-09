@@ -43,5 +43,5 @@ WORKFLOW="$ROOT/.github/workflows/piie-deploy.yml"
 grep -q 'steps.install.outcome.*success' "$WORKFLOW"
 grep -q 'inputs.reconcile_enrolment' "$WORKFLOW"
 grep -q 'verify-release-identity.sh' "$WORKFLOW"
-grep -q 'container-rollback.sh' "$WORKFLOW"
+grep -q 'sudo -n /usr/local/sbin/piie-deploy-gate rollback' "$WORKFLOW"
 echo 'PASS post-activation failure handler, explicit enrolment approval and identity verifier are wired'
