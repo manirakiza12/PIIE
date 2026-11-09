@@ -31,8 +31,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #333; }
 </div>
 
 <table class="info-table">
-    <tr><td><strong>Employee:</strong> {{ $pay->staff->name ?? '—' }} ({{ $pay->staff->code }})</td>
-        <td><strong>Department:</strong> {{ optional($pay->staff->department)->name ?? '—' }} · <strong>Role:</strong> {{ optional($pay->staff->designationRecord)->name ?: optional($pay->staff->role)->name ?? '—' }}</td></tr>
+    <tr><td><strong>Employee:</strong> {{ $pay->staff?->name ?? '—' }} ({{ $pay->staff?->code }})</td>
+        <td><strong>Department:</strong> {{ $pay->staff?->department?->name ?? '—' }} · <strong>Role:</strong> {{ $pay->staff?->designationRecord?->name ?: $pay->staff?->role?->name ?? '—' }}</td></tr>
     <tr><td><strong>Pay Period:</strong> {{ $pay->pay_period?->format('F Y') }}</td><td><strong>Currency:</strong> {{ $pay->currency }}</td></tr>
 </table>
 

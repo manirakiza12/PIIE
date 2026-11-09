@@ -95,7 +95,7 @@
                 <tr>
                     <td>{{ $payrolls->firstItem() + $loop->index }}</td>
                     <td><strong class="text-dark">{{ optional($p->staff)->name }}</strong> <small class="text-muted">{{ optional($p->staff)->code }}</small></td>
-                    <td>{{ optional($p->staff->department)->name ?? '—' }}</td>
+                    <td>{{ $p->staff?->department?->name ?? '—' }}</td>
                     <td class="text-end">{{ number_format($p->basic_salary, 2) }}</td>
                     <td class="text-end">{{ number_format($p->allowances + $p->other_earnings, 2) }}</td>
                     <td class="text-end text-danger">{{ number_format($p->totalEmployeeDeductions(), 2) }}</td>
