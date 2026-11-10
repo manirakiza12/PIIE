@@ -2887,7 +2887,9 @@ Route::controller(\App\Http\Controllers\TuitionPesaPalController::class)->middle
     Route::post('admin/fee-payments/{paymentId}/verify-pesapal', 'verifyPesapalPayment')->name('admin.tuition_payments.verify_pesapal');
     Route::post('admin/fee-payments/{paymentId}/archive-test', 'archiveTestPayment')->name('admin.tuition_payments.archive_test');
     Route::post('admin/fee-payments/{paymentId}/resolve-test', 'resolveTestPayment')->name('admin.tuition_payments.resolve_test');
-    Route::get('admin/fee-payments/{id}', 'index')->name('admin.tuition_payments.show');
+    // whereNumber: a non-numeric {id} (e.g. a stray GET to run-reconciliation,
+    // a POST-only path) must 404, not reach the controller as a TypeError 500.
+    Route::get('admin/fee-payments/{id}', 'index')->whereNumber('id')->name('admin.tuition_payments.show');
     Route::post('admin/fee-payments/{id}/financial-setup/{item}/confirm', 'confirmFinancialSetup')->whereIn('item', ['prior_payment', 'award', 'study_waiver'])->name('admin.tuition_payments.setup.confirm');
     Route::post('admin/fee-payments/{id}/study-waiver', 'waiver')->name('admin.tuition_payments.waiver');
     Route::post('admin/fee-payments/{id}/prior-payment', 'openingPayment')->name('admin.tuition_payments.opening_payment');
