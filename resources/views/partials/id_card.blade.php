@@ -36,7 +36,7 @@
     }
     @media print {
         .idc-card { width: 3.37in; height: 2.125in; margin: 0; box-shadow: none; border: none; }
-        .idc-wrap { page-break-after: always; }
+        .idc-card:first-child { page-break-after: always; }
     }
     .idc-header {
         background: #0f6e6e;
