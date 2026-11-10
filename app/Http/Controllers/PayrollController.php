@@ -235,6 +235,10 @@ class PayrollController extends Controller
 
     public function pay(Request $request, $id)
     {
+        if (!$request->isMethod('post')) {
+            return redirect()->route('admin.payroll.index', $request->only(['month', 'department_id', 'status', 'search', 'sort', 'dir']));
+        }
+
         $validated = $request->validate([
             'payment_amount'    => 'required|numeric|min:0.01',
             'payment_method'    => 'required|in:bank,cash,mobile_money',
