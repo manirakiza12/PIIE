@@ -7,8 +7,10 @@ use App\Models\Payroll;
 use App\Models\PayrollPayment;
 use App\Models\PayrollSetting;
 use App\Models\SalaryStructure;
+use App\Models\Session;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -440,12 +442,22 @@ final class PayrollService
             ]);
         }
 
+        $sessionId = get_school_settings($schoolId)->value('running_session')
+            ?? Session::where('school_id', $schoolId)->where('status', 1)->value('id')
+            ?? Session::where('school_id', $schoolId)->value('id');
+
+        if (!$sessionId) {
+            throw ValidationException::withMessages([
+                'session_id' => 'No active academic session found for this school. Configure a running session or create an active session before recording payroll payments.',
+            ]);
+        }
+
         DB::table('expenses')->insert([
             'expense_category_id' => $categoryId,
             'date' => strtotime($paidOn),
             'amount' => $amount,
             'school_id' => $schoolId,
-            'session_id' => get_school_settings($schoolId)->value('running_session'),
+            'session_id' => $sessionId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

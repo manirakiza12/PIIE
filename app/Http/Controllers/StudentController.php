@@ -29,13 +29,14 @@ use App\Models\HostelRoomAllocation;
 use App\Models\MessageThrade;
 use App\Models\Noticeboard;
 use App\Models\OnlineExam;
-use App\Models\Programme;
+use App\Support\PhotoProcessing;
 use App\Models\Routine;
 use App\Models\Section;
 use App\Models\StudentFeeManager;
 use App\Models\StudentCurriculumAssignment;
 use App\Support\Admissions\ApplicationDocuments;
 use App\Models\StudentProfile;
+use App\Models\Programme;
 use App\Models\School;
 use App\Models\StudentRequest;
 use App\Models\Subject;
@@ -244,6 +245,9 @@ class StudentController extends Controller
         $cardNumber = \App\Support\IdCard::cardNumber($student);
         $validFor = \App\Support\IdCard::validFor($student->school_id);
         $qrDataUri = \App\Support\IdCard::qrDataUri($student);
+
+        // Replace photo with processed version for PDF
+        $student_details['photo'] = PhotoProcessing::getProcessedPhotoDataUri($student->id);
 
         $pdf = PDF::loadView('student.id_card_pdf', compact('student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri'));
 

@@ -87,7 +87,7 @@ class StaffCreationCharacterizationTest extends TestCase
         $this->assertSame('active', $user->staff_status);
         $this->assertSame(1, (int) $user->status);
         $role = [2 => 'ADM', 3 => 'TRS', 4 => 'ACC', 5 => 'LIB', 10 => 'WDN'][$roleId];
-        $this->assertSame(now()->format('Y/m').'/'.$role.'/001/', $user->code);
+        $this->assertMatchesRegularExpression('/^PIIE\/STF\/\d{4}\/\d{3}$/', $user->code);
         // users.school_role is never set by these flows (a created admin is therefore never the
         // primary admin); the Admin flow records school_role = 0 inside user_information only.
         $this->assertNull($user->school_role);
