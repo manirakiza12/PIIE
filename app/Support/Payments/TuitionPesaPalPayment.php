@@ -161,16 +161,16 @@ final class TuitionPesaPalPayment
                     $fee->update(['status' => 'unpaid']);
                 }
                 $changes['status'] = 'reversed';
+            } elseif ($locked->status === 'paid') { return 'paid';
             } elseif ($classification === 'COMPLETED') {
                 $paid = (DecimalAmount::minorUnits($fee->paid_amount) ?? 0) + DecimalAmount::minorUnits($locked->amount);
                 $fee->update(['paid_amount' => DecimalAmount::decimal($paid), 'status' => $paid >= DecimalAmount::minorUnits($fee->total_amount) ? 'paid' : 'unpaid',
                     'payment_method' => 'pesapal', 'gateway_reference' => $status->orderTrackingId, 'gateway_payload' => $payload]);
                 $changes['status'] = 'paid'; $changes['paid_at'] = now();
-            } elseif ($locked->status === 'paid') { return 'paid';
             } elseif ($classification === 'FAILED') {
                 $changes['status'] = 'failed';
                 // Do not reset an invoice with a newer active order.
-                if (! TuitionPayment::where('fee_id', $fee->id)->where('id', '!=', $locked->id)->where('status', 'pending')->exists() && $fee->status !== 'paid') { $fee->update(['status' => 'unpaid']); }
+                if (! TuitionPayment::where('fee_id', $fee->id')->where('id', '!=', $locked->id)->where('status', 'pending')->exists() && $fee->status !== 'paid') { $fee->update(['status' => 'unpaid']); }
             }
             $locked->update($changes);
             if ($locked->wasChanged('status')) {
