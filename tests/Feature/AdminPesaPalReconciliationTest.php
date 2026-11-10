@@ -457,4 +457,48 @@ class AdminPesaPalReconciliationTest extends TestCase
             ->post(route('admin.tuition_payments.verify_pesapal', $payment->id))
             ->assertSessionHas('error', 'Only pending or failed payments can be verified.');
     }
+
+    // ── Manual reconciliation endpoint (regression: GET used to 500) ────────
+
+    public function test_run_reconciliation_get_does_not_500(): void
+    {
+        // The button once used window.location (a GET) against this POST-only
+        // route. That GET matched admin/fee-payments/{id} with a non-numeric id
+        // and fataled as a TypeError -> 500. It must now be a clean client error.
+        $response = $this->actingAs($this->admin)
+            ->get('/admin/fee-payments/run-reconciliation');
+
+        $this->assertContains($response->getStatusCode(), [404, 405],
+            'GET run-reconciliation must not be a 500; got ' . $response->getStatusCode());
+    }
+
+    public function test_run_reconciliation_post_reconciles_pending_payments(): void
+    {
+        $fee = $this->fee();
+        $payment = $this->createPendingPayment($fee);
+        $this->code = 1; // COMPLETED
+        $this->description = 'COMPLETED';
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.tuition_payments.run_reconciliation'))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $payment->refresh();
+        $this->assertSame('paid', $payment->status);
+    }
+
+    public function test_reconciliation_page_uses_post_form_and_action_dropdown(): void
+    {
+        $fee = $this->fee();
+        $this->createPendingPayment($fee);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.tuition_payments.reconciliation'))
+            ->assertOk()
+            ->assertSee('dropdown-menu', false)
+            ->assertSee('Run Reconciliation')
+            // The run action must be a POST form, never a GET link/redirect.
+            ->assertSee('action="' . route('admin.tuition_payments.run_reconciliation') . '"', false);
+    }
 }

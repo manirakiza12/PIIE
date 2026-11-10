@@ -126,9 +126,8 @@
 {{-- Discrepancy Alert --}}
 @if($discrepancyInvoices->count() > 0)
 <div class="alert alert-warning mb-4">
-    <h5 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i> Invoices with Outstanding Balances & Pending PesaPal Payments</h5>
-    <p class="mb-2">These invoices have <strong>pending PesaPal payments</strong> but still show a balance due. Reconcile the pending payments to resolve the discrepancy.</p>
-    <div class="table-responsive">
+    <strong><i class="bi bi-exclamation-triangle me-2"></i>Invoices with pending PesaPal payments and an outstanding balance</strong> — reconcile the pending payments to resolve them.
+    <div class="table-responsive mt-2">
         <table class="table table-sm mb-0">
             <thead>
                 <tr>
@@ -204,30 +203,24 @@
                         $hasDiscrepancy = $payment->status === 'pending' && $fee && $fee->total_amount > $fee->paid_amount;
                     @endphp
                     <tr class="{{ $hasDiscrepancy ? 'table-warning' : '' }}">
-                        <td class="text-nowrap">
-                            #{{ $payment->id }}<br>
-                            <small class="text-muted">{{ $payment->reference }}</small>
-                        </td>
+                        <td class="text-nowrap">#{{ $payment->id }} <small class="text-muted">{{ $payment->reference }}</small></td>
                         <td>
                             @if($fee)
-                                <strong>#{{ $payment->fee_id }}</strong>
-                                @if($invoiceTitle)<br><small class="text-muted">{{ $invoiceTitle }}</small>@endif
-                                <br><small class="text-muted">{{ $studentName }}</small>
+                                #{{ $payment->fee_id }} · {{ $studentName }}@if($invoiceTitle) <small class="text-muted">({{ $invoiceTitle }})</small>@endif
                             @else
-                                <span class="text-danger">Invoice record unavailable</span>
-                                <br><small class="text-muted">Fee #{{ $payment->fee_id }} not found</small>
+                                <span class="text-danger">Invoice #{{ $payment->fee_id }} unavailable</span>
                             @endif
                         </td>
                         <td class="text-nowrap">{{ $payment->currency }} {{ number_format($payment->amount, 2) }}</td>
-                        <td>
+                        <td class="text-nowrap">
                             <span class="badge bg-{{ $payment->status === 'paid' ? 'success' : ($payment->status === 'pending' ? 'warning text-dark' : ($payment->status === 'failed' ? 'danger' : 'secondary')) }}">
                                 {{ ucfirst($payment->status) }}
                             </span>
                             @if($payment->isResolved())
-                                <br><small class="text-muted">Resolved</small>
+                                <small class="text-muted">resolved</small>
                             @endif
                             @if($hasDiscrepancy)
-                                <br><span class="badge bg-warning text-dark">Discrepancy</span>
+                                <span class="badge bg-warning text-dark">Discrepancy</span>
                             @endif
                         </td>
                         <td>
@@ -245,58 +238,47 @@
                         <td>
                             <span class="badge bg-{{ $environment === 'sandbox' ? 'info' : 'dark' }}">{{ ucfirst($environment) }}</span>
                         </td>
-                        <td class="text-nowrap small">
-                            @if($lastCheckedAt)
-                                {{ \Carbon\Carbon::parse($lastCheckedAt)->diffForHumans() }}
-                                <br>{{ \Carbon\Carbon::parse($lastCheckedAt)->format('Y-m-d H:i') }}
-                            @else
-                                <span class="text-muted">Never</span>
-                            @endif
+                        <td class="text-nowrap small" title="{{ $lastCheckedAt }}">
+                            {{ $lastCheckedAt ? \Carbon\Carbon::parse($lastCheckedAt)->diffForHumans() : 'Never' }}
                         </td>
                         <td class="text-nowrap">
-                            @if($fee)
-                                <a href="{{ route('admin.tuition_payments.show', $payment->fee_id) }}" class="btn btn-sm btn-outline-primary" title="View Invoice">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                            @else
-                                <span class="text-muted small">—</span>
-                            @endif
-
-                            @if(in_array($payment->status, ['pending', 'failed']) && ! $payment->isResolved() && $canManage)
-                                <div class="mt-1">
-                                    {{-- Review Payment (modal) --}}
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#reviewModal{{ $payment->id }}" title="Record admin review">
-                                        <i class="bi bi-pencil-square"></i>
-                                    </button>
-
-                                    {{-- Verify with Pesapal (Sandbox only) --}}
-                                    @if($payment->gateway_txn_id && $environment === 'sandbox')
-                                        <form method="POST" action="{{ route('admin.tuition_payments.verify_pesapal', $payment->id) }}" class="d-inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-outline-info" onclick="return confirm('Verify this payment with PesaPal Sandbox? This will query the provider using the original Sandbox credentials for the definitive status. Reconciliation may update financial records (invoice paid amount and status) based on the provider result.');" title="Verify with PesaPal">
-                                                <i class="bi bi-check-circle"></i>
-                                            </button>
-                                        </form>
-                                    @elseif($payment->gateway_txn_id && $environment === 'live')
-                                        <button type="button" class="btn btn-sm btn-outline-info" disabled title="Live payments are reconciled automatically via IPN or scheduled job. Manual verification not available.">
-                                            <i class="bi bi-info-circle"></i>
-                                        </button>
-                                    @else
-                                        <span class="text-muted small">No tracking ID</span>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-three-dots-vertical"></i> Actions
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    @if($fee)
+                                        <li><a class="dropdown-item" href="{{ route('admin.tuition_payments.show', $payment->fee_id) }}"><i class="bi bi-eye me-2"></i>View invoice</a></li>
                                     @endif
-
-                                    {{-- Archive Verified Test Payment --}}
-                                    @if($isEligibleForArchive)
-                                        <form method="POST" action="{{ route('admin.tuition_payments.archive_test', $payment->id) }}" class="d-inline">
-                                            @csrf
-                                            <input type="hidden" name="reason" value="Archiving verified Sandbox test payment">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Archive this verified test payment? This will mark it as archived and it will no longer block configuration changes. The payment snapshot and verification evidence will be preserved.');" title="Archive Verified Test Payment">
-                                                <i class="bi bi-archive"></i>
-                                            </button>
-                                        </form>
+                                    @if(in_array($payment->status, ['pending', 'failed']) && ! $payment->isResolved() && $canManage)
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#reviewModal{{ $payment->id }}"><i class="bi bi-pencil-square me-2"></i>Record review</button></li>
+                                        @if($payment->gateway_txn_id && $environment === 'sandbox')
+                                            <li>
+                                                <form method="POST" action="{{ route('admin.tuition_payments.verify_pesapal', $payment->id) }}">
+                                                    @csrf
+                                                    <button type="submit" class="dropdown-item" onclick="return confirm('Verify this payment with PesaPal now?');">
+                                                        <i class="bi bi-check-circle me-2"></i>Verify with PesaPal
+                                                    </button>
+                                                </form>
+                                            </li>
+                                        @elseif($payment->gateway_txn_id && $environment === 'live')
+                                            <li><span class="dropdown-item text-muted"><i class="bi bi-info-circle me-2"></i>Live payments reconcile automatically</span></li>
+                                        @endif
+                                        @if($isEligibleForArchive)
+                                            <li>
+                                                <form method="POST" action="{{ route('admin.tuition_payments.archive_test', $payment->id) }}">
+                                                    @csrf
+                                                    <input type="hidden" name="reason" value="Archiving verified Sandbox test payment">
+                                                    <button type="submit" class="dropdown-item text-danger" onclick="return confirm('Archive this verified test payment?');">
+                                                        <i class="bi bi-archive me-2"></i>Archive test payment
+                                                    </button>
+                                                </form>
+                                            </li>
+                                        @endif
                                     @endif
-                                </div>
-                            @endif
+                                </ul>
+                            </div>
                         </td>
                     </tr>
 
@@ -310,24 +292,10 @@
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <div class="modal-body">
-                                    <div class="mb-3">
-                                        <strong>Payment Details:</strong>
-                                        <ul class="list-unstyled small">
-                                            <li>Payment ID: #{{ $payment->id }}</li>
-                                            <li>Invoice: {{ $fee ? '#' . $payment->fee_id . ' — ' . $invoiceTitle : 'Invoice record unavailable' }}</li>
-                                            <li>Student: {{ $studentName }}</li>
-                                            <li>Amount: {{ $payment->currency }} {{ number_format($payment->amount, 2) }}</li>
-                                            <li>Status: {{ ucfirst($payment->status) }}</li>
-                                            <li>Tracking ID: {{ $payment->gateway_txn_id ?: 'None' }}</li>
-                                            <li>Environment: {{ ucfirst($environment) }}</li>
-                                            <li>Provider Classification: {{ $providerClassification ?? 'Not yet reconciled' }}</li>
-                                            <li>Last Reconciled: {{ $lastCheckedAt ? \Carbon\Carbon::parse($lastCheckedAt)->format('Y-m-d H:i') : 'Never' }}</li>
-                                        </ul>
+                                    <div class="mb-3 small">
+                                        <strong>Payment #{{ $payment->id }}</strong> · {{ $payment->currency }} {{ number_format($payment->amount, 2) }} · {{ ucfirst($payment->status) }} · {{ ucfirst($environment) }} @if($payment->gateway_txn_id) · {{ $payment->gateway_txn_id }} @endif
                                     </div>
-                                    <div class="alert alert-info small">
-                                        <strong>What this action does:</strong> Records an administrator review note and audit trail. The payment status remains unchanged.<br>
-                                        <strong>What this action does NOT do:</strong> Does not change payment status, does not credit or debit the invoice, does not modify student balances, does not resolve the payment.
-                                    </div>
+                                    <div class="alert alert-info small mb-3">Records a review note and audit trail only — payment status and invoice balance are unchanged.</div>
                                     <form method="POST" action="{{ route('admin.tuition_payments.resolve_test', $payment->id) }}">
                                         @csrf
                                         <input type="hidden" name="provider_status" value="review_only">
@@ -371,9 +339,14 @@
         <a href="{{ route('admin.tuition_payments.reconciliation', array_merge($validated, ['status' => 'failed'])) }}" class="btn btn-outline-danger">
             <i class="bi bi-x-circle me-1"></i> Show All Failed
         </a>
-        <button type="button" class="btn btn-outline-primary" onclick="if(confirm('Run scheduled PesaPal reconciliation now? This will query the provider for all pending payments with tracking IDs.')) window.location='{{ route("admin.tuition_payments.run_reconciliation") }}'">
-            <i class="bi bi-arrow-repeat me-1"></i> Run Manual Reconciliation
-        </button>
+        {{-- POST form: the route is POST-only. A window.location GET here used to
+             match admin/fee-payments/{id} with a non-numeric id and fatal as a 500. --}}
+        <form method="POST" action="{{ route('admin.tuition_payments.run_reconciliation') }}" class="d-inline">
+            @csrf
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Query PesaPal for all pending payments now?')">
+                <i class="bi bi-arrow-repeat me-1"></i> Run Reconciliation
+            </button>
+        </form>
     </div>
 </div>
 @endsection
