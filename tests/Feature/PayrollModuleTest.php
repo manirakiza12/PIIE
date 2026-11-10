@@ -760,6 +760,18 @@ class PayrollModuleTest extends TestCase
             ->assertRedirect()->assertSessionHas('success')->assertSessionHas('message');
     }
 
+    public function test_get_pay_route_redirects_to_index(): void
+    {
+        $this->structureFor($this->teacher);
+        $this->generate($this->period);
+        $payroll = $this->rowFor($this->teacher);
+        $this->actingAs($this->admin)->post(route('admin.payroll.approve', $payroll->id))->assertRedirect();
+
+        // GET on pay route redirects to index (not 405)
+        $this->actingAs($this->admin)->get(route('admin.payroll.pay', $payroll->id))
+            ->assertRedirect(route('admin.payroll.index', ['month' => $this->period]));
+    }
+
     // ── Preview ────────────────────────────────────────────────────────
 
     public function test_preview_lists_eligible_staff_without_creating_records(): void
