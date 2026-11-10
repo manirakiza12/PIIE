@@ -36,6 +36,7 @@ use App\Models\StudentFeeManager;
 use App\Models\StudentCurriculumAssignment;
 use App\Support\Admissions\ApplicationDocuments;
 use App\Models\StudentProfile;
+use App\Models\Programme;
 use App\Models\School;
 use App\Models\StudentRequest;
 use App\Models\Subject;
