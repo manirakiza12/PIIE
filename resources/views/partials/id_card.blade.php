@@ -145,7 +145,7 @@
     </div>
 
     {{-- Back --}}
-    <div class="idc-card">
+    <div class="idc-card" style="page-break-before: always;">
         <div class="idc-back-header"><b>{{ get_phrase('Terms & Emergency Information') }}</b></div>
         <div class="idc-back-body">
             <p class="idc-terms">
