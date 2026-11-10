@@ -200,7 +200,8 @@ class PayrollController extends Controller
         $flashType = $result['generated'] > 0 ? 'success' : 'info';
 
         return redirect()->route('admin.payroll.index', ['month' => $validated['month']])
-            ->with($flashType, implode(' — ', $messages));
+            ->with($flashType, implode(' — ', $messages))
+            ->with('message', implode(' — ', $messages));
     }
 
     // ── Approval workflow ────────────────────────────────────────────────
@@ -209,7 +210,8 @@ class PayrollController extends Controller
     {
         app(PayrollService::class)->approve($this->school_id, Auth::id(), (int) $id);
 
-        return redirect()->back()->with('success', get_phrase('Payslip approved'));
+        return redirect()->back()->with('success', get_phrase('Payslip approved'))
+            ->with('message', get_phrase('Payslip approved'));
     }
 
     public function reject(Request $request, $id)
@@ -217,14 +219,16 @@ class PayrollController extends Controller
         $validated = $request->validate(['rejection_reason' => 'required|string|min:5|max:255']);
         app(PayrollService::class)->reject($this->school_id, Auth::id(), (int) $id, $validated['rejection_reason']);
 
-        return redirect()->back()->with('success', get_phrase('Payslip rejected'));
+        return redirect()->back()->with('success', get_phrase('Payslip rejected'))
+            ->with('message', get_phrase('Payslip rejected'));
     }
 
     public function destroy(Request $request, $id)
     {
         app(PayrollService::class)->deleteDraft($this->school_id, (int) $id);
 
-        return redirect()->back()->with('success', get_phrase('Draft payslip deleted'));
+        return redirect()->back()->with('success', get_phrase('Draft payslip deleted'))
+            ->with('message', get_phrase('Draft payslip deleted'));
     }
 
     // ── Payment recording ────────────────────────────────────────────────
@@ -248,7 +252,8 @@ class PayrollController extends Controller
             $validated['paid_on'] ?? null,
         );
 
-        return redirect()->back()->with('success', get_phrase('Payment recorded'));
+        return redirect()->back()->with('success', get_phrase('Payment recorded'))
+            ->with('message', get_phrase('Payment recorded'));
     }
 
     public function paymentHistory($id)

@@ -16,6 +16,7 @@
 
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if(session('info'))<div class="alert alert-info">{{ session('info') }}</div>@endif
+@if(session('message'))<div class="alert alert-success">{{ session('message') }}</div>@endif
 
 <div class="eSection-wrap p-3 mb-3">
     <form method="GET" action="{{ route('admin.payroll.index') }}" class="row g-2 align-items-end">
@@ -138,55 +139,6 @@
                         </div>
                     </td>
                 </tr>
-
-                @if($p->status=='draft' && !$p->isRejected())
-                <div class="modal fade" id="rejectModal{{ $p->id }}" tabindex="-1">
-                    <div class="modal-dialog">
-                        <form method="POST" action="{{ route('admin.payroll.reject', $p->id) }}" class="modal-content">
-                            @csrf
-                            <div class="modal-header"><h5 class="modal-title">{{ get_phrase('Reject payslip') }} — {{ optional($p->staff)->name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                            <div class="modal-body">
-                                <label class="form-label">{{ get_phrase('Reason') }}</label>
-                                <textarea name="rejection_reason" class="form-control" rows="2" required minlength="5" maxlength="255" placeholder="{{ get_phrase('Explain why this payroll entry is rejected…') }}"></textarea>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ get_phrase('Cancel') }}</button>
-                                <button type="submit" class="btn btn-danger">{{ get_phrase('Reject') }}</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-                @endif
-
-                @if($p->status=='approved')
-                <div class="modal fade" id="payModal{{ $p->id }}" tabindex="-1">
-                    <div class="modal-dialog">
-                        <form method="POST" action="{{ route('admin.payroll.pay', $p->id) }}" class="modal-content">
-                            @csrf
-                            <div class="modal-header"><h5 class="modal-title">{{ get_phrase('Record payment') }} — {{ optional($p->staff)->name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                            <div class="modal-body">
-                                <p class="mb-2">{{ get_phrase('Employee') }}: <strong>{{ optional($p->staff)->name }}</strong> · {{ get_phrase('Period') }}: <strong>{{ $p->pay_period?->format('F Y') }}</strong></p>
-                                <p class="mb-2">{{ get_phrase('Net salary') }}: <strong>{{ number_format($p->net_pay, 2) }}</strong> · {{ get_phrase('Already paid') }}: <strong>{{ number_format($p->paid_amount, 2) }}</strong> · {{ get_phrase('Remaining') }}: <strong>{{ number_format($p->net_pay - $p->paid_amount, 2) }}</strong></p>
-                                <div class="mb-2"><label class="form-label">{{ get_phrase('Amount (UGX)') }}</label><input type="number" name="payment_amount" class="form-control" step="0.01" min="0.01" max="{{ $p->net_pay - $p->paid_amount }}" value="{{ number_format($p->net_pay - $p->paid_amount, 2, '.', '') }}" required></div>
-                                <div class="mb-2"><label class="form-label">{{ get_phrase('Method') }}</label>
-                                    <select name="payment_method" class="form-select" required>
-                                        <option value="bank">{{ get_phrase('Bank transfer') }}</option>
-                                        <option value="cash">{{ get_phrase('Cash') }}</option>
-                                        <option value="mobile_money">{{ get_phrase('Mobile money') }}</option>
-                                    </select>
-                                </div>
-                                <div class="mb-2"><label class="form-label">{{ get_phrase('Transaction reference') }}</label><input type="text" name="payment_reference" class="form-control" maxlength="100" required placeholder="TRX / receipt no."></div>
-                                <div><label class="form-label">{{ get_phrase('Payment date') }}</label><input type="date" name="paid_on" class="form-control" value="{{ now()->toDateString() }}"></div>
-                                <small class="text-muted d-block mt-2">{{ get_phrase('This posts the amount as a school payroll expense in the Finance module. Student fee balances are never affected.') }}</small>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ get_phrase('Cancel') }}</button>
-                                <button type="submit" class="btn btn-success">{{ get_phrase('Record payment') }}</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-                @endif
             @empty
                 <tr><td colspan="10" class="text-center text-muted py-4">{{ get_phrase('No payroll records for this period. Use Preview run or Generate Payroll.') }}</td></tr>
             @endforelse
@@ -195,4 +147,61 @@
     </div>
     {{ $payrolls->links() }}
 </div></div></div>
+
+{{-- Modals rendered OUTSIDE the table (valid HTML) --}}
+@foreach($payrolls as $p)
+    @if($p->status === 'draft' && !$p->isRejected())
+    <div class="modal fade" id="rejectModal{{ $p->id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ route('admin.payroll.reject', $p->id) }}">
+                    @csrf
+                    <div class="modal-header"><h5 class="modal-title">{{ get_phrase('Reject payslip') }} — {{ optional($p->staff)->name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ get_phrase('Close') }}"></button></div>
+                    <div class="modal-body">
+                        <label class="form-label">{{ get_phrase('Reason') }}</label>
+                        <textarea name="rejection_reason" class="form-control" rows="2" required minlength="5" maxlength="255" placeholder="{{ get_phrase('Explain why this payroll entry is rejected…') }}"></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ get_phrase('Cancel') }}</button>
+                        <button type="submit" class="btn btn-danger">{{ get_phrase('Reject') }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    @if($p->status === 'approved')
+    <div class="modal fade" id="payModal{{ $p->id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ route('admin.payroll.pay', $p->id) }}">
+                    @csrf
+                    <div class="modal-header"><h5 class="modal-title">{{ get_phrase('Record payment') }} — {{ optional($p->staff)->name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ get_phrase('Close') }}"></button></div>
+                    <div class="modal-body">
+                        <p class="mb-2">{{ get_phrase('Employee') }}: <strong>{{ optional($p->staff)->name }}</strong> · {{ get_phrase('Period') }}: <strong>{{ $p->pay_period?->format('F Y') }}</strong></p>
+                        <p class="mb-2">{{ get_phrase('Net salary') }}: <strong>{{ number_format($p->net_pay, 2) }}</strong> · {{ get_phrase('Already paid') }}: <strong>{{ number_format($p->paid_amount, 2) }}</strong> · {{ get_phrase('Remaining') }}: <strong>{{ number_format($p->net_pay - $p->paid_amount, 2) }}</strong></p>
+                        <div class="mb-2"><label class="form-label">{{ get_phrase('Amount (UGX)') }}</label><input type="number" name="payment_amount" class="form-control" step="0.01" min="0.01" max="{{ $p->net_pay - $p->paid_amount }}" value="{{ number_format($p->net_pay - $p->paid_amount, 2, '.', '') }}" required></div>
+                        <div class="mb-2"><label class="form-label">{{ get_phrase('Method') }}</label>
+                            <select name="payment_method" class="form-select" required>
+                                <option value="bank">{{ get_phrase('Bank transfer') }}</option>
+                                <option value="cash">{{ get_phrase('Cash') }}</option>
+                                <option value="mobile_money">{{ get_phrase('Mobile money') }}</option>
+                            </select>
+                        </div>
+                        <div class="mb-2"><label class="form-label">{{ get_phrase('Transaction reference') }}</label><input type="text" name="payment_reference" class="form-control" maxlength="100" required placeholder="TRX / receipt no."></div>
+                        <div><label class="form-label">{{ get_phrase('Payment date') }}</label><input type="date" name="paid_on" class="form-control" value="{{ now()->toDateString() }}"></div>
+                        <small class="text-muted d-block mt-2">{{ get_phrase('This posts the amount as a school payroll expense in the Finance module. Student fee balances are never affected.') }}</small>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ get_phrase('Cancel') }}</button>
+                        <button type="submit" class="btn btn-success">{{ get_phrase('Record payment') }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endif
+@endforeach
+
 @endsection
