@@ -21,6 +21,10 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     private int $code = 0;
     private string $description = 'INVALID';
     private string $amount = '5000.00';
+    private string $channel = 'Card';
+    private bool $statusUnavailable = false;
+    private bool $amountMismatch = false;
+    private bool $currencyMismatch = false;
 
     protected function setUp(): void
     {
@@ -42,13 +46,17 @@ class TuitionPesaPalFailureReasonTest extends TestCase
             if (str_contains($request->url(), 'SubmitOrderRequest')) {
                 $this->orders++;
                 $this->reference = $request['id'];
+                if ($this->statusUnavailable) { throw new \Illuminate\Http\Client\ConnectionException('timeout'); }
                 return Http::response(['order_tracking_id' => self::GUID, 'merchant_reference' => $this->reference,
                     'redirect_url' => 'https://cybqa.pesapal.com/pay?OrderTrackingId=' . self::GUID, 'status' => '200', 'error' => null]);
             }
             if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => $this->amount,
-                    'currency' => 'UGX', 'status_code' => $this->code, 'payment_status_description' => $this->description,
-                    'payment_method' => 'Card', 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]);
+                if ($this->statusUnavailable) { return Http::response([], 503); }
+                $amount = $this->amountMismatch ? '4999.00' : $this->amount;
+                $currency = $this->currencyMismatch ? 'KES' : 'UGX';
+                return Http::response(['merchant_reference' => $this->reference,
+                    'amount' => $amount, 'currency' => $currency, 'status_code' => $this->code, 'payment_status_description' => $this->description,
+                    'payment_method' => $this->channel, 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]);
             }
             throw new \RuntimeException('Unexpected request');
         });
@@ -68,17 +76,7 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $this->code = 2;
         $this->description = 'Failed';
         $this->amount = '5000.00';
-
-        // Simulate provider returning "Insufficient funds" in description
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 2, 'payment_status_description' => 'Failed',
-                    'payment_method' => 'MTN Mobile Money', 'confirmation_code' => null,
-                    'description' => 'Insufficient funds', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->channel = 'MTN Mobile Money';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -87,7 +85,6 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $this->assertSame('failed', $payment->status);
         $this->assertSame('INSUFFICIENT_FUNDS', $payment->gateway_payload['verified_failure_reason']);
 
-        // Test the experience helper displays the correct message
         $experience = PesaPalPaymentExperience::forPayment($payment);
         $this->assertSame('failed', $experience['state']);
         $this->assertSame('The provider reported insufficient funds.', $experience['reason']);
@@ -97,16 +94,9 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 2, 'payment_status_description' => 'Failed',
-                    'payment_method' => 'Card', 'confirmation_code' => null,
-                    'description' => 'Cancelled by user', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 2;
+        $this->description = 'Failed';
+        $this->amount = '5000.00';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -122,16 +112,8 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 2, 'payment_status_description' => 'Failed',
-                    'payment_method' => 'Card', 'confirmation_code' => null,
-                    'description' => 'Payment expired', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 2;
+        $this->description = 'Failed';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -148,16 +130,8 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 2, 'payment_status_description' => 'Failed',
-                    'payment_method' => 'Card', 'confirmation_code' => null,
-                    'description' => 'Unable to authorize transaction', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 2;
+        $this->description = 'Failed';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -173,16 +147,10 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 2, 'payment_status_description' => 'Failed',
-                    'payment_method' => 'Card', 'confirmation_code' => null,
-                    'description' => 'Request processed successfully', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 2;
+        $this->description = 'Failed';
+        $this->amount = '5000.00';
+        $this->channel = 'Card';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -231,15 +199,8 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $this->code = 1;
         $this->description = 'Completed';
         TuitionPesaPalPayment::reconcile($payment);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 3, 'payment_status_description' => 'Reversed',
-                    'payment_method' => 'Card', 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 3;
+        $this->description = 'Reversed';
 
         $result = TuitionPesaPalPayment::reconcile($payment->fresh());
         $payment->refresh();
@@ -256,16 +217,10 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 2, 'payment_status_description' => 'Failed',
-                    'payment_method' => 'Card', 'confirmation_code' => null,
-                    'description' => 'Insufficient funds', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 2;
+        $this->description = 'Failed';
+        $this->amount = '5000.00';
+        $this->channel = 'Card';
 
         TuitionPesaPalPayment::reconcile($payment);
 
@@ -287,16 +242,11 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
+        $this->code = 1;
+        $this->description = 'Completed';
 
-        // Try to reconcile without provider evidence - should fail
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => 'WRONG-REF', 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 1, 'payment_status_description' => 'Completed',
-                    'payment_method' => 'Card', 'confirmation_code' => 'WRONG-CODE', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        // Use wrong reference to simulate mismatched provider evidence
+        $this->reference = 'WRONG-REF';
 
         try {
             TuitionPesaPalPayment::reconcile($payment);
@@ -317,7 +267,6 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         TuitionPesaPalPayment::reconcile($payment);
         $firstPaidAmount = $fee->fresh()->paid_amount;
 
-        // Second reconciliation attempt
         TuitionPesaPalPayment::reconcile($payment->fresh());
         $secondPaidAmount = $fee->fresh()->paid_amount;
 
@@ -329,15 +278,9 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '4999.00',
-                    'currency' => 'UGX', 'status_code' => 1, 'payment_status_description' => 'Completed',
-                    'payment_method' => 'Card', 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 1;
+        $this->description = 'Completed';
+        $this->amountMismatch = true;
 
         try {
             TuitionPesaPalPayment::reconcile($payment);
@@ -352,15 +295,9 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'KES', 'status_code' => 1, 'payment_status_description' => 'Completed',
-                    'payment_method' => 'Card', 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 1;
+        $this->description = 'Completed';
+        $this->currencyMismatch = true;
 
         try {
             TuitionPesaPalPayment::reconcile($payment);
@@ -374,13 +311,7 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     {
         $fee = $this->fee();
         $payment = TuitionPesaPalPayment::start($fee);
-
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response([], 503);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->statusUnavailable = true;
 
         try {
             TuitionPesaPalPayment::reconcile($payment);
@@ -402,14 +333,8 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $this->assertSame(5000, (int) $fee->fresh()->paid_amount);
         $this->assertSame('paid', $fee->fresh()->status);
 
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 3, 'payment_status_description' => 'Reversed',
-                    'payment_method' => 'Card', 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 3;
+        $this->description = 'Reversed';
 
         TuitionPesaPalPayment::reconcile($payment->fresh());
         $payment->refresh();
@@ -419,14 +344,8 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $this->assertSame('unpaid', $fee->fresh()->status);
 
         // Late success after reversal should not re-credit
-        Http::fake(function ($request) {
-            if (str_contains($request->url(), 'GetTransactionStatus')) {
-                return Http::response(['merchant_reference' => $this->reference, 'amount' => '5000.00',
-                    'currency' => 'UGX', 'status_code' => 1, 'payment_status_description' => 'Completed',
-                    'payment_method' => 'Card', 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]);
-            }
-            throw new \RuntimeException('Unexpected request');
-        });
+        $this->code = 1;
+        $this->description = 'Completed';
 
         $result = TuitionPesaPalPayment::reconcile($payment->fresh());
         $this->assertSame('reversed', $result);
