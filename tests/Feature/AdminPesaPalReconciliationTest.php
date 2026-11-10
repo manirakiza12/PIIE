@@ -501,4 +501,21 @@ class AdminPesaPalReconciliationTest extends TestCase
             // The run action must be a POST form, never a GET link/redirect.
             ->assertSee('action="' . route('admin.tuition_payments.run_reconciliation') . '"', false);
     }
+
+    public function test_reconciliation_page_has_no_duplicated_sections(): void
+    {
+        $fee = $this->fee(['total_amount' => 5000, 'paid_amount' => 0, 'status' => 'unpaid']);
+        $this->createPendingPayment($fee);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.tuition_payments.reconciliation'))
+            ->assertOk()
+            // The old page repeated the same payments in a second
+            // "Discrepancy Alert" table and repeated the filters in a
+            // "Reconciliation Quick Actions" block. Both are gone.
+            ->assertDontSee('Reconciliation Quick Actions')
+            ->assertDontSee('Invoices with pending PesaPal payments and an outstanding balance')
+            // The discrepancy notice now links to the filter instead.
+            ->assertSee('Show only discrepancies');
+    }
 }
