@@ -4,11 +4,21 @@
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
             <h1 class="h4 mb-0">PesaPal Reconciliation</h1>
-            <p class="text-muted mb-0">Centralized payment verification and financial reconciliation</p>
+            <p class="text-muted mb-0 small">Verify pending payments and settle invoices.</p>
         </div>
-        <a href="{{ route('admin.tuition_payments.index') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i> Fee payments
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{{ route('admin.tuition_payments.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i> Fee payments
+            </a>
+            {{-- POST form: the route is POST-only. A window.location GET here used to
+                 match admin/fee-payments/{id} with a non-numeric id and fatal as a 500. --}}
+            <form method="POST" action="{{ route('admin.tuition_payments.run_reconciliation') }}" class="d-inline">
+                @csrf
+                <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Query PesaPal for all pending payments now?')">
+                    <i class="bi bi-arrow-repeat me-1"></i> Run Reconciliation
+                </button>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -28,150 +38,114 @@
     <div class="alert alert-warning" role="alert">{{ session('warning') }}</div>
 @endif
 
-{{-- Summary Cards --}}
-<div class="row g-3 mb-4">
-    <div class="col-12 col-md-6 col-lg-2">
-        <div class="eSection-wrap text-center">
-            <div class="h5 text-warning mb-0">{{ $summary['total_pending'] }}</div>
-            <div class="small text-muted">Pending</div>
+{{-- Summary strip: one compact line, no duplicate cards --}}
+<div class="eSection-wrap mb-3">
+    <div class="d-flex flex-wrap align-items-center gap-4">
+        <div class="d-flex align-items-baseline gap-2">
+            <span class="h5 mb-0 text-warning">{{ $summary['total_pending'] }}</span>
+            <span class="small text-muted">Pending</span>
             @if($summary['stale_pending'] > 0)
-                <div class="small text-danger">({{ $summary['stale_pending'] }} stale >7d)</div>
+                <span class="badge bg-danger">{{ $summary['stale_pending'] }} stale</span>
             @endif
         </div>
-    </div>
-    <div class="col-12 col-md-6 col-lg-2">
-        <div class="eSection-wrap text-center">
-            <div class="h5 text-success mb-0">{{ $summary['total_paid'] }}</div>
-            <div class="small text-muted">Paid</div>
+        <div class="d-flex align-items-baseline gap-2">
+            <span class="h5 mb-0 text-success">{{ $summary['total_paid'] }}</span>
+            <span class="small text-muted">Paid</span>
         </div>
-    </div>
-    <div class="col-12 col-md-6 col-lg-2">
-        <div class="eSection-wrap text-center">
-            <div class="h5 text-danger mb-0">{{ $summary['total_failed'] }}</div>
-            <div class="small text-muted">Failed</div>
+        <div class="d-flex align-items-baseline gap-2">
+            <span class="h5 mb-0 text-danger">{{ $summary['total_failed'] }}</span>
+            <span class="small text-muted">Failed</span>
             @if($summary['unverified_failed'] > 0)
-                <div class="small text-warning">({{ $summary['unverified_failed'] }} unverified)</div>
+                <span class="badge bg-warning text-dark">{{ $summary['unverified_failed'] }} unverified</span>
             @endif
         </div>
-    </div>
-    <div class="col-12 col-md-6 col-lg-2">
-        <div class="eSection-wrap text-center">
-            <div class="h5 text-secondary mb-0">{{ $summary['total_reversed'] }}</div>
-            <div class="small text-muted">Reversed</div>
+        <div class="d-flex align-items-baseline gap-2">
+            <span class="h5 mb-0 text-secondary">{{ $summary['total_reversed'] }}</span>
+            <span class="small text-muted">Reversed</span>
         </div>
-    </div>
-    <div class="col-12 col-md-6 col-lg-2">
-        <div class="eSection-wrap text-center">
-            <div class="h5 text-dark mb-0">{{ $summary['total_archived'] }}</div>
-            <div class="small text-muted">Archived</div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6 col-lg-2">
-        <div class="eSection-wrap text-center">
-            <div class="h5 text-primary mb-0">{{ $discrepancyInvoices->count() }}</div>
-            <div class="small text-muted">Invoices with Discrepancies</div>
+        <div class="d-flex align-items-baseline gap-2">
+            <span class="h5 mb-0 text-dark">{{ $summary['total_archived'] }}</span>
+            <span class="small text-muted">Archived</span>
         </div>
     </div>
 </div>
 
-{{-- Filters --}}
-<div class="eSection-wrap mb-4">
-    <form method="get" class="row g-3 align-items-end flex-wrap">
-        <div class="col-12 col-md-3">
-            <label for="status" class="form-label mb-1">Payment Status</label>
+{{-- Toolbar: a single filter row; rare filters are tucked away --}}
+<div class="eSection-wrap mb-3">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+            <label for="status" class="form-label mb-1 small">Status</label>
             <select id="status" name="status" class="form-select form-select-sm">
-                <option value="">All Statuses</option>
+                <option value="">All statuses</option>
                 @foreach(['pending','paid','failed','reversed','archived'] as $value)
                     <option value="{{ $value }}" @selected(($validated['status'] ?? null) === $value)>{{ ucfirst($value) }}</option>
                 @endforeach
             </select>
         </div>
-        <div class="col-12 col-md-3">
-            <label for="environment" class="form-label mb-1">Environment</label>
+        <div class="col-6 col-md-2">
+            <label for="environment" class="form-label mb-1 small">Environment</label>
             <select id="environment" name="environment" class="form-select form-select-sm">
-                <option value="">All Environments</option>
+                <option value="">All</option>
                 <option value="sandbox" @selected(($validated['environment'] ?? null) === 'sandbox')>Sandbox</option>
                 <option value="live" @selected(($validated['environment'] ?? null) === 'live')>Live</option>
             </select>
         </div>
         <div class="col-12 col-md-3">
-            <label for="date_from" class="form-label mb-1">Date From</label>
-            <input type="date" id="date_from" name="date_from" class="form-control form-control-sm" value="{{ $validated['date_from'] ?? '' }}">
-        </div>
-        <div class="col-12 col-md-3">
-            <label for="date_to" class="form-label mb-1">Date To</label>
-            <input type="date" id="date_to" name="date_to" class="form-control form-control-sm" value="{{ $validated['date_to'] ?? '' }}">
-        </div>
-        <div class="col-12 col-md-3">
-            <label for="student_search" class="form-label mb-1">Student Search</label>
+            <label for="student_search" class="form-label mb-1 small">Student</label>
             <input type="text" id="student_search" name="student_search" class="form-control form-control-sm" placeholder="Name or code" value="{{ $validated['student_search'] ?? '' }}">
         </div>
         <div class="col-12 col-md-3">
-            <label for="reference_search" class="form-label mb-1">Reference / Tracking ID</label>
+            <label for="reference_search" class="form-label mb-1 small">Reference / tracking</label>
             <input type="text" id="reference_search" name="reference_search" class="form-control form-control-sm" placeholder="PRN or OrderTrackingId" value="{{ $validated['reference_search'] ?? '' }}">
-        </div>
-        <div class="col-12 col-md-2">
-            <div class="form-check mt-3">
-                <input class="form-check-input" type="checkbox" id="discrepancy" name="discrepancy" value="1" @checked($validated['discrepancy'] ?? false)>
-                <label class="form-check-label small" for="discrepancy">Show Discrepancies Only</label>
-            </div>
         </div>
         <div class="col-12 col-md-2 d-flex gap-2">
             <button type="submit" class="btn btn-primary btn-sm">Filter</button>
             <a href="{{ route('admin.tuition_payments.reconciliation') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
         </div>
+
+        <div class="col-12">
+            <details @if(($validated['date_from'] ?? null) || ($validated['date_to'] ?? null) || ($validated['discrepancy'] ?? false)) open @endif>
+                <summary class="small text-muted">More filters</summary>
+                <div class="row g-2 align-items-end mt-1">
+                    <div class="col-6 col-md-2">
+                        <label for="date_from" class="form-label mb-1 small">Date from</label>
+                        <input type="date" id="date_from" name="date_from" class="form-control form-control-sm" value="{{ $validated['date_from'] ?? '' }}">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="date_to" class="form-label mb-1 small">Date to</label>
+                        <input type="date" id="date_to" name="date_to" class="form-control form-control-sm" value="{{ $validated['date_to'] ?? '' }}">
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="discrepancy" name="discrepancy" value="1" @checked($validated['discrepancy'] ?? false)>
+                            <label class="form-check-label small" for="discrepancy">Show discrepancies only</label>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        </div>
     </form>
 </div>
 
-{{-- Discrepancy Alert --}}
+{{-- Discrepancy notice: one line, links to the filter instead of repeating the whole table --}}
 @if($discrepancyInvoices->count() > 0)
-<div class="alert alert-warning mb-4">
-    <strong><i class="bi bi-exclamation-triangle me-2"></i>Invoices with pending PesaPal payments and an outstanding balance</strong> — reconcile the pending payments to resolve them.
-    <div class="table-responsive mt-2">
-        <table class="table table-sm mb-0">
-            <thead>
-                <tr>
-                    <th>Invoice</th>
-                    <th>Student</th>
-                    <th>Total</th>
-                    <th>Paid</th>
-                    <th>Balance</th>
-                    <th>Pending PesaPal</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($discrepancyInvoices as $fee)
-                    <tr>
-                        <td>
-                            <strong>#{{ $fee->id }}</strong>
-                            @if($fee->title)<br><small class="text-muted">{{ $fee->title }}</small>@endif
-                        </td>
-                        <td>{{ $fee->student?->name ?? '—' }}<br><small class="text-muted">{{ $fee->student?->code ?? '—' }}</small></td>
-                        <td>{{ $fee->currency ?? 'UGX' }} {{ number_format($fee->total_amount, 2) }}</td>
-                        <td>{{ $fee->currency ?? 'UGX' }} {{ number_format($fee->paid_amount, 2) }}</td>
-                        <td class="text-danger fw-bold">{{ $fee->currency ?? 'UGX' }} {{ number_format($fee->total_amount - $fee->paid_amount, 2) }}</td>
-                        <td>
-                            @foreach($fee->pesapalPayments as $p)
-                                <span class="badge bg-warning text-dark me-1">
-                                    {{ $p->currency }} {{ number_format($p->amount, 2) }}
-                                    @if($p->gateway_txn_id)
-                                        <br><small>{{ $p->gateway_txn_id }}</small>
-                                    @endif
-                                </span>
-                            @endforeach
-                        </td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
+<div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 py-2 mb-3">
+    <div class="small">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <strong>{{ $discrepancyInvoices->count() }}</strong> {{ \Illuminate\Support\Str::plural('invoice', $discrepancyInvoices->count()) }} with pending PesaPal payments and an outstanding balance.
     </div>
+    <a href="{{ route('admin.tuition_payments.reconciliation', array_merge($validated, ['discrepancy' => true])) }}" class="btn btn-sm btn-outline-dark">Show only discrepancies</a>
 </div>
 @endif
 
 {{-- Payments Table --}}
 <div class="eSection-wrap">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h6 mb-0">Payments</h2>
+        <span class="small text-muted">{{ $payments->total() }} result{{ $payments->total() === 1 ? '' : 's' }}</span>
+    </div>
     <div class="table-responsive">
-        <table class="table table-sm">
+        <table class="table table-sm table-hover align-middle">
             <thead>
                 <tr>
                     <th>Payment ID</th>
@@ -326,27 +300,4 @@
     {{ $payments->links() }}
 </div>
 
-{{-- Reconciliation Summary Footer --}}
-<div class="eSection-wrap mt-4">
-    <h5>Reconciliation Quick Actions</h5>
-    <div class="d-flex flex-wrap gap-2">
-        <a href="{{ route('admin.tuition_payments.reconciliation', array_merge($validated, ['discrepancy' => true])) }}" class="btn btn-warning">
-            <i class="bi bi-exclamation-triangle me-1"></i> Show Only Discrepancies
-        </a>
-        <a href="{{ route('admin.tuition_payments.reconciliation', array_merge($validated, ['status' => 'pending'])) }}" class="btn btn-outline-warning">
-            <i class="bi bi-clock me-1"></i> Show All Pending
-        </a>
-        <a href="{{ route('admin.tuition_payments.reconciliation', array_merge($validated, ['status' => 'failed'])) }}" class="btn btn-outline-danger">
-            <i class="bi bi-x-circle me-1"></i> Show All Failed
-        </a>
-        {{-- POST form: the route is POST-only. A window.location GET here used to
-             match admin/fee-payments/{id} with a non-numeric id and fatal as a 500. --}}
-        <form method="POST" action="{{ route('admin.tuition_payments.run_reconciliation') }}" class="d-inline">
-            @csrf
-            <button type="submit" class="btn btn-primary" onclick="return confirm('Query PesaPal for all pending payments now?')">
-                <i class="bi bi-arrow-repeat me-1"></i> Run Reconciliation
-            </button>
-        </form>
-    </div>
-</div>
 @endsection
