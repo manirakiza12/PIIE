@@ -81,6 +81,8 @@ final class ApplicantPesaPalPayment
                 'id' => $payment->reference, 'amount' => (string) $payment->amount, 'currency' => $payment->currency,
                 'description' => 'Application fee PRN ' . ApplicationFee::registrationNumber($admission),
                 'callback_url' => route('applicant.pesapal.callback'),
+                'cancellation_url' => route('applicant.pesapal.invitation', $admission->id),
+                'redirect_mode' => 'TOP_WINDOW',
                 'notification_id' => $configuration->notificationId,
                 'billing_address' => ['email_address' => (string) $admission->email, 'phone_number' => $payerPhone ?: (string) $admission->phone,
                     'first_name' => (string) $admission->first_name, 'last_name' => (string) $admission->last_name],
