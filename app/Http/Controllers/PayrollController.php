@@ -297,6 +297,7 @@ class PayrollController extends Controller
             ->whereIn('payroll.pay_period', $periods)
             ->join('users', 'payroll.staff_id', '=', 'users.id')
             ->leftJoin('departments', 'users.department_id', '=', 'departments.id')
+            ->where('users.school_id', $this->school_id)
             ->selectRaw("COALESCE(departments.name, '— Unassigned —') as department,
                 COUNT(*) as employees,
                 SUM(payroll.basic_salary + payroll.allowances + payroll.other_earnings) as gross,
