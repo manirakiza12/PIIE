@@ -663,6 +663,103 @@ class PayrollModuleTest extends TestCase
             ->assertSee('value="'.number_format($net, 2, '.', '').'"', false);
     }
 
+    // ── Full workflow regression: approve → pay (partial → full) ────────────
+
+    public function test_full_workflow_approve_then_pay_partial_then_complete(): void
+    {
+        $this->structureFor($this->teacher, ['basic' => 1000000, 'housing' => 0, 'transport' => 0, 'medical' => 0]);
+        $this->generate($this->period);
+        $payroll = $this->rowFor($this->teacher);
+
+        // 1. Draft → Approve
+        $this->actingAs($this->admin)->post(route('admin.payroll.approve', $payroll->id))
+            ->assertRedirect()->assertSessionHas('success');
+        $this->assertSame('approved', DB::table('payroll')->find($payroll->id)->status);
+
+        // 2. Approved → Partial payment
+        $net = (float) DB::table('payroll')->find($payroll->id)->net_pay;
+        $partial = round($net / 2, 2);
+        $this->actingAs($this->admin)->post(route('admin.payroll.pay', $payroll->id), $this->paymentPayload($partial))
+            ->assertRedirect()->assertSessionHas('success');
+        $afterPartial = DB::table('payroll')->find($payroll->id);
+        $this->assertSame('approved', $afterPartial->status, 'Partially paid stays approved');
+        $this->assertEqualsWithDelta($partial, (float) $afterPartial->paid_amount, 0.01);
+        $this->assertSame(1, DB::table('payroll_payments')->where('payroll_id', $payroll->id)->count());
+
+        // 3. Partial → Full payment
+        $remaining = round($net - $partial, 2);
+        $this->actingAs($this->admin)->post(route('admin.payroll.pay', $payroll->id), $this->paymentPayload($remaining))
+            ->assertRedirect()->assertSessionHas('success');
+        $afterFull = DB::table('payroll')->find($payroll->id);
+        $this->assertSame('paid', $afterFull->status);
+        $this->assertEqualsWithDelta($net, (float) $afterFull->paid_amount, 0.01);
+        $this->assertSame(2, DB::table('payroll_payments')->where('payroll_id', $payroll->id)->count());
+
+        // 4. Expense posted for each payment
+        $this->assertSame(2, DB::table('expenses')->where('school_id', $this->school)->count());
+    }
+
+    public function test_payment_modal_renders_for_approved_rows_and_submits_to_correct_route(): void
+    {
+        $this->structureFor($this->teacher, ['basic' => 1000000, 'housing' => 0, 'transport' => 0, 'medical' => 0]);
+        $this->generate($this->period);
+        $payroll = $this->rowFor($this->teacher);
+        $this->actingAs($this->admin)->post(route('admin.payroll.approve', $payroll->id))->assertRedirect();
+
+        // Dashboard renders payment modal with correct form action
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.payroll.index', ['month' => $this->period]));
+        $response->assertOk();
+        $content = (string) $response->getContent();
+
+        // Modal exists with correct ID
+        $this->assertStringContainsString("id=\"payModal{$payroll->id}\"", $content);
+        // Form action points to correct pay route
+        $this->assertStringContainsString("action=\"".route('admin.payroll.pay', $payroll->id)."\"", $content);
+        // Modal has proper Bootstrap structure: modal-dialog > modal-content > form
+        $this->assertStringContainsString('<div class="modal-dialog">', $content);
+        $this->assertStringContainsString('<div class="modal-content">', $content);
+        // Payment fields present
+        $this->assertStringContainsString('name="payment_amount"', $content);
+        $this->assertStringContainsString('name="payment_method"', $content);
+        $this->assertStringContainsString('name="payment_reference"', $content);
+        $this->assertStringContainsString('name="paid_on"', $content);
+    }
+
+    public function test_reject_modal_renders_for_draft_rows(): void
+    {
+        $this->structureFor($this->teacher);
+        $this->generate($this->period);
+        $payroll = $this->rowFor($this->teacher);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.payroll.index', ['month' => $this->period]));
+        $response->assertOk();
+        $content = (string) $response->getContent();
+
+        $this->assertStringContainsString("id=\"rejectModal{$payroll->id}\"", $content);
+        $this->assertStringContainsString("action=\"".route('admin.payroll.reject', $payroll->id)."\"", $content);
+        $this->assertStringContainsString('<div class="modal-dialog">', $content);
+        $this->assertStringContainsString('<div class="modal-content">', $content);
+        $this->assertStringContainsString('name="rejection_reason"', $content);
+    }
+
+    public function test_flash_messages_appear_after_approve_and_pay(): void
+    {
+        $this->structureFor($this->teacher, ['basic' => 1000000, 'housing' => 0, 'transport' => 0, 'medical' => 0]);
+        $this->generate($this->period);
+        $payroll = $this->rowFor($this->teacher);
+
+        // Approve returns success flash
+        $this->actingAs($this->admin)->post(route('admin.payroll.approve', $payroll->id))
+            ->assertRedirect()->assertSessionHas('success')->assertSessionHas('message');
+
+        // Pay returns success flash
+        $net = (float) DB::table('payroll')->find($payroll->id)->net_pay;
+        $this->actingAs($this->admin)->post(route('admin.payroll.pay', $payroll->id), $this->paymentPayload($net))
+            ->assertRedirect()->assertSessionHas('success')->assertSessionHas('message');
+    }
+
     // ── Preview ────────────────────────────────────────────────────────
 
     public function test_preview_lists_eligible_staff_without_creating_records(): void
