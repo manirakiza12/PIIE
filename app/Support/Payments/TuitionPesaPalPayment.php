@@ -171,7 +171,7 @@ final class TuitionPesaPalPayment
             } elseif ($classification === 'FAILED') {
                 $changes['status'] = 'failed';
                 // Do not reset an invoice with a newer active order.
-                if (! TuitionPayment::where('fee_id', $fee->id')->where('id', '!=', $locked->id)->where('status', 'pending')->exists() && $fee->status !== 'paid') { $fee->update(['status' => 'unpaid']); }
+                if (! TuitionPayment::where('fee_id', $fee->id)->where('id', '!=', $locked->id)->where('status', 'pending')->exists() && $fee->status !== 'paid') { $fee->update(['status' => 'unpaid']); }
             }
             $locked->update($changes);
             if ($locked->wasChanged('status')) {
