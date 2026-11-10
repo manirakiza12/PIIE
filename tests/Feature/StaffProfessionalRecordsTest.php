@@ -484,7 +484,7 @@ class StaffProfessionalRecordsTest extends TestCase
 
         $this->assertSame(3, (int) $user->role_id);
         $this->assertSame($this->schoolA, (int) $user->school_id);
-        $this->assertSame(now()->format('Y/m').'/TRS/001/', $user->code);
+        $this->assertMatchesRegularExpression('/^PIIE\/STF\/\d{4}\/\d{3}$/', $user->code);
         $this->assertSame(self::NIN, StaffNin::decrypt($user->staffProfile));
         $this->assertCount(1, $user->staffQualifications);
         $this->assertSame($user->staffDocuments->firstWhere('category', 'academic_certificate')->id, $user->staffQualifications->first()->evidence_document_id);
