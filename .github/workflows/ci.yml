@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main, fix/**]
+  pull_request:
+    branches: [main]
+
+env:
+  PHP_VERSION: '8.3'
+  DB_DATABASE: 'ci_test'
+  DB_USERNAME: 'ci_user'
+  DB_PASSWORD: 'ci-pass-only'
+
+jobs:
+  phpunit:
+    name: PHPUnit (PHP ${{ env.PHP_VERSION }}, MySQL)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ${{ env.DB_DATABASE }}
+          MYSQL_USER: ${{ env.DB_USERNAME }}
+          MYSQL_PASSWORD: ${{ env.DB_PASSWORD }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, pdo_mysql, bcmath, intl, xml, curl, zip, gd
+          ini-values: memory_limit=512M
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install Dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
+          sed -i "s/DB_HOST=.*/DB_HOST=127.0.0.1/" .env
+          sed -i "s/DB_PORT=.*/DB_PORT=3306/" .env
+          sed -i "s/DB_DATABASE=.*/DB_DATABASE=${DB_DATABASE}/" .env
+          sed -i "s/DB_USERNAME=.*/DB_USERNAME=${DB_USERNAME}/" .env
+          sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${DB_PASSWORD}/" .env
+          sed -i "s/APP_ENV=.*/APP_ENV=testing/" .env
+          php artisan key:generate
+
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -u${DB_USERNAME} -p${DB_PASSWORD} && break
+            sleep 2
+          done
+
+      - name: Run Migrations
+        run: php artisan migrate --force --seed
+
+      - name: Run Payroll Module Tests
+        run: php vendor/bin/phpunit tests/Feature/PayrollModuleTest.php --testdox
+
+      - name: Run Full Test Suite
+        run: php vendor/bin/phpunit --exclude-group=slow
+
+  lint:
+    name: Lint & Style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, pdo_mysql
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install Dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: PHP Syntax Check
+        run: find app -name "*.php" -exec php -l {} \; | grep -v "No syntax errors"
+
+      - name: StyleCI (via StyleCI Action)
+        uses: styleci/ci-action@main
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          config: .styleci.yml
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [phpunit, lint]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/fix/')
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Staging
+        run: |
+          echo "Deploy to staging server..."
+          # Add your staging deployment commands here
+          # Example: ssh user@staging-server "cd /var/www/piie && git pull && composer install --no-dev && php artisan migrate --force"
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [phpunit, lint]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Production
+        run: |
+          echo "Deploy to production server..."
+          # Add your production deployment commands here
+          # Example: ssh user@prod-server "cd /var/www/piie && git pull && composer install --no-dev && php artisan migrate --force"

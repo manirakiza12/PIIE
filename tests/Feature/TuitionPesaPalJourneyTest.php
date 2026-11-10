@@ -80,7 +80,7 @@ class TuitionPesaPalJourneyTest extends TestCase
         $this->assertSame('UGX', $request['currency']);
         $this->assertSame(route('tuition.pesapal.callback'), $request['callback_url']);
         $this->assertSame(self::GUID, $request['notification_id']);
-        $this->assertEqualsCanonicalizing(['id', 'amount', 'currency', 'description', 'callback_url', 'notification_id', 'billing_address'], array_keys($request->data()));
+        $this->assertEqualsCanonicalizing(['id', 'amount', 'currency', 'description', 'callback_url', 'cancellation_url', 'redirect_mode', 'notification_id', 'billing_address'], array_keys($request->data()));
         $this->assertSame(['email_address' => 'student@example.test', 'phone_number' => '+256771234567', 'first_name' => 'Student', 'last_name' => 'Student'], $request['billing_address']);
         $this->assertSame('unpaid', $fee->fresh()->status);
         $this->assertSame(0, (int) $fee->fresh()->paid_amount);
