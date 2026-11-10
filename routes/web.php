@@ -2666,7 +2666,7 @@ Route::controller(PayrollController::class)->middleware('auth', 'admin', 'rbac')
     Route::post('admin/payroll/{id}/reject',          'reject')->name('admin.payroll.reject')->whereNumber('id');
     Route::delete('admin/payroll/{id}',               'destroy')->name('admin.payroll.destroy')->whereNumber('id');
     Route::post('admin/payroll/{id}/delete',          'destroy')->name('admin.payroll.delete')->whereNumber('id');
-    Route::post('admin/payroll/{id}/pay',             'pay')->name('admin.payroll.pay')->whereNumber('id');
+    Route::match(['get', 'post'], 'admin/payroll/{id}/pay', 'pay')->name('admin.payroll.pay')->whereNumber('id');
     Route::get('admin/payroll/{id}/payments',         'paymentHistory')->name('admin.payroll.payment_history')->whereNumber('id');
     Route::get('admin/payroll/reports',               'reports')->name('admin.payroll.reports');
     Route::get('admin/payroll/print/{id}',            'printSlip')->name('admin.payroll.print')->whereNumber('id');
