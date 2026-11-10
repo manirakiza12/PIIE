@@ -30,7 +30,6 @@ class IdCardRedesignTest extends TestCase
         Schema::table('users', function (Blueprint $table) {
             $table->string('staff_status')->nullable();
             $table->unsignedBigInteger('designation_id')->nullable();
-            $table->unsignedBigInteger('department_id')->nullable();
         });
         Schema::table('schools', fn (Blueprint $table) => $table->string('phone')->nullable());
 
