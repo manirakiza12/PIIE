@@ -256,9 +256,7 @@ if (!function_exists('institution_logo_url')) {
 if (!function_exists('get_school_settings')) {
     function get_school_settings($school_id = '')
     {
-        $running_session = DB::table('schools')->where('id', $school_id)->get();
-
-        return $running_session;
+        return DB::table('schools')->where('id', $school_id);
     }
 }
 
