@@ -9,6 +9,7 @@ use App\Models\PayrollSetting;
 use App\Models\SalaryStructure;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -437,6 +438,14 @@ final class PayrollService
                 'school_id' => $schoolId,
                 'created_at' => now(),
                 'updated_at' => now(),
+            ]);
+        }
+
+        $sessionId = get_school_settings($schoolId)->value('running_session');
+
+        if (!$sessionId) {
+            throw ValidationException::withMessages([
+                'session_id' => 'No running session configured for this school. Set a running session in school settings before recording payroll payments.',
             ]);
         }
 
