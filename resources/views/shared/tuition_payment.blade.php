@@ -5,6 +5,7 @@
 <title>School fee payment | PIIE</title>
 <link rel="stylesheet" href="{{ asset('assets/vendors/bootstrap-5.1.3/css/bootstrap.min.css') }}">
 <link rel="stylesheet" href="{{ asset('assets/css/fee-payment.css') }}">
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="fee-workspace"><main class="fee-shell">
 @php
@@ -92,12 +93,21 @@
 @if(in_array($area, ['student', 'parent'], true) && $fee->status !== 'paid' && $fee->total_amount > $fee->paid_amount)
 <section class="fee-panel mb-4" aria-label="Make a payment"><h2>Make a payment</h2>
     <p class="fee-caption">Pay securely through PesaPal. Your invoice updates after PesaPal confirms payment. If a payment is pending, check its status before trying again.</p>
-    <form method="post" action="{{ route($area . '.payment.pesapal.start', $fee->id) }}">@csrf
+    <form method="post" action="{{ route($area . '.payment.pesapal.start', $fee->id) }}" x-data="{ paymentOption: 'balance' }">@csrf
         <p class="fee-caption">Choose how much to pay here. On PesaPal, choose an available payment method, such as MTN Mobile Money, Airtel Money, or Visa. Availability depends on the configured PesaPal checkout. The phone number is contact information and does not select a payment method.</p>
-        <label class="form-label" for="payment_option">Amount to pay</label><select class="form-select mb-2" id="payment_option" name="payment_option">
+        <label class="form-label" for="payment_option">Amount to pay</label><select class="form-select mb-2" id="payment_option" name="payment_option" x-model="paymentOption" @change="$refs.customAmount && ($refs.customAmount.value = '')">
         @if(!$eligibility['eligible'] && $eligibility['shortfall_minor'] > 0 && (int)$fee->session_id === $eligibility['session_id'])<option value="minimum">Pay toward the 20% study minimum ({{ number_format(min($eligibility['shortfall_minor'] / 100, $balance), 2) }})</option>@endif
         <option value="balance">Pay full invoice balance</option><option value="custom">Pay a custom amount</option></select>
-        <label class="form-label" for="payment_amount">Amount (only for custom payment)</label><input class="form-control mb-2" id="payment_amount" name="payment_amount" type="number" min="0.01" step="0.01" max="{{ $balance }}" value="{{ old('payment_amount') }}">
+        <div x-show="paymentOption === 'custom'" x-transition x-ref="customAmount" style="display: none;">
+            <label class="form-label" for="payment_amount">Custom amount</label><input class="form-control mb-2" id="payment_amount" name="payment_amount" type="number" min="0.01" step="0.01" max="{{ $balance }}" placeholder="Enter amount up to {{ number_format($balance, 2) }}">
+            <p class="fee-caption mb-2">Amount to be submitted: <strong x-text="Number($refs.customAmount.querySelector('input')?.value || 0).toFixed(2)"></strong> {{ $currencyLabel }}</p>
+        </div>
+        <template x-if="paymentOption === 'balance'">
+            <p class="fee-caption mb-2">Amount to be submitted: <strong>{{ number_format($balance, 2) }}</strong> {{ $currencyLabel }}</p>
+        </template>
+        <template x-if="paymentOption === 'minimum'">
+            <p class="fee-caption mb-2">Amount to be submitted: <strong>{{ number_format(min($eligibility['shortfall_minor'] / 100, $balance), 2) }}</strong> {{ $currencyLabel }}</p>
+        </template>
         <label for="payer_phone" class="form-label">Payer phone number</label><input id="payer_phone" type="tel" name="payer_phone" class="form-control mb-3" maxlength="20" value="{{ old('payer_phone') }}">
         <button class="btn btn-primary">Pay with PesaPal / resume checkout</button>
     </form>
@@ -106,13 +116,25 @@
 <section class="fee-panel" id="payment-tracking" aria-label="Payment tracking">
     <h2>Payment tracking</h2><p class="fee-caption">New PesaPal payments for this invoice. Prior receipts and fee awards are tracked separately above.</p>
     @forelse($payments as $payment)
+    @php
+        $experience = \App\Support\Payments\PesaPalPaymentExperience::forPayment($payment);
+    @endphp
     <article class="fee-payment">
         <div class="fee-entry-head"><div><h3 class="fee-payment-reference mb-1">PRN: {{ $payment->reference }}</h3><span class="fee-entry-amount">{{ $payment->currency }} {{ number_format($payment->amount, 2) }}</span> <span class="small text-muted">· {{ $payment->gateway_payload['payment_channel'] ?? ($payment->status === 'paid' ? $payment->method : 'Payment channel pending confirmation') }}</span></div>
-            <span class="fee-pill {{ $payment->status === 'paid' ? 'fee-pill--success' : ($payment->status === 'failed' ? 'fee-pill--danger' : 'fee-pill--warning') }}">{{ ucfirst($payment->status) }}</span>
+            <span class="fee-pill {{ $payment->status === 'paid' ? 'fee-pill--success' : ($payment->status === 'failed' ? 'fee-pill--danger' : 'fee-pill--warning') }}">{{ $experience['label'] }}</span>
         </div>
         <div class="fee-payment-details"><span>Started {{ $payment->created_at }}</span>@if($payment->paid_at)<span>Verified paid {{ $payment->paid_at }}</span>@endif</div>
         <details class="fee-action"><summary>Check payment status / view provider details</summary>
             <p class="small">Tracking ID: {{ $payment->gateway_txn_id ?: 'Awaiting provider response' }}<br>Confirmation: {{ $payment->gateway_payload['provider_confirmation_code'] ?? 'Awaiting confirmation' }}</p>
+            @if($experience['message'])
+                <p class="fee-caption mb-2">{{ $experience['message'] }}</p>
+            @endif
+            @if($experience['reason'])
+                <p class="fee-caption mb-2"><strong>{{ $experience['reason'] }}</strong></p>
+            @endif
+            @if($payment->gateway_payload['last_checked_at'] ?? null)
+                <p class="small text-muted">Last provider check: {{ \Carbon\Carbon::parse($payment->gateway_payload['last_checked_at'])->format('d M Y H:i T') }}</p>
+            @endif
             <form method="post" action="{{ route($area . '.payment.pesapal.check', ['id' => $fee->id, 'payment' => $payment->id]) }}">@csrf
                 @if($area === 'admin')<label class="form-label" for="tracking_{{ $payment->id }}">PesaPal order tracking ID (for recovery)</label><input id="tracking_{{ $payment->id }}" name="order_tracking_id" class="form-control mb-2" value="{{ $payment->gateway_txn_id }}">@endif
                 <label class="form-label" for="confirmation_{{ $payment->id }}">PesaPal confirmation code (optional)</label><input id="confirmation_{{ $payment->id }}" name="confirmation_code" class="form-control mb-2" maxlength="100">

@@ -3,6 +3,7 @@
 namespace App\Support\Payments;
 
 use App\Models\{AuditLog, PaymentMethods, StudentFeeManager, TuitionPayment, User};
+use App\Support\Payments\PesaPalPaymentExperience;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -78,7 +79,10 @@ final class TuitionPesaPalPayment
             $order = (new PesaPalService($configuration))->submitOrder(['id' => $payment->reference,
                 'amount' => (string) $payment->amount, 'currency' => $payment->currency,
                 'description' => 'School fees PRN ' . $payment->reference,
-                'callback_url' => route('tuition.pesapal.callback'), 'notification_id' => $configuration->notificationId,
+                'callback_url' => route('tuition.pesapal.callback'),
+                'cancellation_url' => route('student.FeePayment', $fee->id),
+                'redirect_mode' => 'TOP_WINDOW',
+                'notification_id' => $configuration->notificationId,
                 'billing_address' => ['email_address' => trim((string) $student->email), 'phone_number' => preg_replace('/[()\s-]/', '', $phone ?: (string) $student->phone),
                     'first_name' => $firstName, 'last_name' => $lastName]]);
             DB::transaction(function () use ($payment, $order) {
@@ -123,6 +127,9 @@ final class TuitionPesaPalPayment
                     'classification' => $status->classification(),
                     'provider_confirmation_code' => $status->confirmationCode,
                     'last_checked_at' => now()->toIso8601String(),
+                    'verified_failure_reason' => $status->classification() === 'FAILED'
+                        ? PesaPalPaymentExperience::failureReason($status->description)
+                        : null,
                 ]);
                 if (filled($status->paymentMethod)) {
                     $payload['payment_channel'] = mb_substr(trim(strip_tags($status->paymentMethod)), 0, 100);
@@ -137,8 +144,13 @@ final class TuitionPesaPalPayment
             $previous = $locked->gateway_payload['classification'] ?? null;
             if ($previous === 'REVERSED') { return 'reversed'; }
             $classification = $status->classification();
+            if ($previous === 'COMPLETED' && $classification === 'COMPLETED') { return 'paid'; }
             $payload = array_merge($locked->gateway_payload, ['classification' => $classification,
-                'provider_confirmation_code' => $status->confirmationCode, 'last_checked_at' => now()->toIso8601String()]);
+                'provider_confirmation_code' => $status->confirmationCode, 'last_checked_at' => now()->toIso8601String(),
+                'verified_failure_reason' => $classification === 'FAILED'
+                    ? PesaPalPaymentExperience::failureReason($status->description)
+                    : null,
+            ]);
             if (filled($status->paymentMethod)) {
                 $payload['payment_channel'] = mb_substr(trim(strip_tags($status->paymentMethod)), 0, 100);
             }
