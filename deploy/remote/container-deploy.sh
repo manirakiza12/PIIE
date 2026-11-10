@@ -149,10 +149,13 @@ artisan route:clear
 [ "$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)" = "$ENV_SUM" ] || fail 'Environment changed'
 [ "$(stat -c '%u:%g:%a' "$BASE/shared/.env")" = "$ENV_PERM" ] || fail '.env permissions changed'
 switch_pointer ".secure/releases/$RID"
-SWITCHED=1
-app_apache_reload
-artisan up; MAINTENANCE=0
-for url in /health / /login /careers /applicant/login /assets/css/typography.css /assets/css/workspace-ui.css; do
+    SWITCHED=1
+    app_apache_reload
+    artisan up; MAINTENANCE=0
+    artisan config:cache
+    artisan route:cache
+    artisan view:cache
+    for url in /health / /login /careers /applicant/login /assets/css/typography.css /assets/css/workspace-ui.css; do
   app_run /srv/piie/current curl --fail --silent --show-error --retry 3 --retry-delay 2 -H 'Host: piie.ac.ug' "http://127.0.0.1$url" -o /dev/null || fail "HTTP smoke failed: $url"
 done
 # Scheduler is a separately installed, mount-gated systemd timer. Never rewrite
