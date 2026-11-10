@@ -236,16 +236,7 @@ class PayrollController extends Controller
     public function pay(Request $request, $id)
     {
         if (!$request->isMethod('post')) {
-            $payroll = Payroll::where('school_id', $this->school_id)->whereKey($id)->first();
-            $month = $payroll ? $payroll->pay_period?->format('Y-m') : $request->get('month');
-            return redirect()->route('admin.payroll.index', array_filter([
-                'month' => $month,
-                'department_id' => $request->get('department_id'),
-                'status' => $request->get('status'),
-                'search' => $request->get('search'),
-                'sort' => $request->get('sort'),
-                'dir' => $request->get('dir'),
-            ]));
+            return redirect()->route('admin.payroll.index', $request->only(['month', 'department_id', 'status', 'search', 'sort', 'dir']));
         }
 
         $validated = $request->validate([
