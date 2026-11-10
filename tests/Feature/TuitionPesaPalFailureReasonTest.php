@@ -22,6 +22,7 @@ class TuitionPesaPalFailureReasonTest extends TestCase
     private string $description = 'INVALID';
     private string $amount = '5000.00';
     private string $channel = 'Card';
+    private string $failureDescription = '';
     private bool $statusUnavailable = false;
     private bool $amountMismatch = false;
     private bool $currencyMismatch = false;
@@ -56,7 +57,8 @@ class TuitionPesaPalFailureReasonTest extends TestCase
                 $currency = $this->currencyMismatch ? 'KES' : 'UGX';
                 return Http::response(['merchant_reference' => $this->reference,
                     'amount' => $amount, 'currency' => $currency, 'status_code' => $this->code, 'payment_status_description' => $this->description,
-                    'payment_method' => $this->channel, 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null]);
+                    'payment_method' => $this->channel, 'confirmation_code' => 'PROVIDER-123', 'status' => '200', 'error' => null,
+                    'description' => $this->failureDescription]);
             }
             throw new \RuntimeException('Unexpected request');
         });
@@ -77,6 +79,7 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $this->description = 'Failed';
         $this->amount = '5000.00';
         $this->channel = 'MTN Mobile Money';
+        $this->failureDescription = 'Insufficient funds';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -97,6 +100,7 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $this->code = 2;
         $this->description = 'Failed';
         $this->amount = '5000.00';
+        $this->failureDescription = 'Cancelled by user';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -114,6 +118,7 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $payment = TuitionPesaPalPayment::start($fee);
         $this->code = 2;
         $this->description = 'Failed';
+        $this->failureDescription = 'Payment expired';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -132,6 +137,7 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $payment = TuitionPesaPalPayment::start($fee);
         $this->code = 2;
         $this->description = 'Failed';
+        $this->failureDescription = 'Unable to authorize transaction';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
@@ -151,6 +157,7 @@ class TuitionPesaPalFailureReasonTest extends TestCase
         $this->description = 'Failed';
         $this->amount = '5000.00';
         $this->channel = 'Card';
+        $this->failureDescription = 'Request processed successfully';
 
         $result = TuitionPesaPalPayment::reconcile($payment);
         $payment->refresh();
