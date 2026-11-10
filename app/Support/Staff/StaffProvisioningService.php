@@ -114,7 +114,7 @@ class StaffProvisioningService
                 'school_id' => $schoolId,
                 'user_information' => json_encode($info),
                 'status' => 1,
-                'code' => \App\Support\RegistrationNumber::staff($roleId),
+                'code' => \App\Support\Staff\StaffIdCard::generateStaffId($schoolId),
                 'staff_status' => $roleId === \App\Support\Roles\SystemRole::GENERIC_STAFF
                     ? ($data['staff_status'] ?? StaffStatus::ACTIVE)
                     : StaffStatus::ACTIVE,
