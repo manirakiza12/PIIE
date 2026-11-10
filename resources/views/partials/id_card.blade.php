@@ -24,6 +24,11 @@
         border: 1px solid #d8dce3;
         box-shadow: 0 8px 24px rgba(17, 24, 39, 0.08);
         margin: 0 10px 20px 10px;
+        page-break-inside: avoid;
+    }
+    @media print {
+        .idc-card { width: 3.37in; height: 2.125in; margin: 0; box-shadow: none; border: none; }
+        .idc-card:first-child { page-break-after: always; }
     }
     .idc-header {
         background: #0f6e6e;
