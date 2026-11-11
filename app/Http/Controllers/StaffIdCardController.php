@@ -22,8 +22,10 @@ class StaffIdCardController extends Controller
         abort_unless(StaffIdCard::isActive($staff), 403);
         $number = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($staff->code ?: $staff->id));
 
+        // CR80 card size: 85.60mm x 53.98mm = 3.37in x 2.125in
+        // Two pages (front + back) on a single sheet for duplex printing
         return Pdf::loadView('staff.id_card_pdf', StaffIdCard::data($staff, true))
-            ->setPaper('a4')->download('Staff_ID_Card_'.$number.'.pdf');
+            ->setPaper([0, 0, 242.64, 153.0], 'landscape')->download('Staff_ID_Card_'.$number.'.pdf');
     }
 
     public function verify($staff)
