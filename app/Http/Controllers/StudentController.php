@@ -233,11 +233,12 @@ class StudentController extends Controller
         $cardLogoSrc = !empty($school?->school_logo)
             ? asset('assets/uploads/school_logo/'.$school->school_logo)
             : asset('assets/images/id_logo.png');
-        $studentSignatureSrc = asset('assets/signatures/academic registrar.jpg');
+        $holderSignatureSrc = null;
+        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset(false);
 
         return view('student.id_card', compact(
             'student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
-            'cardLogoSrc', 'studentSignatureSrc'
+            'cardLogoSrc', 'holderSignatureSrc', 'authorizedSignatureSrc'
         ));
     }
 
@@ -261,12 +262,12 @@ class StudentController extends Controller
             : asset('assets/images/id_logo.png');
 
         $cardLogoSrc = $this->localAssetImage($logo);
-        $studentSignatureSrc = $this->localAssetImage(asset('assets/signatures/academic registrar.jpg'));
-        $staffSignatureSrc = $this->localAssetImage(asset('assets/signatures/Twinamatsiko Naboth.jpg'));
+        $holderSignatureSrc = null;
+        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset(true);
 
         $pdf = PDF::loadView('student.id_card_pdf', compact(
             'studentDetails', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
-            'cardLogoSrc', 'studentSignatureSrc', 'staffSignatureSrc'
+            'cardLogoSrc', 'holderSignatureSrc', 'authorizedSignatureSrc'
         ));
 
         return $pdf->setPaper([0, 0, 242.64, 153.0], 'landscape')

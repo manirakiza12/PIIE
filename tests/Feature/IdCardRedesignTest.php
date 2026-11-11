@@ -88,38 +88,60 @@ class IdCardRedesignTest extends TestCase
     }
 
     /** @test */
-    public function test_staff_id_card_shows_authorized_signature_on_back(): void
+    public function test_staff_id_card_data_uses_authorized_signature_only(): void
     {
         $schoolId = $this->makeSchool(['title' => 'Signature Test School']);
         $staff = $this->makeStaff($schoolId);
 
         $data = StaffIdCard::data($staff, true);
 
-        $this->assertArrayHasKey('staffSignatureSrc', $data);
-        $this->assertStringStartsWith('data:image/', $data['staffSignatureSrc']);
-        $this->assertNotEmpty(substr($data['staffSignatureSrc'], strlen('data:image/')));
+        $this->assertArrayHasKey('authorizedSignatureSrc', $data);
+        $this->assertStringStartsWith('data:image/', $data['authorizedSignatureSrc']);
+        $this->assertNull($data['holderSignatureSrc'] ?? null);
+        $this->assertSame('Authorized Signature', $data['authorizedSignatureLabel']);
 
-        // Browser view uses the public asset URL rather than embedding the file.
         $webData = StaffIdCard::data($staff);
-        $this->assertStringContainsString('Twinamatsiko Naboth.jpg', $webData['staffSignatureSrc']);
+        $this->assertStringContainsString('academic registrar.jpg', $webData['authorizedSignatureSrc']);
+        $this->assertNull($webData['holderSignatureSrc'] ?? null);
     }
 
     /** @test */
-    public function test_student_id_card_shows_academic_registrar_signature_on_back(): void
+    public function test_student_card_views_show_authorized_signature_and_blank_holder_signature(): void
     {
         $schoolId = $this->makeSchool();
-        $staff = $this->makeStaff($schoolId, 7); // Student role for testing
-        $staff->update(['role_id' => 7, 'code' => student_code()]);
+        $student = User::create([
+            'school_id' => $schoolId,
+            'role_id' => 7,
+            'name' => 'Student Signature Mapping',
+            'code' => student_code(),
+            'email' => 'sig.student.'.uniqid().'@example.com',
+            'password' => bcrypt('secret'),
+        ]);
+        DB::table('roles')->insertOrIgnore(['role_id' => 7, 'name' => 'Student', 'school_id' => 0]);
 
-        $data = StaffIdCard::data($staff, true);
+        $response = $this->actingAs($student)->get(route('student.id_card'));
+        $response->assertOk();
+        $response->assertSee('Student Signature');
+        $response->assertSee('Authorized Signature');
+        $response->assertSee('academic registrar.jpg');
+        $response->assertDontSee('Twinamatsiko Naboth.jpg');
+        $this->assertStringNotContainsString('alt="Student Signature"', $response->getContent());
+        $this->assertStringContainsString('alt="Authorized Signature"', $response->getContent());
+    }
 
-        $this->assertArrayHasKey('studentSignatureSrc', $data);
-        $this->assertStringStartsWith('data:image/', $data['studentSignatureSrc']);
-        $this->assertNotEmpty(substr($data['studentSignatureSrc'], strlen('data:image/')));
+    /** @test */
+    public function test_staff_card_view_shows_authorized_signature_and_blank_staff_holder_signature(): void
+    {
+        $schoolId = $this->makeSchool(['title' => 'Staff Signature School']);
+        $staff = $this->makeStaff($schoolId);
 
-        // Browser view uses the public asset URL rather than embedding the file.
-        $webData = StaffIdCard::data($staff);
-        $this->assertStringContainsString('academic registrar.jpg', $webData['studentSignatureSrc']);
+        $response = $this->actingAs($staff)->get(route('staff.id_card'));
+        $response->assertOk();
+        $response->assertSee('Staff Signature');
+        $response->assertSee('Authorized Signature');
+        $response->assertSee('academic registrar.jpg');
+        $this->assertStringNotContainsString('alt="Staff Signature"', $response->getContent());
+        $this->assertStringContainsString('alt="Authorized Signature"', $response->getContent());
     }
 
     /** @test */

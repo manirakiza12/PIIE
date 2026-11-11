@@ -27,6 +27,13 @@
     $displayPhoto = $studentDetails['photo'] ?? '';
     $displayClass = $studentDetails['class_name'] ?? '';
     $displaySection = $studentDetails['section_name'] ?? '';
+
+    // Signature mapping: left = cardholder, right = institution authorized signatory.
+    // Personal cardholder signatures are not configured in existing application data.
+    $holderLabel = $holderSignatureLabel ?? ($staffCard ? get_phrase('Staff Signature') : get_phrase('Student Signature'));
+    $authorizedLabel = $authorizedSignatureLabel ?? get_phrase('Authorized Signature');
+    $holderSrc = $holderSignatureSrc ?? null;
+    $authorizedSrc = $authorizedSignatureSrc ?? null;
 @endphp
 <style>
     .idc-wrap { display: table; margin: 0 auto; }
@@ -99,9 +106,11 @@
     .idc-back-header b { font-size: 10.5px; color: #111827; }
     .idc-back-body { padding: 8px 14px; font-size: 9px; color: #374151; line-height: 1.35; }
     .idc-terms { margin: 0 0 6px 0; }
-    .idc-signature-table { width: 100%; margin-top: 14px; border-collapse: collapse; }
-    .idc-signature-cell { width: 46%; height: 36px; text-align: center; vertical-align: bottom; font-size: 8.8px; color: #374151; border-top: 1px solid #6b7280; padding-top: 3px; }
-    .idc-signature-img { max-width: 100%; max-height: 30px; display: block; margin: 0 auto 2px auto; }
+    .idc-signature-table { width: 100%; margin-top: 12px; border-collapse: collapse; table-layout: fixed; }
+    .idc-signature-cell { width: 46%; text-align: center; vertical-align: top; font-size: 8.5px; color: #374151; padding: 0; }
+    .idc-signature-area { height: 24px; border-bottom: 1px solid #6b7280; text-align: center; line-height: 24px; font-size: 0; overflow: hidden; }
+    .idc-signature-img { display: inline-block; vertical-align: bottom; max-width: 100%; max-height: 23px; width: auto; height: auto; }
+    .idc-signature-label { margin-top: 3px; font-size: 8.5px; line-height: 1.2; color: #374151; }
     .idc-back-footer { padding: 5px 14px 8px 14px; font-size: 8.2px; color: #4b5563; text-align: center; border-top: 1px solid #eceef2; }
 </style>
 
@@ -180,18 +189,14 @@
 
             <table class="idc-signature-table"><tr>
                 <td class="idc-signature-cell">
-                    @if($staffCard && !empty($staffSignatureSrc))
-                        <img class="idc-signature-img" src="{{ $staffSignatureSrc }}" alt="{{ get_phrase('Staff Signature') }}">
-                        {{ get_phrase('Staff Signature') }}
-                    @elseif(!$staffCard && !empty($studentSignatureSrc))
-                        <img class="idc-signature-img" src="{{ $studentSignatureSrc }}" alt="{{ get_phrase('Student Signature') }}">
-                        {{ get_phrase('Student Signature') }}
-                    @else
-                        {{ get_phrase($staffCard ? 'Staff Signature' : 'Student Signature') }}
-                    @endif
+                    <div class="idc-signature-area">@if(!empty($holderSrc))<img class="idc-signature-img" src="{{ $holderSrc }}" alt="{{ $holderLabel }}">@endif</div>
+                    <div class="idc-signature-label">{{ $holderLabel }}</div>
                 </td>
                 <td style="width: 8%;"></td>
-                <td class="idc-signature-cell">{{ get_phrase('Authorized Signature') }}</td>
+                <td class="idc-signature-cell">
+                    <div class="idc-signature-area">@if(!empty($authorizedSrc))<img class="idc-signature-img" src="{{ $authorizedSrc }}" alt="{{ $authorizedLabel }}">@endif</div>
+                    <div class="idc-signature-label">{{ $authorizedLabel }}</div>
+                </td>
             </tr></table>
         </div>
         <div class="idc-back-footer">

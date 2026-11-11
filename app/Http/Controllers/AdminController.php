@@ -2269,11 +2269,12 @@ class AdminController extends Controller
         $cardLogoSrc = !empty($school?->school_logo)
             ? asset('assets/uploads/school_logo/'.$school->school_logo)
             : asset('assets/images/id_logo.png');
-        $studentSignatureSrc = asset('assets/signatures/academic registrar.jpg');
+        $holderSignatureSrc = null;
+        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset(false);
 
         return view('admin.student.id_card', compact(
             'student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
-            'cardLogoSrc', 'studentSignatureSrc'
+            'cardLogoSrc', 'holderSignatureSrc', 'authorizedSignatureSrc'
         ));
     }
     public function studentProfile($id)

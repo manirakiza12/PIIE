@@ -19,8 +19,18 @@ final class StaffIdCard
     private const STAFF_ROLES = [1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
     // Signature asset paths (relative to public/)
-    private const STAFF_SIGNATURE_PATH = 'assets/signatures/Twinamatsiko Naboth.jpg';
-    private const STUDENT_SIGNATURE_PATH = 'assets/signatures/academic registrar.jpg';
+    private const AUTHORIZED_SIGNATURE_PATH = 'assets/signatures/academic registrar.jpg';
+
+    public static function authorizedSignaturePath(): string
+    {
+        return self::AUTHORIZED_SIGNATURE_PATH;
+    }
+
+    public static function authorizedSignatureAsset(bool $pdf = false): ?string
+    {
+        $url = asset(self::AUTHORIZED_SIGNATURE_PATH);
+        return $pdf ? self::localImage($url) : $url;
+    }
 
     public static function isStaff(?User $user): bool
     {
@@ -72,8 +82,10 @@ final class StaffIdCard
             'staffPosition' => $position,
             'staffDepartment' => $department,
             'programme' => null,
-            'staffSignatureSrc' => $pdf ? self::localImage(asset(self::STAFF_SIGNATURE_PATH)) : asset(self::STAFF_SIGNATURE_PATH),
-            'studentSignatureSrc' => $pdf ? self::localImage(asset(self::STUDENT_SIGNATURE_PATH)) : asset(self::STUDENT_SIGNATURE_PATH),
+            'holderSignatureSrc' => null,
+            'holderSignatureLabel' => get_phrase('Staff Signature'),
+            'authorizedSignatureSrc' => self::authorizedSignatureAsset($pdf),
+            'authorizedSignatureLabel' => get_phrase('Authorized Signature'),
         ];
     }
 
