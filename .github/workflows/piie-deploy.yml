@@ -1,5 +1,5 @@
 # =============================================================================
-# PIIE — Production Deployment  (PREPARED — NOT ENABLED)
+# PIIE â€” Production Deployment  (PREPARED â€” NOT ENABLED)
 # =============================================================================
 #
 #   THIS WORKFLOW IS DELIBERATELY DISABLED BY THREE INDEPENDENT LOCKS:
@@ -56,11 +56,11 @@
 
 name: PIIE Deploy
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # LOCK 1: manual trigger only. There is intentionally no `push` and no
-# `pull_request` trigger, so no commit — including one merged to main — can
+# `pull_request` trigger, so no commit â€” including one merged to main â€” can
 # deploy itself. Dispatching by hand still hits locks 2 and 3.
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 on:
   workflow_dispatch:
     inputs:

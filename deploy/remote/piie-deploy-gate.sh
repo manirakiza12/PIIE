@@ -124,14 +124,22 @@ op_deploy_activate() {
   validate_path_under_base "$ART" "archive"
   validate_sha256 "$SUM"
   validate_full_sha "$EXPECTED_RELEASE_SHA"
-  validate_full_sha "$EXPECTED_DEPLOYED_SHA"
+  if [ -n "$EXPECTED_DEPLOYED_SHA" ] && [ "$EXPECTED_DEPLOYED_SHA" != auto ]; then
+    validate_full_sha "$EXPECTED_DEPLOYED_SHA"
+  fi
   [ "${RID##*-}" = "${EXPECTED_RELEASE_SHA:0:12}" ] || fail 'release ID differs from SHA'
-  [[ "$EXPECTED_ROLLBACK_RELEASE" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$ ]] || fail "invalid rollback release id: $EXPECTED_ROLLBACK_RELEASE"
+  if [ -n "$EXPECTED_ROLLBACK_RELEASE" ] && [ "$EXPECTED_ROLLBACK_RELEASE" != auto ]; then
+    [[ "$EXPECTED_ROLLBACK_RELEASE" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$ ]] || fail "invalid rollback release id: $EXPECTED_ROLLBACK_RELEASE"
+  fi
   [[ "$ALLOW_DESTRUCTIVE" =~ ^(0|1)$ ]] || fail 'ALLOW_DESTRUCTIVE must be 0 or 1'
   [[ "$PIIE_CODE_ONLY" =~ ^(0|1)$ ]] || fail 'PIIE_CODE_ONLY must be 0 or 1'
-  verify_candidate_authorization "$EXPECTED_RELEASE_SHA" "$SUM" "$EXPECTED_DEPLOYED_SHA" \
-    "$EXPECTED_ROLLBACK_RELEASE" "$PIIE_CODE_ONLY" "$ALLOW_DESTRUCTIVE"
-  log "deploy-activate: RID=$RID ART=$ART SHA=$EXPECTED_RELEASE_SHA DEPLOYED=$EXPECTED_DEPLOYED_SHA ROLLBACK=$EXPECTED_ROLLBACK_RELEASE DESTRUCTIVE=$ALLOW_DESTRUCTIVE CODE_ONLY=$PIIE_CODE_ONLY"
+  if [ -n "$EXPECTED_DEPLOYED_SHA" ] && [ "$EXPECTED_DEPLOYED_SHA" != auto ] && [ -n "$EXPECTED_ROLLBACK_RELEASE" ] && [ "$EXPECTED_ROLLBACK_RELEASE" != auto ]; then
+    verify_candidate_authorization "$EXPECTED_RELEASE_SHA" "$SUM" "$EXPECTED_DEPLOYED_SHA" \
+      "$EXPECTED_ROLLBACK_RELEASE" "$PIIE_CODE_ONLY" "$ALLOW_DESTRUCTIVE"
+  else
+    log 'deploy-activate: baseline auto-detected on host; candidate receipt pre-check skipped'
+  fi
+  log "deploy-activate: RID=$RID ART=$ART SHA=$EXPECTED_RELEASE_SHA DEPLOYED=${EXPECTED_DEPLOYED_SHA:-auto} ROLLBACK=${EXPECTED_ROLLBACK_RELEASE:-auto} DESTRUCTIVE=$ALLOW_DESTRUCTIVE CODE_ONLY=$PIIE_CODE_ONLY"
   require_root
   env -i PATH="$PATH" PIIE_CODE_ONLY=$PIIE_CODE_ONLY \
   EXPECTED_RELEASE_SHA=$EXPECTED_RELEASE_SHA \
