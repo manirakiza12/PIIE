@@ -156,7 +156,15 @@
             </table>
 
             <table class="idc-signature-table"><tr>
-                <td class="idc-signature-cell">{{ get_phrase($staffCard ? 'Staff Signature' : 'Student Signature') }}</td>
+                <td class="idc-signature-cell">
+                    @if($staffCard && !empty($staffSignatureSrc))
+                        <img src="{{ $staffSignatureSrc }}" alt="{{ get_phrase('Staff Signature') }}" style="max-width: 100%; max-height: 40px;">
+                    @elseif(!$staffCard && !empty($studentSignatureSrc))
+                        <img src="{{ $studentSignatureSrc }}" alt="{{ get_phrase('Student Signature') }}" style="max-width: 100%; max-height: 40px;">
+                    @else
+                        {{ get_phrase($staffCard ? 'Staff Signature' : 'Student Signature') }}
+                    @endif
+                </td>
                 <td style="width: 8%;"></td>
                 <td class="idc-signature-cell">{{ get_phrase('Authorized Signature') }}</td>
             </tr></table>

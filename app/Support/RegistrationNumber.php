@@ -54,9 +54,10 @@ final class RegistrationNumber
 
     public static function staff(int $roleId): string
     {
-        // Unified PIIE/STF/YYYY/NNN format for all staff roles (replaces legacy role-specific prefixes)
-        // Trim trailing slash from next() for clean display format
-        return rtrim(self::next('PIIE/STF/'.now()->format('Y').'/'), '/');
+        // Role-specific prefixes: ADM for Admin (2), STF for all other staff roles
+        $prefix = $roleId === 2 ? 'PIIE/ADM/' : 'PIIE/STF/';
+        $prefix .= now()->format('Y').'/';
+        return rtrim(self::next($prefix), '/');
     }
 
     public static function next(string $prefix): string
