@@ -22,17 +22,23 @@ RECOVERY=$PREV
 ENV_SUM=$(sha256sum "$BASE/shared/.env" | cut -d' ' -f1)
 ENV_PERM=$(stat -c '%u:%g:%a' "$BASE/shared/.env")
 if [ "$MODE" = activate ]; then
-  [[ "${EXPECTED_DEPLOYED_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Verified baseline SHA required'
-  [ "$(cat "$BASE/current/RELEASE_SHA")" = "$EXPECTED_DEPLOYED_SHA" ] || fail 'Live baseline changed'
   case "$PREV" in
     releases/f23cff8) ACTIVE_ID=f23cff8 ;;
     .secure/releases/*) ACTIVE_ID=${PREV##*/} ;;
     *) fail 'Untrusted active pointer' ;;
   esac
-  if [ -n "${EXPECTED_ROLLBACK_RELEASE:-}" ]; then
-    [ "$ACTIVE_ID" = "$EXPECTED_ROLLBACK_RELEASE" ] || fail 'Approved rollback release is not the active baseline'
+  LIVE_SHA=$(cat "$BASE/current/RELEASE_SHA")
+  [[ "$LIVE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'Live release SHA missing'
+  if [ -z "${EXPECTED_DEPLOYED_SHA:-}" ] || [ "$EXPECTED_DEPLOYED_SHA" = auto ]; then
+    EXPECTED_DEPLOYED_SHA=$LIVE_SHA
   fi
-  verify_release "$ACTIVE_ID" "$EXPECTED_DEPLOYED_SHA"
+  [[ "$EXPECTED_DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'Verified baseline SHA required'
+  [ "$LIVE_SHA" = "$EXPECTED_DEPLOYED_SHA" ] || fail 'Live baseline changed'
+  if [ -z "${EXPECTED_ROLLBACK_RELEASE:-}" ] || [ "$EXPECTED_ROLLBACK_RELEASE" = auto ]; then
+    EXPECTED_ROLLBACK_RELEASE=$ACTIVE_ID
+  fi
+  [ "$ACTIVE_ID" = "$EXPECTED_ROLLBACK_RELEASE" ] || fail 'Approved rollback release is not the active baseline'
+  verify_release "$ACTIVE_ID" "$LIVE_SHA"
   if [ "$PREV" = releases/f23cff8 ]; then
     compare_legacy_baseline "$BASE/current" "$BASE/.secure/releases/f23cff8" "$(sed -n '2p' "$BASE/.secure/private/f23cff8.approved")" || fail 'Legacy baseline code changed'
   fi

@@ -12,15 +12,16 @@ check() {
 VALIDATOR="$ROOT/deploy/validate-deploy-inputs.sh"
 check 0 env MODE=stage DEPLOYED_REF= ALLOW_DESTRUCTIVE=0 CODE_ONLY=0 bash "$VALIDATOR"
 check 0 env MODE=activate DEPLOYED_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ROLLBACK_RELEASE=f23cff8 bash "$VALIDATOR"
-check 2 env MODE=activate DEPLOYED_REF= bash "$VALIDATOR"
+check 0 env MODE=activate DEPLOYED_REF=auto ROLLBACK_RELEASE=auto bash "$VALIDATOR"
+check 0 env MODE=activate DEPLOYED_REF= ROLLBACK_RELEASE= bash "$VALIDATOR"
 check 2 env MODE=stage DEPLOYED_REF='; touch should-never-exist' bash "$VALIDATOR"
 check 2 env MODE=stage DEPLOYED_REF='$(id)' bash "$VALIDATOR"
 check 2 env MODE=invalid bash "$VALIDATOR"
 check 2 env MODE=stage ALLOW_DESTRUCTIVE='1; id' bash "$VALIDATOR"
 check 2 env MODE=stage CODE_ONLY=invalid bash "$VALIDATOR"
-check 2 env MODE=activate DEPLOYED_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ROLLBACK_RELEASE= bash "$VALIDATOR"
+check 2 env MODE=activate DEPLOYED_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ROLLBACK_RELEASE=invalid/ref bash "$VALIDATOR"
 check 2 env MODE=stage ROLLBACK_RELEASE='../mailcow' bash "$VALIDATOR"
-echo 'PASS valid stage/activation accepted; missing identity and remote-shell injection inputs rejected'
+echo 'PASS valid stage/activation accepted, auto baseline accepted, and invalid remote-shell inputs rejected'
 # Stub only the scanner process, retaining the real override decision logic.
 cp "$ROOT/deploy/gate-migrations.sh" "$S/gate-migrations.sh"
 printf '#!/usr/bin/env bash\nexit "${FIXTURE_SCAN_STATUS:?}"\n' > "$S/check-migrations.sh"
