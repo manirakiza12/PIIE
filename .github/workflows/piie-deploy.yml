@@ -81,9 +81,9 @@ on:
         type: string
 
       deployed_ref:
-        description: 'Verified currently deployed commit SHA (required for activation migration comparison)'
+        description: 'Verified currently deployed commit SHA (auto-detected on host when omitted/auto)'
         required: false
-        default: ''
+        default: 'auto'
         type: string
 
       code_only:
@@ -93,9 +93,9 @@ on:
         type: boolean
 
       rollback_release:
-        description: 'Verified existing release ID for code rollback (required for activation)'
+        description: 'Verified existing release ID for code rollback (auto-detected on host when omitted/auto)'
         required: false
-        default: ''
+        default: 'auto'
         type: string
 
       reconcile_enrolment:
@@ -136,10 +136,10 @@ jobs:
       - name: Validate deployment inputs before any remote command
         env:
           MODE: ${{ inputs.mode }}
-          DEPLOYED_REF: ${{ inputs.deployed_ref }}
+          DEPLOYED_REF: ${{ inputs.deployed_ref || 'auto' }}
           ALLOW_DESTRUCTIVE: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS || '0' }}
           CODE_ONLY: ${{ inputs.code_only && '1' || '0' }}
-          ROLLBACK_RELEASE: ${{ inputs.rollback_release }}
+          ROLLBACK_RELEASE: ${{ inputs.rollback_release || 'auto' }}
         run: bash deploy/validate-deploy-inputs.sh
 
       - id: sha
@@ -158,7 +158,7 @@ jobs:
       - name: Resolve the base ref for the migration scan
         id: baseref
         env:
-          DEPLOYED_REF: ${{ inputs.deployed_ref }}
+          DEPLOYED_REF: ${{ inputs.deployed_ref || 'auto' }}
           MODE: ${{ inputs.mode }}
         run: |
           # check-migrations.sh exits 2 when the base ref is missing, and 1 when
@@ -174,11 +174,13 @@ jobs:
             echo '::error::Forward deployment must use the current approved main commit; use the separate reviewed rollback path for older code.'
             exit 1
           }
-          if [ "$MODE" = activate ]; then
-            [[ "$DEPLOYED_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Provide the verified deployed commit SHA before activation."; exit 1; }
+          if [ "$MODE" = activate ] && [ -n "${DEPLOYED_REF:-}" ] && [ "$DEPLOYED_REF" != auto ]; then
+            [[ "$DEPLOYED_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Provide a full lowercase deployed commit SHA or leave auto."; exit 1; }
             git cat-file -e "$DEPLOYED_REF^{commit}" || exit 1
             git merge-base --is-ancestor "$DEPLOYED_REF" HEAD || { echo "::error::Deployment requires forward migration history."; exit 1; }
             BASE="$DEPLOYED_REF"
+          elif [ "$MODE" = activate ]; then
+            echo 'deployed_ref=auto: migration scan will use origin/main baseline; live baseline is verified on host during activation.'
           fi
           if git rev-parse --verify -q "$BASE" >/dev/null; then
             echo "ref=$BASE" >> "$GITHUB_OUTPUT"
@@ -251,9 +253,9 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
           ALLOW_DESTRUCTIVE: ${{ vars.ALLOW_DESTRUCTIVE_MIGRATIONS || '0' }}
-          DEPLOYED_REF: ${{ inputs.deployed_ref }}
+          DEPLOYED_REF: ${{ inputs.deployed_ref || 'auto' }}
           CODE_ONLY: ${{ inputs.code_only && '1' || '0' }}
-          ROLLBACK_RELEASE: ${{ inputs.rollback_release }}
+          ROLLBACK_RELEASE: ${{ inputs.rollback_release || 'auto' }}
         run: |
           bash deploy/validate-deploy-inputs.sh
           RID="$(date -u +%Y%m%d-%H%M%S)-${SHA:0:12}"
@@ -295,8 +297,8 @@ jobs:
         if: ${{ failure() && inputs.mode == 'activate' && steps.install.outcome == 'success' }}
         env:
           MODE: ${{ inputs.mode }}
-          DEPLOYED_REF: ${{ inputs.deployed_ref }}
-          ROLLBACK_RELEASE: ${{ inputs.rollback_release }}
+          DEPLOYED_REF: ${{ inputs.deployed_ref || 'auto' }}
+          ROLLBACK_RELEASE: ${{ inputs.rollback_release || 'auto' }}
         run: |
           bash deploy/validate-deploy-inputs.sh
           ssh piie-prod "sudo -n /usr/local/sbin/piie-deploy-gate rollback '$SHA' '$ROLLBACK_RELEASE' '$DEPLOYED_REF'"
