@@ -767,9 +767,11 @@ class PayrollModuleTest extends TestCase
         $payroll = $this->rowFor($this->teacher);
         $this->actingAs($this->admin)->post(route('admin.payroll.approve', $payroll->id))->assertRedirect();
 
-        // GET on pay route redirects to index (not 405)
+        // GET on pay route redirects to index (not 405), preserving the
+        // pay period as a month query parameter.
         $this->actingAs($this->admin)->get(route('admin.payroll.pay', $payroll->id))
-            ->assertRedirect(route('admin.payroll.index').'?*');
+            ->assertRedirectContains(route('admin.payroll.index'))
+            ->assertRedirectContains('month='.$payroll->pay_period->format('Y-m'));
     }
 
     // ── Preview ────────────────────────────────────────────────────────
