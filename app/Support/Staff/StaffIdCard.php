@@ -18,9 +18,26 @@ final class StaffIdCard
     // Existing employee portals, including legacy Registrar and generic staff.
     private const STAFF_ROLES = [1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
-    // Signature asset paths (relative to public/)
-    private const STAFF_SIGNATURE_PATH = 'assets/signatures/Twinamatsiko Naboth.jpg';
-    private const STUDENT_SIGNATURE_PATH = 'assets/signatures/academic registrar.jpg';
+    public static function authorizedSignaturePath(): ?string
+    {
+        // No tenant-specific, approved authorized-signatory configuration is stored in
+        // existing application data (schools/global settings carry no signature field).
+        // Returning null preserves a blank authorized-signature line per school rather
+        // than exposing one institution's/global signature across tenants.
+        return null;
+    }
+
+    public static function authorizedSignatureAsset(?int $schoolId = null, bool $pdf = false): ?string
+    {
+        $path = self::authorizedSignaturePath();
+        if ($path === null || $path === '') {
+            return null;
+        }
+
+        $url = asset($path);
+
+        return $pdf ? self::localImage($url) : $url;
+    }
 
     public static function isStaff(?User $user): bool
     {
@@ -72,8 +89,10 @@ final class StaffIdCard
             'staffPosition' => $position,
             'staffDepartment' => $department,
             'programme' => null,
-            'staffSignatureSrc' => $pdf ? self::localImage(asset(self::STAFF_SIGNATURE_PATH)) : asset(self::STAFF_SIGNATURE_PATH),
-            'studentSignatureSrc' => $pdf ? self::localImage(asset(self::STUDENT_SIGNATURE_PATH)) : asset(self::STUDENT_SIGNATURE_PATH),
+            'holderSignatureSrc' => null,
+            'holderSignatureLabel' => get_phrase('Staff Signature'),
+            'authorizedSignatureSrc' => self::authorizedSignatureAsset((int) $staff->school_id, $pdf),
+            'authorizedSignatureLabel' => get_phrase('Authorized Signature'),
         ];
     }
 

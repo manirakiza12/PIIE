@@ -104,11 +104,12 @@ class ParentController extends Controller
         $cardLogoSrc = !empty($school?->school_logo)
             ? asset('assets/uploads/school_logo/'.$school->school_logo)
             : asset('assets/images/id_logo.png');
-        $studentSignatureSrc = asset('assets/signatures/academic registrar.jpg');
+        $holderSignatureSrc = null;
+        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset((int) $student->school_id, false);
 
         return view('parent.user.id_card', compact(
             'student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
-            'cardLogoSrc', 'studentSignatureSrc'
+            'cardLogoSrc', 'holderSignatureSrc', 'authorizedSignatureSrc'
         ));
     }
 
