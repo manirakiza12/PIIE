@@ -88,7 +88,7 @@ class IdCardRedesignTest extends TestCase
     }
 
     /** @test */
-    public function test_staff_id_card_data_uses_authorized_signature_only(): void
+    public function test_staff_id_card_data_has_no_authorized_signature_without_tenant_configuration(): void
     {
         $schoolId = $this->makeSchool(['title' => 'Signature Test School']);
         $staff = $this->makeStaff($schoolId);
@@ -96,17 +96,17 @@ class IdCardRedesignTest extends TestCase
         $data = StaffIdCard::data($staff, true);
 
         $this->assertArrayHasKey('authorizedSignatureSrc', $data);
-        $this->assertStringStartsWith('data:image/', $data['authorizedSignatureSrc']);
+        $this->assertNull($data['authorizedSignatureSrc']);
         $this->assertNull($data['holderSignatureSrc'] ?? null);
         $this->assertSame('Authorized Signature', $data['authorizedSignatureLabel']);
 
         $webData = StaffIdCard::data($staff);
-        $this->assertStringContainsString('academic registrar.jpg', $webData['authorizedSignatureSrc']);
+        $this->assertNull($webData['authorizedSignatureSrc']);
         $this->assertNull($webData['holderSignatureSrc'] ?? null);
     }
 
     /** @test */
-    public function test_student_card_views_show_authorized_signature_and_blank_holder_signature(): void
+    public function test_student_and_staff_cards_show_blank_signatures_without_tenant_configuration(): void
     {
         $schoolId = $this->makeSchool();
         $student = User::create([
@@ -119,29 +119,83 @@ class IdCardRedesignTest extends TestCase
         ]);
         DB::table('roles')->insertOrIgnore(['role_id' => 7, 'name' => 'Student', 'school_id' => 0]);
 
-        $response = $this->actingAs($student)->get(route('student.id_card'));
-        $response->assertOk();
-        $response->assertSee('Student Signature');
-        $response->assertSee('Authorized Signature');
-        $response->assertSee('academic registrar.jpg');
-        $response->assertDontSee('Twinamatsiko Naboth.jpg');
-        $this->assertStringNotContainsString('alt="Student Signature"', $response->getContent());
-        $this->assertStringContainsString('alt="Authorized Signature"', $response->getContent());
+        $studentResponse = $this->actingAs($student)->get(route('student.id_card'));
+        $studentResponse->assertOk();
+        $studentResponse->assertSee('Student Signature');
+        $studentResponse->assertSee('Authorized Signature');
+        $studentResponse->assertDontSee('Twinamatsiko Naboth.jpg');
+        $this->assertStringNotContainsString('alt="Student Signature"', $studentResponse->getContent());
+        $this->assertStringNotContainsString('alt="Authorized Signature"', $studentResponse->getContent());
+
+        $staff = $this->makeStaff($schoolId);
+        $staffResponse = $this->actingAs($staff)->get(route('staff.id_card'));
+        $staffResponse->assertOk();
+        $staffResponse->assertSee('Staff Signature');
+        $staffResponse->assertSee('Authorized Signature');
+        $this->assertStringNotContainsString('alt="Staff Signature"', $staffResponse->getContent());
+        $this->assertStringNotContainsString('alt="Authorized Signature"', $staffResponse->getContent());
     }
 
     /** @test */
-    public function test_staff_card_view_shows_authorized_signature_and_blank_staff_holder_signature(): void
+    public function test_admin_and_parent_student_card_views_use_blank_signatures_without_tenant_configuration(): void
     {
-        $schoolId = $this->makeSchool(['title' => 'Staff Signature School']);
-        $staff = $this->makeStaff($schoolId);
+        $schoolId = $this->makeSchool();
+        $admin = User::create([
+            'school_id' => $schoolId,
+            'role_id' => 2,
+            'name' => 'Admin Viewer',
+            'email' => 'admin.viewer.'.uniqid().'@example.com',
+            'password' => bcrypt('secret'),
+            'account_status' => 'active',
+        ]);
+        $parent = User::create([
+            'school_id' => $schoolId,
+            'role_id' => 6,
+            'name' => 'Parent Viewer',
+            'email' => 'parent.viewer.'.uniqid().'@example.com',
+            'password' => bcrypt('secret'),
+            'account_status' => 'active',
+        ]);
+        $student = User::create([
+            'school_id' => $schoolId,
+            'role_id' => 7,
+            'name' => 'Viewed Student',
+            'code' => student_code(),
+            'email' => 'viewed.student.'.uniqid().'@example.com',
+            'password' => bcrypt('secret'),
+            'parent_id' => $parent->id,
+        ]);
+        DB::table('roles')->insertOrIgnore(['role_id' => 2, 'name' => 'Admin', 'school_id' => 0]);
+        DB::table('roles')->insertOrIgnore(['role_id' => 6, 'name' => 'Parent', 'school_id' => 0]);
+        DB::table('roles')->insertOrIgnore(['role_id' => 7, 'name' => 'Student', 'school_id' => 0]);
 
-        $response = $this->actingAs($staff)->get(route('staff.id_card'));
-        $response->assertOk();
-        $response->assertSee('Staff Signature');
-        $response->assertSee('Authorized Signature');
-        $response->assertSee('academic registrar.jpg');
-        $this->assertStringNotContainsString('alt="Staff Signature"', $response->getContent());
-        $this->assertStringContainsString('alt="Authorized Signature"', $response->getContent());
+        $adminResponse = $this->actingAs($admin)->get(route('admin.student.id_card', $student->id));
+        $adminResponse->assertOk();
+        $adminResponse->assertSee('Student Signature');
+        $adminResponse->assertSee('Authorized Signature');
+        $this->assertStringNotContainsString('alt="Authorized Signature"', $adminResponse->getContent());
+
+        $parentResponse = $this->actingAs($parent)->get(route('parent.student.id_card', $student->id));
+        $parentResponse->assertOk();
+        $parentResponse->assertSee('Student Signature');
+        $parentResponse->assertSee('Authorized Signature');
+        $this->assertStringNotContainsString('alt="Authorized Signature"', $parentResponse->getContent());
+    }
+
+    /** @test */
+    public function test_authorized_signature_asset_is_never_globally_exposed(): void
+    {
+        $this->assertNull(StaffIdCard::authorizedSignaturePath());
+        $this->assertNull(StaffIdCard::authorizedSignatureAsset(1, false));
+        $this->assertNull(StaffIdCard::authorizedSignatureAsset(999, true));
+
+        $schoolA = $this->makeSchool(['title' => 'School A']);
+        $schoolB = $this->makeSchool(['title' => 'School B']);
+        $staffA = $this->makeStaff($schoolA);
+        $staffB = $this->makeStaff($schoolB);
+
+        $this->assertNull(StaffIdCard::data($staffA, true)['authorizedSignatureSrc']);
+        $this->assertNull(StaffIdCard::data($staffB, false)['authorizedSignatureSrc']);
     }
 
     /** @test */

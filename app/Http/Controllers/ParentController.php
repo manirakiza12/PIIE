@@ -105,7 +105,7 @@ class ParentController extends Controller
             ? asset('assets/uploads/school_logo/'.$school->school_logo)
             : asset('assets/images/id_logo.png');
         $holderSignatureSrc = null;
-        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset(false);
+        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset((int) $student->school_id, false);
 
         return view('parent.user.id_card', compact(
             'student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',

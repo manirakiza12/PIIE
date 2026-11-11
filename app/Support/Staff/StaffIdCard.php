@@ -18,17 +18,24 @@ final class StaffIdCard
     // Existing employee portals, including legacy Registrar and generic staff.
     private const STAFF_ROLES = [1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
-    // Signature asset paths (relative to public/)
-    private const AUTHORIZED_SIGNATURE_PATH = 'assets/signatures/academic registrar.jpg';
-
-    public static function authorizedSignaturePath(): string
+    public static function authorizedSignaturePath(): ?string
     {
-        return self::AUTHORIZED_SIGNATURE_PATH;
+        // No tenant-specific, approved authorized-signatory configuration is stored in
+        // existing application data (schools/global settings carry no signature field).
+        // Returning null preserves a blank authorized-signature line per school rather
+        // than exposing one institution's/global signature across tenants.
+        return null;
     }
 
-    public static function authorizedSignatureAsset(bool $pdf = false): ?string
+    public static function authorizedSignatureAsset(?int $schoolId = null, bool $pdf = false): ?string
     {
-        $url = asset(self::AUTHORIZED_SIGNATURE_PATH);
+        $path = self::authorizedSignaturePath();
+        if ($path === null || $path === '') {
+            return null;
+        }
+
+        $url = asset($path);
+
         return $pdf ? self::localImage($url) : $url;
     }
 
@@ -84,7 +91,7 @@ final class StaffIdCard
             'programme' => null,
             'holderSignatureSrc' => null,
             'holderSignatureLabel' => get_phrase('Staff Signature'),
-            'authorizedSignatureSrc' => self::authorizedSignatureAsset($pdf),
+            'authorizedSignatureSrc' => self::authorizedSignatureAsset((int) $staff->school_id, $pdf),
             'authorizedSignatureLabel' => get_phrase('Authorized Signature'),
         ];
     }

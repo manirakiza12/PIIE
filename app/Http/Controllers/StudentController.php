@@ -234,7 +234,7 @@ class StudentController extends Controller
             ? asset('assets/uploads/school_logo/'.$school->school_logo)
             : asset('assets/images/id_logo.png');
         $holderSignatureSrc = null;
-        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset(false);
+        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset((int) $student->school_id, false);
 
         return view('student.id_card', compact(
             'student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
@@ -263,7 +263,7 @@ class StudentController extends Controller
 
         $cardLogoSrc = $this->localAssetImage($logo);
         $holderSignatureSrc = null;
-        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset(true);
+        $authorizedSignatureSrc = \App\Support\Staff\StaffIdCard::authorizedSignatureAsset((int) $student->school_id, true);
 
         $pdf = PDF::loadView('student.id_card_pdf', compact(
             'studentDetails', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
