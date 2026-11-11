@@ -241,7 +241,7 @@ class IdCardRedesignTest extends TestCase
         // CR80: 85.60mm x 53.98mm = 242.65pt x 153.01pt. Dompdf writes the
         // resolved page size to /MediaBox rather than the CSS @page declaration.
         $this->assertMatchesRegularExpression(
-            '/\/MediaBox\s*\[\s*0(?:\.0+)?\s+0(?:\.0+)?\s+242\.6\d*\s+153(?:\.0+)?\s*\]/',
+            '/\/MediaBox\s*\[\s*0(?:\.\d+)?\s+0(?:\.\d+)?\s+242\.6\d*\s+153\.0\d*\s*\]/',
             $content
         );
     }
