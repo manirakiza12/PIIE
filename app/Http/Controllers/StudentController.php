@@ -31,6 +31,8 @@ use App\Models\Noticeboard;
 use App\Models\OnlineExam;
 use App\Models\Programme;
 use App\Models\Routine;
+use App\Models\School;
+use App\Models\StudentProfile;
 use App\Models\StudentRequest;
 use App\Models\Subject;
 use App\Models\Syllabus;
