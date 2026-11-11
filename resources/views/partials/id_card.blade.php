@@ -24,6 +24,11 @@
         border: 1px solid #d8dce3;
         box-shadow: 0 8px 24px rgba(17, 24, 39, 0.08);
         margin: 0 10px 20px 10px;
+        page-break-inside: avoid;
+    }
+    @media print {
+        .idc-card { width: 3.37in; height: 2.125in; margin: 0; box-shadow: none; border: none; }
+        .idc-card:first-child { page-break-after: always; }
     }
     .idc-header {
         background: #0f6e6e;
@@ -140,7 +145,7 @@
     </div>
 
     {{-- Back --}}
-    <div class="idc-card">
+    <div class="idc-card" style="page-break-before: always;">
         <div class="idc-back-header"><b>{{ get_phrase('Terms & Emergency Information') }}</b></div>
         <div class="idc-back-body">
             <p class="idc-terms">
@@ -151,7 +156,15 @@
             </table>
 
             <table class="idc-signature-table"><tr>
-                <td class="idc-signature-cell">{{ get_phrase($staffCard ? 'Staff Signature' : 'Student Signature') }}</td>
+                <td class="idc-signature-cell">
+                    @if($staffCard && !empty($staffSignatureSrc))
+                        <img src="{{ $staffSignatureSrc }}" alt="{{ get_phrase('Staff Signature') }}" style="max-width: 100%; max-height: 40px;">
+                    @elseif(!$staffCard && !empty($studentSignatureSrc))
+                        <img src="{{ $studentSignatureSrc }}" alt="{{ get_phrase('Student Signature') }}" style="max-width: 100%; max-height: 40px;">
+                    @else
+                        {{ get_phrase($staffCard ? 'Staff Signature' : 'Student Signature') }}
+                    @endif
+                </td>
                 <td style="width: 8%;"></td>
                 <td class="idc-signature-cell">{{ get_phrase('Authorized Signature') }}</td>
             </tr></table>

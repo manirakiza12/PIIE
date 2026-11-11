@@ -54,8 +54,10 @@ final class RegistrationNumber
 
     public static function staff(int $roleId): string
     {
-        $role = [2 => 'ADM', 3 => 'TRS', 4 => 'ACC', 5 => 'LIB', 10 => 'WDN', 20 => 'STF'][$roleId] ?? 'STF';
-        return self::next(now()->format('Y/m').'/'.$role.'/');
+        // Role-specific prefixes: ADM for Admin (2), STF for all other staff roles
+        $prefix = $roleId === 2 ? 'PIIE/ADM/' : 'PIIE/STF/';
+        $prefix .= now()->format('Y').'/';
+        return rtrim(self::next($prefix), '/');
     }
 
     public static function next(string $prefix): string
