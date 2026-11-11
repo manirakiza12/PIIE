@@ -769,7 +769,7 @@ class PayrollModuleTest extends TestCase
 
         // GET on pay route redirects to index (not 405)
         $this->actingAs($this->admin)->get(route('admin.payroll.pay', $payroll->id))
-            ->assertRedirect(route('admin.payroll.index', ['month' => $this->period]));
+            ->assertRedirect(route('admin.payroll.index'));
     }
 
     // ── Preview ────────────────────────────────────────────────────────

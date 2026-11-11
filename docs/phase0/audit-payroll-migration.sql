@@ -19,14 +19,16 @@ SELECT COUNT(*) AS historical_paid_record_count,
 FROM payroll
 WHERE status = 'paid';
 
--- Paid rows that have no matching payroll_payments row (will be backfilled
--- to net_pay because no payment history exists).
-SELECT COUNT(*) AS paid_rows_without_payment_history
-FROM payroll p
-WHERE p.status = 'paid'
-  AND NOT EXISTS (
-        SELECT 1 FROM payroll_payments pp WHERE pp.payroll_id = p.id
-  );
+-- Whether payroll_payments exists pre-migration (0 = not yet created).
+SELECT COUNT(*) AS payroll_payments_table_exists
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payroll_payments';
+
+-- Existing salary_structures columns (to confirm pre-migration baseline).
+SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'salary_structures'
+ORDER BY ORDINAL_POSITION;
 
 -- Existing payroll table columns (to confirm pre-migration baseline).
 SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
