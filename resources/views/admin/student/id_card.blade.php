@@ -3,7 +3,21 @@
   <div class="col-12">
     <div class="card">
       <div class="card-body" id="printableArea">
-        @include('partials.id_card', ['studentDetails' => $student_details])
+        @include('partials.id_card', [
+            'school' => $school,
+            'studentDetails' => $student_details,
+            'programme' => $programme,
+            'cardNumber' => $cardNumber,
+            'validFor' => $validFor,
+            'qrDataUri' => $qrDataUri,
+            'staffCard' => false,
+            'staffPosition' => null,
+            'staffDepartment' => null,
+            'cardLogoSrc' => null,
+            'isPdf' => false,
+            'staffSignatureSrc' => asset('assets/signatures/Twinamatsiko Naboth.jpg'),
+            'studentSignatureSrc' => asset('assets/signatures/academic registrar.jpg'),
+        ])
 
         <div class="d-print-none mt-4">
           <div class="text-center">

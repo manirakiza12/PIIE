@@ -143,6 +143,7 @@ final class TuitionPesaPalPayment
             if ($locked->gateway_txn_id && $locked->gateway_txn_id !== $status->orderTrackingId) { throw new PesaPalException(); }
             $previous = $locked->gateway_payload['classification'] ?? null;
             if ($previous === 'REVERSED') { return 'reversed'; }
+            if ($previous === 'COMPLETED' && $classification === 'COMPLETED') { return 'paid'; }
             $classification = $status->classification();
             if ($previous === 'COMPLETED' && $classification === 'COMPLETED') { return 'paid'; }
             $payload = array_merge($locked->gateway_payload, ['classification' => $classification,

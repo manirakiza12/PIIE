@@ -82,7 +82,8 @@ class StaffIdCardTest extends TestCase
         $response = $this->actingAs($member)->get(route('staff.id_card.pdf'));
         $response->assertOk()->assertHeader('content-type', 'application/pdf');
         $this->assertStringStartsWith('%PDF-', $response->getContent());
-        $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()));
+        // Front + back = 2 pages
+        $this->assertSame(2, preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()));
         $html = view('staff.id_card_pdf', StaffIdCard::data($member, true))->render();
         $this->assertStringContainsString(IdCard::INSTITUTION_PHONE, $html);
         $this->assertStringNotContainsString('0700123456', $html);

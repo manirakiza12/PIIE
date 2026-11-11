@@ -30,7 +30,21 @@
         <div class="eSection-wrap">
             <p class="text-muted small mb-3">{{ get_phrase('Scan the QR code on your card with any phone camera to verify it — it opens a page confirming your name, photo, and enrollment status.') }}</p>
             <div id="printableArea">
-                @include('partials.id_card', ['studentDetails' => $student_details])
+                @include('partials.id_card', [
+                    'school' => $school,
+                    'studentDetails' => $student_details,
+                    'programme' => $programme,
+                    'cardNumber' => $cardNumber,
+                    'validFor' => $validFor,
+                    'qrDataUri' => $qrDataUri,
+                    'staffCard' => false,
+                    'staffPosition' => null,
+                    'staffDepartment' => null,
+                    'cardLogoSrc' => null,
+                    'isPdf' => false,
+                    'staffSignatureSrc' => asset('assets/signatures/Twinamatsiko Naboth.jpg'),
+                    'studentSignatureSrc' => asset('assets/signatures/academic registrar.jpg'),
+                ])
             </div>
         </div>
     </div>

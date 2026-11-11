@@ -13,7 +13,10 @@
 <div class="eSection-wrap">
     <p class="text-muted print-hidden">{{ get_phrase('Scan the QR code to verify this staff ID and its current status.') }}</p>
     <div id="staff-id-card" data-print-root>
-        @include('partials.id_card')
+        @include('partials.id_card', array_merge(
+            \App\Support\Staff\StaffIdCard::data(auth()->user()),
+            ['isPdf' => false]
+        ))
     </div>
 </div>
 @endsection
