@@ -2266,8 +2266,15 @@ class AdminController extends Controller
         $cardNumber = \App\Support\IdCard::cardNumber($student);
         $validFor = \App\Support\IdCard::validFor($student->school_id);
         $qrDataUri = \App\Support\IdCard::qrDataUri($student);
+        $cardLogoSrc = !empty($school?->school_logo)
+            ? asset('assets/uploads/school_logo/'.$school->school_logo)
+            : asset('assets/images/id_logo.png');
+        $studentSignatureSrc = asset('assets/signatures/academic registrar.jpg');
 
-        return view('admin.student.id_card', compact('student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri'));
+        return view('admin.student.id_card', compact(
+            'student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
+            'cardLogoSrc', 'studentSignatureSrc'
+        ));
     }
     public function studentProfile($id)
     {

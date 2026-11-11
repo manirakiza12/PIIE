@@ -230,8 +230,15 @@ class StudentController extends Controller
         $cardNumber = \App\Support\IdCard::cardNumber($student);
         $validFor = \App\Support\IdCard::validFor($student->school_id);
         $qrDataUri = \App\Support\IdCard::qrDataUri($student);
+        $cardLogoSrc = !empty($school?->school_logo)
+            ? asset('assets/uploads/school_logo/'.$school->school_logo)
+            : asset('assets/images/id_logo.png');
+        $studentSignatureSrc = asset('assets/signatures/academic registrar.jpg');
 
-        return view('student.id_card', compact('student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri'));
+        return view('student.id_card', compact(
+            'student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
+            'cardLogoSrc', 'studentSignatureSrc'
+        ));
     }
 
     public function idCardPdf()
@@ -245,9 +252,64 @@ class StudentController extends Controller
         $validFor = \App\Support\IdCard::validFor($student->school_id);
         $qrDataUri = \App\Support\IdCard::qrDataUri($student);
 
-        $pdf = PDF::loadView('student.id_card_pdf', compact('student_details', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri'));
+        $studentDetails = array_merge((array) $student_details, [
+            'photo' => \App\Support\PhotoProcessing::getProcessedPhotoDataUri($student->id),
+        ]);
 
-        return $pdf->download('ID_Card_' . preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($student_details['code'] ?: $student->id)) . '.pdf');
+        $logo = !empty($school?->school_logo)
+            ? asset('assets/uploads/school_logo/'.$school->school_logo)
+            : asset('assets/images/id_logo.png');
+
+        $cardLogoSrc = $this->localAssetImage($logo);
+        $studentSignatureSrc = $this->localAssetImage(asset('assets/signatures/academic registrar.jpg'));
+        $staffSignatureSrc = $this->localAssetImage(asset('assets/signatures/Twinamatsiko Naboth.jpg'));
+
+        $pdf = PDF::loadView('student.id_card_pdf', compact(
+            'studentDetails', 'programme', 'school', 'cardNumber', 'validFor', 'qrDataUri',
+            'cardLogoSrc', 'studentSignatureSrc', 'staffSignatureSrc'
+        ));
+
+        return $pdf->setPaper([0, 0, 242.64, 153.0], 'landscape')
+            ->download('ID_Card_' . preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($student_details['code'] ?: $student->id)) . '.pdf');
+    }
+
+    private function localAssetImage(string $url): string
+    {
+        if ($url === '' || str_starts_with($url, 'data:')) {
+            return $url;
+        }
+
+        $path = parse_url($url, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return '';
+        }
+
+        $relative = ltrim($path, '/');
+        $candidates = [];
+        if (($assetsAt = strpos($relative, 'assets/')) !== false) {
+            $candidates[] = public_path(substr($relative, $assetsAt));
+        }
+        $candidates[] = public_path($relative);
+
+        $roots = array_filter([realpath(public_path()), realpath(public_path('assets/uploads'))]);
+        foreach ($candidates as $candidate) {
+            $resolved = realpath($candidate);
+            if (!$resolved || !is_file($resolved)) {
+                continue;
+            }
+
+            $allowed = collect($roots)->contains(fn ($root) => str_starts_with($resolved, $root.DIRECTORY_SEPARATOR));
+            if (!$allowed) {
+                continue;
+            }
+
+            $mime = mime_content_type($resolved);
+            if (str_starts_with((string) $mime, 'image/')) {
+                return 'data:'.$mime.';base64,'.base64_encode(file_get_contents($resolved));
+            }
+        }
+
+        return '';
     }
 
     /**
