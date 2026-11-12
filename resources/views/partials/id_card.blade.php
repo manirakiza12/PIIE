@@ -89,29 +89,27 @@
         display: block;
     }
     .idc-details-cell { vertical-align: top; padding-left: 10px; }
-    .idc-name { font-size: 13px; font-weight: 700; color: #111827; margin: 0 0 1px 0; line-height: 1.2; }
-    .idc-code { font-size: 10px; color: #374151; margin-bottom: 5px; font-weight: 600; letter-spacing: .02em; }
+    .idc-name { font-size: 13px; font-weight: 700; color: #111827; margin: 0 0 3px 0; line-height: 1.2; }
 
-    .idc-fields { font-size: 9.5px; color: #1f2937; width: 100%; border-collapse: collapse; }
+    .idc-fields { font-size: 9.2px; color: #1f2937; width: 100%; border-collapse: collapse; table-layout: fixed; }
     .idc-field-row td { padding: 1px 0 2px 0; border-bottom: 1px dashed #e5e7eb; vertical-align: top; }
-    .idc-field-label { display: inline-block; width: 62px; color: #4b5563; font-weight: 600; }
-    .idc-field-value { font-weight: 600; color: #111827; }
+    .idc-field-label { display: inline-block; width: 92px; color: #4b5563; font-weight: 600; vertical-align: top; }
+    .idc-field-value { font-weight: 600; color: #111827; display: inline-block; max-width: calc(100% - 96px); word-break: break-word; }
 
     .idc-footer-table { width: 100%; padding: 6px 12px 8px 12px; border-top: 1px solid #eceef2; border-collapse: collapse; }
-    .idc-card-number { font-size: 8.8px; color: #374151; font-weight: 600; }
     .idc-valid-for { font-size: 8.5px; color: #4b5563; margin-top: 1px; }
     .idc-qr { width: 42px; height: 42px; }
 
-    .idc-back-header { background: #f3f5f8; padding: 7px 12px; text-align: center; border-bottom: 1px solid #e5e7eb; }
-    .idc-back-header b { font-size: 10.5px; color: #111827; }
-    .idc-back-body { padding: 8px 14px; font-size: 9px; color: #374151; line-height: 1.35; }
-    .idc-terms { margin: 0 0 6px 0; }
-    .idc-signature-table { width: 100%; margin-top: 12px; border-collapse: collapse; table-layout: fixed; }
-    .idc-signature-cell { width: 46%; text-align: center; vertical-align: top; font-size: 8.5px; color: #374151; padding: 0; }
-    .idc-signature-area { height: 24px; border-bottom: 1px solid #6b7280; text-align: center; line-height: 24px; font-size: 0; overflow: hidden; }
-    .idc-signature-img { display: inline-block; vertical-align: bottom; max-width: 100%; max-height: 23px; width: auto; height: auto; }
-    .idc-signature-label { margin-top: 3px; font-size: 8.5px; line-height: 1.2; color: #374151; }
-    .idc-back-footer { padding: 5px 14px 8px 14px; font-size: 8.2px; color: #4b5563; text-align: center; border-top: 1px solid #eceef2; }
+    .idc-back-header { background: #f3f5f8; padding: 6px 12px; text-align: center; border-bottom: 1px solid #e5e7eb; }
+    .idc-back-header b { font-size: 10px; color: #111827; }
+    .idc-back-body { padding: 6px 10px 4px 10px; font-size: 8.2px; color: #374151; line-height: 1.2; }
+    .idc-terms { margin: 0 0 3px 0; }
+    .idc-signature-table { width: 100%; margin-top: 6px; border-collapse: collapse; table-layout: fixed; }
+    .idc-signature-cell { width: 46%; text-align: center; vertical-align: top; font-size: 8px; color: #374151; padding: 0; }
+    .idc-signature-area { height: 20px; border-bottom: 1px solid #6b7280; text-align: center; line-height: 20px; font-size: 0; overflow: hidden; }
+    .idc-signature-img { display: inline-block; vertical-align: bottom; max-width: 100%; max-height: 19px; width: auto; height: auto; }
+    .idc-signature-label { margin-top: 2px; font-size: 8px; line-height: 1.1; color: #374151; }
+    .idc-back-footer { padding: 2px 10px 4px 10px; font-size: 7.4px; color: #4b5563; text-align: center; border-top: 1px solid #eceef2; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 
 <div class="idc-wrap">
@@ -141,9 +139,9 @@
             </td>
             <td class="idc-details-cell">
                 <div class="idc-name">{{ $displayName }}</div>
-                <div class="idc-code">{{ null_checker($displayCode) }}</div>
 
                 <table class="idc-fields">
+                    <tr class="idc-field-row"><td><span class="idc-field-label">{{ $staffCard ? get_phrase('Staff ID Number') : get_phrase('Registration Number') }}</span><span class="idc-field-value">{{ $cardNumber }}</span></td></tr>
                     @if($staffCard)
                         <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Position') }}</span><span class="idc-field-value">{{ $staffPosition ?? '' }}</span></td></tr>
                         @if(!empty($staffDepartment))
@@ -155,22 +153,18 @@
                         <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Class') }}</span><span class="idc-field-value">{{ empty($displayClass) ? get_phrase('Not assigned') : $displayClass }}</span></td></tr>
                         <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Section') }}</span><span class="idc-field-value">{{ empty($displaySection) ? get_phrase('Not assigned') : $displaySection }}</span></td></tr>
                     @endif
-                    @unless($staffCard)
-
-                    @endunless
                     <tr class="idc-field-row"><td><span class="idc-field-label">{{ get_phrase('Contact') }}</span><span class="idc-field-value">{{ \App\Support\IdCard::INSTITUTION_PHONE }}</span></td></tr>
                 </table>
             </td>
         </tr></table>
 
         <table class="idc-footer-table"><tr>
-            <td style="text-align: left;">
-                <div class="idc-card-number">{{ $cardNumber }}</div>
+            <td style="text-align: left; vertical-align: middle;">
                 @if($validFor)
                     <div class="idc-valid-for">{{ get_phrase('Valid for') }} {{ $validFor }}</div>
                 @endif
             </td>
-            <td style="text-align: right; width: 50px;">
+            <td style="text-align: right; width: 50px; vertical-align: middle;">
                 <img class="idc-qr" src="{{ $qrDataUri }}" alt="{{ get_phrase('Scan to verify') }}">
             </td>
         </tr></table>
