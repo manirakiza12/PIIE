@@ -341,4 +341,78 @@ class CurriculumAssignmentProposalTest extends TestCase
             ->assertSee('href="'.route('admin.curriculum_assignment.index').'"', false)->assertDontSee('Save draft mapping');
         $this->assertDatabaseCount('curriculum_applicability_mappings', 0);
     }
+
+    public function test_draft_assignment_can_be_updated_by_authorized_user(): void
+    {
+        $id = $this->service->createMapping($this->registrar, $this->mappingData());
+        $this->service->updateMapping($this->registrar, $id, $this->mappingData(['reason' => 'Updated registrar policy reference TEST-02.']));
+        $this->assertDatabaseHas('curriculum_applicability_mappings', ['id' => $id, 'reason' => 'Updated registrar policy reference TEST-02.']);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_ASSIGNMENT_UPDATED', 'record_id' => $id]);
+    }
+
+    public function test_approved_assignment_cannot_be_updated(): void
+    {
+        $id = $this->service->createMapping($this->registrar, $this->mappingData());
+        $this->service->approveMapping($this->registrar, $id);
+        $this->blocked(fn () => $this->service->updateMapping($this->registrar, $id, $this->mappingData(['reason' => 'Attempted update.'])), 'mapping_not_draft');
+        $this->assertDatabaseHas('curriculum_applicability_mappings', ['id' => $id, 'status' => 'approved']);
+    }
+
+    public function test_draft_assignment_can_be_deleted_by_authorized_user(): void
+    {
+        $id = $this->service->createMapping($this->registrar, $this->mappingData());
+        $this->service->destroyMapping($this->registrar, $id);
+        $this->assertDatabaseMissing('curriculum_applicability_mappings', ['id' => $id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'CURRICULUM_ASSIGNMENT_DELETED', 'record_id' => $id]);
+    }
+
+    public function test_approved_assignment_cannot_be_deleted(): void
+    {
+        $id = $this->service->createMapping($this->registrar, $this->mappingData());
+        $this->service->approveMapping($this->registrar, $id);
+        $this->blocked(fn () => $this->service->destroyMapping($this->registrar, $id), 'mapping_not_draft');
+        $this->assertDatabaseHas('curriculum_applicability_mappings', ['id' => $id, 'status' => 'approved']);
+    }
+
+    public function test_update_delete_enforces_tenant_isolation(): void
+    {
+        $otherSchool = $this->makeSchool();
+        $otherRegistrar = $this->makeAdminUser($otherSchool);
+        $id = $this->service->createMapping($this->registrar, $this->mappingData());
+        $otherService = app(CurriculumAssignmentProposals::class);
+        try {
+            $otherService->updateMapping($otherRegistrar, $id, $this->mappingData());
+            $this->fail('Expected tenant isolation block');
+        } catch (\Illuminate\Database\RecordNotFoundException $e) {
+            // Expected: mapping not found in other school
+        }
+        try {
+            $otherService->destroyMapping($otherRegistrar, $id);
+            $this->fail('Expected tenant isolation block');
+        } catch (\Illuminate\Database\RecordNotFoundException $e) {
+            // Expected: mapping not found in other school
+        }
+        $this->assertDatabaseHas('curriculum_applicability_mappings', ['id' => $id, 'school_id' => $this->school]);
+    }
+
+    public function test_update_delete_requires_manage_permission(): void
+    {
+        $viewer = User::factory()->create(['school_id' => $this->school, 'role_id' => 20, 'account_status' => 'active']);
+        DB::table('user_permissions')->insert(['school_id' => $this->school, 'user_id' => $viewer->id, 'permission' => 'academic.curriculum_assignment.view']);
+        $id = $this->service->createMapping($this->registrar, $this->mappingData());
+        $viewerService = app(CurriculumAssignmentProposals::class);
+        try {
+            $viewerService->updateMapping($viewer, $id, $this->mappingData());
+            $this->fail('Expected permission denied');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+        }
+        try {
+            $viewerService->destroyMapping($viewer, $id);
+            $this->fail('Expected permission denied');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+        }
+        $this->assertDatabaseHas('curriculum_applicability_mappings', ['id' => $id]);
+    }
 }
