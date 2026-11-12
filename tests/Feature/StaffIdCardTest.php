@@ -51,6 +51,8 @@ class StaffIdCardTest extends TestCase
         $member = $this->member();
         $response = $this->actingAs($member)->get(route('staff.id_card'));
         $response->assertOk()->assertSee('STAFF ID')->assertSee($member->name)->assertSee($member->code);
+        $response->assertSee('Staff ID Number');
+        $this->assertSame(1, substr_count($response->getContent(), $member->code));
         $response->assertSee('Lecturer')->assertSee(route('staff.id_card'))->assertSee('My ID Card');
         $response->assertSee(IdCard::INSTITUTION_PHONE)->assertDontSee('0700123456')->assertDontSee('0770000999');
     }
