@@ -328,7 +328,7 @@ class CurriculumAssignmentProposalTest extends TestCase
     {
         $this->approvedProposal();
         $before = DB::table('curriculum_assignment_proposals')->get()->toJson();
-        $this->actingAs($this->registrar)->get(route('admin.curriculum_assignment.index'))->assertOk()->assertSee('automatic course enrolment')->assertSee('Apply approved placement');
+        $this->actingAs($this->registrar)->get(route('admin.curriculum_assignment.index'))->assertOk()->assertSee('automatic course enrolment')->assertSee('Apply Approved Placement');
         $this->assertSame($before, DB::table('curriculum_assignment_proposals')->get()->toJson());
         $this->assertDatabaseCount('student_curriculum_assignments', 0);
     }

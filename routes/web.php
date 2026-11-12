@@ -2917,6 +2917,8 @@ Route::get('staff/id-card/verify/{staff}', [\App\Http\Controllers\StaffIdCardCon
 Route::middleware(['auth', 'admin', 'rbac'])->controller(\App\Http\Controllers\CurriculumAssignmentProposalController::class)->group(function () {
     Route::get('admin/curriculum-assignment', 'index')->name('admin.curriculum_assignment.index');
     Route::post('admin/curriculum-assignment/mappings', 'storeMapping')->name('admin.curriculum_assignment.mapping.store');
+    Route::put('admin/curriculum-assignment/mappings/{id}', 'updateMapping')->whereNumber('id')->name('admin.curriculum_assignment.mapping.update');
+    Route::delete('admin/curriculum-assignment/mappings/{id}', 'destroyMapping')->whereNumber('id')->name('admin.curriculum_assignment.mapping.destroy');
     Route::post('admin/curriculum-assignment/mappings/{id}/approve', 'approveMapping')->whereNumber('id')->name('admin.curriculum_assignment.mapping.approve');
     Route::post('admin/curriculum-assignment/mappings/{id}/revoke', 'revokeMapping')->whereNumber('id')->name('admin.curriculum_assignment.mapping.revoke');
     Route::post('admin/curriculum-assignment/proposals', 'propose')->name('admin.curriculum_assignment.propose');

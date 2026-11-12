@@ -11,3 +11,312 @@
   .home-header .header-menu > ul > .user-profile > .btn-group > button { padding-inline:0; }
   .home-header .header-menu > ul > .user-profile > .btn-group > button > .text-start { display:none; }
 }
+
+/* ==========================================================================
+   Curriculum Assignment — Compact Single-Row Tables & Actions Dropdown
+   ========================================================================== */
+
+/* Table layout: fixed layout for consistent column widths */
+.curriculum-assignment-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+/* Compact row height */
+.curriculum-assignment-table > :not(caption) > * > * {
+    padding: 6px 10px;
+    vertical-align: middle;
+}
+
+/* First column gets more padding */
+.curriculum-assignment-table > :not(caption) > * > *:first-child {
+    padding-left: 16px;
+}
+
+/* Truncation utility for long programme/curriculum names */
+.curriculum-assignment-table .truncate-cell {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* Programme column: 25% */
+.curriculum-assignment-table .col-programme {
+    width: 25%;
+    min-width: 180px;
+}
+
+/* Curriculum column: 25% */
+.curriculum-assignment-table .col-curriculum {
+    width: 25%;
+    min-width: 180px;
+}
+
+/* Academic Year column: 15% */
+.curriculum-assignment-table .col-year {
+    width: 15%;
+    min-width: 120px;
+}
+
+/* Status column: 12% */
+.curriculum-assignment-table .col-status {
+    width: 12%;
+    min-width: 100px;
+}
+
+/* Approved By column: 13% */
+.curriculum-assignment-table .col-approved {
+    width: 13%;
+    min-width: 110px;
+}
+
+/* Actions column: 10% - never wraps */
+.curriculum-assignment-table .col-actions {
+    width: 10%;
+    min-width: 100px;
+    white-space: nowrap;
+}
+
+/* Table container: allow horizontal scroll, don't clip dropdowns */
+.table-responsive-curriculum {
+    position: relative;
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
+/* Dropdown menu z-index for table contexts */
+.table-responsive-curriculum .dropdown-menu {
+    z-index: 1055;
+}
+
+/* Dropdown trigger button in table cell */
+.table-responsive-curriculum .dropdown-toggle {
+    min-height: 36px;
+    padding: 4px 10px;
+    white-space: nowrap;
+}
+
+/* Form-based dropdown items (for POST actions with CSRF) */
+.dropdown-menu .dropdown-item-form {
+    margin: 0;
+    padding: 0;
+}
+
+.dropdown-menu .dropdown-item-form button.dropdown-item {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 6px 16px;
+}
+
+.dropdown-menu .dropdown-item-form button.dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* Divider in dropdown */
+.dropdown-divider {
+    margin: 4px 0;
+}
+
+/* Status badge compact */
+.badge-compact {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+/* Section cards */
+.curriculum-section {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.curriculum-section-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.curriculum-section-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #343a40;
+}
+
+.curriculum-section-header p {
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.curriculum-section-body {
+    padding: 1rem 1.25rem;
+}
+
+/* Form in details/summary */
+.curriculum-form-collapse summary {
+    cursor: pointer;
+    user-select: none;
+    padding: 0.5rem 0;
+    font-weight: 500;
+    color: #0d6efd;
+}
+
+.curriculum-form-collapse summary:hover {
+    color: #0b5ed7;
+}
+
+.curriculum-form-collapse summary::-webkit-details-marker {
+    display: none;
+}
+
+.curriculum-form-collapse summary::before {
+    content: '\f282';
+    font-family: 'bootstrap-icons';
+    margin-right: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.curriculum-form-collapse[open] summary::before {
+    content: '\f286';
+}
+
+.curriculum-form-collapse .collapse-content {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e9ecef;
+}
+
+/* Empty state */
+.curriculum-empty {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: #6c757d;
+}
+
+.curriculum-empty i {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* Modal for View Details */
+.curriculum-modal .modal-dialog {
+    max-width: 700px;
+}
+
+.curriculum-modal .modal-body {
+    padding: 1.5rem;
+}
+
+.curriculum-modal .detail-row {
+    display: flex;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #f1f1f1;
+}
+
+.curriculum-modal .detail-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.curriculum-modal .detail-label {
+    width: 180px;
+    flex-shrink: 0;
+    font-weight: 500;
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+
+.curriculum-modal .detail-value {
+    flex: 1;
+    word-break: break-word;
+    font-size: 0.875rem;
+}
+
+/* Placement tables - same compact style */
+.placement-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.placement-table > :not(caption) > * > * {
+    padding: 5px 8px;
+    vertical-align: middle;
+}
+
+.placement-table .truncate-cell {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1199px) {
+    .curriculum-assignment-table .truncate-cell {
+        max-width: 150px;
+    }
+}
+
+@media (max-width: 991px) {
+    .curriculum-assignment-table .truncate-cell {
+        max-width: 120px;
+    }
+    
+    .curriculum-assignment-table .col-actions {
+        min-width: 120px;
+    }
+}
+
+@media (max-width: 767px) {
+    .curriculum-assignment-table > :not(caption) > * > * {
+        padding: 4px 6px;
+    }
+    
+    .curriculum-assignment-table .truncate-cell {
+        max-width: 100px;
+    }
+    
+    .table-responsive-curriculum .dropdown-toggle {
+        min-height: 40px;
+        padding: 6px 12px;
+        font-size: 0.8rem;
+    }
+}
+
+/* Print styles */
+@media print {
+    .table-responsive-curriculum {
+        overflow: visible;
+    }
+    
+    .curriculum-assignment-table .col-actions {
+        display: none;
+    }
+    
+    .curriculum-form-collapse summary {
+        display: none;
+    }
+    
+    .curriculum-form-collapse .collapse-content {
+        display: block !important;
+        border-top: none;
+        margin-top: 0;
+        padding-top: 0;
+    }
+}
