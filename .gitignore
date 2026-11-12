@@ -182,3 +182,4 @@ auth.json
 
 # Track the Composer lockfile for reproducible CI/CD
 !/composer.lock
+"storage/app/idcard-preview/"  

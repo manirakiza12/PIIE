@@ -20,11 +20,14 @@ final class CurriculumAssignmentProposalController extends Controller
         foreach (['programmes', 'intake_sessions', 'curricula', 'academic_years', 'curriculum_stages'] as $table) {
             $options[$table] = DB::table($table)->where('school_id', $school)->orderBy('id')->get();
         }
+        // Pre-filter approved mappings for the proposal stage
+        $options['mappings_approved'] = DB::table('curriculum_applicability_mappings')
+            ->where('school_id', $school)->where('status', 'approved')->get();
         $exceptions = DB::table('automation_exceptions')->where('school_id', $school)->whereIn('workflow', ['curriculum_assignment', 'curriculum_mapping'])->whereNull('resolved_at')->orderByDesc('last_seen_at')->paginate(15, ['*'], 'exceptions_page')->withQueryString();
         $admissions = DB::table('admissions as a')->join('users as u', fn ($q) => $q->on('u.id', '=', 'a.automation_student_id')->where('u.school_id', $school))
             ->where('a.school_id', $school)->whereIn('a.status', ['accepted', 'enrolled'])
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($s) => $s->where('u.name', 'like', '%'.$request->string('search').'%')->orWhere('u.code', 'like', '%'.$request->string('search').'%')->orWhere('a.app_number', 'like', '%'.$request->string('search').'%')))
-            ->select('a.id', 'a.app_number', 'u.name', 'u.code')->orderBy('a.id')->paginate(15, ['*'], 'admissions_page')->withQueryString();
+            ->select('a.id', 'a.app_number', 'u.name', 'u.code', 'a.programme_id', 'a.intake_session_id')->orderBy('a.id')->paginate(15, ['*'], 'admissions_page')->withQueryString();
         return view('admin.academic.curriculum_assignment_proposals', compact('mappings', 'proposals', 'options', 'exceptions', 'admissions'));
     }
 
@@ -35,18 +38,37 @@ final class CurriculumAssignmentProposalController extends Controller
             'curriculum_id' => 'required|integer|min:1', 'entry_academic_year_id' => 'required|integer|min:1',
             'entry_curriculum_stage_id' => 'required|integer|min:1', 'reason' => 'required|string|max:2000',
         ]);
-        return $this->perform(fn () => $service->createMapping($request->user(), $data), 'Draft mapping saved. It requires explicit Registrar approval.');
+        return $this->perform(fn () => $service->createMapping($request->user(), $data), 'Draft assignment saved. It requires explicit Registrar approval.');
+    }
+
+    public function updateMapping(Request $request, int $id, CurriculumAssignmentProposals $service)
+    {
+        $data = $request->validate([
+            'programme_id' => 'required|integer|min:1', 'intake_session_id' => 'required|integer|min:1',
+            'curriculum_id' => 'required|integer|min:1', 'entry_academic_year_id' => 'required|integer|min:1',
+            'entry_curriculum_stage_id' => 'required|integer|min:1', 'reason' => 'required|string|max:2000',
+        ]);
+        return $this->perform(function () use ($service, $request, $id, $data) {
+            $service->updateMapping($request->user(), $id, $data);
+        }, 'Assignment updated.');
+    }
+
+    public function destroyMapping(Request $request, int $id, CurriculumAssignmentProposals $service)
+    {
+        return $this->perform(function () use ($service, $request, $id) {
+            $service->destroyMapping($request->user(), $id);
+        }, 'Draft assignment deleted.');
     }
 
     public function approveMapping(Request $request, int $id, CurriculumAssignmentProposals $service)
     {
-        return $this->perform(fn () => $service->approveMapping($request->user(), $id), 'Applicability mapping approved. No placement has been created.');
+        return $this->perform(fn () => $service->approveMapping($request->user(), $id), 'Applicability assignment approved. No placement has been created.');
     }
 
     public function revokeMapping(Request $request, int $id, CurriculumAssignmentProposals $service)
     {
         $data = $request->validate(['reason' => 'required|string|max:2000']);
-        return $this->perform(fn () => $service->revokeMapping($request->user(), $id, $data['reason']), 'Mapping revoked. Existing academic records are preserved.');
+        return $this->perform(fn () => $service->revokeMapping($request->user(), $id, $data['reason']), 'Assignment revoked. Existing academic records are preserved.');
     }
 
     public function propose(Request $request, CurriculumAssignmentProposals $service)

@@ -18,15 +18,48 @@ final class CurriculumAssignmentProposals
     {
         $this->authorize($actor, 'manage');
         return $this->transaction($actor, function () use ($actor, $data): int {
-            $this->requireText($data['reason'] ?? '', 'Record the Registrar policy or approval reference for this mapping.');
+            $this->requireText($data['reason'] ?? '', 'Record the Registrar policy or approval reference for this assignment.');
             $mapping = (object) array_intersect_key($data, array_flip(['programme_id', 'intake_session_id', 'curriculum_id', 'entry_academic_year_id', 'entry_curriculum_stage_id']));
             $mapping->school_id = (int) $actor->school_id;
             $this->mappingSnapshot($mapping);
             $id = DB::table('curriculum_applicability_mappings')->insertGetId((array) $mapping + [
                 'reason' => trim($data['reason']), 'status' => 'draft', 'created_by' => $actor->id, 'created_at' => now(), 'updated_at' => now(),
             ]);
-            $this->audit($actor, 'CURRICULUM_MAPPING_DRAFTED', 'curriculum_applicability_mappings', $id, ['mapping' => (array) $mapping, 'reason' => trim($data['reason'])]);
+            $this->audit($actor, 'CURRICULUM_ASSIGNMENT_DRAFTED', 'curriculum_applicability_mappings', $id, ['mapping' => (array) $mapping, 'reason' => trim($data['reason'])]);
             return $id;
+        }, 'manage');
+    }
+
+    public function updateMapping(User $actor, int $id, array $data): void
+    {
+        $this->authorize($actor, 'manage');
+        $this->transaction($actor, function () use ($actor, $id, $data): void {
+            $this->requireText($data['reason'] ?? '', 'Record the Registrar policy or approval reference for this assignment.');
+            $mapping = $this->mapping($actor, $id);
+            if ($mapping->status !== 'draft') $this->block('mapping_not_draft', 'Only a draft assignment may be edited. Approved assignments are immutable; revoke and replace them.');
+            $newMapping = (object) array_intersect_key($data, array_flip(['programme_id', 'intake_session_id', 'curriculum_id', 'entry_academic_year_id', 'entry_curriculum_stage_id']));
+            $newMapping->school_id = (int) $actor->school_id;
+            $this->mappingSnapshot($newMapping);
+            DB::table('curriculum_applicability_mappings')->where('id', $id)->update([
+                'programme_id' => $newMapping->programme_id,
+                'intake_session_id' => $newMapping->intake_session_id,
+                'curriculum_id' => $newMapping->curriculum_id,
+                'entry_academic_year_id' => $newMapping->entry_academic_year_id,
+                'entry_curriculum_stage_id' => $newMapping->entry_curriculum_stage_id,
+                'reason' => trim($data['reason']), 'updated_at' => now(),
+            ]);
+            $this->audit($actor, 'CURRICULUM_ASSIGNMENT_UPDATED', 'curriculum_applicability_mappings', $id, ['mapping' => (array) $newMapping, 'reason' => trim($data['reason'])]);
+        }, 'manage');
+    }
+
+    public function destroyMapping(User $actor, int $id): void
+    {
+        $this->authorize($actor, 'manage');
+        $this->transaction($actor, function () use ($actor, $id): void {
+            $mapping = $this->mapping($actor, $id);
+            if ($mapping->status !== 'draft') $this->block('mapping_not_draft', 'Only a draft assignment may be deleted.');
+            DB::table('curriculum_applicability_mappings')->where('id', $id)->delete();
+            $this->audit($actor, 'CURRICULUM_ASSIGNMENT_DELETED', 'curriculum_applicability_mappings', $id, []);
         }, 'manage');
     }
 
