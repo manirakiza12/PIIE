@@ -562,10 +562,6 @@
                         Observed {{ $exception->occurrences }} time(s) · Last seen {{ \Carbon\Carbon::parse($exception->last_seen_at)->format('d M Y H:i') }}
                     </small>
                 </div>
-                <a href="{{ route('admin.automation.exceptions', ['school' => $actor->school_id, 'workflow' => $exception->workflow, 'history' => true]) }}"
-                   class="btn btn-sm btn-outline-primary">
-                    History
-                </a>
             </div>
         </div>
         @empty
