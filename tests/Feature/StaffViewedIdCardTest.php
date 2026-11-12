@@ -70,6 +70,9 @@ class StaffViewedIdCardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Diploma in IT');
+        $response->assertSee('Registration Number');
+        $response->assertSee($student->code);
+        $this->assertSame(1, substr_count($response->getContent(), $student->code));
         $response->assertSee('data:image/svg+xml;base64,', false);
     }
 
@@ -83,7 +86,9 @@ class StaffViewedIdCardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Viewed Student');
+        $response->assertSee('Registration Number');
         $response->assertSee($student->code);
+        $this->assertSame(1, substr_count($response->getContent(), $student->code));
     }
 
     /** Security Phase 2G: a parent's ID card view is limited to their own children in their own school. */

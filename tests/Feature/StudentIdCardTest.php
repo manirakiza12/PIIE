@@ -107,6 +107,8 @@ class StudentIdCardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee($student->code);
+        $response->assertSee('Registration Number');
+        $this->assertSame(1, substr_count($response->getContent(), $student->code));
         $response->assertSee('data:image/svg+xml;base64,', false);
     }
 
