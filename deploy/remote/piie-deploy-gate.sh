@@ -80,17 +80,6 @@ validate_full_sha() {
 # Integrity checks on a caller-supplied archive are not independent authorization.
 # Only a root-controlled receipt, obtained through the administrator review path,
 # may authorize the exact candidate, digest, baseline, rollback target and flags.
-verify_candidate_authorization() {
-  source "$LIB/deployment-guard.sh"
-  secure_layout
-  local approvals="$BASE/.secure/private/authorized"
-  local receipt="$approvals/$1.approved"
-  root_directory "$approvals"
-  root_file "$receipt"
-  [ "$(stat -c %a "$receipt")" = 600 ] || fail 'Candidate approval must have mode 600'
-  cmp -s "$receipt" <(printf '%s\n' piie-deployment-approval-v1 "$@") ||
-    fail 'Candidate is not independently approved for these deployment inputs'
-}
 
 # OPERATION: preflight
 op_preflight() {
@@ -133,12 +122,11 @@ op_deploy_activate() {
   fi
   [[ "$ALLOW_DESTRUCTIVE" =~ ^(0|1)$ ]] || fail 'ALLOW_DESTRUCTIVE must be 0 or 1'
   [[ "$PIIE_CODE_ONLY" =~ ^(0|1)$ ]] || fail 'PIIE_CODE_ONLY must be 0 or 1'
-  if [ -n "$EXPECTED_DEPLOYED_SHA" ] && [ "$EXPECTED_DEPLOYED_SHA" != auto ] && [ -n "$EXPECTED_ROLLBACK_RELEASE" ] && [ "$EXPECTED_ROLLBACK_RELEASE" != auto ]; then
-    verify_candidate_authorization "$EXPECTED_RELEASE_SHA" "$SUM" "$EXPECTED_DEPLOYED_SHA" \
-      "$EXPECTED_ROLLBACK_RELEASE" "$PIIE_CODE_ONLY" "$ALLOW_DESTRUCTIVE"
-  else
-    log 'deploy-activate: baseline auto-detected on host; candidate receipt pre-check skipped'
-  fi
+  local ALLOW_DESTRUCTIVE_MIGRATIONS=$ALLOW_DESTRUCTIVE
+  source "$LIB/secure-handoff.sh"
+  authorize_activation
+  # Resolved identities are passed explicitly. The helper reauthorizes under its
+  # exclusive lock, refusing any baseline/receipt change after this precheck.
   log "deploy-activate: RID=$RID ART=$ART SHA=$EXPECTED_RELEASE_SHA DEPLOYED=${EXPECTED_DEPLOYED_SHA:-auto} ROLLBACK=${EXPECTED_ROLLBACK_RELEASE:-auto} DESTRUCTIVE=$ALLOW_DESTRUCTIVE CODE_ONLY=$PIIE_CODE_ONLY"
   require_root
   env -i PATH="$PATH" PIIE_CODE_ONLY=$PIIE_CODE_ONLY \

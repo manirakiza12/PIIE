@@ -2,6 +2,47 @@
 source "$(dirname "${BASH_SOURCE[0]}")/deployment-guard.sh"
 # Fixed protected parents, independent of unprivileged incoming/releases staging.
 protected_directory() { root_directory "$1"; }
+# The gate prechecks this; container-deploy MUST repeat it under deployment_lock.
+# Caller baseline values are assertions only. Authority comes from protected state.
+authorize_activation() {
+  secure_layout
+  verify_runtime_mount
+  local pointer active sha approvals receipt
+  [ -L "$BASE/current" ] || fail 'Current must be a release symlink'
+  pointer=$(readlink "$BASE/current")
+  case "$pointer" in
+    releases/f23cff8) active=f23cff8 ;;
+    .secure/releases/*)
+      active=${pointer#.secure/releases/}
+      [[ "$active" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$ ]] || fail 'Invalid active release ID'
+      ;;
+    *) fail 'Untrusted active pointer' ;;
+  esac
+  root_directory "$BASE/.secure/releases/$active"
+  root_file "$BASE/.secure/releases/$active/RELEASE_SHA"
+  sha=$(cat "$BASE/.secure/releases/$active/RELEASE_SHA")
+  [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail 'Live release SHA missing'
+  verify_release "$active" "$sha"
+  [ "$(cat "$BASE/current/RELEASE_SHA")" = "$sha" ] || fail 'Live baseline changed'
+  if [ -n "${EXPECTED_DEPLOYED_SHA:-}" ] && [ "$EXPECTED_DEPLOYED_SHA" != auto ]; then
+    [ "$EXPECTED_DEPLOYED_SHA" = "$sha" ] || fail 'Live baseline changed'
+  fi
+  if [ -n "${EXPECTED_ROLLBACK_RELEASE:-}" ] && [ "$EXPECTED_ROLLBACK_RELEASE" != auto ]; then
+    [ "$EXPECTED_ROLLBACK_RELEASE" = "$active" ] || fail 'Approved rollback release is not the active baseline'
+  fi
+  [[ "${EXPECTED_RELEASE_SHA:-}" =~ ^[0-9a-f]{40}$ && "${SUM:-}" =~ ^[0-9a-f]{64}$ ]] || fail 'Invalid candidate identity'
+  [[ "${PIIE_CODE_ONLY:-0}" =~ ^[01]$ && "${ALLOW_DESTRUCTIVE_MIGRATIONS:-0}" =~ ^[01]$ ]] || fail 'Invalid activation flags'
+  approvals="$BASE/.secure/private/authorized"
+  receipt="$approvals/$EXPECTED_RELEASE_SHA.approved"
+  root_directory "$approvals"
+  root_file "$receipt"
+  [ "$(stat -c %a "$receipt")" = 600 ] || fail 'Candidate approval must have mode 600'
+  cmp -s "$receipt" <(printf '%s\n' piie-deployment-approval-v1 "$EXPECTED_RELEASE_SHA" "$SUM" \
+    "$sha" "$active" "${PIIE_CODE_ONLY:-0}" "${ALLOW_DESTRUCTIVE_MIGRATIONS:-0}") ||
+    fail 'Candidate is not independently approved for these deployment inputs'
+  EXPECTED_DEPLOYED_SHA=$sha
+  EXPECTED_ROLLBACK_RELEASE=$active
+}
 compare_legacy_baseline() {
   local receipt="$BASE/.secure/private/f23cff8.comparison.json"
   local action=compare
