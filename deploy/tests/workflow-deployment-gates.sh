@@ -21,6 +21,9 @@ check 2 env MODE=stage ALLOW_DESTRUCTIVE='1; id' bash "$VALIDATOR"
 check 2 env MODE=stage CODE_ONLY=invalid bash "$VALIDATOR"
 check 2 env MODE=activate DEPLOYED_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ROLLBACK_RELEASE=invalid/ref bash "$VALIDATOR"
 check 2 env MODE=stage ROLLBACK_RELEASE='../mailcow' bash "$VALIDATOR"
+check 2 env MODE=activate DEPLOYED_REF='auto; id' ROLLBACK_RELEASE=auto bash "$VALIDATOR"
+check 2 env MODE=activate DEPLOYED_REF=auto ROLLBACK_RELEASE='auto; id' bash "$VALIDATOR"
+check 2 env MODE=activate DEPLOYED_REF=auto ROLLBACK_RELEASE=auto CODE_ONLY='$(id)' bash "$VALIDATOR"
 echo 'PASS valid stage/activation accepted, auto baseline accepted, and invalid remote-shell inputs rejected'
 # Stub only the scanner process, retaining the real override decision logic.
 cp "$ROOT/deploy/gate-migrations.sh" "$S/gate-migrations.sh"

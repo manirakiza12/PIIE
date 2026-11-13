@@ -45,6 +45,25 @@ code=$?
 set -e
 [ "$code" != 0 ] && grep -q 'Live baseline changed' "$S/rejected.log"
 echo 'PASS: activation rejects changed baseline before backup or migration'
+# No privileged caller (including direct helper invocation) may omit approval.
+set +e
+EXPECTED_DEPLOYED_SHA=auto EXPECTED_ROLLBACK_RELEASE=auto bash "$SCRIPTS/container-deploy.sh" 20261014-120013-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/no-receipt.log" 2>&1
+code=$?
+set -e
+[ "$code" -ne 0 ] && [ "$(readlink "$S/current")" = releases/f23cff8 ]
+grep -q 'Unsafe directory: .*authorized' "$S/no-receipt.log"
+[ ! -e "$S/.secure/releases/20261014-120013-f23cff8aaaaa" ]
+[ ! -e "$S/.secure/private/backup-20261014-120013-f23cff8aaaaa" ]
+! grep -qE 'artisan down|mariadb-dump|migrate --force' "$S/docker.log"
+echo 'PASS: direct helper auto activation without receipt fails before mutation'
+# Synthetic fixture authorization only; never creates a production receipt.
+fixture_authorize() {
+  local active=${1:-f23cff8} code_only=${2:-0}
+  mkdir -p "$S/.secure/private/authorized"
+  printf '%s\n' piie-deployment-approval-v1 "$SHA" "$SUM" "$SHA" "$active" "$code_only" 0 > "$S/.secure/private/authorized/$SHA.approved"
+  chmod 600 "$S/.secure/private/authorized/$SHA.approved"
+}
+fixture_authorize
 set +e
 FAIL_PREVIEW=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120002-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage > "$S/preview.log" 2>&1
 code=$?
@@ -87,10 +106,12 @@ grep -q '^kill --signal=USR1 piie-app' "$S/docker.log"
 echo 'PASS: successful activation uses container-compatible relative links and scheduler'
 
 : > "$S/docker.log"
+fixture_authorize 20261014-120004-f23cff8aaaaa 1
 EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120005-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/code-only.log" 2>&1
 ! grep -q 'migrate --' "$S/docker.log"
 [ "$(readlink "$S/current")" = .secure/releases/20261014-120005-f23cff8aaaaa ]
 echo 'PASS: code-only activation runs no migrations'
+fixture_authorize 20261014-120005-f23cff8aaaaa 1
 set +e
 EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 PENDING_MIGRATIONS=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120006-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/pending.log" 2>&1
 code=$?
@@ -99,6 +120,7 @@ set -e
 [ "$(readlink "$S/current")" = .secure/releases/20261014-120005-f23cff8aaaaa ]
 echo 'PASS: code-only activation rejects pending migrations before backup or switching'
 
+fixture_authorize 20261014-120005-f23cff8aaaaa 0
 set +e
 EXPECTED_DEPLOYED_SHA="$SHA" FAIL_RELOAD_ONCE=1 bash "$SCRIPTS/container-deploy.sh" 20261014-120007-f23cff8aaaaa "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate > "$S/reload.log" 2>&1
 code=$?
@@ -141,6 +163,7 @@ echo 'PASS: failed rollback reload is reported critical without a false recovery
 
 RID=20261014-120012-f23cff8aaaaa
 bash "$SCRIPTS/container-deploy.sh" "$RID" "$S/incoming/piie-release-fixture.tar.gz" "$SUM" stage > "$S/restage.log" 2>&1
+fixture_authorize 20261014-120005-f23cff8aaaaa 1
 EXPECTED_DEPLOYED_SHA="$SHA" PIIE_CODE_ONLY=1 bash "$SCRIPTS/container-deploy.sh" "$RID" "$S/incoming/piie-release-fixture.tar.gz" "$SUM" activate >> "$S/restage.log" 2>&1
 [ "$(readlink "$S/current")" = ".secure/releases/$RID" ]
 [ -n "$(find "$S/.secure/private" -path '*/previous-release/RELEASE_SHA' -print -quit)" ]

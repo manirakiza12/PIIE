@@ -97,9 +97,26 @@ CODE_ONLY
 ALLOW_DESTRUCTIVE
 ```
 
-All six input values must match the later activation exactly. The gate verifies
-the protected mount/layout first and refuses missing or mismatched receipts
-before calling the deployment helper. Neither unprivileged staging nor the
+All six input values must match the later activation exactly. For every activation,
+including empty, `auto`, explicit and mixed baseline inputs, the gate reads the
+current protected release identity and verifies its existing approval and runtime
+mount. Explicit inputs are assertions that must match that state, never authority
+to select a different baseline. It then requires the exact candidate receipt;
+automatic resolution never skips authorization. The shared implementation is
+`authorize_activation` in `secure-handoff.sh`.
+
+The deployment helper repeats resolution and receipt verification under the
+exclusive deployment lock before preflight, release preparation, backup or
+application changes. The gate passes its resolved identities explicitly, so a
+baseline change between its precheck and the locked helper check fails closed.
+Direct administrator invocation of the helper also requires authorization.
+Install the gate, `secure-handoff.sh`, and `container-deploy.sh` together from the
+same reviewed helper-source commit, with their compatible protected dependencies;
+updating only the gate is insufficient. Staging does not require an activation
+receipt and still never activates application code. Explicit rollback retains its
+separate protected-release checks and never uses `auto` target identities.
+
+Neither unprivileged staging nor the
 workflow uploads may create this authorization. Approval records created by
 `prepare_release` are installation receipts, not substitutes for this prior
 authorization. Do not use placeholders or approve a digest obtained solely from
